@@ -19,19 +19,10 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-
-import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
-import java.util.Properties;
 import java.util.stream.Stream;
-
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 public class TestBulkInsertPartitioner {
 
@@ -45,15 +36,4 @@ public class TestBulkInsertPartitioner {
         Arguments.of(Arrays.asList("pt1", "pt2", "col1", "col2").toArray(), Arrays.asList("col1", "pt1", "col2").toArray(), false, "pt1,pt2")
     );
   }
-
-  @ParameterizedTest
-  @MethodSource("argsForTryPrependPartitionColumns")
-  public void testTryPrependPartitionColumns(String[] expectedSortColumns, String[] sortColumns, boolean populateMetaField, String partitionColumnName) {
-    Properties props = new Properties();
-    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), partitionColumnName);
-    props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), String.valueOf(populateMetaField));
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/").withProperties(props).build();
-    assertArrayEquals(expectedSortColumns, BulkInsertPartitioner.tryPrependPartitionPathColumns(sortColumns, writeConfig));
-  }
-
 }

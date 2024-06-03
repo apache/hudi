@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
+import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -37,18 +38,17 @@ import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.FileIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -71,7 +71,6 @@ import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.hadoop.fs.CachingPath.createRelativePathUnsafe;
 import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
@@ -99,16 +98,18 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_L
  * During compaction on the table, the deletions are merged with additions and hence records are pruned.
  */
 public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadataPayload> {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataPayload.class);
   /**
    * Type of the record. This can be an enum in the schema but Avro1.8
-   * has a bug - https://issues.apache.org/jira/browse/AVRO-1810
+   * has a bug - <a href="https://issues.apache.org/jira/browse/AVRO-1810">...</a>
    */
-  protected static final int METADATA_TYPE_PARTITION_LIST = 1;
-  protected static final int METADATA_TYPE_FILE_LIST = 2;
-  protected static final int METADATA_TYPE_COLUMN_STATS = 3;
-  protected static final int METADATA_TYPE_BLOOM_FILTER = 4;
+  private static final int METADATA_TYPE_PARTITION_LIST = 1;
+  private static final int METADATA_TYPE_FILE_LIST = 2;
+  private static final int METADATA_TYPE_COLUMN_STATS = 3;
+  private static final int METADATA_TYPE_BLOOM_FILTER = 4;
   private static final int METADATA_TYPE_RECORD_INDEX = 5;
+  private static final int METADATA_TYPE_PARTITION_STATS = 6;
+  private static final int METADATA_TYPE_SECONDARY_INDEX = 7;
 
   /**
    * HoodieMetadata schema field ids
@@ -119,6 +120,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
+  public static final String SCHEMA_FIELD_ID_SECONDARY_INDEX = "SecondaryIndexMetadata";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -161,6 +163,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final int RECORD_INDEX_MISSING_FILEINDEX_FALLBACK = -1;
 
   /**
+   * HoodieMetadata secondary index payload field ids
+   */
+  public static final String SECONDARY_INDEX_FIELD_RECORD_KEY = "recordKey";
+  public static final String SECONDARY_INDEX_FIELD_IS_DELETED = FIELD_IS_DELETED;
+
+  /**
    * NOTE: PLEASE READ CAREFULLY
    * <p>
    * In Avro 1.10 generated builders rely on {@code SpecificData.getForSchema} invocation that in turn
@@ -183,6 +191,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataBloomFilter bloomFilterMetadata = null;
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
+  private HoodieSecondaryIndexInfo secondaryIndexMetadata;
   private boolean isDeletedRecord = false;
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
@@ -217,7 +226,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         //       Otherwise, it has to be present or the record would be considered invalid
         if (bloomFilterRecord == null) {
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_COLUMN_STATS));
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, METADATA_TYPE_BLOOM_FILTER));
         } else {
           bloomFilterMetadata = new HoodieMetadataBloomFilter(
               (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
@@ -226,7 +235,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
           );
         }
-      } else if (type == METADATA_TYPE_COLUMN_STATS) {
+      } else if (type == METADATA_TYPE_COLUMN_STATS || type == METADATA_TYPE_PARTITION_STATS) {
         GenericRecord columnStatsRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_COLUMN_STATS);
         // NOTE: Only legitimate reason for {@code ColumnStatsMetadata} to not be present is when
         //       it's not been read from the storage (ie it's not been a part of projected schema).
@@ -259,6 +268,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()));
+      } else if (type == METADATA_TYPE_SECONDARY_INDEX) {
+        GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
+        checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + METADATA_TYPE_SECONDARY_INDEX);
+        secondaryIndexMetadata = new HoodieSecondaryIndexInfo(
+            secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
+            (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
       }
     } else {
       this.isDeletedRecord = true;
@@ -266,32 +281,38 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null);
+    this(key, type, filesystemMetadata, null, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null);
+    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null);
+    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata);
+    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata, null);
+  }
+
+  private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
+    this(key, METADATA_TYPE_SECONDARY_INDEX, null, null, null, null, secondaryIndexMetadata);
   }
 
   protected HoodieMetadataPayload(String key, int type,
-      Map<String, HoodieMetadataFileInfo> filesystemMetadata,
-      HoodieMetadataBloomFilter metadataBloomFilter,
-      HoodieMetadataColumnStats columnStats,
-      HoodieRecordIndexInfo recordIndexMetadata) {
+                                  Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+                                  HoodieMetadataBloomFilter metadataBloomFilter,
+                                  HoodieMetadataColumnStats columnStats,
+                                  HoodieRecordIndexInfo recordIndexMetadata,
+                                  HoodieSecondaryIndexInfo secondaryIndexMetadata) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
     this.bloomFilterMetadata = metadataBloomFilter;
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
+    this.secondaryIndexMetadata = secondaryIndexMetadata;
   }
 
   /**
@@ -356,8 +377,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     final String bloomFilterType,
                                                                                     final ByteBuffer bloomFilter,
                                                                                     final boolean isDeleted) {
-    checkArgument(!baseFileName.contains(HoodieLocation.SEPARATOR)
-            && FSUtils.isBaseFile(new Path(baseFileName)),
+    checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
+            && FSUtils.isBaseFile(new StoragePath(baseFileName)),
         "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
@@ -403,6 +424,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
         // No need to merge with previous record index, always pick the latest payload.
         return this;
+      case METADATA_TYPE_SECONDARY_INDEX:
+        // Secondary Index combine()/merge() always returns the current (*this*)
+        // record and discards the prevRecord. Based on the 'isDeleted' marker in the payload,
+        // the merger running on top takes the right action (discard current or retain current record).
+        return this;
       default:
         throw new HoodieMetadataException("Unknown type of HoodieMetadataPayload: " + type);
     }
@@ -428,6 +454,17 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord);
   }
 
+  public static Option<HoodieRecord<HoodieMetadataPayload>> combineSecondaryIndexRecord(
+      HoodieRecord<HoodieMetadataPayload> oldRecord,
+      HoodieRecord<HoodieMetadataPayload> newRecord) {
+    // If the new record is tombstone, we can discard it
+    if (newRecord.getData().secondaryIndexMetadata.getIsDeleted()) {
+      return Option.empty();
+    }
+
+    return Option.of(newRecord);
+  }
+
   @Override
   public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord oldRecord, Schema schema, Properties properties) throws IOException {
     HoodieMetadataPayload anotherPayload = new HoodieMetadataPayload(Option.of((GenericRecord) oldRecord));
@@ -447,7 +484,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
-        columnStatMetadata, recordIndexMetadata);
+        columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
     return Option.of(record);
   }
 
@@ -495,25 +532,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   /**
    * Returns the files added as part of this record.
    */
-  public FileStatus[] getFileStatuses(Configuration hadoopConf, Path partitionPath) throws IOException {
-    FileSystem fs = partitionPath.getFileSystem(hadoopConf);
-    return getFileStatuses(fs, partitionPath);
-  }
-
-  /**
-   * Returns the files added as part of this record.
-   */
-  public FileStatus[] getFileStatuses(FileSystem fs, Path partitionPath) {
-    long blockSize = fs.getDefaultBlockSize(partitionPath);
+  public List<StoragePathInfo> getFileList(HoodieStorage storage, StoragePath partitionPath) {
+    long blockSize = storage.getDefaultBlockSize(partitionPath);
     return filterFileInfoEntries(false)
         .map(e -> {
           // NOTE: Since we know that the Metadata Table's Payload is simply a file-name we're
           //       creating Hadoop's Path using more performant unsafe variant
-          CachingPath filePath = new CachingPath(partitionPath, createRelativePathUnsafe(e.getKey()));
-          return new FileStatus(e.getValue().getSize(), false, 0, blockSize, 0, 0,
-              null, null, null, filePath);
+          return new StoragePathInfo(new StoragePath(partitionPath, e.getKey()), e.getValue().getSize(),
+              false, (short) 0, blockSize, 0);
         })
-        .toArray(FileStatus[]::new);
+        .collect(Collectors.toList());
   }
 
   private Stream<Map.Entry<String, HoodieMetadataFileInfo>> filterFileInfoEntries(boolean isDeleted) {
@@ -550,27 +578,34 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             //          - First we merge records from all of the delta log-files
             //          - Then we merge records from base-files with the delta ones (coming as a result
             //          of the previous step)
-            (oldFileInfo, newFileInfo) ->
-                // NOTE: We can’t assume that MT update records will be ordered the same way as actual
-                //       FS operations (since they are not atomic), therefore MT record merging should be a
-                //       _commutative_ & _associative_ operation (ie one that would work even in case records
-                //       will get re-ordered), which is
-                //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
-                //          take max of the old and new records)
-                //          - Not possible for is-deleted flags*
-                //
-                //       *However, we’re assuming that the case of concurrent write and deletion of the same
-                //       file is _impossible_ -- it would only be possible with concurrent upsert and
-                //       rollback operation (affecting the same log-file), which is implausible, b/c either
-                //       of the following have to be true:
-                //          - We’re appending to failed log-file (then the other writer is trying to
-                //          rollback it concurrently, before it’s own write)
-                //          - Rollback (of completed instant) is running concurrently with append (meaning
-                //          that restore is running concurrently with a write, which is also nut supported
-                //          currently)
-                newFileInfo.getIsDeleted()
-                    ? null
-                    : new HoodieMetadataFileInfo(Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false));
+            (oldFileInfo, newFileInfo) -> {
+              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              //       FS operations (since they are not atomic), therefore MT record merging should be a
+              //       _commutative_ & _associative_ operation (ie one that would work even in case records
+              //       will get re-ordered), which is
+              //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+              //          take max of the old and new records)
+              //          - Not possible for is-deleted flags*
+              //
+              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       file is _impossible_ -- it would only be possible with concurrent upsert and
+              //       rollback operation (affecting the same log-file), which is implausible, b/c either
+              //       of the following have to be true:
+              //          - We’re appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it’s own write)
+              //          - Rollback (of completed instant) is running concurrently with append (meaning
+              //          that restore is running concurrently with a write, which is also nut supported
+              //          currently)
+              if (newFileInfo.getIsDeleted()) {
+                if (oldFileInfo.getIsDeleted()) {
+                  LOG.warn("A file is repeatedly deleted in the files partition of the metadata table: " + key);
+                  return newFileInfo;
+                }
+                return null;
+              }
+              return new HoodieMetadataFileInfo(
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+            });
       });
     }
 
@@ -613,7 +648,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static String getColumnStatsIndexKey(String partitionName, HoodieColumnRangeMetadata<Comparable> columnRangeMetadata) {
 
     final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionName));
-    final FileIndexID fileIndexID = new FileIndexID(new Path(columnRangeMetadata.getFilePath()).getName());
+    final FileIndexID fileIndexID = new FileIndexID(new StoragePath(columnRangeMetadata.getFilePath()).getName());
     final ColumnIndexID columnIndexID = new ColumnIndexID(columnRangeMetadata.getColumnName());
     return getColumnStatsIndexKey(partitionIndexID, fileIndexID, columnIndexID);
   }
@@ -627,7 +662,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
-              .setFileName(new Path(columnRangeMetadata.getFilePath()).getName())
+              .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
               .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
               .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
@@ -640,6 +675,36 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       return new HoodieAvroRecord<>(key, payload);
     });
+  }
+
+  public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionPath,
+                                                                 Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
+                                                                 boolean isDeleted) {
+    return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
+      HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
+          MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
+          HoodieMetadataColumnStats.newBuilder()
+              .setFileName(null)
+              .setColumnName(columnRangeMetadata.getColumnName())
+              .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
+              .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
+              .setNullCount(columnRangeMetadata.getNullCount())
+              .setValueCount(columnRangeMetadata.getValueCount())
+              .setTotalSize(columnRangeMetadata.getTotalSize())
+              .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
+              .setIsDeleted(isDeleted)
+              .build());
+
+      return new HoodieAvroRecord<>(key, payload);
+    });
+  }
+
+  public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(HoodieTableMetadataUtil.getColumnStatsIndexPartitionIdentifier(partitionPath));
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+    return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
   }
 
   @SuppressWarnings({"rawtypes", "unchecked"})
@@ -746,6 +811,30 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               1));
       return new HoodieAvroRecord<>(key, payload);
     }
+  }
+
+  /**
+   * Create and return a {@code HoodieMetadataPayload} to insert or update an entry for the secondary index.
+   * <p>
+   * Each entry maps the secondary key of a single record in HUDI to its record (or primary) key
+   *
+   * @param recordKey     Primary key of the record
+   * @param secondaryKey  Secondary key of the record
+   * @param isDeleted     true if this record is deleted
+   */
+  public static HoodieRecord<HoodieMetadataPayload> createSecondaryIndex(String recordKey, String secondaryKey, String partitionPath, Boolean isDeleted) {
+
+    HoodieKey key = new HoodieKey(secondaryKey, partitionPath);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(secondaryKey, new HoodieSecondaryIndexInfo(recordKey, isDeleted));
+    return new HoodieAvroRecord<>(key, payload);
+  }
+
+  public String getRecordKeyFromSecondaryIndex() {
+    return secondaryIndexMetadata.getRecordKey();
+  }
+
+  public boolean isSecondaryIndexDeleted() {
+    return secondaryIndexMetadata.getIsDeleted();
   }
 
   /**

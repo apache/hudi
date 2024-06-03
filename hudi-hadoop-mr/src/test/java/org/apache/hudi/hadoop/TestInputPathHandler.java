@@ -24,8 +24,9 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -162,17 +163,18 @@ public class TestInputPathHandler {
     properties.setProperty(HoodieTableConfig.TYPE.key(), tableType.name());
     properties.setProperty(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), HoodieAvroPayload.class.getName());
     properties.setProperty(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-    return HoodieTableMetaClient.initTableAndGetMetaClient(hadoopConf, basePath, properties);
+    return HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath, properties);
   }
 
   static List<Path> generatePartitions(DistributedFileSystem dfs, String basePath)
       throws IOException {
     List<Path> paths = new ArrayList<>();
-    paths.add(new Path(basePath + HoodieLocation.SEPARATOR + "2019/05/21"));
-    paths.add(new Path(basePath + HoodieLocation.SEPARATOR + "2019/05/22"));
-    paths.add(new Path(basePath + HoodieLocation.SEPARATOR + "2019/05/23"));
-    paths.add(new Path(basePath + HoodieLocation.SEPARATOR + "2019/05/24"));
-    paths.add(new Path(basePath + HoodieLocation.SEPARATOR + "2019/05/25"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/21"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/22"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/23"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/24"));
+    paths.add(new Path(basePath + StoragePath.SEPARATOR + "2019/05/25"));
     for (Path path : paths) {
       dfs.mkdirs(path);
     }

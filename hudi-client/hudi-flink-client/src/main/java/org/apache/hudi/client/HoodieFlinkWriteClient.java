@@ -57,6 +57,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -254,6 +255,7 @@ public class HoodieFlinkWriteClient<T> extends
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
+      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
       HoodieWriteMetadata<List<WriteStatus>> result;
       records.get(0).getCurrentLocation().setInstantTime("I");
       try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
@@ -476,7 +478,7 @@ public class HoodieFlinkWriteClient<T> extends
       case INSERT_OVERWRITE_TABLE:
         Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
         List<String> partitionPaths =
-            FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+            FSUtils.getAllPartitionPaths(context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
         if (partitionPaths != null && partitionPaths.size() > 0) {
           context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
           partitionToExistingFileIds = partitionPaths.stream().parallel()

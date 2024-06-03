@@ -23,7 +23,9 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkFunctionalIndexClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.secondary.SecondaryIndexManager
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -48,7 +50,7 @@ case class CreateIndexCommand(table: CatalogTable,
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
-    if (options.contains("func")) {
+    if (options.contains("func") || indexType.equals("secondary_index")) {
       HoodieSparkFunctionalIndexClient.getInstance(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, options.asJava)
     } else {
@@ -130,8 +132,8 @@ abstract class IndexBaseCommand extends HoodieLeafRunnableCommand with Logging {
     val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableId)
     val basePath = getTableLocation(catalogTable, sparkSession)
     HoodieTableMetaClient.builder()
-        .setConf(sparkSession.sqlContext.sparkContext.hadoopConfiguration)
-        .setBasePath(basePath)
-        .build()
+      .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf))
+      .setBasePath(basePath)
+      .build()
   }
 }

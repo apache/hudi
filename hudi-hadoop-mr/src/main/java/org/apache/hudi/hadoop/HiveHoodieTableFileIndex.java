@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -27,6 +25,9 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableQueryType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.StoragePath;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,7 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
                                   HoodieTableMetaClient metaClient,
                                   TypedProperties configProperties,
                                   HoodieTableQueryType queryType,
-                                  List<Path> queryPaths,
+                                  List<StoragePath> queryPaths,
                                   Option<String> specifiedQueryInstant,
                                   boolean shouldIncludePendingCommits
   ) {
@@ -83,12 +84,12 @@ public class HiveHoodieTableFileIndex extends BaseHoodieTableFileIndex {
 
   static class NoopCache implements FileStatusCache {
     @Override
-    public Option<FileStatus[]> get(Path path) {
+    public Option<List<StoragePathInfo>> get(StoragePath path) {
       return Option.empty();
     }
 
     @Override
-    public void put(Path path, FileStatus[] leafFiles) {
+    public void put(StoragePath path, List<StoragePathInfo> leafFiles) {
       // no-op
     }
 

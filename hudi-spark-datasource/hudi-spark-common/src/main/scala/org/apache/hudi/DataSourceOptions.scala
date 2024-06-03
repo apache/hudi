@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGene
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
 
@@ -428,6 +429,13 @@ object DataSourceWriteOptions {
   val RECORDKEY_FIELD = KeyGeneratorOptions.RECORDKEY_FIELD_NAME
 
   /**
+   * Secondary key field. Columns to be used as the secondary index columns. Actual value
+   * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+   * the dot notation eg: `a.b.c`
+   */
+  val SECONDARYKEY_COLUMN_NAME = KeyGeneratorOptions.SECONDARYKEY_COLUMN_NAME
+
+  /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
    * value obtained by invoking .toString()
    */
@@ -459,6 +467,18 @@ object DataSourceWriteOptions {
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
     .defaultValue("true")
+    .withInferFunction(
+      JFunction.toJavaFunction((config: HoodieConfig) => {
+        if (config.getString(OPERATION) == WriteOperationType.BULK_INSERT.value
+          && !config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+          && config.getBooleanOrDefault(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
+          // need to turn off row writing for BULK_INSERT without meta fields with turned on COMBINE_BEFORE_INSERT to prevent shortcutting and ignoring COMBINE_BEFORE_INSERT setting
+          Option.of("false")
+        } else {
+          Option.empty()
+        }
+      })
+    )
     .markAdvanced()
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")
@@ -500,7 +520,9 @@ object DataSourceWriteOptions {
     .defaultValue("false")
     .markAdvanced()
     .withDocumentation("If set to true, records from the incoming dataframe will not overwrite existing records with the same key during the write operation. " +
-      "This config is deprecated as of 0.14.0. Please use hoodie.datasource.insert.dup.policy instead.");
+      "<br /> **Note** Just for Insert operation in Spark SQL writing since 0.14.0, users can switch to the config `hoodie.datasource.insert.dup.policy` instead " +
+      "for a simplified duplicate handling experience. The new config will be incorporated into all other writing flows and this config will be fully deprecated " +
+      "in future releases.");
 
   val PARTITIONS_TO_DELETE: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.partitions.to.delete")
@@ -563,8 +585,6 @@ object DataSourceWriteOptions {
 
   val SET_NULL_FOR_MISSING_COLUMNS: ConfigProperty[String] = HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS
 
-  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
-
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.insert.into.operation")
     .defaultValue(WriteOperationType.INSERT.value())
@@ -597,7 +617,7 @@ object DataSourceWriteOptions {
     .withValidValues(NONE_INSERT_DUP_POLICY, DROP_INSERT_DUP_POLICY, FAIL_INSERT_DUP_POLICY)
     .markAdvanced()
     .sinceVersion("0.14.0")
-    .withDocumentation("When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
+    .withDocumentation("**Note** This is only applicable to Spark SQL writing.<br />When operation type is set to \"insert\", users can optionally enforce a dedup policy. This policy will be employed "
       + " when records being ingested already exists in storage. Default policy is none and no action will be taken. Another option is to choose " +
       " \"drop\", on which matching records from incoming will be dropped and the rest will be ingested. Third option is \"fail\" which will " +
       "fail the write operation when same records are re-ingested. In other words, a given record as deduced by the key generation policy " +
@@ -1037,7 +1057,7 @@ object DataSourceOptionsHelper {
     var newProp: ConfigProperty[U] = ConfigProperty.key(prop.key())
       .defaultValue(converter(prop.defaultValue()))
       .withDocumentation(prop.doc())
-      .withAlternatives(prop.getAlternatives.asScala: _*)
+      .withAlternatives(prop.getAlternatives.asScala.toSeq: _*)
 
     newProp = toScalaOption(prop.getSinceVersion) match {
       case Some(version) => newProp.sinceVersion(version)

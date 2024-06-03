@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -34,10 +33,10 @@ import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -48,6 +47,9 @@ import org.apache.hudi.hadoop.RealtimeFileStatus;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
@@ -107,17 +109,19 @@ public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
   private JobConf baseJobConf;
+  private HoodieStorage storage;
   private FileSystem fs;
-  private Configuration hadoopConf;
+  private StorageConfiguration<Configuration> storageConf;
 
   @BeforeEach
   public void setUp() {
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    hadoopConf.set("fs.defaultFS", "file:///");
-    hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
-    baseJobConf = new JobConf(hadoopConf);
+    storageConf = HoodieTestUtils.getDefaultStorageConf();
+    storageConf.set("fs.defaultFS", "file:///");
+    storageConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
+    baseJobConf = new JobConf(storageConf.unwrap());
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
+    storage = new HoodieHadoopStorage(fs);
   }
 
   @AfterEach
@@ -136,7 +140,8 @@ public class TestHoodieRealtimeRecordReader {
 
   private Writer writeLogFile(File partitionDir, Schema schema, String fileId, String baseCommit, String newCommit,
                               int numberOfRecords) throws InterruptedException, IOException {
-    return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, fileId, baseCommit, newCommit,
+    return InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, fileId,
+        baseCommit, newCommit,
         numberOfRecords, 0,
         0);
   }
@@ -187,7 +192,7 @@ public class TestHoodieRealtimeRecordReader {
                                   boolean partitioned, HoodieLogBlock.HoodieLogBlockType logBlockType) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = partitioned ? InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ)
@@ -206,7 +211,7 @@ public class TestHoodieRealtimeRecordReader {
     // TODO: HUDI-154 Once Hive 2.x PR (PR-674) is merged, enable this change
     // logVersionsWithAction.add(Pair.of(HoodieTimeline.ROLLBACK_ACTION, 3));
     FileSlice fileSlice =
-        new FileSlice(partitioned ? FSUtils.getRelativePartitionPath(new Path(basePath.toString()),
+        new FileSlice(partitioned ? HadoopFSUtils.getRelativePartitionPath(new Path(basePath.toString()),
             new Path(partitionDir.getAbsolutePath())) : "default", baseInstant, "fileid0");
     logVersionsWithAction.forEach(logVersionWithAction -> {
       try {
@@ -221,11 +226,13 @@ public class TestHoodieRealtimeRecordReader {
 
         HoodieLogFormat.Writer writer;
         if (action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          writer = InputFormatTestUtil.writeRollback(partitionDir, fs, "fileid0", baseInstant, instantTime,
+          writer = InputFormatTestUtil.writeRollback(partitionDir, storage, "fileid0", baseInstant,
+              instantTime,
               String.valueOf(baseInstantTs + logVersion - 1), logVersion);
         } else {
           writer =
-              InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", baseInstant,
+              InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+                  baseInstant,
                   instantTime, 120, 0, logVersion, logBlockType);
         }
         long size = writer.getCurrentSize();
@@ -297,7 +304,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testUnMergedReader() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     final int numRecords = 1000;
     final int firstBatchLastRecordKey = numRecords - 1;
@@ -313,7 +320,8 @@ public class TestHoodieRealtimeRecordReader {
     // insert new records to log file
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime, newCommitTime,
             numRecords, numRecords, 0);
     long size = writer.getCurrentSize();
     writer.close();
@@ -380,7 +388,7 @@ public class TestHoodieRealtimeRecordReader {
                                                    boolean isCompressionEnabled) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -521,7 +529,7 @@ public class TestHoodieRealtimeRecordReader {
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -539,7 +547,8 @@ public class TestHoodieRealtimeRecordReader {
     schema = SchemaTestUtil.getComplexEvolvedSchema();
     String newCommitTime = "101";
     HoodieLogFormat.Writer writer =
-        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+        InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime, newCommitTime,
             numberOfLogRecords, 0, 1);
     long size = writer.getCurrentSize();
     logFiles.add(writer.getLogFile());
@@ -548,18 +557,23 @@ public class TestHoodieRealtimeRecordReader {
 
     // write rollback for the previous block in new log file version
     newCommitTime = "102";
-    writer = InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime,
-        newCommitTime, "101", 1);
+    writer =
+        InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, storage, schema, "fileid0",
+            instantTime,
+            newCommitTime, "101", 1);
     logFiles.add(writer.getLogFile());
     writer.close();
 
-    commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-        schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
+    commitMetadata =
+        CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+            WriteOperationType.UPSERT,
+            schema.toString(), HoodieTimeline.DELTA_COMMIT_ACTION);
     FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
 
     // create a split with baseFile (parquet file written earlier) and new log file(s)
     HoodieRealtimeFileSplit split = new HoodieRealtimeFileSplit(
-        new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1, baseJobConf),
+        new FileSplit(new Path(partitionDir + "/fileid0_1_" + instantTime + ".parquet"), 0, 1,
+            baseJobConf),
         basePath.toUri().toString(), logFiles, newCommitTime, false, Option.empty());
 
     // create a RecordReader to be used by HoodieRealtimeRecordReader
@@ -606,7 +620,7 @@ public class TestHoodieRealtimeRecordReader {
     // initial commit
     List<HoodieLogFile> logFiles = new ArrayList<>();
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;
     int numberOfLogRecords = numberOfRecords / 2;
@@ -675,7 +689,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testIncrementalWithOnlylog() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     final int numRecords = 1000;
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, numRecords, instantTime,
@@ -688,7 +702,8 @@ public class TestHoodieRealtimeRecordReader {
     try {
       String newCommitTime = "102";
       HoodieLogFormat.Writer writer =
-          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid0", instantTime, newCommitTime,
+          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid0",
+              instantTime, newCommitTime,
               numRecords, numRecords, 0);
       writer.close();
       createDeltaCommitFile(basePath, newCommitTime, "2016/05/01", "2016/05/01/.fileid0_102.log.0_1-0-1", "fileid0", schema.toString());
@@ -725,7 +740,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testIncrementalWithReplace() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);
@@ -837,7 +852,7 @@ public class TestHoodieRealtimeRecordReader {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
     URI baseUri = basePath.toUri();
-    HoodieTestUtils.init(hadoopConf, baseUri.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, baseUri.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareNonPartitionedParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);
@@ -851,18 +866,23 @@ public class TestHoodieRealtimeRecordReader {
       int logVersion = 1;
       int baseInstantTs = Integer.parseInt(baseInstant);
       String instantTime = String.valueOf(baseInstantTs + logVersion);
-      HoodieLogFormat.Writer writer = InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, fs, schema, "fileid1", baseInstant,
-          instantTime, 100, 0, logVersion);
+      HoodieLogFormat.Writer writer =
+          InputFormatTestUtil.writeDataBlockToLogFile(partitionDir, storage, schema, "fileid1",
+              baseInstant,
+              instantTime, 100, 0, logVersion);
       long size = writer.getCurrentSize();
       writer.close();
       assertTrue(size > 0, "block - size should be > 0");
-      HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
-          schema.toString(), HoodieTimeline.COMMIT_ACTION);
+      HoodieCommitMetadata commitMetadata =
+          CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(),
+              WriteOperationType.UPSERT,
+              schema.toString(), HoodieTimeline.COMMIT_ACTION);
       FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
       // create a split with new log file(s)
       fileSlice.addLogFile(new HoodieLogFile(writer.getLogFile().getPath(), size));
       RealtimeFileStatus realtimeFileStatus = new RealtimeFileStatus(
-          new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0, writer.getLogFile().getPath()),
+          new FileStatus(writer.getLogFile().getFileSize(), false, 1, 1, 0,
+              new Path(writer.getLogFile().getPath().toUri())),
           baseUri.toString(),
           fileSlice.getLogFiles().collect(Collectors.toList()),
           false,
@@ -914,7 +934,7 @@ public class TestHoodieRealtimeRecordReader {
   public void testIncrementalWithCompaction() throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
-    HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(storageConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String baseInstant = "100";
     File partitionDir = InputFormatTestUtil.prepareParquetTable(basePath, schema, 1, 100, baseInstant,
         HoodieTableType.MERGE_ON_READ);

@@ -36,7 +36,6 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME;
 import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY;
-
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE;
 
 /**
@@ -73,22 +72,36 @@ public class HoodieAWSConfig extends HoodieConfig {
           .key("hoodie.aws.role.arn")
           .noDefaultValue()
           .markAdvanced()
-          .sinceVersion("0.13.2")
+          .sinceVersion("0.15.0")
           .withDocumentation("AWS Role ARN to assume");
 
-  public static final ConfigProperty<String> AWS_GLUE_ENDPOINT = ConfigProperty
-          .key("hoodie.aws.glue.endpoint")
+  public static final ConfigProperty<String> AWS_ASSUME_ROLE_SESSION_NAME = ConfigProperty
+          .key("hoodie.aws.role.session.name")
+          .defaultValue("hoodie")
+          .markAdvanced()
+          .sinceVersion("0.15.0")
+          .withDocumentation("Session name to use when assuming the AWS Role");
+
+  public static final ConfigProperty<String> AWS_ASSUME_ROLE_EXTERNAL_ID = ConfigProperty
+          .key("hoodie.aws.role.external.id")
           .noDefaultValue()
           .markAdvanced()
-          .sinceVersion("0.14.2")
-          .withDocumentation("Aws glue endpoint");
+          .sinceVersion("0.15.0")
+          .withDocumentation("External ID use when assuming the AWS Role");
+
+  public static final ConfigProperty<String> AWS_GLUE_ENDPOINT = ConfigProperty
+      .key("hoodie.aws.glue.endpoint")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Aws glue endpoint");
 
   public static final ConfigProperty<String> AWS_GLUE_REGION = ConfigProperty
-          .key("hoodie.aws.glue.region")
-          .noDefaultValue()
-          .markAdvanced()
-          .sinceVersion("0.14.2")
-          .withDocumentation("Aws glue endpoint");
+      .key("hoodie.aws.glue.region")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Aws glue endpoint");
 
   private HoodieAWSConfig() {
     super();
@@ -112,6 +125,14 @@ public class HoodieAWSConfig extends HoodieConfig {
 
   public String getAWSAssumeRoleARN() {
     return getString(AWS_ASSUME_ROLE_ARN);
+  }
+
+  public String getAWSAssumeRoleExternalID() {
+    return getString(AWS_ASSUME_ROLE_EXTERNAL_ID);
+  }
+
+  public String getAWSAssumeRoleSessionName() {
+    return getString(AWS_ASSUME_ROLE_SESSION_NAME);
   }
 
   public static class Builder {
@@ -147,6 +168,16 @@ public class HoodieAWSConfig extends HoodieConfig {
 
     public HoodieAWSConfig.Builder withAssumeRoleARN(String assumeRoleARN) {
       awsConfig.setValue(AWS_ASSUME_ROLE_ARN, assumeRoleARN);
+      return this;
+    }
+
+    public HoodieAWSConfig.Builder withAssumeRoleExternalID(String assumeRoleExternalID) {
+      awsConfig.setValue(AWS_ASSUME_ROLE_EXTERNAL_ID, assumeRoleExternalID);
+      return this;
+    }
+
+    public HoodieAWSConfig.Builder withAssumeRoleSessionName(String assumeRoleSessionName) {
+      awsConfig.setValue(AWS_ASSUME_ROLE_SESSION_NAME, assumeRoleSessionName);
       return this;
     }
 

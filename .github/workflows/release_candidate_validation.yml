@@ -1,0 +1,103 @@
+name: Release Candidate Validation
+
+on:
+  push:
+    branches:
+      - 'release-*'
+  pull_request:
+    branches:
+      - 'release-*'
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5
+  SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
+
+jobs:
+  validate-release-candidate-bundles:
+    runs-on: ubuntu-latest
+    if: false
+    env:
+      HUDI_VERSION: 0.14.1
+      STAGING_REPO_NUM: 1123
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.18'
+            sparkProfile: 'spark3.4'
+            sparkRuntime: 'spark3.4.0'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.17'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.2'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.16'
+            sparkProfile: 'spark3.3'
+            sparkRuntime: 'spark3.3.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.15'
+            sparkProfile: 'spark3.2'
+            sparkRuntime: 'spark3.2.3'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.1'
+            sparkRuntime: 'spark3.1.3'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.14'
+            sparkProfile: 'spark3.0'
+            sparkRuntime: 'spark3.0.2'
+          - scalaProfile: 'scala-2.11'
+            flinkProfile: 'flink1.14'
+            sparkProfile: 'spark'
+            sparkRuntime: 'spark2.4.8'
+          - scalaProfile: 'scala-2.11'
+            flinkProfile: 'flink1.14'
+            sparkProfile: 'spark2.4'
+            sparkRuntime: 'spark2.4.8'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: IT - Bundle Validation - OpenJDK 8
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run: |
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8 $STAGING_REPO_NUM
+      - name: IT - Bundle Validation - OpenJDK 11
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        if: ${{ env.SPARK_PROFILE >= 'spark3' }} # Only run validation on Spark 3
+        run: |
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11 $STAGING_REPO_NUM
+      - name: IT - Bundle Validation - OpenJDK 17
+        env:
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        if: ${{ env.SPARK_PROFILE >= 'spark3.3' }} # Only Spark 3.3 and above support Java 17
+        run: |
+          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17 $STAGING_REPO_NUM

@@ -41,9 +41,12 @@ public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredent
 
   public HoodieConfigAWSAssumedRoleCredentialsProvider(Properties props) {
     String roleArn = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN.key());
+    String externalId = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_EXTERNAL_ID.key());
+    String sessionName = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_SESSION_NAME.key());
     AssumeRoleRequest req = AssumeRoleRequest.builder()
           .roleArn(roleArn)
-          .roleSessionName("hoodie")
+          .roleSessionName(sessionName)
+          .externalId(externalId)
           .build();
     StsClient stsClient = StsClient.builder().build();
 

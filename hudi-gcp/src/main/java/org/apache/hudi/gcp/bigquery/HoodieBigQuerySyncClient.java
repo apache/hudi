@@ -44,6 +44,7 @@ import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableInfo;
 import com.google.cloud.bigquery.ViewDefinition;
+import com.google.cloud.bigquery.StandardTableDefinition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,16 +199,22 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       LOG.info("No table update is needed.");
       return; // No need to update schema.
     }
-    ExternalTableDefinition.Builder builder = definition.toBuilder();
-    builder.setSchema(finalSchema);
-    builder.setAutodetect(false);
-    if (definition.getHivePartitioningOptions() != null) {
-      builder.setHivePartitioningOptions(definition.getHivePartitioningOptions().toBuilder().setRequirePartitionFilter(requirePartitionFilter).build());
+    if (!StringUtils.isNullOrEmpty(bigLakeConnectionId)) {
+      Table updatedTable =
+              existingTable.toBuilder().setDefinition(StandardTableDefinition.of(finalSchema)).build();
+      updatedTable.update();
+    } else {
+      ExternalTableDefinition.Builder builder = definition.toBuilder();
+      builder.setSchema(finalSchema);
+      builder.setAutodetect(false);
+      if (definition.getHivePartitioningOptions() != null) {
+        builder.setHivePartitioningOptions(definition.getHivePartitioningOptions().toBuilder().setRequirePartitionFilter(requirePartitionFilter).build());
+      }
+      Table updatedTable = existingTable.toBuilder()
+              .setDefinition(builder.build())
+              .build();
+      bigquery.update(updatedTable);
     }
-    Table updatedTable = existingTable.toBuilder()
-        .setDefinition(builder.build())
-        .build();
-    bigquery.update(updatedTable);
   }
 
   public void createVersionsTable(String tableName, String sourceUri, String sourceUriPrefix, List<String> partitionFields) {

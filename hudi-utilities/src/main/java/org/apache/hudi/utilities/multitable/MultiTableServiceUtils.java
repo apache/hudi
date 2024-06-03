@@ -20,12 +20,13 @@
 package org.apache.hudi.utilities.multitable;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.utilities.UtilHelpers;
 
 import org.apache.hadoop.conf.Configuration;
@@ -62,7 +63,7 @@ public class MultiTableServiceUtils {
   }
 
   public static List<String> getTablesToBeServedFromProps(JavaSparkContext jsc, TypedProperties properties) {
-    SerializableConfiguration conf = new SerializableConfiguration(jsc.hadoopConfiguration());
+    StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     String combinedTablesString = properties.getString(Constants.TABLES_TO_BE_SERVED_PROP);
     boolean skipWrongPath = properties.getBoolean(Constants.TABLES_SKIP_WRONG_PATH, false);
     if (combinedTablesString == null) {
@@ -74,7 +75,7 @@ public class MultiTableServiceUtils {
     if (skipWrongPath) {
       tablePaths = Arrays.stream(tablesArray)
           .filter(tablePath -> {
-            if (isHoodieTable(new Path(tablePath), conf.get())) {
+            if (isHoodieTable(new Path(tablePath), conf.unwrap())) {
               return true;
             } else {
               // Log the wrong path in console.
@@ -85,7 +86,7 @@ public class MultiTableServiceUtils {
     } else {
       tablePaths = Arrays.asList(tablesArray);
       tablePaths.stream()
-          .filter(tablePath -> !isHoodieTable(new Path(tablePath), conf.get()))
+          .filter(tablePath -> !isHoodieTable(new Path(tablePath), conf.unwrap()))
           .findFirst()
           .ifPresent(tablePath -> {
             throw new TableNotFoundException("Table not found: " + tablePath);
@@ -105,8 +106,8 @@ public class MultiTableServiceUtils {
 
   public static List<String> findHoodieTablesUnderPath(JavaSparkContext jsc, String pathStr) {
     Path rootPath = new Path(pathStr);
-    SerializableConfiguration conf = new SerializableConfiguration(jsc.hadoopConfiguration());
-    if (isHoodieTable(rootPath, conf.get())) {
+    StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
+    if (isHoodieTable(rootPath, conf.unwrap())) {
       return Collections.singletonList(pathStr);
     }
 
@@ -119,7 +120,7 @@ public class MultiTableServiceUtils {
     while (!pathsToList.isEmpty()) {
       // List all directories in parallel
       List<FileStatus[]> dirToFileListing = engineContext.map(pathsToList, path -> {
-        FileSystem fileSystem = path.getFileSystem(conf.get());
+        FileSystem fileSystem = path.getFileSystem(conf.unwrap());
         return fileSystem.listStatus(path);
       }, listingParallelism);
       pathsToList.clear();
@@ -131,7 +132,7 @@ public class MultiTableServiceUtils {
 
       if (!dirs.isEmpty()) {
         List<Pair<FileStatus, DirType>> dirResults = engineContext.map(dirs, fileStatus -> {
-          if (isHoodieTable(fileStatus.getPath(), conf.get())) {
+          if (isHoodieTable(fileStatus.getPath(), conf.unwrap())) {
             return Pair.of(fileStatus, DirType.HOODIE_TABLE);
           } else if (fileStatus.getPath().getName().equals(METAFOLDER_NAME)) {
             return Pair.of(fileStatus, DirType.META_FOLDER);

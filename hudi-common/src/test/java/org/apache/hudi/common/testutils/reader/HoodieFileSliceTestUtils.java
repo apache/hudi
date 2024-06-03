@@ -19,11 +19,10 @@
 
 package org.apache.hudi.common.testutils.reader;
 
-import org.apache.hudi.avro.HoodieAvroWriteSupport;
-import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -34,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
@@ -43,18 +43,17 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieAvroParquetWriter;
-import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hbase.io.compress.Compression;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
@@ -68,6 +67,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
@@ -164,7 +165,7 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Path logFilePath
+      StoragePath logFilePath
   ) {
     return createDataBlock(
         dataBlockType,
@@ -178,7 +179,7 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      Path pathForReader
+      StoragePath pathForReader
   ) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -196,7 +197,7 @@ public class HoodieFileSliceTestUtils {
         return new HoodieHFileDataBlock(
             records,
             header,
-            Compression.Algorithm.GZ,
+            HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(),
             pathForReader,
             HoodieReaderConfig.USE_NATIVE_HFILE_READER.defaultValue());
       case PARQUET_DATA_BLOCK:
@@ -205,7 +206,7 @@ public class HoodieFileSliceTestUtils {
             false,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            CompressionCodecName.GZIP,
+            PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
             0.1,
             true);
       default:
@@ -243,35 +244,31 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    Configuration hadoopConf = new Configuration();
+    HoodieStorage storage = HoodieTestUtils.getStorage(baseFilePath);
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
-    BloomFilter filter = BloomFilterFactory.createBloomFilter(
-        1000,
-        0.0001,
-        10000,
-        BloomFilterTypeCode.DYNAMIC_V0.name());
-    HoodieAvroWriteSupport<IndexedRecord> writeSupport = new HoodieAvroWriteSupport<>(
-        new AvroSchemaConverter().convert(schema),
-        schema,
-        Option.of(filter),
-        new Properties());
-    HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig = new HoodieParquetConfig(
-        writeSupport,
-        CompressionCodecName.GZIP,
-        ParquetWriter.DEFAULT_BLOCK_SIZE,
-        ParquetWriter.DEFAULT_PAGE_SIZE,
-        1024 * 1024 * 1024,
-        hadoopConf,
-        0.1,
-        true);
+    HoodieConfig cfg = new HoodieConfig();
+    //enable bloom filter
+    cfg.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    cfg.setValue(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED.key(), "true");
 
-    try (HoodieAvroParquetWriter writer = new HoodieAvroParquetWriter(
-        new Path(baseFilePath),
-        parquetConfig,
-        baseInstantTime,
-        new LocalTaskContextSupplier(),
-        true)) {
+    //set bloom filter values
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_NUM_ENTRIES_VALUE.key(), String.valueOf(1000));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_FPP_VALUE.key(), String.valueOf(0.00001));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_DYNAMIC_MAX_ENTRIES.key(), String.valueOf(10000));
+    cfg.setValue(HoodieStorageConfig.BLOOM_FILTER_TYPE.key(), BloomFilterTypeCode.DYNAMIC_V0.name());
+
+    //set parquet config values
+    cfg.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), CompressionCodecName.GZIP.name());
+    cfg.setValue(HoodieStorageConfig.PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
+    cfg.setValue(HoodieStorageConfig.PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
+    cfg.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    cfg.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION.key(), String.valueOf(0.1));
+    cfg.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.key(), "true");
+
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
+        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
+            schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
             (String) record.get(schema.getField(ROW_KEY).pos()), record);
@@ -281,7 +278,7 @@ public class HoodieFileSliceTestUtils {
   }
 
   public static HoodieLogFile createLogFile(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       String logFilePath,
       List<IndexedRecord> records,
       Schema schema,
@@ -292,19 +289,19 @@ public class HoodieFileSliceTestUtils {
   ) throws InterruptedException, IOException {
     try (HoodieLogFormat.Writer writer =
              HoodieLogFormat.newWriterBuilder()
-                 .onParentPath(new Path(logFilePath).getParent())
+                 .onParentPath(new StoragePath(logFilePath).getParent())
                  .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
                  .withFileId(fileId)
                  .withDeltaCommit(logInstantTime)
                  .withLogVersion(version)
-                 .withFs(fileSystem).build()) {
+                 .withStorage(storage).build()) {
       Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, logInstantTime);
       header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new Path(logFilePath));
+            blockType, records, header, new StoragePath(logFilePath));
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
@@ -319,7 +316,7 @@ public class HoodieFileSliceTestUtils {
    * Based on provided parameters to generate a {@link FileSlice} object.
    */
   public static FileSlice generateFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       String basePath,
       String fileId,
       String partitionPath,
@@ -357,7 +354,7 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType blockType =
           logFilePlan.getOperationType() == DELETE ? DELETE_BLOCK : PARQUET_DATA_BLOCK;
       logFiles.add(createLogFile(
-          fileSystem,
+          storage,
           logFile.toString(),
           records,
           schema,
@@ -377,7 +374,7 @@ public class HoodieFileSliceTestUtils {
    * Generate a {@link FileSlice} object which contains a {@link HoodieBaseFile} only.
    */
   public static Option<FileSlice> getBaseFileOnlyFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       KeyRange range,
       long timestamp,
       String basePath,
@@ -398,7 +395,7 @@ public class HoodieFileSliceTestUtils {
     plans.add(baseFilePlan);
 
     return Option.of(generateFileSlice(
-        fileSystem,
+        storage,
         basePath,
         fileId,
         partitionPath,
@@ -410,7 +407,7 @@ public class HoodieFileSliceTestUtils {
    * Generate a regular {@link FileSlice} containing both a base file and a number of log files.
    */
   public static Option<FileSlice> getFileSlice(
-      FileSystem fileSystem,
+      HoodieStorage storage,
       List<KeyRange> ranges,
       List<Long> timestamps,
       List<DataGenerationPlan.OperationType> operationTypes,
@@ -432,7 +429,7 @@ public class HoodieFileSliceTestUtils {
     }
 
     return Option.of(generateFileSlice(
-        fileSystem,
+        storage,
         basePath,
         fileId,
         partitionPath,

@@ -24,12 +24,15 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.Path;
 
 import java.util.Iterator;
 import java.util.Map;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Factory clazz for flink write handles.
@@ -107,8 +110,8 @@ public class FlinkWriteHandleFactory {
       Path writePath = bucketToHandles.get(fileID);
       if (writePath != null) {
         HoodieWriteHandle<?, ?, ?, ?> writeHandle =
-            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, writePath);
-        bucketToHandles.put(fileID, ((MiniBatchHandle) writeHandle).getWritePath()); // override with new replace handle
+            createReplaceHandle(config, instantTime, table, recordItr, partitionPath, fileID, convertToStoragePath(writePath));
+        bucketToHandles.put(fileID, new Path(((MiniBatchHandle) writeHandle).getWritePath().toUri())); // override with new replace handle
         return writeHandle;
       }
 
@@ -119,7 +122,7 @@ public class FlinkWriteHandleFactory {
       } else {
         writeHandle = createMergeHandle(config, instantTime, table, recordItr, partitionPath, fileID);
       }
-      bucketToHandles.put(fileID, ((MiniBatchHandle) writeHandle).getWritePath());
+      bucketToHandles.put(fileID, new Path(((MiniBatchHandle) writeHandle).getWritePath().toUri()));
       return writeHandle;
     }
 
@@ -130,7 +133,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId,
-        Path basePath);
+        StoragePath basePath);
 
     protected abstract HoodieWriteHandle<?, ?, ?, ?> createMergeHandle(
         HoodieWriteConfig config,
@@ -161,7 +164,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId,
-        Path basePath) {
+        StoragePath basePath) {
       return new FlinkMergeAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
@@ -199,7 +202,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId,
-        Path basePath) {
+        StoragePath basePath) {
       return new FlinkConcatAndReplaceHandle<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }
@@ -237,7 +240,7 @@ public class FlinkWriteHandleFactory {
         Iterator<HoodieRecord<T>> recordItr,
         String partitionPath,
         String fileId,
-        Path basePath) {
+        StoragePath basePath) {
       return new FlinkMergeAndReplaceHandleWithChangeLog<>(config, instantTime, table, recordItr, partitionPath, fileId,
           table.getTaskContextSupplier(), basePath);
     }

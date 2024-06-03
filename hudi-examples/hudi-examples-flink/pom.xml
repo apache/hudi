@@ -30,7 +30,7 @@
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
         <checkstyle.skip>true</checkstyle.skip>
-        <parquet.version>1.11.1</parquet.version>
+        <parquet.version>${flink.format.parquet.version}</parquet.version>
     </properties>
 
     <build>
@@ -69,9 +69,6 @@
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
-            <resource>
-                <directory>src/test/resources</directory>
-            </resource>
         </resources>
     </build>
 
@@ -80,6 +77,11 @@
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hadoop-common</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -187,6 +189,12 @@
             <version>${flink.version}</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.flink</groupId>
+            <artifactId>flink-metrics-dropwizard</artifactId>
+            <version>${flink.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
         <dependency>
             <groupId>org.apache.parquet</groupId>
@@ -229,7 +237,7 @@
         <dependency>
             <groupId>com.twitter</groupId>
             <artifactId>bijection-avro_${scala.binary.version}</artifactId>
-            <version>0.9.7</version>
+            <version>${bijection-avro.version}</version>
         </dependency>
         <dependency>
             <groupId>joda-time</groupId>
@@ -270,6 +278,14 @@
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-common</artifactId>
+            <version>${project.version}</version>
+            <classifier>tests</classifier>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-hadoop-common</artifactId>
             <version>${project.version}</version>
             <classifier>tests</classifier>
             <type>test-jar</type>

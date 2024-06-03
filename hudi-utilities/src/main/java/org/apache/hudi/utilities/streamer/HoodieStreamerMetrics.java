@@ -20,7 +20,9 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import com.codahale.metrics.Timer;
@@ -36,10 +38,14 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   private transient Timer hiveSyncTimer;
   private transient Timer metaSyncTimer;
 
-  public HoodieStreamerMetrics(HoodieWriteConfig writeConfig) {
-    super(writeConfig);
+  public HoodieStreamerMetrics(HoodieWriteConfig writeConfig, HoodieStorage storage) {
+    this(writeConfig.getMetricsConfig(), storage);
+  }
+
+  public HoodieStreamerMetrics(HoodieMetricsConfig writeConfig, HoodieStorage storage) {
+    super(writeConfig, storage);
     if (writeConfig.isMetricsOn()) {
-      metrics = Metrics.getInstance(writeConfig);
+      metrics = Metrics.getInstance(writeConfig, storage);
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
@@ -149,6 +155,19 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public void updateStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceNewMessageCount);
+    }
+  }
+
+  @Override
+  public void updateStreamerSourceParallelism(int sourceParallelism) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "sourceParallelism"), sourceParallelism);
+    }
+  }
+
+  public void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "sourceBytesToBeIngestedInSyncRound"), sourceBytesToBeIngested);
     }
   }
 

@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
@@ -26,7 +25,11 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.TablePathUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -51,16 +54,17 @@ class HoodieStreamSource(
     offsetRangeLimit: HoodieOffsetRangeLimit)
   extends Source with Logging with Serializable with SparkAdapterSupport {
 
-  @transient private val hadoopConf = sqlContext.sparkSession.sessionState.newHadoopConf()
+  @transient private val storageConf = HadoopFSUtils.getStorageConf(
+    sqlContext.sparkSession.sessionState.newHadoopConf())
 
-  private lazy val tablePath: Path = {
-    val path = new Path(parameters.getOrElse("path", "Missing 'path' option"))
-    val fs = path.getFileSystem(hadoopConf)
+  private lazy val tablePath: StoragePath = {
+    val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
+    val fs = new HoodieHadoopStorage(path, storageConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
 
   private lazy val metaClient = HoodieTableMetaClient.builder()
-    .setConf(hadoopConf).setBasePath(tablePath.toString).build()
+    .setConf(storageConf.newInstance()).setBasePath(tablePath.toString).build()
 
   private lazy val tableType = metaClient.getTableType
 

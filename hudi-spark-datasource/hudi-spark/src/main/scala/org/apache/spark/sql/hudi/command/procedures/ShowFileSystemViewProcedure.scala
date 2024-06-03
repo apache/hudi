@@ -19,20 +19,18 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
+import org.apache.hudi.storage.StoragePath
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
 import java.util.stream.Collectors
 
-import scala.collection.JavaConversions
-import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
@@ -92,13 +90,13 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                   excludeCompaction: Boolean
                                  ): HoodieTableFileSystemView = {
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val fs = metaClient.getFs
+    val metaClient = createMetaClient(jsc, basePath)
+    val storage = metaClient.getStorage
     val statuses = if (globRegex == PARAMETERS_ALL.apply(6).default) {
-      FSUtils.getAllDataFileStatus(fs, new Path(basePath))
+      FSUtils.getAllDataPathInfo(storage, new StoragePath(basePath))
     } else {
       val globPath = String.format("%s/%s/*", basePath, globRegex)
-      FSUtils.getGlobStatusExcludingMetaFolder(fs, new Path(globPath))
+      FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath))
     }
     var timeline: HoodieTimeline = if (excludeCompaction) {
       metaClient.getActiveTimeline.getCommitsTimeline
@@ -126,8 +124,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](JavaConversions.asJavaCollection(instants.toList)).stream(), details)
-    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses.toArray(new Array[FileStatus](0)))
+      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
+    new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 
   private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {
@@ -159,7 +157,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
                                    merge: Boolean): java.util.List[Row] = {
     var fileSliceStream: java.util.stream.Stream[FileSlice] = null
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
     if (!merge) {
       fileSliceStream = fsView.getLatestFileSlices(partition)

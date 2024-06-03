@@ -18,7 +18,6 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
@@ -69,7 +68,7 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -131,7 +130,7 @@ public class TestDFSHoodieTestSuiteWriterAdapter extends UtilitiesTestBase {
   // TODO(HUDI-3668): Fix this test
   public void testDFSWorkloadSinkWithMultipleFilesFunctional() throws IOException {
     DeltaConfig dfsSinkConfig = new DFSDeltaConfig(DeltaOutputMode.DFS, DeltaInputType.AVRO,
-        new SerializableConfiguration(jsc.hadoopConfiguration()), basePath, basePath,
+        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), basePath, basePath,
         schemaProvider.getSourceSchema().toString(), 10240L, jsc.defaultParallelism(), false, false);
     DeltaWriterAdapter<GenericRecord> dfsDeltaWriterAdapter = DeltaWriterFactory
         .getDeltaWriterAdapter(dfsSinkConfig, 1);

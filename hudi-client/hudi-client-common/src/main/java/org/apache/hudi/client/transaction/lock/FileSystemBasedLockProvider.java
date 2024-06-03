@@ -33,10 +33,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -72,16 +72,16 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private LockInfo lockInfo;
   private String currentOwnerLockInfo;
 
-  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);
     if (StringUtils.isNullOrEmpty(lockDirectory)) {
       lockDirectory = lockConfiguration.getConfig().getString(HoodieWriteConfig.BASE_PATH.key())
-          + HoodieLocation.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
+          + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
-    this.lockFile = new Path(lockDirectory + HoodieLocation.SEPARATOR + LOCK_FILE_NAME);
+    this.lockFile = new Path(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
     this.lockInfo = new LockInfo();
     this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
     this.fs = HadoopFSUtils.getFs(this.lockFile.toString(), configuration);
@@ -221,6 +221,6 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * <p>IMPORTANT: this path should be shared especially when there is engine cooperation.
    */
   private static String defaultLockPath(String tablePath) {
-    return tablePath + HoodieLocation.SEPARATOR + AUXILIARYFOLDER_NAME;
+    return tablePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 }

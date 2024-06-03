@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   void setUp() {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     props = new TypedProperties();
     props.setProperty(ROOT_INPUT_PATH.key(), basePath);
     props.setProperty(PARTITIONS_LIST_PARALLELISM.key(), "1");
@@ -67,12 +68,13 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreCertainPrefixes(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", ".foo2", 1);
     createBaseFile(basePath, "p1", "000", "_foo3", 1);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, 0);
+    List<FileStatus> eligibleFiles = selector.listEligibleFiles(
+        (FileSystem) storage.getFileSystem(), inputPath, 0);
     assertEquals(1, eligibleFiles.size());
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
@@ -80,12 +82,13 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnore0LengthFiles(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 0);
     createBaseFile(basePath, "p1", "000", "foo3", 0);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, 0);
+    List<FileStatus> eligibleFiles = selector.listEligibleFiles(
+        (FileSystem) storage.getFileSystem(), inputPath, 0);
     assertEquals(1, eligibleFiles.size());
     assertTrue(eligibleFiles.get(0).getPath().getName().startsWith("foo1"));
   }
@@ -93,19 +96,20 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void listEligibleFilesShouldIgnoreFilesEarlierThanCheckpointTime(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 1);
     createBaseFile(basePath, "p1", "000", "foo2", 1);
     createBaseFile(basePath, "p1", "000", "foo3", 1);
 
-    List<FileStatus> eligibleFiles = selector.listEligibleFiles(fs, inputPath, Long.MAX_VALUE);
+    List<FileStatus> eligibleFiles = selector.listEligibleFiles(
+        (FileSystem) storage.getFileSystem(), inputPath, Long.MAX_VALUE);
     assertEquals(0, eligibleFiles.size());
   }
 
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldRespectSourceLimit(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 2000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 3000);
@@ -127,7 +131,7 @@ public class TestDFSPathSelectorCommonMethods extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(classes = {DFSPathSelector.class, DatePartitionPathSelector.class})
   public void getNextFilePathsAndMaxModificationTimeShouldIgnoreSourceLimitIfSameModTimeFilesPresent(Class<?> clazz) throws Exception {
-    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, hadoopConf);
+    DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(clazz.getName(), props, storageConf.unwrap());
     createBaseFile(basePath, "p1", "000", "foo1", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo2", 10, 1000);
     createBaseFile(basePath, "p1", "000", "foo3", 10, 1000);

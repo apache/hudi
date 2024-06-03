@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -65,6 +65,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -227,7 +228,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   private List<FileStatus> listStatusForSnapshotMode(JobConf job,
                                                      Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                      List<Path> snapshotPaths) {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(job));
     List<FileStatus> targetFiles = new ArrayList<>();
 
     TypedProperties props = new TypedProperties(new Properties());
@@ -254,7 +255,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                 tableMetaClient,
                 props,
                 HoodieTableQueryType.SNAPSHOT,
-                partitionPaths,
+                partitionPaths.stream().map(HadoopFSUtils::convertToStoragePath).collect(Collectors.toList()),
                 queryCommitInstant,
                 shouldIncludePendingCommits);
 
@@ -287,7 +288,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
           List<FileSlice> filteredFileSlices = new ArrayList<>();
 
           for (Path p : entry.getValue()) {
-            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), p);
+            String relativePartitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), p);
 
             List<FileSlice> fileSlices = queryInstant.map(
                 instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, instant))

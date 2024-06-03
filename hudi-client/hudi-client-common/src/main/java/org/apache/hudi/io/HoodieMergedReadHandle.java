@@ -52,23 +52,33 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   protected final Schema readerSchema;
+  private final Option<FileSlice> fileSliceOpt;
 
   public HoodieMergedReadHandle(HoodieWriteConfig config,
                                 Option<String> instantTime,
                                 HoodieTable<T, I, K, O> hoodieTable,
                                 Pair<String, String> partitionPathFileIDPair) {
+    this(config, instantTime, hoodieTable, partitionPathFileIDPair, Option.empty());
+  }
+
+  public HoodieMergedReadHandle(HoodieWriteConfig config,
+                                Option<String> instantTime,
+                                HoodieTable<T, I, K, O> hoodieTable,
+                                Pair<String, String> partitionPathFileIDPair,
+                                Option<FileSlice> fileSliceOption) {
     super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    fileSliceOpt = fileSliceOption.isPresent() ? fileSliceOption : getLatestFileSlice();
   }
 
   public List<HoodieRecord<T>> getMergedRecords() {
-    Option<FileSlice> fileSliceOpt = getLatestFileSlice();
     if (!fileSliceOpt.isPresent()) {
       return Collections.emptyList();
     }
     checkState(nonEmpty(instantTime), String.format("Expected a valid instant time but got `%s`", instantTime));
     final FileSlice fileSlice = fileSliceOpt.get();
-    final HoodieRecordLocation currentLocation = new HoodieRecordLocation(instantTime, fileSlice.getFileId());
+    String baseFileInstantTime = fileSlice.getBaseFile().get().getCommitTime();
+    final HoodieRecordLocation currentLocation = new HoodieRecordLocation(baseFileInstantTime, fileSlice.getFileId());
     Option<HoodieFileReader> baseFileReader = Option.empty();
     HoodieMergedLogRecordScanner logRecordScanner = null;
     try {
@@ -117,13 +127,12 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
     List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
         .map(l -> l.getPath().toString()).collect(toList());
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(hoodieTable.getMetaClient().getFs())
+        .withStorage(storage)
         .withBasePath(hoodieTable.getMetaClient().getBasePathV2().toString())
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(instantTime)
         .withMaxMemorySizeInBytes(IOUtils.getMaxMemoryPerCompaction(hoodieTable.getTaskContextSupplier(), config))
-        .withReadBlocksLazily(config.getCompactionLazyBlockReadEnabled())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())

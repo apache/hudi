@@ -45,7 +45,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
-import java.text.ParseException;
 import java.util.Map;
 
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
@@ -130,7 +129,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
 
   private Option<Pair<Integer, String>> getLatestDeltaCommitInfo() {
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfo =
-        CompactionUtils.getDeltaCommitsSinceLatestCompaction(table.getActiveTimeline());
+        CompactionUtils.getCompletedDeltaCommitsSinceLatestCompaction(table.getActiveTimeline());
     if (deltaCommitsInfo.isPresent()) {
       return Option.of(Pair.of(
           deltaCommitsInfo.get().getLeft().countInstants(),
@@ -211,12 +210,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
   }
 
   private Long parsedToSeconds(String time) {
-    long timestamp;
-    try {
-      timestamp = HoodieActiveTimeline.parseDateFromInstantTime(time).getTime() / 1000;
-    } catch (ParseException e) {
-      throw new HoodieCompactionException(e.getMessage(), e);
-    }
-    return timestamp;
+    return HoodieActiveTimeline.parseDateFromInstantTimeSafely(time).orElseThrow(() -> new HoodieCompactionException("Failed to parse timestamp " + time))
+            .getTime() / 1000;
   }
 }

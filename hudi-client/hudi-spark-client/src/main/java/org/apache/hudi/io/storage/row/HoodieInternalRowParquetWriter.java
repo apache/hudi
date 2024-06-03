@@ -18,9 +18,10 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
-import org.apache.hudi.io.storage.HoodieBaseParquetWriter;
+import org.apache.hudi.storage.StoragePath;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
@@ -34,7 +35,8 @@ public class HoodieInternalRowParquetWriter extends HoodieBaseParquetWriter<Inte
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
-  public HoodieInternalRowParquetWriter(Path file, HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig)
+  public HoodieInternalRowParquetWriter(StoragePath file,
+                                        HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig)
       throws IOException {
     super(file, parquetConfig);
 

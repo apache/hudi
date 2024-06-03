@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.HoodieStorageUtils
+
 import org.apache.hadoop.fs.Path
-
-import org.apache.hudi.common.table.HoodieTableConfig
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._
@@ -30,6 +30,8 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.util.ThreadUtils
 
 import java.util.concurrent.TimeUnit.MILLISECONDS
+
+import scala.language.postfixOps
 import scala.util.control.NonFatal
 
 /**
@@ -83,15 +85,17 @@ case class RepairHoodieTableCommand(tableName: TableIdentifier,
     } else 0
     val addedAmount = if (enableAddPartitions) {
       val total = partitionSpecsAndLocs.length
-      val partitionStats = if (spark.sqlContext.conf.gatherFastStats) {
-        HoodieSqlCommonUtils.getFilesInPartitions(spark, table, partitionSpecsAndLocs
-          .map(_._2.toString))
-          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
+      val partitionList = partitionSpecsAndLocs.map(_._2.toString)
+      val partitionStats = if (spark.sqlContext.conf.gatherFastStats && total > 0) {
+        HoodieSqlCommonUtils.getFilesInPartitions(spark, table,
+            HoodieStorageUtils.getStorage(partitionList.head, HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())),
+            partitionList)
+          .mapValues(statuses => PartitionStatistics(statuses.length, statuses.map(_.getLength).sum))
       } else {
         Map.empty[String, PartitionStatistics]
       }
       logInfo(s"Finished to gather the fast stats for all $total partitions.")
-      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats)
+      addPartitions(spark, table, partitionSpecsAndLocs, partitionStats.toMap)
       total
     } else 0
     // Updates the table to indicate that its partition metadata is stored in the Hive metastore.

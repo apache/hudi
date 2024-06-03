@@ -19,17 +19,15 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -58,7 +56,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(timeline, instantTime)
@@ -88,7 +86,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 

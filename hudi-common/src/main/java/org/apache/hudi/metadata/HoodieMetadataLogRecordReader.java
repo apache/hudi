@@ -20,13 +20,16 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordReader;
+import org.apache.hudi.common.table.log.BaseHoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieMetadataMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FileSystem;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -40,6 +43,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+
 /**
  * Metadata log-block records reading implementation, internally relying on
  * {@link HoodieMergedLogRecordScanner} to merge corresponding Metadata Table's delta log-blocks
@@ -48,17 +53,17 @@ import java.util.stream.Collectors;
 @ThreadSafe
 public class HoodieMetadataLogRecordReader implements Closeable {
 
-  private final HoodieMergedLogRecordScanner logRecordScanner;
+  private final BaseHoodieMergedLogRecordScanner<String> logRecordScanner;
 
-  private HoodieMetadataLogRecordReader(HoodieMergedLogRecordScanner logRecordScanner) {
+  private HoodieMetadataLogRecordReader(BaseHoodieMergedLogRecordScanner logRecordScanner) {
     this.logRecordScanner = logRecordScanner;
   }
 
   /**
    * Returns the builder for {@code HoodieMetadataMergedLogRecordScanner}.
    */
-  public static HoodieMetadataLogRecordReader.Builder newBuilder() {
-    return new HoodieMetadataLogRecordReader.Builder();
+  public static HoodieMetadataLogRecordReader.Builder newBuilder(String partitionName) {
+    return new HoodieMetadataLogRecordReader.Builder(partitionName);
   }
 
   @SuppressWarnings("unchecked")
@@ -150,18 +155,23 @@ public class HoodieMetadataLogRecordReader implements Closeable {
    * Builder used to build {@code HoodieMetadataMergedLogRecordScanner}.
    */
   public static class Builder {
-    private final HoodieMergedLogRecordScanner.Builder scannerBuilder =
-        new HoodieMergedLogRecordScanner.Builder()
-            .withKeyFiledOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
-            // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
-            //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
-            //       will be migrated to its own custom instance of {@code RecordMerger}
-            .withReadBlocksLazily(true)
-            .withReverseReader(false)
-            .withOperationField(false);
+    private final AbstractHoodieLogRecordReader.Builder scannerBuilder;
+    private final String partitionName;
 
-    public Builder withFileSystem(FileSystem fs) {
-      scannerBuilder.withFileSystem(fs);
+    public Builder(String partitionName) {
+      this.partitionName = partitionName;
+      this.scannerBuilder = shouldUseMetadataMergedLogRecordScanner() ? HoodieMetadataMergedLogRecordScanner.newBuilder() : HoodieMergedLogRecordScanner.newBuilder();
+      scannerBuilder
+          .withKeyFieldOverride(HoodieMetadataPayload.KEY_FIELD_NAME)
+          // NOTE: Merging of Metadata Table's records is currently handled using {@code HoodiePreCombineAvroRecordMerger}
+          //       for compatibility purposes; In the future it {@code HoodieMetadataPayload} semantic
+          //       will be migrated to its own custom instance of {@code RecordMerger}
+          .withReverseReader(false)
+          .withOperationField(false);
+    }
+
+    public Builder withStorage(HoodieStorage storage) {
+      scannerBuilder.withStorage(storage);
       return this;
     }
 
@@ -217,7 +227,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
 
     public Builder withLogBlockTimestamps(Set<String> validLogBlockTimestamps) {
       InstantRange instantRange = InstantRange.builder()
-          .rangeType(InstantRange.RangeType.EXPLICIT_MATCH)
+          .rangeType(InstantRange.RangeType.EXACT_MATCH)
           .explicitInstants(validLogBlockTimestamps).build();
       scannerBuilder.withInstantRange(Option.of(instantRange));
       return this;
@@ -239,7 +249,11 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
 
     public HoodieMetadataLogRecordReader build() {
-      return new HoodieMetadataLogRecordReader(scannerBuilder.build());
+      return new HoodieMetadataLogRecordReader((BaseHoodieMergedLogRecordScanner) scannerBuilder.build());
+    }
+
+    private boolean shouldUseMetadataMergedLogRecordScanner() {
+      return PARTITION_NAME_SECONDARY_INDEX.equals(partitionName);
     }
   }
 }

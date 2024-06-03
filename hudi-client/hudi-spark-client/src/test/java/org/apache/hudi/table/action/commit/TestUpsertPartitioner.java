@@ -67,7 +67,6 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serial
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -175,7 +174,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
     when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
     long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -185,7 +184,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
     when(commitTimeLine.empty()).thenReturn(true);
     long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -469,9 +468,9 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     assertEquals(3, partitioner.numPartitions());
     assertEquals(
         Arrays.asList(
-            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
+            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath),
             new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath)
         ),
         partitioner.getBucketInfos());
   }

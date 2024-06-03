@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -93,6 +92,8 @@ public class HoodieClusteringJob {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
+    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
+    public Boolean skipClean = true;
 
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
@@ -132,6 +133,7 @@ public class HoodieClusteringJob {
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
           + "   --retry " + retry + ", \n"
+          + "   --skipClean " + skipClean + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
           + "   --mode " + runningMode + ", \n"
@@ -213,7 +215,7 @@ public class HoodieClusteringJob {
         // Instant time is not specified
         // Find the earliest scheduled clustering instant for execution
         Option<HoodieInstant> firstClusteringInstant =
-            metaClient.getActiveTimeline().filterPendingReplaceTimeline().firstInstant();
+            metaClient.getActiveTimeline().getFirstPendingClusterInstant();
         if (firstClusteringInstant.isPresent()) {
           cfg.clusteringInstantTime = firstClusteringInstant.get().getTimestamp();
           LOG.info("Found the earliest scheduled clustering instant which will be executed: "
@@ -259,14 +261,15 @@ public class HoodieClusteringJob {
 
       if (cfg.retryLastFailedClusteringJob) {
         HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-        HoodieTimeline inflightHoodieTimeline = table.getActiveTimeline().filterPendingReplaceTimeline().filterInflights();
-        if (!inflightHoodieTimeline.empty()) {
-          HoodieInstant inflightClusteringInstant = inflightHoodieTimeline.lastInstant().get();
+        Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterInstant();
+
+        if (lastClusterOpt.isPresent()) {
+          HoodieInstant inflightClusteringInstant = lastClusterOpt.get();
           Date clusteringStartTime = HoodieActiveTimeline.parseDateFromInstantTime(inflightClusteringInstant.getTimestamp());
           if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
             // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
             LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
-            instantTime = Option.of(inflightHoodieTimeline.lastInstant().get().getTimestamp());
+            instantTime = Option.of(inflightClusteringInstant.getTimestamp());
           } else {
             LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
           }
@@ -297,7 +300,7 @@ public class HoodieClusteringJob {
   }
 
   private void clean(SparkRDDWriteClient<?> client) {
-    if (client.getConfig().isAutoClean()) {
+    if (!cfg.skipClean && client.getConfig().isAutoClean()) {
       client.clean();
     }
   }

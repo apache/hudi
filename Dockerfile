@@ -19,7 +19,6 @@
 # thrift
 # maven
 # java8
-# Use an official Ubuntu base image
 FROM apachehudi/hudi-ci-bundle-validation-base:azure_ci_test_base_new
 
 CMD ["java", "-version"]

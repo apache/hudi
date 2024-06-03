@@ -110,12 +110,15 @@ public class HoodieTestSuiteJob {
     this.jsc = jsc;
     this.stopJsc = stopJsc;
     cfg.propsFilePath = HadoopFSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
-    this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
+    this.sparkSession =
+        SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
     this.fs = HadoopFSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
-    this.props = UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
+    this.props =
+        UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
     log.info("Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
-    this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       metaClient = HoodieTableMetaClient.withPropertyBuilder()
@@ -123,9 +126,11 @@ public class HoodieTestSuiteJob {
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
-      metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.targetBasePath).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.targetBasePath).build();
     }
 
     if (cfg.cleanInput) {

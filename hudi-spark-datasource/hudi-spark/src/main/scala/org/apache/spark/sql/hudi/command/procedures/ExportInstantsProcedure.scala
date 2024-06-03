@@ -28,11 +28,12 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.HoodieLocation
+import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.avro.specific.SpecificData
-import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -41,7 +42,6 @@ import java.io.File
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.break
 
@@ -77,7 +77,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val archivePath = new Path(basePath + "/.hoodie/.commits_.archive*")
     val actionSet: util.Set[String] = Set(actions.split(","): _*).asJava
     val numExports = if (limit == -1) Integer.MAX_VALUE else limit
@@ -114,12 +114,13 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyArchivedInstants(basePath: String, statuses: util.List[FileStatus], actionSet: util.Set[String], limit: Int, localFolder: String) = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
     var copyCount = 0
-    val fileSystem = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration())
-    for (fs <- statuses) {
+    val storage = HoodieStorageUtils.getStorage(basePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+    for (fs <- statuses.asScala) {
       // read the archived file
-      val reader = HoodieLogFormat.newReader(fileSystem, new HoodieLogFile(fs.getPath), HoodieArchivedMetaEntry.getClassSchema)
+      val reader = HoodieLogFormat.newReader(
+        storage, new HoodieLogFile(convertToStoragePath(fs.getPath)), HoodieArchivedMetaEntry.getClassSchema)
       // read the avro blocks
       while ( {
         reader.hasNext && copyCount < limit
@@ -159,8 +160,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
                 null
             }
             val instantTime = archiveEntryRecord.get("commitTime").toString
-            val outPath = localFolder + HoodieLocation.SEPARATOR + instantTime + "." + action
-            if (metadata != null) writeToFile(fileSystem, outPath, HoodieAvroUtils.avroToJson(metadata, true))
+            val outPath = localFolder + StoragePath.SEPARATOR + instantTime + "." + action
+            if (metadata != null) writeToFile(storage, outPath, HoodieAvroUtils.avroToJson(metadata, true))
             if ( {
               copyCount += 1;
               copyCount
@@ -176,13 +177,13 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
   @throws[Exception]
   private def copyNonArchivedInstants(metaClient: HoodieTableMetaClient, instants: util.List[HoodieInstant], limit: Int, localFolder: String): Int = {
-    import scala.collection.JavaConversions._
+    import scala.collection.JavaConverters._
     var copyCount = 0
-    if (instants.nonEmpty) {
+    if (!instants.isEmpty) {
       val timeline = metaClient.getActiveTimeline
-      val fileSystem = HadoopFSUtils.getFs(metaClient.getBasePath, jsc.hadoopConfiguration())
-      for (instant <- instants) {
-        val localPath = localFolder + HoodieLocation.SEPARATOR + instant.getFileName
+      val storage = HoodieStorageUtils.getStorage(metaClient.getBasePath, HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()))
+      for (instant <- instants.asScala) {
+        val localPath = localFolder + StoragePath.SEPARATOR + instant.getFileName
         val data: Array[Byte] = instant.getAction match {
           case HoodieTimeline.CLEAN_ACTION =>
             val metadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(timeline.getInstantDetails(instant).get)
@@ -212,7 +213,7 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
 
         }
         if (data != null) {
-          writeToFile(fileSystem, localPath, data)
+          writeToFile(storage, localPath, data)
           copyCount = copyCount + 1
         }
       }
@@ -221,8 +222,8 @@ class ExportInstantsProcedure extends BaseProcedure with ProcedureBuilder with L
   }
 
   @throws[Exception]
-  private def writeToFile(fs: FileSystem, path: String, data: Array[Byte]): Unit = {
-    val out = fs.create(new Path(path))
+  private def writeToFile(storage: HoodieStorage, path: String, data: Array[Byte]): Unit = {
+    val out = storage.create(new StoragePath(path))
     out.write(data)
     out.flush()
     out.close()

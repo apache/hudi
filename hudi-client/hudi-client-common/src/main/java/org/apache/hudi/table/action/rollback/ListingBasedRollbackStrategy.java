@@ -32,7 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -53,6 +53,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
 
 /**
@@ -89,7 +90,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     try {
       HoodieTableMetaClient metaClient = table.getMetaClient();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, table.getMetaClient().getBasePath(), false);
+          FSUtils.getAllPartitionPaths(context, table.getStorage(), table.getMetaClient().getBasePath(), false);
       int numPartitions = Math.max(Math.min(partitionPaths.size(), config.getRollbackParallelism()), 1);
 
       context.setJobStatus(this.getClass().getSimpleName(), "Creating Listing Rollback Plan: " + config.getTableName());
@@ -109,7 +110,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         Supplier<FileStatus[]> filesToDelete = () -> {
           try {
             return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath(), baseFileExtension,
-                metaClient.getFs(), commitMetadataOptional, isCommitMetadataCompleted, tableType);
+                (FileSystem) metaClient.getStorage().getFileSystem(),
+                commitMetadataOptional, isCommitMetadataCompleted, tableType);
           } catch (IOException e) {
             throw new HoodieIOException("Fetching files to delete error", e);
           }
@@ -140,7 +142,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                 // have been written to the log files.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
                     listBaseFilesToBeDeleted(instantToRollback.getTimestamp(), baseFileExtension, partitionPath,
-                        metaClient.getFs())));
+                        (FileSystem) metaClient.getStorage().getFileSystem())));
               } else {
                 // if this is part of a restore operation, we should rollback/delete entire file slice.
                 hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath,
@@ -181,14 +183,17 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
     PathFilter filter = (path) -> {
       if (path.toString().contains(baseFileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
-        return HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS, fileCommitTime);
-      } else if (FSUtils.isLogFile(path)) {
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(path);
+        return HoodieTimeline.compareTimestamps(commit, HoodieTimeline.LESSER_THAN_OR_EQUALS,
+            fileCommitTime);
+      } else if (HadoopFSUtils.isLogFile(path)) {
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return completionTimeQueryView.isSlicedAfterOrOn(commit, fileCommitTime);
       }
       return false;
     };
-    return metaClient.getFs().listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
+    return ((FileSystem) metaClient.getStorage().getFileSystem())
+        .listStatus(HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath),
+            filter);
   }
 
   @NotNull
@@ -217,11 +222,11 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       }
       return false;
     };
-    return fs.listStatus(FSUtils.getPartitionPath(config.getBasePath(), partitionPath), filter);
+    return fs.listStatus(HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getBasePath(), partitionPath), filter);
   }
 
   private FileStatus[] fetchFilesFromInstant(HoodieInstant instantToRollback, String partitionPath, String basePath,
-                                             String baseFileExtension, HoodieWrapperFileSystem fs,
+                                             String baseFileExtension, FileSystem fs,
                                              Option<HoodieCommitMetadata> commitMetadataOptional,
                                              Boolean isCommitMetadataCompleted,
                                              HoodieTableType tableType) throws IOException {
@@ -236,7 +241,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   private FileStatus[] fetchFilesFromCommitMetadata(HoodieInstant instantToRollback, String partitionPath,
                                                     String basePath, HoodieCommitMetadata commitMetadata,
-                                                    String baseFileExtension, HoodieWrapperFileSystem fs)
+                                                    String baseFileExtension, FileSystem fs)
       throws IOException {
     SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
     Path[] filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath);
@@ -263,7 +268,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
    * @throws IOException
    */
   private FileStatus[] fetchFilesFromListFiles(HoodieInstant instantToRollback, String partitionPath, String basePath,
-                                               String baseFileExtension, HoodieWrapperFileSystem fs)
+                                               String baseFileExtension, FileSystem fs)
       throws IOException {
     SerializablePathFilter pathFilter = getSerializablePathFilter(baseFileExtension, instantToRollback.getTimestamp());
     Path[] filePaths = listFilesToBeDeleted(basePath, partitionPath);
@@ -278,7 +283,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
   }
 
   private static Path[] listFilesToBeDeleted(String basePath, String partitionPath) {
-    return new Path[] {FSUtils.getPartitionPath(basePath, partitionPath)};
+    return new Path[] {HadoopFSUtils.constructAbsolutePathInHadoopPath(basePath, partitionPath)};
   }
 
   private static Path[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {
@@ -292,9 +297,9 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       if (path.toString().endsWith(basefileExtension)) {
         String fileCommitTime = FSUtils.getCommitTime(path.getName());
         return commit.equals(fileCommitTime);
-      } else if (FSUtils.isLogFile(path)) {
+      } else if (HadoopFSUtils.isLogFile(path)) {
         // Since the baseCommitTime is the only commit for new log files, it's okay here
-        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(path);
+        String fileCommitTime = FSUtils.getDeltaCommitTimeFromLogPath(convertToStoragePath(path));
         return commit.equals(fileCommitTime);
       }
       return false;

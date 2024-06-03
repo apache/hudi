@@ -31,8 +31,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.repair.RepairUtils;
 
 import com.beust.jcommander.JCommander;
@@ -122,7 +124,8 @@ public class HoodieDataTableValidator implements Serializable {
         : readConfigFromFileSystem(jsc, cfg);
 
     this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration()).setBasePath(cfg.basePath)
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+        .setBasePath(cfg.basePath)
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
@@ -298,22 +301,26 @@ public class HoodieDataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try {
       HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
-          engineContext, metaClient.getTableConfig(), engineContext.getHadoopConf(), cfg.basePath);
-      List<Path> allDataFilePaths = HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
+          engineContext, metaClient.getTableConfig(), metaClient.getStorage(), cfg.basePath);
+      List<StoragePath> allDataFilePaths =
+          HoodieDataTableUtils.getBaseAndLogFilePathsFromFileSystem(tableMetadata, cfg.basePath);
       // verify that no data files present with commit time < earliest commit in active timeline.
       if (metaClient.getActiveTimeline().firstInstant().isPresent()) {
         String earliestInstant = metaClient.getActiveTimeline().firstInstant().get().getTimestamp();
-        List<Path> danglingFilePaths = allDataFilePaths.stream().filter(path -> {
+        List<StoragePath> danglingFilePaths = allDataFilePaths.stream().filter(path -> {
           String instantTime = FSUtils.getCommitTime(path.getName());
-          return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN, earliestInstant);
+          return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN,
+              earliestInstant);
         }).collect(Collectors.toList());
 
         if (!danglingFilePaths.isEmpty() && danglingFilePaths.size() > 0) {
-          LOG.error("Data table validation failed due to dangling files count " + danglingFilePaths.size() + ", found before active timeline");
+          LOG.error("Data table validation failed due to dangling files count "
+              + danglingFilePaths.size() + ", found before active timeline");
           danglingFilePaths.forEach(entry -> LOG.error("Dangling file: " + entry.toString()));
           finalResult = false;
           if (!cfg.ignoreFailed) {
-            throw new HoodieValidationException("Data table validation failed due to dangling files " + danglingFilePaths.size());
+            throw new HoodieValidationException(
+                "Data table validation failed due to dangling files " + danglingFilePaths.size());
           }
         }
 

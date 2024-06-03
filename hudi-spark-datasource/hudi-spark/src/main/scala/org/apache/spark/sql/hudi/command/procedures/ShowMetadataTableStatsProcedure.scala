@@ -19,14 +19,15 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -48,13 +49,14 @@ class ShowMetadataTableStatsProcedure() extends BaseProcedure with ProcedureBuil
     val table = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf), config, basePath)
+    val metadata = new HoodieBackedTableMetadata(
+      new HoodieLocalEngineContext(metaClient.getStorageConf), metaClient.getStorage, config, basePath)
     val stats = metadata.stats
 
     val rows = new util.ArrayList[Row]
-    for (entry <- stats.entrySet) {
+    for (entry <- stats.entrySet.asScala) {
       rows.add(Row(entry.getKey, entry.getValue))
     }
     rows.stream().toArray().map(r => r.asInstanceOf[Row]).toList

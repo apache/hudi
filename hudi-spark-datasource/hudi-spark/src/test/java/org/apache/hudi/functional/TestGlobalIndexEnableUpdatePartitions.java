@@ -39,7 +39,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -130,7 +133,6 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch9, 2), commitTimeAtEpoch9).collect());
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
     }
-
   }
 
   @ParameterizedTest
@@ -186,8 +188,64 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, 9);
     }
   }
+  
+  @ParameterizedTest
+  @MethodSource("getTableTypeAndIndexType")
+  public void testUdpateSubsetOfRecUpdates(HoodieTableType tableType, IndexType indexType) throws IOException {
+    final Class<?> payloadClass = DefaultHoodieRecordPayload.class;
+    HoodieWriteConfig writeConfig = getWriteConfig(payloadClass, indexType);
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, writeConfig.getProps());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
+      final int totalRecords = 4;
+      final String p1 = "p1";
+      final String p2 = "p2";
+
+      List<HoodieRecord> allInserts = getInserts(totalRecords, p1, 0, payloadClass);
+
+      // 1st batch: insert 1,2
+      String commitTimeAtEpoch0 = getCommitTimeAtUTC(0);
+      client.startCommitWithTime(commitTimeAtEpoch0);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(allInserts.subList(0,2), 2), commitTimeAtEpoch0).collect());
+      readTableAndValidate(metaClient, new int[] {0, 1}, p1, 0L);
+
+      // 2nd batch: update records 1,2 and insert 3
+      String commitTimeAtEpoch5 = getCommitTimeAtUTC(5);
+      List<HoodieRecord> updatesAtEpoch5 = getUpdates(allInserts.subList(0,3), 5, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch5);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch5, 2), commitTimeAtEpoch5).collect());
+      readTableAndValidate(metaClient, new int[] {0, 1, 2}, p1, getExpectedTsMap(new int[] {0, 1, 2}, new Long[] {5L, 5L, 5L}));
+
+      // 3rd batch: update records 1,2,3 and insert 4
+      String commitTimeAtEpoch10 = getCommitTimeAtUTC(10);
+      List<HoodieRecord> updatesAtEpoch10 = getUpdates(allInserts, 10, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch10);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch10, 2), commitTimeAtEpoch10).collect());
+      readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p1, getExpectedTsMap(new int[] {0, 1, 2, 3}, new Long[] {10L, 10L, 10L, 10L}));
+
+      // 4th batch: update all from p1 to p2
+      String commitTimeAtEpoch20 = getCommitTimeAtUTC(20);
+      List<HoodieRecord> updatesAtEpoch20 = getUpdates(allInserts, p2, 20, payloadClass);
+      client.startCommitWithTime(commitTimeAtEpoch20);
+      assertNoWriteErrors(client.upsert(jsc().parallelize(updatesAtEpoch20, 2), commitTimeAtEpoch20).collect());
+      readTableAndValidate(metaClient, new int[] {0, 1, 2, 3}, p2, 20);
+    }
+  }
+
+  private Map<String, Long> getExpectedTsMap(int[] recordKeys, Long[] expectedTses) {
+    Map<String, Long> expectedTsMap = new HashMap<>();
+    for (int i = 0; i < recordKeys.length; i++) {
+      expectedTsMap.put(String.valueOf(recordKeys[i]), expectedTses[i]);
+    }
+    return expectedTsMap;
+  }
 
   private void readTableAndValidate(HoodieTableMetaClient metaClient, int[] expectedIds, String expectedPartition, long expectedTs) {
+    Map<String, Long> expectedTsMap = new HashMap<>();
+    Arrays.stream(expectedIds).forEach(entry -> expectedTsMap.put(String.valueOf(entry), expectedTs));
+    readTableAndValidate(metaClient, expectedIds, expectedPartition, expectedTsMap);
+  }
+
+  private void readTableAndValidate(HoodieTableMetaClient metaClient, int[] expectedIds, String expectedPartition, Map<String, Long> expectedTsMap) {
     Dataset<Row> df = spark().read().format("hudi")
         .load(metaClient.getBasePathV2().toString())
         .sort("id")
@@ -204,7 +262,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       assertEquals(expectedPartition, r.getString(1));
       assertEquals(expectedId, r.getInt(2));
       assertEquals(expectedPartition, r.getString(3));
-      assertEquals(expectedTs, r.getLong(4));
+      assertEquals(expectedTsMap.get(String.valueOf(expectedId)), r.getLong(4));
     }
     df.unpersist();
   }

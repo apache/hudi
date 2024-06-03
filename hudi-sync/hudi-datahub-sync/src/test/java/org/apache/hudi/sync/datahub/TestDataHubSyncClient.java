@@ -20,6 +20,7 @@
 package org.apache.hudi.sync.datahub;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import datahub.client.MetadataWriteResponse;
@@ -62,15 +63,15 @@ public class TestDataHubSyncClient {
   @BeforeAll
   public static void beforeAll() throws IOException {
     TRIP_EXAMPLE_SCHEMA = "{\"type\": \"record\",\"name\": \"triprec\",\"fields\": [ "
-            + "{\"name\": \"ts\",\"type\": \"long\"}]}";
+        + "{\"name\": \"ts\",\"type\": \"long\"}]}";
 
     avroSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
 
     Properties props = new Properties();
     props.put("hoodie.table.name", "some_table");
     tableBasePath = Paths.get(tmpDir.toString(), "some_table").toString();
-    HoodieTableMetaClient.initTableAndGetMetaClient(new Configuration(),
-            tableBasePath, props);
+    HoodieTableMetaClient.initTableAndGetMetaClient(
+        HadoopFSUtils.getStorageConf(new Configuration()), tableBasePath, props);
   }
 
   @BeforeEach

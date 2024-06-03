@@ -24,12 +24,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -126,6 +125,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       b.add(Arguments.of("COPY_ON_WRITE", true, true, true, true, true));
       b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, true));
       b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
+      b.add(Arguments.of("MERGE_ON_READ", true, true, false, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));
     }
     return b.build();
@@ -221,8 +221,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       addData(df, false);
       deltaStreamer.sync();
       assertTrue(allowNullForDeletedCols);
-    } catch (SchemaCompatibilityException e) {
-      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
+    } catch (MissingSchemaFieldException e) {
       assertFalse(allowNullForDeletedCols);
       return;
     }
@@ -319,7 +318,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     //test reordering column
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath =
+        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     df = df.drop("rider").withColumn("rider", functions.lit("rider-003"));
 
@@ -327,7 +327,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+        dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
@@ -401,14 +402,13 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
-    } catch (SchemaCompatibilityException e) {
+    } catch (MissingSchemaFieldException e) {
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
-      assertTrue(e.getMessage().contains("Incoming batch schema is not compatible with the table's one"));
-      assertFalse(allowNullForDeletedCols);
     }
   }
 
@@ -482,13 +482,14 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
-          "Incoming batch schema is not compatible with the table's one"));
+          "Schema validation failed due to missing field."));
     }
   }
 
@@ -561,9 +562,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertFalse(targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+          dsConfig.targetBasePath, metaClient);
       assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)), latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
+              .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)),
+          latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(targetSchemaSameAsTableSchema);
@@ -639,7 +642,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     HoodieInstant lastInstant = metaClient.getActiveTimeline().lastInstant().get();
 
     // type demotion
-    datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
+    datapath =
+        String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();
     df = sparkSession.read().json(datapath);
     Column col = df.col("current_ts");
     Dataset<Row> typeDemotionDf = df.withColumn("current_ts", col.cast(DataTypes.IntegerType));
@@ -647,7 +651,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, fs, dsConfig.targetBasePath, metaClient);
+    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+        dsConfig.targetBasePath, metaClient);
     assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
         .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
@@ -655,7 +660,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
   private static HoodieTableMetaClient getMetaClient(HoodieStreamer.Config dsConfig) {
     return HoodieTableMetaClient.builder()
-        .setConf(new Configuration(fs.getConf()))
+        .setConf(storage.getConf().newInstance())
         .setBasePath(dsConfig.targetBasePath)
         .setPayloadClassName(dsConfig.payloadClassName)
         .build();

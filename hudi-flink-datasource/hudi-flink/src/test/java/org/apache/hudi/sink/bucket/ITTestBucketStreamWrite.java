@@ -24,11 +24,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.storage.HoodieLocation;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -37,8 +37,6 @@ import org.apache.hudi.utils.TestSQL;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,15 +84,15 @@ public class ITTestBucketStreamWrite {
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
-    } else  {
-      FileSystem fs = HadoopFSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-      TestData.checkWrittenDataMOR(fs, tempFile, EXPECTED, 4);
+    } else {
+      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
+      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
     }
   }
 
   private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
     // create metaClient
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tablePath, new org.apache.hadoop.conf.Configuration());
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
 
     // should only contain one instant
     HoodieTimeline activeCompletedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
@@ -106,12 +104,13 @@ public class ITTestBucketStreamWrite {
     String filename = activeCompletedTimeline.getInstants().get(0).getFileName();
 
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+            HoodieCommitMetadata.class);
 
     // delete successful commit to simulate an unsuccessful write
-    FileSystem fs = metaClient.getFs();
-    Path path = new Path(metaClient.getMetaPath() + HoodieLocation.SEPARATOR + filename);
-    fs.delete(path);
+    HoodieStorage storage = metaClient.getStorage();
+    StoragePath path = new StoragePath(metaClient.getMetaPath(), filename);
+    storage.deleteDirectory(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯

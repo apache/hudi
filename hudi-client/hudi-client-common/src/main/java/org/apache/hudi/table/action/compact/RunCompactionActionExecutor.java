@@ -73,7 +73,7 @@ public class RunCompactionActionExecutor<T> extends
     this.operationType = operationType;
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
-    metrics = new HoodieMetrics(config);
+    metrics = new HoodieMetrics(config, table.getStorage());
   }
 
   @Override

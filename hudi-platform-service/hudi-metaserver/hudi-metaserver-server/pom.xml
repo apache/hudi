@@ -30,9 +30,9 @@
 
     <properties>
         <main.basedir>${project.parent.basedir}</main.basedir>
-        <mybatis.version>3.4.6</mybatis.version>
+        <mybatis.version>3.5.6</mybatis.version>
         <HikariCP.version>4.0.3</HikariCP.version>
-        <mysql-connector-java.version>8.0.22</mysql-connector-java.version>
+        <mysql-connector-java.version>8.0.28</mysql-connector-java.version>
     </properties>
 
     <dependencies>
@@ -93,34 +93,6 @@
             </build>
         </profile>
         <profile>
-            <id>thrift-gen-source-with-script</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <version>1.6.0</version>
-                        <executions>
-                            <execution>
-                                <id>thrift-install-and-generate-source</id>
-                                <phase>generate-sources</phase>
-                                <goals>
-                                    <goal>exec</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <executable>${project.parent.basedir}/src/main/thrift/bin/thrift_binary.sh</executable>
-                            <arguments>
-                                <argument>${thrift.install.env}</argument>
-                            </arguments>
-                            <skip>false</skip>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-        <profile>
             <id>m1-mac</id>
             <properties>
                 <thrift.install.env>m1_mac</thrift.install.env>
@@ -136,6 +108,27 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <executions>
+                    <execution>
+                        <id>thrift-install-and-generate-source</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <executable>${project.parent.basedir}/src/main/thrift/bin/thrift_binary.sh</executable>
+                    <arguments>
+                        <argument>${thrift.install.env}</argument>
+                    </arguments>
+                    <skip>false</skip>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>

@@ -19,12 +19,12 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -131,13 +131,13 @@ public class DatePartitionPathSelector extends DFSPathSelector {
             + currentDate);
     long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
-    SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     List<String> prunedPartitionPaths = pruneDatePartitionPaths(
         context, fs, getStringWithAltKeys(props, ROOT_INPUT_PATH), currentDate);
 
     List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          FileSystem fs = new Path(path).getFileSystem(serializedConf.get());
+          FileSystem fs = new Path(path).getFileSystem(storageConf.unwrap());
           return listEligibleFiles(fs, new Path(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.
@@ -183,11 +183,11 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     if (datePartitionDepth <= 0) {
       return partitionPaths;
     }
-    SerializableConfiguration serializedConf = new SerializableConfiguration(fs.getConf());
+    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
     for (int i = 0; i < datePartitionDepth; i++) {
       partitionPaths = context.flatMap(partitionPaths, path -> {
         Path subDir = new Path(path);
-        FileSystem fileSystem = subDir.getFileSystem(serializedConf.get());
+        FileSystem fileSystem = subDir.getFileSystem(storageConf.unwrap());
         // skip files/dirs whose names start with (_, ., etc)
         FileStatus[] statuses = fileSystem.listStatus(subDir,
             file -> IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));

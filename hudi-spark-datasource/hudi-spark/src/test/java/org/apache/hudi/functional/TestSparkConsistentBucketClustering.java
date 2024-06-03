@@ -45,6 +45,7 @@ import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -52,7 +53,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -96,11 +96,11 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ, props);
     config = getConfigBuilder().withProps(props)
         .withAutoCommit(false)
         .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(props)
@@ -185,13 +185,15 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     hoodieTimelineArchiver.archiveIfRequired(context);
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
       if (!isCommitFilePresent) {
-        Path metadataPath = FSUtils.getPartitionPath(table.getMetaClient().getHashingMetadataPath(), p);
+        StoragePath metadataPath =
+            FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), p);
         try {
-          Arrays.stream(table.getMetaClient().getFs().listStatus(metadataPath)).forEach(fl -> {
-            if (fl.getPath().getName().contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
+          table.getStorage().listDirectEntries(metadataPath).forEach(fl -> {
+            if (fl.getPath().getName()
+                .contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
               try {
                 // delete commit marker to test recovery job
-                table.getMetaClient().getFs().delete(fl.getPath());
+                table.getStorage().deleteDirectory(fl.getPath());
               } catch (IOException e) {
                 throw new RuntimeException(e);
               }

@@ -18,16 +18,17 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.HoodieSparkFunctionalIndex;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -38,18 +39,20 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.functional.HoodieFunctionalIndex;
-import org.apache.hudi.index.functional.HoodieSparkFunctionalIndex;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.SQLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +82,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
    *                                 attempting to bootstrap the table.
    * @return An instance of the {@code HoodieTableMetadataWriter}
    */
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context,
                                                  Option<String> inflightInstantTimestamp) {
@@ -87,7 +90,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, EAGER, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf,
                                                  HoodieWriteConfig writeConfig,
                                                  HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                                  HoodieEngineContext context,
@@ -96,12 +99,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
         conf, writeConfig, failedWritesCleaningPolicy, context, inflightInstantTimestamp);
   }
 
-  public static HoodieTableMetadataWriter create(Configuration conf, HoodieWriteConfig writeConfig,
+  public static HoodieTableMetadataWriter create(StorageConfiguration<?> conf, HoodieWriteConfig writeConfig,
                                                  HoodieEngineContext context) {
     return create(conf, writeConfig, context, Option.empty());
   }
 
-  SparkHoodieBackedTableMetadataWriter(Configuration hadoopConf,
+  SparkHoodieBackedTableMetadataWriter(StorageConfiguration<?> hadoopConf,
                                        HoodieWriteConfig writeConfig,
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
@@ -120,7 +123,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       } else {
         registry = Registry.getRegistry("HoodieMetadata");
       }
-      this.metrics = Option.of(new HoodieMetadataMetrics(registry));
+      this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -157,9 +160,9 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs,
-                                                               HoodieFunctionalIndexDefinition indexDefinition,
+                                                               HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema readerSchema, SerializableConfiguration hadoopConf) {
+                                                               Schema readerSchema, StorageConfiguration<?> storageConf) {
     HoodieFunctionalIndex<Column, Column> functionalIndex = new HoodieSparkFunctionalIndex(
         indexDefinition.getIndexName(),
         indexDefinition.getIndexFunction(),
@@ -213,7 +216,33 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
+  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+    return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
+  }
+
+  @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
     return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+  }
+
+  @Override
+  protected EngineType getEngineType() {
+    return EngineType.SPARK;
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> getDeletedSecondaryRecordMapping(HoodieEngineContext engineContext, Map<String, String> recordKeySecondaryKeyMap, HoodieIndexDefinition indexDefinition) {
+    HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
+    if (recordKeySecondaryKeyMap.isEmpty()) {
+      return sparkEngineContext.emptyHoodieData();
+    }
+
+    List<HoodieRecord> deletedRecords = new ArrayList<>();
+    recordKeySecondaryKeyMap.forEach((key, value) -> {
+      HoodieRecord<HoodieMetadataPayload> siRecord = HoodieMetadataPayload.createSecondaryIndex(key, value, indexDefinition.getIndexName(), true);
+      deletedRecords.add(siRecord);
+    });
+
+    return HoodieJavaRDD.of(deletedRecords, sparkEngineContext, 1);
   }
 }

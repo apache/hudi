@@ -18,10 +18,11 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.storage.StoragePath
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -33,7 +34,8 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
@@ -186,7 +188,7 @@ trait SparkAdapter extends Serializable {
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
                      schema: Schema,
-                     globPaths: Array[Path],
+                     globPaths: Array[StoragePath],
                      parameters: java.util.Map[String, String]): BaseRelation
 
   /**
@@ -214,4 +216,18 @@ trait SparkAdapter extends Serializable {
    * Tries to translate a Catalyst Expression into data source Filter
    */
   def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
+
+  /**
+   * Get parquet file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  def createParquetFileReader(vectorized: Boolean,
+                              sqlConf: SQLConf,
+                              options: Map[String, String],
+                              hadoopConf: Configuration): SparkParquetReader
 }
