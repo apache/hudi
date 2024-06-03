@@ -18,13 +18,18 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.action.TableChangesHelper;
 
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -35,6 +40,8 @@ import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverte
  * Utility methods to support evolve old avro schema based on a given schema.
  */
 public class AvroSchemaEvolutionUtils {
+  private static final Set<String> META_FIELD_NAMES = Arrays.stream(HoodieRecord.HoodieMetadataField.values())
+      .map(HoodieRecord.HoodieMetadataField::getFieldName).collect(Collectors.toSet());
 
   /**
    * Support reconcile from a new avroSchema.
@@ -112,6 +119,21 @@ public class AvroSchemaEvolutionUtils {
     typeChangeColumns.stream().filter(f -> !inComingInternalSchema.findType(f).isNestedType()).forEach(col -> {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
+
+    // mark columns missing from incoming schema as nullable
+    Set<String> visited = new HashSet<>();
+    diffFromOldSchema.stream()
+        // ignore meta fields
+        .filter(col -> !META_FIELD_NAMES.contains(col))
+        .sorted()
+        .forEach(col -> {
+          // if parent is marked as nullable, only update the parent and not all the missing children field
+          String parent = TableChangesHelper.getParentName(col);
+          if (!visited.contains(parent)) {
+            typeChange.updateColumnNullability(col, true);
+          }
+          visited.add(col);
+        });
 
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
   }

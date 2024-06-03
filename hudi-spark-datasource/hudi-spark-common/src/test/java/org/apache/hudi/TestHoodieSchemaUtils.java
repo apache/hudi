@@ -194,7 +194,12 @@ public class TestHoodieSchemaUtils {
         createPrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field3", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingSimpleField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createNullableField("field2", Schema.Type.INT),
+          createPrimitiveField("field3", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -215,7 +220,16 @@ public class TestHoodieSchemaUtils {
         createPrimitiveField("field2", Schema.Type.INT),
         createPrimitiveField("field4", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingComplexField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createPrimitiveField("field2", Schema.Type.INT),
+          createNullableArrayField("field3", createRecord("nestedRecord",
+              createPrimitiveField("nestedField1", Schema.Type.INT),
+              createPrimitiveField("nestedField2", Schema.Type.INT),
+              createPrimitiveField("nestedField3", Schema.Type.INT))),
+          createPrimitiveField("field4", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -230,7 +244,16 @@ public class TestHoodieSchemaUtils {
             createPrimitiveField("nestedField3", Schema.Type.INT))),
         createPrimitiveField("field4", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingComplexField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createNullableField("field2", Schema.Type.INT),
+          createArrayField("field3", createRecord("nestedRecord",
+              createNullableField("nestedField1", Schema.Type.INT),
+              createPrimitiveField("nestedField2", Schema.Type.INT),
+              createPrimitiveField("nestedField3", Schema.Type.INT))),
+          createPrimitiveField("field4", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -278,7 +301,15 @@ public class TestHoodieSchemaUtils {
   private static Schema.Field createPrimitiveField(String name, Schema.Type type) {
     return new Schema.Field(name, Schema.create(type), null, null);
   }
-  
+
+  private static Schema.Field createNullableField(String name, Schema.Type type) {
+    return new Schema.Field(name, Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(type)), null, Schema.Field.NULL_VALUE);
+  }
+
+  private static Schema.Field createNullableArrayField(String name, Schema schema) {
+    return new Schema.Field(name, Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.createArray(schema)), null, Schema.Field.NULL_VALUE);
+  }
+
   private static Schema createRecord(String name, Schema.Field... fields) {
     return Schema.createRecord(name, null, null, false, Arrays.asList(fields));
   }
