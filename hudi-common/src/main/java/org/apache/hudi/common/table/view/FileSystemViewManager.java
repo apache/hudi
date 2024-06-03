@@ -261,7 +261,7 @@ public class FileSystemViewManager {
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(viewConfig, metaClient);
-          SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier = new SecondaryViewSupplier(conf, viewConfig, metaClient, commonConfig, metadataConfig, metadataCreator);
+          SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier = new SecondaryViewSupplier(viewConfig, metaClient, commonConfig, metadataCreator);
           return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryViewSupplier);
         });
       default:
@@ -270,22 +270,17 @@ public class FileSystemViewManager {
   }
 
   private static class SecondaryViewSupplier implements SerializableSupplier<SyncableFileSystemView> {
-    private final SerializableConfiguration conf;
     private final FileSystemViewStorageConfig viewConfig;
     private final HoodieTableMetaClient metaClient;
     private final HoodieCommonConfig commonConfig;
-    private final HoodieMetadataConfig metadataConfig;
     private final SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata> metadataCreator;
 
-    private SecondaryViewSupplier(SerializableConfiguration conf, FileSystemViewStorageConfig viewConfig,
+    private SecondaryViewSupplier(FileSystemViewStorageConfig viewConfig,
                                   HoodieTableMetaClient metaClient, HoodieCommonConfig commonConfig,
-                                  HoodieMetadataConfig metadataConfig,
                                   SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata> metadataCreator) {
-      this.conf = conf;
       this.viewConfig = viewConfig;
       this.metaClient = metaClient;
       this.commonConfig = commonConfig;
-      this.metadataConfig = metadataConfig;
       this.metadataCreator = metadataCreator;
     }
 
