@@ -327,7 +327,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, compactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
-      LOG.info("Committing Compaction {}. Finished with result {}", compactionCommitTime, metadata);
+      LOG.info("Committing Compaction {}", compactionCommitTime);
+      LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
@@ -388,7 +389,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, logCompactionCommitTime, writeStats);
       // commit to data table after committing to metadata table.
       writeTableMetadata(table, logCompactionCommitTime, metadata, context.emptyHoodieData());
-      LOG.info("Committing Log Compaction {}. Finished with result {}", logCompactionCommitTime, metadata);
+      LOG.info("Committing Log Compaction {}", logCompactionCommitTime);
+      LOG.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
       CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endTransaction(Option.of(logCompactionInstant));
@@ -513,7 +515,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // Update table's metadata (table)
       writeTableMetadata(table, clusteringInstant.getTimestamp(), metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
-      LOG.info("Committing Clustering {}. Finished with result {}", clusteringCommitTime, metadata);
+      LOG.info("Committing Clustering {}", clusteringCommitTime);
+      LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
 
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           clusteringInstant,
