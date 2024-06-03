@@ -373,6 +373,10 @@ public class HoodieDeltaStreamer implements Serializable {
     @Parameter(names = {"--checkpoint"}, description = "Resume Delta Streamer from this checkpoint.")
     public String checkpoint = null;
 
+    @Parameter(names = {"--disable-hoodie-commit-checkpoint"}, description = "Disable reading checkpoint from " +
+            ".hoodie commit timeline and do not write checkpoint to .hoodie commit timeline")
+    public Boolean disableHoodieTimelineCheckpoint = false;
+
     @Parameter(names = {"--initial-checkpoint-provider"}, description = "subclass of "
         + "org.apache.hudi.utilities.checkpointing.InitialCheckpointProvider. Generate check point for delta streamer "
         + "for the first run. This field will override the checkpoint of last commit using the checkpoint field. "
