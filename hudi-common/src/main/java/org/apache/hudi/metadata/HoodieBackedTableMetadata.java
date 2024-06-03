@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
@@ -858,28 +859,39 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return Collections.emptyMap();
     }
 
-    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> result = new HashMap<>();
-
     // Load the file slices for the partition. Each file slice is a shard which saves a portion of the keys.
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
     final int numFileSlices = partitionFileSlices.size();
     ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
-    // Lookup keys from each file slice
-    // TODO: parallelize this loop
-    for (FileSlice partition : partitionFileSlices) {
-      Map<String, List<HoodieRecord<HoodieMetadataPayload>>> currentFileSliceResult = lookupSecondaryKeysFromFileSlice(partitionName, keys, partition);
-
-      currentFileSliceResult.forEach((secondaryKey, secondaryRecords) -> {
-        result.merge(secondaryKey, secondaryRecords, (oldRecords, newRecords) -> {
-          newRecords.addAll(oldRecords);
-          return newRecords;
-        });
-      });
-    }
-
-    return result;
+    engineContext.setJobStatus(this.getClass().getSimpleName(), "Lookup keys from each file slice");
+    HoodieData<FileSlice> partitionRDD = engineContext.parallelize(partitionFileSlices);
+    // Define the seqOp function (merges elements within a partition)
+    Functions.Function2<Map<String, List<HoodieRecord<HoodieMetadataPayload>>>, FileSlice, Map<String, List<HoodieRecord<HoodieMetadataPayload>>>> seqOp =
+        (accumulator, partition) -> {
+          Map<String, List<HoodieRecord<HoodieMetadataPayload>>> currentFileSliceResult = lookupSecondaryKeysFromFileSlice(partitionName, keys, partition);
+          currentFileSliceResult.forEach((secondaryKey, secondaryRecords) -> accumulator.merge(secondaryKey, secondaryRecords, (oldRecords, newRecords) -> {
+            newRecords.addAll(oldRecords);
+            return newRecords;
+          }));
+          return accumulator;
+        };
+    // Define the combOp function (merges elements across partitions)
+    Functions.Function2<Map<String, List<HoodieRecord<HoodieMetadataPayload>>>, Map<String, List<HoodieRecord<HoodieMetadataPayload>>>, Map<String, List<HoodieRecord<HoodieMetadataPayload>>>> combOp =
+        (map1, map2) -> {
+          map2.forEach((secondaryKey, secondaryRecords) -> {
+            map1.merge(secondaryKey, secondaryRecords, (oldRecords, newRecords) -> {
+              newRecords.addAll(oldRecords);
+              return newRecords;
+            });
+          });
+          return map1;
+        };
+    // Use aggregate to merge results within and across partitions
+    // Define the zero value (initial value)
+    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> zeroValue = new HashMap<>();
+    return engineContext.aggregate(partitionRDD, zeroValue, seqOp, combOp);
   }
 
   /**

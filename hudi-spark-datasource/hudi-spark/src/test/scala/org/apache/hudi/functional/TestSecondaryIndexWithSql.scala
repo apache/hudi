@@ -109,6 +109,7 @@ class TestSecondaryIndexWithSql extends SecondaryIndexTestBase {
       spark.sql(
         s"""
            |create table $tableName (
+           |  ts bigint,
            |  record_key_col string,
            |  not_record_key_col string,
            |  partition_key_col string
@@ -123,13 +124,24 @@ class TestSecondaryIndexWithSql extends SecondaryIndexTestBase {
            | partitioned by(partition_key_col)
            | location '$basePath'
        """.stripMargin)
-      spark.sql(s"insert into $tableName values('row1', 'abc', 'p1')")
-      spark.sql(s"insert into $tableName values('row2', 'cde', 'p2')")
-      spark.sql(s"insert into $tableName values('row3', 'def', 'p2')")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
       // create secondary index
       spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
 
       assertEquals(0, spark.read.format("hudi").options(hudiOpts).load(basePath).filter("not_record_key_col in ('abc', 'cde')").count())
+
+      // create another secondary index on non-string column
+      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+      // validate index created successfully
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
+      assertEquals(0, spark.read.format("hudi").options(hudiOpts).load(basePath).filter("ts = 4").count())
     }
   }
 }
