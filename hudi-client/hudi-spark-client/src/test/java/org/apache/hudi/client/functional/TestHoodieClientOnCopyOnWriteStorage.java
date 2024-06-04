@@ -44,6 +44,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -61,6 +62,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -1788,6 +1790,129 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> testInsertTwoBatches(boolean populateMetaFields, String partitionPath) throws IOException {
     return testInsertTwoBatches(populateMetaFields, partitionPath, new Properties(), false);
+  }
+
+  @Test
+  public void testClusteringWithReuseFileIds() throws Exception {
+    // setup clustering config
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringMaxBytesInGroup(10) // set small size per group, so each file gets its own clustering group
+        .withClusteringExecutionStrategyClass("org.apache.hudi.client.ClusteringIdentityTestExecutionStrategy")
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+    testInsertAndClustering(clusteringConfig, true, true, true, SqlQueryEqualityPreCommitValidator.class.getName(),
+        COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
+  @Test
+  public void testCleanFunctionalityForStitchingUsecase() throws Exception {
+    String partition = "2015/03/16";
+    Properties properties = new Properties();
+    properties.put(HoodieClusteringConfig.CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.begin.partition", partition);
+    properties.put(HoodieClusteringConfig.CLUSTERING_STRATEGY_PARAM_PREFIX + "cluster.end.partition", partition);
+    // setup clustering config
+    // let the max bytes in group to be equal to default that way one group will include multiple file slices
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringExecutionStrategyClass("org.apache.hudi.client.clustering.run.strategy.SparkSortAndSizeExecutionStrategy")
+        .withClusteringPlanStrategyClass("org.apache.hudi.client.clustering.plan.strategy.SparkSelectedPartitionsClusteringPlanStrategy")
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).fromProperties(properties)
+        .build();
+
+    // Insert 2 insert commits creating 2 data files on a partition and then run clustering on the partition and verify.
+    testInsertAndClustering(clusteringConfig, true, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+
+    Path partitionPath = new Path(basePath, partition);
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+
+    // Collect the original data files present in the partition before the clustering operation.
+    Option<HoodieInstant> lastInstant = metaClient.getCommitTimeline().lastInstant();
+    assertTrue(lastInstant.isPresent());
+    assertEquals(lastInstant.get().getAction(), HoodieTimeline.REPLACE_COMMIT_ACTION);
+    String clusteringCommitTime = lastInstant.get().getTimestamp();
+    List<String> dataFiles = Stream.of(FSUtils.getAllDataFilesInPartition(fs, partitionPath))
+        .map(fileStatus -> fileStatus.getPath().getName())
+        .collect(Collectors.toList());
+    Set<String> originalFiles = dataFiles.stream()
+        .filter(fileName -> !fileName.contains(clusteringCommitTime))
+        .collect(Collectors.toSet());
+
+    // Make an insert on the partition. By setting CLEANER_COMMITS_RETAINED_PROP to 1.
+    // Cleaner should clean all the data files replaced by clustering.
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.NAME.key(), "testdb.test_trips");
+    props.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, true, props);
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    insertOneBatch(client);
+    List<String> filesInPartition = Stream.of(
+        FSUtils.getAllDataFilesInPartition(metaClient.getFs(), new Path(basePath, partition)))
+        .map(fileStatus -> fileStatus.getPath().getName())
+        .collect(Collectors.toList());
+    // Cleaner would have cleaned the original files, so count should be 0.
+    assertEquals(2, filesInPartition.size());
+    assertEquals(0, filesInPartition.stream().filter(originalFiles::contains).count());
+  }
+
+  @Test
+  public void testIfOrignalFilesAfterClusteringAreCleaned() throws Exception {
+    // setup clustering config
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringMaxBytesInGroup(10) // set small size per group, so each file gets its own clustering group
+        .withClusteringExecutionStrategyClass("org.apache.hudi.client.ClusteringIdentityTestExecutionStrategy")
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).build();
+
+    // Insert 2 insert commits creating 2 data files on a partition and then run clustering on the partition and verify.
+    testInsertAndClustering(clusteringConfig, true, true, true, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+
+    String partition = "2015/03/16";
+    Path partitionPath = new Path(basePath, partition);
+    HoodieWrapperFileSystem fs = metaClient.getFs();
+
+    // Collect the original data files present in the partition before the clustering operation.
+    Option<HoodieInstant> lastInstant = metaClient.getCommitTimeline().lastInstant();
+    assertTrue(lastInstant.isPresent());
+    assertEquals(lastInstant.get().getAction(), HoodieTimeline.REPLACE_COMMIT_ACTION);
+    String clusteringCommitTime = lastInstant.get().getTimestamp();
+    List<String> dataFiles = Stream.of(FSUtils.getAllDataFilesInPartition(fs, partitionPath))
+        .map(fileStatus -> fileStatus.getPath().getName())
+        .collect(Collectors.toList());
+    Set<String> originalFiles = dataFiles.stream()
+        .filter(fileName -> !fileName.contains(clusteringCommitTime))
+        .collect(Collectors.toSet());
+
+    // Make an insert on the partition. By setting CLEANER_COMMITS_RETAINED_PROP to 1.
+    // Cleaner should clean all the data files replaced by clustering.
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.NAME.key(), "testdb.test_trips");
+    props.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
+    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, true, props);
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+
+    insertOneBatch(client);
+    List<String> filesInPartition = Stream.of(
+        FSUtils.getAllDataFilesInPartition(metaClient.getFs(), new Path(basePath, partition)))
+        .map(fileStatus -> fileStatus.getPath().getName())
+        .collect(Collectors.toList());
+    // Cleaner would have cleaned the original files, so count should be 0.
+    assertEquals(3, filesInPartition.size());
+    assertEquals(0, filesInPartition.stream().filter(originalFiles::contains).count());
+  }
+
+  private List<WriteStatus> insertOneBatch(SparkRDDWriteClient client) throws IOException {
+    dataGen = new HoodieTestDataGenerator(new String[]{"2015/03/16"});
+    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    List<HoodieRecord> records1 = dataGen.generateInserts(commitTime, 200);
+    return writeAndVerifyBatch(client, records1, commitTime, true);
+  }
+
+  public void testClusteringWithParquetToolsExecutionStrategy() throws Exception {
+    // setup clustering config
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringMaxBytesInGroup(10) // set small size per group, so each file gets its own clustering group
+        .withClusteringExecutionStrategyClass("org.apache.hudi.client.ParquetToolsTestExecutionStrategy")
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(0).build();
+    testInsertAndClustering(clusteringConfig, true, true, true,  SqlQueryEqualityPreCommitValidator.class.getName(),
+        COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
   /**

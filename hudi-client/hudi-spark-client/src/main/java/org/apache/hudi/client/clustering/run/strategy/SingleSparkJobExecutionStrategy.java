@@ -110,7 +110,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
   /**
    * Submit job to execute clustering for the group.
    */
-  private Stream<WriteStatus> runClusteringForGroup(ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
+  protected Stream<WriteStatus> runClusteringForGroup(ClusteringGroupInfo clusteringOps, Map<String, String> strategyParams,
                                                     boolean preserveHoodieMetadata, SerializableSchema schema,
                                                     TaskContextSupplier taskContextSupplier, String instantTime) {
 
