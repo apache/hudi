@@ -198,3 +198,10 @@ d18adf3e0 [ENG-9990][CHERRYPICK] Upgrade h2 and hive dependency version (#729)
 6f0beba06d9 [ENG-9739][HUDI-7816] Provide SourceProfileSupplier option into the SnapshotLoadQuerySplitter (#728)
 b004bdea59f [AUDIT-809] Upgrade to version release-v1.16.0 (#734)
 9e1c2150cf0 [ENG-9990][HUDI-7808] Upgrade io.acryl:datahub-client from 0.8.31 to 0.8.45 (#733)
+
+---[2024-06-04 08:24:31] [release-v1.18.0] ---
+2d36ffca425 [ENG-10247][HUDI-7824] Fixing incr cleaner with savepoint removal (#746)
+dff1ccd7315 [ENG-10157][HUDI-7821] Handle case where older proto message is read with new schema (#740)
+57edb88606d [ENG-10204][MINOR] Avoid logging full commit metadata at info level (#743)
+7084e2bd9b4 [ENG-10119][INTERNAL] Use latest client method instead of providing -1 version (#736)
+649ae3a3758 [ENG-9739][INTERNAL] Upgrade to version release-v1.17.0 (#739)
