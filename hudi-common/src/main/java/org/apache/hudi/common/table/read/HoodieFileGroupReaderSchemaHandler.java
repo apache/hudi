@@ -42,6 +42,9 @@ import java.util.stream.Stream;
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 
+/**
+ * This class is responsible for handling the schema for the file group reader.
+ */
 public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final Schema dataSchema;

@@ -38,7 +38,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -137,33 +136,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
       String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, readerSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (hasNextBaseRecord(baseRecord, logRecordInfo)) {
         return true;
       }
     }
 
     // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-    return false;
+    return hasNextLogRecord();
   }
 }

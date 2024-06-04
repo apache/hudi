@@ -38,7 +38,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -97,21 +96,10 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
+    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    Option<Pair<Function<T,T>, Schema>> schemaEvolutionTransformerOpt =
-        composeEvolvedSchemaTransformer(dataBlock);
-
-    // In case when schema has been evolved original persisted records will have to be
-    // transformed to adhere to the new schema
-    Function<T,T> transformer =
-        schemaEvolutionTransformerOpt.map(Pair::getLeft)
-            .orElse(Function.identity());
-
-    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
-
-    // TODO: return an iterator that can generate sequence number with the record.
-    //  Then we can hide this logic into data block.
+    // TODO: Return an iterator that can generate sequence number with the record.
+    //       Then we can hide this logic into data block.
     try (ClosableIterator<T> recordIterator = dataBlock.getEngineRecordIterator(readerContext)) {
       int recordIndex = 0;
       while (recordIterator.hasNext()) {
@@ -125,10 +113,10 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
 
         long recordPosition = recordPositions.get(recordIndex++);
 
-        T evolvedNextRecord = transformer.apply(nextRecord);
+        T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         processNextDataRecord(
             evolvedNextRecord,
-            readerContext.generateMetadataForRecord(evolvedNextRecord, evolvedSchema),
+            readerContext.generateMetadataForRecord(evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight()),
             recordPosition
         );
       }
@@ -194,35 +182,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       T baseRecord = baseFileIterator.next();
       nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
-
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, readerSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (hasNextBaseRecord(baseRecord, logRecordInfo)) {
         return true;
       }
     }
 
     // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-
-    return false;
+    return hasNextLogRecord();
   }
 }

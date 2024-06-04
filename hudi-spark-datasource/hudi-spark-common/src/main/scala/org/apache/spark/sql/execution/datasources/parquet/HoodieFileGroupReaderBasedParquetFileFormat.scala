@@ -199,7 +199,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
   }
 
-  protected def setSchemaEvolutionConfigs(conf: StorageConfiguration[_]): Unit = {
+  private def setSchemaEvolutionConfigs(conf: StorageConfiguration[_]): Unit = {
     if (internalSchemaOpt.isPresent) {
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchemaOpt.get()))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tableState.tablePath)

@@ -92,9 +92,7 @@ public class InternalSchemaMerger {
    * @return read schema to read avro/parquet file.
    */
   public Pair<InternalSchema, Map<String, String>> mergeSchemaGetRenamed() {
-    Types.RecordType record = (Types.RecordType) mergeType(querySchema.getRecord(), 0);
-    InternalSchema internalSchema =  new InternalSchema(record);
-    return Pair.of(internalSchema, renamedFields);
+    return Pair.of(mergeSchema(), renamedFields);
   }
 
   /**

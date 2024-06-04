@@ -51,6 +51,7 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -250,19 +251,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     } else {
       blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
     }
-    Option<Pair<Function<T,T>, Schema>> schemaEvolutionTransformerOpt =
-        composeEvolvedSchemaTransformer(dataBlock);
-
-    // In case when schema has been evolved original persisted records will have to be
-    // transformed to adhere to the new schema
-    Function<T,T> transformer =
-        schemaEvolutionTransformerOpt.map(Pair::getLeft)
-            .orElse(Function.identity());
-
-    Schema schema = schemaEvolutionTransformerOpt.map(Pair::getRight)
-        .orElseGet(dataBlock::getSchema);
-
-    return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, transformer), schema);
+    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    return Pair.of(new CloseableMappingIterator<>(
+        blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
   }
 
   /**
@@ -380,5 +371,52 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
 
     return blockPositions;
+  }
+
+  protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+        baseRecord, readerSchema);
+
+    Option<T> resultRecord = logRecordInfo != null
+        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
+      return true;
+    }
+    return false;
+  }
+
+  protected boolean hasNextLogRecord() throws IOException {
+    if (logRecordIterator == null) {
+      logRecordIterator = records.values().iterator();
+    }
+
+    while (logRecordIterator.hasNext()) {
+      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
+      Option<T> resultRecord;
+      resultRecord = merge(Option.empty(), Collections.emptyMap(),
+          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
+      if (resultRecord.isPresent()) {
+        nextRecord = readerContext.seal(resultRecord.get());
+        return true;
+      }
+    }
+    return false;
+  }
+
+  protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
+    Option<Pair<Function<T, T>, Schema>> schemaEvolutionTransformerOpt =
+        composeEvolvedSchemaTransformer(dataBlock);
+
+    // In case when schema has been evolved original persisted records will have to be
+    // transformed to adhere to the new schema
+    Function<T, T> transformer =
+        schemaEvolutionTransformerOpt.map(Pair::getLeft)
+            .orElse(Function.identity());
+
+    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
+        .orElseGet(dataBlock::getSchema);
+    return Pair.of(transformer, evolvedSchema);
   }
 }

@@ -44,7 +44,8 @@ public class HoodieFileGroupReaderTestUtils {
       TypedProperties properties,
       HoodieStorage storage,
       HoodieTableConfig tableConfig,
-      HoodieReaderContext<IndexedRecord> readerContext
+      HoodieReaderContext<IndexedRecord> readerContext,
+      HoodieTableMetaClient metaClient
   ) {
     assert (fileSliceOpt.isPresent());
     return new HoodieFileGroupReaderBuilder()
@@ -55,7 +56,7 @@ public class HoodieFileGroupReaderTestUtils {
         .withLength(length)
         .withProperties(properties)
         .withTableConfig(tableConfig)
-        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition);
+        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
   }
 
   public static class HoodieFileGroupReaderBuilder {
@@ -109,7 +110,8 @@ public class HoodieFileGroupReaderTestUtils {
         String basePath,
         String latestCommitTime,
         Schema schema,
-        boolean shouldUseRecordPosition
+        boolean shouldUseRecordPosition,
+        HoodieTableMetaClient metaClient
     ) {
       return new HoodieFileGroupReader<>(
           readerContext,
@@ -120,7 +122,7 @@ public class HoodieFileGroupReaderTestUtils {
           schema,
           schema,
           Option.empty(),
-          null,
+          metaClient,
           props,
           tableConfig,
           start,

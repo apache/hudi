@@ -281,7 +281,7 @@ public abstract class HoodieReaderContext<T> {
    * skeleton file iterator, followed by all columns in the data file iterator
    *
    * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
-   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @param dataFileIterator     iterator over data files that were bootstrapped into the hudi table
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
   public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
@@ -293,8 +293,8 @@ public abstract class HoodieReaderContext<T> {
    * Creates a function that will reorder records of schema "from" to schema of "to"
    * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
    *
-   * @param from the schema of records to be passed into UnaryOperator
-   * @param to the schema of records produced by UnaryOperator
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
    * @param renamedColumns map of renamed columns where the key is the new name from the query and
    *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns

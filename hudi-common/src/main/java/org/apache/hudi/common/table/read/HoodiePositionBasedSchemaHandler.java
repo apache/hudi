@@ -31,6 +31,9 @@ import java.util.List;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
 
+/**
+ * This class is responsible for handling the schema for the file group reader that supports positional merge.
+ */
 public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSchemaHandler<T> {
   public HoodiePositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                           Schema dataSchema,

@@ -22,10 +22,11 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{ROW_INDEX_TEMPORARY_COLUMN_NAME, getAppliedRequiredSchema}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
@@ -37,6 +38,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
@@ -44,23 +46,23 @@ import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import scala.collection.mutable
 
 /**
- * Implementation of {@link HoodieReaderContext} to read {@link InternalRow}s with
- * {@link ParquetFileFormat} on Spark.
+ * Implementation of [[HoodieReaderContext]] to read [[InternalRow]]s with
+ * [[ParquetFileFormat]] on Spark.
  *
  * This uses Spark parquet reader to read parquet data files or parquet log blocks.
  *
- * @param parquetFileReader A reader that transforms a {@link PartitionedFile} to an iterator of
- *                        {@link InternalRow}. This is required for reading the base file and
- *                        not required for reading a file group with only log files.
- * @param recordKeyColumn column name for the recordkey
- * @param filters spark filters that might be pushed down into the reader
+ * @param parquetFileReader A reader that transforms a [[PartitionedFile]] to an iterator of
+ *                          [[InternalRow]]. This is required for reading the base file and
+ *                          not required for reading a file group with only log files.
+ * @param recordKeyColumn   column name for the recordkey
+ * @param filters           spark filters that might be pushed down into the reader
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               recordKeyColumn: String,
                                               filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
-  lazy val sparkAdapter = SparkAdapterSupport.sparkAdapter
-  val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
+  lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
+  private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
@@ -128,10 +130,10 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       dataFileIterator.asInstanceOf[ClosableIterator[Any]], dataRequiredSchema)
   }
 
-  protected def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
-                                 skeletonRequiredSchema: Schema,
-                                 dataFileIterator: ClosableIterator[Any],
-                                 dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
+  private def doBootstrapMerge(skeletonFileIterator: ClosableIterator[Any],
+                               skeletonRequiredSchema: Schema,
+                               dataFileIterator: ClosableIterator[Any],
+                               dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
     if (getUseRecordPosition) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
@@ -241,10 +243,6 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
 }
 
 object SparkFileFormatInternalRowReaderContext {
-  // From "ParquetFileFormat.scala": The names of the field for record position.
-  private val ROW_INDEX = "row_index"
-  private val ROW_INDEX_TEMPORARY_COLUMN_NAME = s"_tmp_metadata_$ROW_INDEX"
-
   // From "namedExpressions.scala": Used to construct to record position field metadata.
   private val FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY = "__file_source_generated_metadata_col"
   private val FILE_SOURCE_METADATA_COL_ATTR_KEY = "__file_source_metadata_col"
@@ -252,10 +250,6 @@ object SparkFileFormatInternalRowReaderContext {
 
   def getRecordKeyRelatedFilters(filters: Seq[Filter], recordKeyColumn: String): Seq[Filter] = {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
-  }
-
-  def isIndexTempColumn(field: StructField): Boolean = {
-    field.name.equals(ROW_INDEX_TEMPORARY_COLUMN_NAME)
   }
 
   def getAppliedRequiredSchema(requiredSchema: StructType): StructType = {
@@ -267,4 +261,9 @@ object SparkFileFormatInternalRowReaderContext {
       val rowIndexField = StructField(ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = false, metadata)
       StructType(requiredSchema.fields.filterNot(isIndexTempColumn) :+ rowIndexField)
   }
+
+  private def isIndexTempColumn(field: StructField): Boolean = {
+    field.name.equals(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+  }
+
 }
