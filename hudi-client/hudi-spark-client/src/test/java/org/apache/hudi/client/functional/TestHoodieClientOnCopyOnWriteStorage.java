@@ -38,6 +38,7 @@ import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -66,6 +67,8 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -101,6 +104,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndex.IndexType;
 import org.apache.hudi.io.HoodieMergeHandle;
@@ -939,6 +943,31 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       BulkInsertPartitioner<JavaRDD<HoodieRecord>> partitioner = new RDDCustomColumnsSortPartitioner(new String[] {"rider"}, HoodieTestDataGenerator.AVRO_SCHEMA, config);
       List<WriteStatus> statuses = client.bulkInsert(insertRecordsRDD1, commitTime1, Option.of(partitioner)).collect();
       assertNoWriteErrors(statuses);
+    }
+  }
+
+  @Test
+  public void testOutOfOrderCommitTimestamps() {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .build();
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String commit1 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commit1);
+      String commit2 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commit2);
+      String commit3 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commit3);
+
+      // create commit4 after commit5. commit4 creation should fail.
+      String commit4 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      String commit5 = HoodieActiveTimeline.createNewInstantTime(false, timeGenerator);
+      client.startCommitWithTime(commit5);
+      assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commit4));
     }
   }
 

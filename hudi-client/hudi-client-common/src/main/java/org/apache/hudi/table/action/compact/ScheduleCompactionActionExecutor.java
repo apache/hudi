@@ -89,6 +89,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseActionExec
     Option<HoodieCompactionPlan> option = Option.empty();
     if (plan != null && nonEmpty(plan.getOperations())) {
       extraMetadata.ifPresent(plan::setExtraMetadata);
+      table.validateForLatestTimestamp(instantTime);
       try {
         if (operationType.equals(WriteOperationType.COMPACT)) {
           HoodieInstant compactionInstant = new HoodieInstant(HoodieInstant.State.REQUESTED,
