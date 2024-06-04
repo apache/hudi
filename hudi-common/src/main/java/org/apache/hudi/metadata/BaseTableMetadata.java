@@ -320,14 +320,14 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
    * @param secondaryKeys The list of secondary keys to read
    */
   @Override
-  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys) {
+  public Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
     ValidationUtils.checkState(
-        dataMetaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partitionName -> partitionName.startsWith(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath())),
-        "Secondary index is not initialized in MDT");
+        dataMetaClient.getTableConfig().getMetadataPartitions().contains(partitionName),
+        "Secondary index is not initialized in MDT for: " + partitionName);
     // Fetch secondary-index records
-    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    Map<String, List<HoodieRecord<HoodieMetadataPayload>>> secondaryKeyRecords = getSecondaryIndexRecords(secondaryKeys, partitionName);
     // Now collect the record-keys and fetch the RLI records
     List<String> recordKeys = new ArrayList<>();
     secondaryKeyRecords.forEach((key, records) -> records.forEach(record -> {

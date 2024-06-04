@@ -44,10 +44,14 @@ class SecondaryIndexSupport(spark: SparkSession,
                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
-    lazy val (_, secondaryKeys) = if (isIndexAvailable) filterQueriesWithSecondaryKey(queryFilters, getSecondaryKeyConfig(queryReferencedColumns, metaClient)) else (List.empty, List.empty)
+    val secondaryKeyConfigOpt = getSecondaryKeyConfig(queryReferencedColumns, metaClient)
+    if (secondaryKeyConfigOpt.isEmpty) {
+      Option.empty
+    }
+    lazy val (_, secondaryKeys) = if (isIndexAvailable) filterQueriesWithSecondaryKey(queryFilters, secondaryKeyConfigOpt.map(_._2)) else (List.empty, List.empty)
     if (isIndexAvailable && queryFilters.nonEmpty && secondaryKeys.nonEmpty) {
       val allFiles = fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
-      Some(getCandidateFilesFromSecondaryIndex(allFiles, secondaryKeys))
+      Some(getCandidateFilesFromSecondaryIndex(allFiles, secondaryKeys, secondaryKeyConfigOpt.get._1))
     } else {
       Option.empty
     }
@@ -71,8 +75,8 @@ class SecondaryIndexSupport(spark: SparkSession,
    * @param secondaryKeys - List of secondary keys.
    * @return Sequence of file names which need to be queried
    */
-  private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String]): Set[String] = {
-    val recordKeyLocationsMap = metadataTable.readSecondaryIndex(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava)
+  private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
+    val recordKeyLocationsMap = metadataTable.readSecondaryIndex(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava, secondaryIndexName)
     val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
     val candidateFiles: mutable.Set[String] = mutable.Set.empty
     for (locations <- JavaConverters.collectionAsScalaIterableConverter(recordKeyLocationsMap.values()).asScala) {
@@ -96,12 +100,12 @@ class SecondaryIndexSupport(spark: SparkSession,
    * TODO: Handle multiple secondary indexes (similar to functional index)
    */
   private def getSecondaryKeyConfig(queryReferencedColumns: Seq[String],
-                                    metaClient: HoodieTableMetaClient): Option[String] = {
+                                    metaClient: HoodieTableMetaClient): Option[(String, String)] = {
     val indexDefinitions = metaClient.getIndexMetadata.get.getIndexDefinitions.asScala
     indexDefinitions.values
       .find(indexDef => indexDef.getIndexType.equals(PARTITION_NAME_SECONDARY_INDEX) &&
         queryReferencedColumns.contains(indexDef.getSourceFields.get(0)))
-      .map(indexDef => indexDef.getSourceFields.get(0))
+      .map(indexDef => (indexDef.getIndexName, indexDef.getSourceFields.get(0)))
   }
 }
 

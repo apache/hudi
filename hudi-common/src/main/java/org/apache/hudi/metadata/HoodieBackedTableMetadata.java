@@ -21,6 +21,7 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
@@ -77,6 +78,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
+import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -585,7 +587,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     try {
       HoodieTimer timer = HoodieTimer.start();
       // Open base file reader
-      Pair<HoodieSeekingFileReader<?>, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer);
+      // If the partition is a secondary index partition, use the HBase HFile reader instead of native HFile reader.
+      // TODO (HUDI-7831): Support reading secondary index records using native HFile reader.
+      boolean shouldUseNativeHFileReader = !partitionName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX);
+      Pair<HoodieSeekingFileReader<?>, Long> baseFileReaderOpenTimePair = getBaseFileReader(slice, timer, shouldUseNativeHFileReader);
       HoodieSeekingFileReader<?> baseFileReader = baseFileReaderOpenTimePair.getKey();
       final long baseFileOpenMs = baseFileReaderOpenTimePair.getValue();
 
@@ -604,16 +609,20 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     }
   }
 
-  private Pair<HoodieSeekingFileReader<?>, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer) throws IOException {
+  private Pair<HoodieSeekingFileReader<?>, Long> getBaseFileReader(FileSlice slice, HoodieTimer timer, boolean shouldUseNativeHFileReader) throws IOException {
     HoodieSeekingFileReader<?> baseFileReader;
     long baseFileOpenMs;
     // If the base file is present then create a reader
     Option<HoodieBaseFile> baseFile = slice.getBaseFile();
     if (baseFile.isPresent()) {
       StoragePath baseFilePath = baseFile.get().getStoragePath();
+      HoodieConfig readerConfig = DEFAULT_HUDI_CONFIG_FOR_READER;
+      if (!shouldUseNativeHFileReader) {
+        readerConfig.setValue(USE_NATIVE_HFILE_READER, "false");
+      }
       baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(metadataMetaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, baseFilePath);
+          .getFileReader(readerConfig, baseFilePath);
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           baseFile.get().getCommitTime(), baseFileOpenMs));
@@ -880,12 +889,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // Define the combOp function (merges elements across partitions)
     Functions.Function2<Map<String, List<HoodieRecord<HoodieMetadataPayload>>>, Map<String, List<HoodieRecord<HoodieMetadataPayload>>>, Map<String, List<HoodieRecord<HoodieMetadataPayload>>>> combOp =
         (map1, map2) -> {
-          map2.forEach((secondaryKey, secondaryRecords) -> {
-            map1.merge(secondaryKey, secondaryRecords, (oldRecords, newRecords) -> {
-              newRecords.addAll(oldRecords);
-              return newRecords;
-            });
-          });
+          map2.forEach((secondaryKey, secondaryRecords) -> map1.merge(secondaryKey, secondaryRecords, (oldRecords, newRecords) -> {
+            newRecords.addAll(oldRecords);
+            return newRecords;
+          }));
           return map1;
         };
     // Use aggregate to merge results within and across partitions

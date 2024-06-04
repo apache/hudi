@@ -232,7 +232,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Returns the location of records which the provided secondary keys maps to.
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
-  Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys);
+  Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,
