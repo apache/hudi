@@ -47,6 +47,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -65,14 +66,14 @@ import static org.apache.hudi.config.DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE
  * using DynamoDB. Users need to have access to AWS DynamoDB to be able to use this lock.
  */
 @NotThreadSafe
-public abstract class DynamoDBBasedLockProviderBase implements LockProvider<LockItem> {
+public abstract class DynamoDBBasedLockProviderBase implements LockProvider<LockItem>, Serializable {
 
   protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedLockProviderBase.class);
 
   protected static final String DYNAMODB_ATTRIBUTE_NAME = "key";
 
   protected final DynamoDbBasedLockConfig dynamoDbBasedLockConfig;
-  protected final AmazonDynamoDBLockClient client;
+  protected final transient AmazonDynamoDBLockClient client;
   protected final String tableName;
   protected final String dynamoDBPartitionKey;
   protected volatile LockItem lock;
