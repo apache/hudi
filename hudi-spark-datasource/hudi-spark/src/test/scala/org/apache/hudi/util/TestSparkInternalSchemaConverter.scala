@@ -37,8 +37,8 @@ class TestSparkInternalSchemaConverter extends HoodieSparkClientTestHarness with
   @Test
   def testCollectColumnNames(): Unit = {
     val simpleSchema = StructType(Seq(
-      StructField("field1", IntegerType, nullable = false),
-      StructField("field2", StringType, nullable = false)))
+      StructField("field1", IntegerType, nullable = false, Metadata.empty),
+      StructField("field2", StringType, nullable = false, Metadata.empty)))
 
     assertEquals(getStructType(getSimpleSchema).json, simpleSchema.json)
     var fieldNames =  collectColNamesFromSparkStruct(simpleSchema)
@@ -47,8 +47,8 @@ class TestSparkInternalSchemaConverter extends HoodieSparkClientTestHarness with
     assertTrue(fieldNames.containsAll(expectedOutput))
 
     val simpleSchemaWithNullable = StructType(Seq(
-      StructField("field1", IntegerType, nullable = true),
-      StructField("field2", StringType, nullable = false)))
+      StructField("field1", IntegerType, nullable = true, Metadata.empty),
+      StructField("field2", StringType, nullable = false, Metadata.empty)))
 
     assertEquals(getStructType(getSimpleSchemaWithNullable).json, simpleSchemaWithNullable.json)
     fieldNames =  collectColNamesFromSparkStruct(simpleSchemaWithNullable)
@@ -58,10 +58,10 @@ class TestSparkInternalSchemaConverter extends HoodieSparkClientTestHarness with
 
     val complexSchemaSingleLevel = StructType(Seq(
       StructField("field1", StructType(Seq(
-        StructField("nested", IntegerType, nullable = false)
-      )), nullable = false),
-      StructField("field2", ArrayType(StringType, containsNull = false), nullable = false),
-      StructField("field3", MapType(StringType, DoubleType, valueContainsNull = false), nullable = false)
+        StructField("nested", IntegerType, nullable = false, Metadata.empty)
+      )), nullable = false, Metadata.empty),
+      StructField("field2", ArrayType(StringType, containsNull = false), nullable = false, Metadata.empty),
+      StructField("field3", MapType(StringType, DoubleType, valueContainsNull = false), nullable = false, Metadata.empty)
     ))
 
     assertEquals(getStructType(getComplexSchemaSingleLevel).json, complexSchemaSingleLevel.json)
@@ -71,17 +71,17 @@ class TestSparkInternalSchemaConverter extends HoodieSparkClientTestHarness with
     assertTrue(fieldNames.containsAll(expectedOutput))
 
     val deeplyNestedField = StructType(Seq(
-      StructField("field1", IntegerType, nullable = false),
+      StructField("field1", IntegerType, nullable = false, Metadata.empty),
       StructField("field2", StructType(Seq(
         StructField("field2nestarray",
           ArrayType(
             StructType(Seq(
-              StructField("field21", IntegerType, nullable = true),
-              StructField("field22", IntegerType, nullable = true)
+              StructField("field21", IntegerType, nullable = true, Metadata.empty),
+              StructField("field22", IntegerType, nullable = true, Metadata.empty)
             )), containsNull = true),
           nullable = false)
       )), nullable = false),
-      StructField("field3", IntegerType, nullable = true)
+      StructField("field3", IntegerType, nullable = true, Metadata.empty)
     ))
 
     assertEquals(getStructType(getDeeplyNestedFieldSchema).json, deeplyNestedField.json)

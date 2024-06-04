@@ -73,7 +73,7 @@ public class TestAvroInternalSchemaConverter {
                 createArrayField("field2nestarray",
                     createNullableRecord("field2nestarraynest",
                         createNullablePrimitiveField("field21", Schema.Type.INT),
-                        createNullablePrimitiveField("field22", Schema.Type.INT))))),
+                        createNullablePrimitiveField("field22", Schema.Type.INT)))), null, null),
         createNullablePrimitiveField("field3", Schema.Type.INT));
   }
 
