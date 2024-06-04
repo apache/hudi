@@ -38,36 +38,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAvroInternalSchemaConverter {
 
-  @Test
-  public void testCollectColumnNames() {
-    Schema simpleSchema = createRecord("simpleSchema",
+  public static Schema getSimpleSchema() {
+    return createRecord("simpleSchema",
         createPrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field2", Schema.Type.STRING));
+  }
 
-    List<String> fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchema);
-    List<String> expectedOutput = Arrays.asList("field1", "field2");
-    assertEquals(expectedOutput.size(), fieldNames.size());
-    assertTrue(fieldNames.containsAll(expectedOutput));
+  public static List<String> getSimpleSchemaExpectedColumnNames() {
+    return Arrays.asList("field1", "field2");
+  }
 
-
-    Schema simpleSchemaWithNullable = createRecord("simpleSchemaWithNullable",
+  public static Schema getSimpleSchemaWithNullable() {
+    return createRecord("simpleSchemaWithNullable",
         createNullablePrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field2", Schema.Type.STRING));
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchemaWithNullable);
-    expectedOutput = Arrays.asList("field1", "field2");
-    assertEquals(expectedOutput.size(), fieldNames.size());
-    assertTrue(fieldNames.containsAll(expectedOutput));
+  }
 
-    Schema complexSchemaSingleLevel = createRecord("complexSchemaSingleLevel",
+  public static Schema getComplexSchemaSingleLevel() {
+    return createRecord("complexSchemaSingleLevel",
         AvroSchemaTestUtils.createNestedField("field1", Schema.Type.INT),
         createArrayField("field2", Schema.Type.STRING),
         createMapField("field3", Schema.Type.DOUBLE));
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(complexSchemaSingleLevel);
-    expectedOutput = Arrays.asList("field1.nested", "field2.element", "field3.key", "field3.value");
-    assertEquals(expectedOutput.size(), fieldNames.size());
-    assertTrue(fieldNames.containsAll(expectedOutput));
+  }
 
-    Schema deeplyNestedField = createRecord("deeplyNestedField",
+  public static List<String> getComplexSchemaSingleLevelExpectedColumnNames() {
+    return Arrays.asList("field1.nested", "field2.element", "field3.key", "field3.value");
+  }
+
+  public static Schema getDeeplyNestedFieldSchema() {
+    return createRecord("deeplyNestedFieldSchema",
         createPrimitiveField("field1", Schema.Type.INT),
         new Schema.Field("field2",
             createRecord("field2nest",
@@ -76,9 +75,37 @@ public class TestAvroInternalSchemaConverter {
                         createNullablePrimitiveField("field21", Schema.Type.INT),
                         createNullablePrimitiveField("field22", Schema.Type.INT))))),
         createNullablePrimitiveField("field3", Schema.Type.INT));
-    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(deeplyNestedField);
-    expectedOutput = Arrays.asList("field1", "field2.field2nestarray.element.field21",
+  }
+
+  public static List<String> getDeeplyNestedFieldSchemaExpectedColumnNames() {
+    return Arrays.asList("field1", "field2.field2nestarray.element.field21",
         "field2.field2nestarray.element.field22", "field3");
+  }
+
+  @Test
+  public void testCollectColumnNames() {
+    Schema simpleSchema =  getSimpleSchema();
+    List<String> fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchema);
+    List<String> expectedOutput = getSimpleSchemaExpectedColumnNames();
+    assertEquals(expectedOutput.size(), fieldNames.size());
+    assertTrue(fieldNames.containsAll(expectedOutput));
+
+
+    Schema simpleSchemaWithNullable = getSimpleSchemaWithNullable();
+    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(simpleSchemaWithNullable);
+    expectedOutput = getSimpleSchemaExpectedColumnNames();
+    assertEquals(expectedOutput.size(), fieldNames.size());
+    assertTrue(fieldNames.containsAll(expectedOutput));
+
+    Schema complexSchemaSingleLevel = getComplexSchemaSingleLevel();
+    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(complexSchemaSingleLevel);
+    expectedOutput = getComplexSchemaSingleLevelExpectedColumnNames();
+    assertEquals(expectedOutput.size(), fieldNames.size());
+    assertTrue(fieldNames.containsAll(expectedOutput));
+
+    Schema deeplyNestedFieldSchema = getDeeplyNestedFieldSchema();
+    fieldNames =  AvroInternalSchemaConverter.collectColNamesFromSchema(deeplyNestedFieldSchema);
+    expectedOutput = getDeeplyNestedFieldSchemaExpectedColumnNames();
     assertEquals(expectedOutput.size(), fieldNames.size());
     assertTrue(fieldNames.containsAll(expectedOutput));
   }
