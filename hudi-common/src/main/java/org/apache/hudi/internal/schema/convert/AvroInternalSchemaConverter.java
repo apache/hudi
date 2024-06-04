@@ -20,6 +20,7 @@ package org.apache.hudi.internal.schema.convert;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -84,7 +85,8 @@ public class AvroInternalSchemaConverter {
    * @param schema a avro schema.
    * @return leaf nodes full names.
    */
-  private static List<String> collectColNamesFromSchema(Schema schema) {
+  @VisibleForTesting
+  static List<String> collectColNamesFromSchema(Schema schema) {
     List<String> result = new ArrayList<>();
     Deque<String> visited = new LinkedList<>();
     collectColNamesFromAvroSchema(schema, visited, result);
@@ -99,7 +101,7 @@ public class AvroInternalSchemaConverter {
           visited.push(f.name());
           collectColNamesFromAvroSchema(f.schema(), visited, resultSet);
           visited.pop();
-          addFullName(f.schema(), f.name(), visited, resultSet);
+          addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
         }
         return;
 
@@ -111,27 +113,26 @@ public class AvroInternalSchemaConverter {
         visited.push("element");
         collectColNamesFromAvroSchema(schema.getElementType(), visited, resultSet);
         visited.pop();
-        addFullName(schema.getElementType(), "element", visited, resultSet);
+        addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
         return;
 
       case MAP:
-        addFullName(STRING, "key", visited, resultSet);
+        addFullNameIfLeafNode(STRING, "key", visited, resultSet);
         visited.push("value");
         collectColNamesFromAvroSchema(schema.getValueType(), visited, resultSet);
         visited.pop();
-        addFullName(schema.getValueType(), "value", visited, resultSet);
+        addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
         return;
 
       default:
-        return;
     }
   }
 
-  private static void addFullName(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullName(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+  private static void addFullNameIfLeafNode(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
+    addFullNameIfLeafNode(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
   }
 
-  private static void addFullName(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
+  private static void addFullNameIfLeafNode(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
     switch (type) {
       case RECORD:
       case ARRAY:

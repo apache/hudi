@@ -20,9 +20,11 @@
 package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
+import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.sources.{EqualTo, GreaterThan, IsNotNull}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
 class TestHoodieFileGroupReaderBasedParquetFileFormat extends SparkClientFunctionalTestHarness {
@@ -44,5 +46,18 @@ class TestHoodieFileGroupReaderBasedParquetFileFormat extends SparkClientFunctio
       filtersWithKeys, "key_column")
     assertEquals(1, filtersWithKeyColumn.size)
     assertEquals("key_column", filtersWithKeyColumn.head.references.head)
+  }
+
+  @Test
+  def testGetAppliedRequiredSchema(): Unit = {
+    val fields = Array(
+      StructField("column_a", LongType, nullable = false),
+      StructField("column_b", StringType, nullable = false))
+    val requiredSchema = StructType(fields)
+
+    val appliedSchema: StructType = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(
+      requiredSchema)
+    assertEquals(3, appliedSchema.fields.length)
+    assertTrue(appliedSchema.fields.map(f => f.name).contains(ROW_INDEX_TEMPORARY_COLUMN_NAME))
   }
 }
