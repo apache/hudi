@@ -64,6 +64,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
 
   @Test
   def testRecordPositionColumn(): Unit = {
+    //feature is only supported in spark 3.5+
     if (HoodieSparkUtils.gteqSpark3_5) {
       val _spark = spark
       // Prepare the schema
