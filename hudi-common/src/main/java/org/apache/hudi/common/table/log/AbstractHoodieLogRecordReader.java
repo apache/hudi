@@ -833,6 +833,8 @@ public abstract class AbstractHoodieLogRecordReader {
 
     public abstract Builder withBasePath(String basePath);
 
+    public abstract Builder withBasePath(StoragePath basePath);
+
     public abstract Builder withLogFilePaths(List<String> logFilePaths);
 
     public abstract Builder withReaderSchema(Schema schema);

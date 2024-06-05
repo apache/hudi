@@ -97,7 +97,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
     // Using FSUtils.getFS here instead of metaClient.getFS() since we don't want to count these listStatus
     // calls in metrics as they are not part of normal HUDI operation.
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getStorage(), metaClient.getBasePath().toString(),
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, metaClient.getStorage(), metaClient.getBasePath(),
         HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS);
     // Sort partition so we can pick last N partitions by default
     Collections.sort(partitionPaths);
@@ -284,7 +284,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       // If there is no data file, fall back to reading log files
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
           .withStorage(metaClient.getStorage())
-          .withBasePath(metaClient.getBasePath().toString())
+          .withBasePath(metaClient.getBasePath())
           .withLogFilePaths(
               fileSlice.getLogFiles().map(l -> l.getPath().getName())
                   .collect(Collectors.toList()))

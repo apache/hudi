@@ -1090,7 +1090,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig hoodieWriteConfig = cfgBuilder.withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(VERSION_0).build();
     HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -1155,7 +1155,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Force using older timeline layout
     HoodieWriteConfig config = cfgBuilder.withTimelineLayoutVersion(VERSION_0).build();
     HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(populateMetaFields).initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
+        .setPopulateMetaFields(populateMetaFields).initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 

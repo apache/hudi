@@ -162,7 +162,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
       return;
     }
     LOG.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
-        this.metaClient.getBasePath().toString(), partition);
+        this.metaClient.getBasePath(), partition);
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();

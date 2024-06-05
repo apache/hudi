@@ -269,7 +269,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
         LOG.info("Syncing partition (" + partition + ") of instant (" + instant + ")");
         List<StoragePathInfo> pathInfoList = entry.getValue().stream()
             .map(p -> new StoragePathInfo(
-                new StoragePath(String.format("%s/%s", metaClient.getBasePath().toString(), p.getPath())),
+                new StoragePath(String.format("%s/%s", metaClient.getBasePath(), p.getPath())),
                 p.getFileSizeInBytes(), false, (short) 0, 0, 0))
             .collect(Collectors.toList());
         List<HoodieFileGroup> fileGroups =

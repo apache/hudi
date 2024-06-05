@@ -316,7 +316,7 @@ public class HoodieTableMetadataUtil {
    * @param context       - instance of {@link HoodieEngineContext}
    * @param partitionPath - Partition path of the partition to delete
    */
-  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, String partitionPath) {
+  public static void deleteMetadataPartition(StoragePath basePath, HoodieEngineContext context, String partitionPath) {
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath).setConf(context.getStorageConf().newInstance()).build();
     deleteMetadataTablePartition(dataMetaClient, context, partitionPath, false);
@@ -336,6 +336,10 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionPath));
     }
+  }
+
+  public static boolean metadataPartitionExists(StoragePath basePath, HoodieEngineContext context, String partitionPath) {
+    return metadataPartitionExists(basePath.toString(), context, partitionPath);
   }
 
   /**
@@ -1752,7 +1756,7 @@ public class HoodieTableMetadataUtil {
                                                                      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                      boolean forDelete,
                                                                      int recordIndexMaxParallelism,
-                                                                     String basePath,
+                                                                     StoragePath basePath,
                                                                      StorageConfiguration<?> configuration,
                                                                      String activeModule) {
     if (partitionBaseFilePairs.isEmpty()) {
@@ -1791,7 +1795,7 @@ public class HoodieTableMetadataUtil {
 
     engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
-    final String basePath = metaClient.getBasePath().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
@@ -1853,7 +1857,7 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(partitionFiles.size(), secondaryIndexMaxParallelism);
-    final String basePath = metaClient.getBasePath().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     Schema tableSchema;
     try {
       tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -1890,7 +1894,7 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
-    final String basePath = metaClient.getBasePath().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     Schema tableSchema;
     try {
       tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
@@ -1985,7 +1989,7 @@ public class HoodieTableMetadataUtil {
     };
   }
 
-  private static StoragePath filePath(String basePath, String partition, String filename) {
+  private static StoragePath filePath(StoragePath basePath, String partition, String filename) {
     if (partition.isEmpty()) {
       return new StoragePath(basePath, filename);
     } else {

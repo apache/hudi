@@ -225,7 +225,7 @@ public class SparkRDDReadClient<T> implements Serializable {
    */
   public List<Pair<String, HoodieCompactionPlan>> getPendingCompactions() {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(storageConf.newInstance()).setBasePath(hoodieTable.getMetaClient().getBasePath().toString()).setLoadActiveTimelineOnLoad(true).build();
+        .setConf(storageConf.newInstance()).setBasePath(hoodieTable.getMetaClient().getBasePath()).setLoadActiveTimelineOnLoad(true).build();
     return CompactionUtils.getAllPendingCompactionPlans(metaClient).stream()
         .map(
             instantWorkloadPair -> Pair.of(instantWorkloadPair.getKey().getTimestamp(), instantWorkloadPair.getValue()))

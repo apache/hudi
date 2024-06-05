@@ -622,7 +622,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           partitionBaseFilePairs,
           false,
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-          dataWriteConfig.getBasePath(),
+          dataMetaClient.getBasePath(),
           storageConf,
           this.getClass().getSimpleName());
     } else {
@@ -1685,7 +1685,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-        dataWriteConfig.getBasePath(),
+        dataMetaClient.getBasePath(),
         storageConf,
         this.getClass().getSimpleName());
   }

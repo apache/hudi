@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import jodd.io.FileUtil;
@@ -151,6 +152,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
             HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
 
+    StoragePath baseStoragePath = new StoragePath(basePath);
+
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.
 
@@ -163,7 +166,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(partition3CreationTime));
       // validate that exception is thrown since MDT has one additional partition.
       assertThrows(HoodieValidationException.class, () -> {
-        validator.validatePartitions(engineContext, basePath, metaClient);
+        validator.validatePartitions(engineContext, baseStoragePath, metaClient);
       });
     } else {
       // 3rd partition creation time is > last completed instant
@@ -173,7 +176,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       validator.setPartitionCreationTime(Option.of(HoodieActiveTimeline.createNewInstantTime(true, timeGenerator)));
 
       // validate that all 3 partitions are returned
-      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, basePath, metaClient));
+      assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
     }
   }
 
@@ -200,17 +203,17 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     }
 
     @Override
-    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath, HoodieStorage storage, HoodieTimeline completedTimeline) {
+    List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage, HoodieTimeline completedTimeline) {
       return fsPartitionsToReturn;
     }
 
     @Override
-    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath, HoodieStorage storage) {
+    List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath, HoodieStorage storage) {
       return metadataPartitionsToReturn;
     }
 
     @Override
-    Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
+    Option<String> getPartitionCreationInstant(HoodieStorage storage, StoragePath basePath, String partition) {
       return this.partitionCreationTime;
     }
   }

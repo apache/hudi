@@ -207,7 +207,7 @@ public class CompactionCommand {
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String cmd = SparkCommand.COMPACT_SCHEDULE.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, client.getBasePath().toString(),
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), compactionInstantTime, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
@@ -255,7 +255,7 @@ public class CompactionCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), master, sparkMemory, client.getBasePath().toString(),
+    sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
         retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
@@ -290,7 +290,7 @@ public class CompactionCommand {
     String sparkPropertiesPath =
         Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory, client.getBasePath().toString(),
+    sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), parallelism, schemaFilePath,
         retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
@@ -458,7 +458,6 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -469,7 +468,7 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_VALIDATE.toString(), master, sparkMemory, client.getBasePath().toString(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_VALIDATE.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
@@ -523,7 +522,6 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -534,7 +532,7 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString(), master, sparkMemory, client.getBasePath().toString(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism, Boolean.valueOf(skipV).toString(),
           Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
@@ -568,7 +566,6 @@ public class CompactionCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Header Only", defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -579,7 +576,7 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString(), master, sparkMemory, client.getBasePath().toString(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString(), master, sparkMemory, HoodieCLI.basePath,
           fileId, partitionPath, outputPathStr, "1", Boolean.valueOf(skipV).toString(),
           Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
@@ -614,7 +611,6 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
@@ -625,7 +621,7 @@ public class CompactionCommand {
       String sparkPropertiesPath = Utils
           .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_REPAIR.toString(), master, sparkMemory, client.getBasePath().toString(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_REPAIR.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism, Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);

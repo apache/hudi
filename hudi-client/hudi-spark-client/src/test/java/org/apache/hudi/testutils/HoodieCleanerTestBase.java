@@ -118,7 +118,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       HoodieInstant completedCleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs);
       HoodieCleanMetadata metadata = CleanerUtils.getCleanerMetadata(metaClient, completedCleanInstant);
       metadata.getPartitionMetadata().values().forEach(p -> {
-        String dirPath = metaClient.getBasePath().toString() + "/" + p.getPartitionPath();
+        String dirPath = metaClient.getBasePath() + "/" + p.getPartitionPath();
         p.getSuccessDeleteFiles().forEach(p2 -> {
           try {
             metaClient.getStorage().create(new StoragePath(dirPath, p2), true).close();
@@ -133,7 +133,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
         // Simulate the failure of corresponding instant in the metadata table
         HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
             metaClient.getStorageConf(),
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString()));
+            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
         HoodieInstant deltaCommit = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
         metadataMetaClient.reloadActiveTimeline().revertToInflight(deltaCommit);
       }

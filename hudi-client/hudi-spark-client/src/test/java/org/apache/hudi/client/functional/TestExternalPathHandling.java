@@ -86,7 +86,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
-        .withPath(metaClient.getBasePath().toString())
+        .withPath(metaClient.getBasePath())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2)
@@ -216,7 +216,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     Assertions.assertEquals(partitionPath, fileGroup.getPartitionPath());
     HoodieBaseFile baseFile = fileGroup.getAllBaseFiles().findFirst().get();
     Assertions.assertEquals(instantTime, baseFile.getCommitTime());
-    Assertions.assertEquals(metaClient.getBasePath().toString() + "/" + filePath, baseFile.getPath());
+    Assertions.assertEquals(metaClient.getBasePath() + "/" + filePath, baseFile.getPath());
   }
 
   private void assertEmptyColStats(HoodieBackedTableMetadata hoodieBackedTableMetadata, String partitionPath, String fileName) {

@@ -72,7 +72,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testKeepByCreationTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePath().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)
@@ -104,7 +104,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testKeepByTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePath().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)
@@ -138,7 +138,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testInlinePartitionTTL() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePath().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)

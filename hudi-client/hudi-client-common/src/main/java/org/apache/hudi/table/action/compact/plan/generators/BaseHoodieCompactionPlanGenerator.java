@@ -83,7 +83,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(
-        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath().toString());
+        engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
     partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);

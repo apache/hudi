@@ -42,6 +42,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -218,16 +219,16 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     HoodieTableMetaClient metaClient2 = getMetaClient("table2");
     String instant1 = InProcessTimeGenerator.createNewInstantTime(0);
-    writeToTable(metaClient1.getBasePath().toString(), instant1, false);
-    writeToTable(metaClient2.getBasePath().toString(), instant1, false);
+    writeToTable(metaClient1.getBasePath(), instant1, false);
+    writeToTable(metaClient2.getBasePath(), instant1, false);
     String instant2 = InProcessTimeGenerator.createNewInstantTime(1);
-    writeToTable(metaClient1.getBasePath().toString(), instant2, true);
-    writeToTable(metaClient2.getBasePath().toString(), instant2, true);
+    writeToTable(metaClient1.getBasePath(), instant2, true);
+    writeToTable(metaClient2.getBasePath(), instant2, true);
     Assertions.assertEquals(0, metaClient1.reloadActiveTimeline().getCleanerTimeline().countInstants());
     Assertions.assertEquals(0, metaClient2.reloadActiveTimeline().getCleanerTimeline().countInstants());
   }
 
-  private void writeToTable(String basePath, String instant, boolean update) throws IOException {
+  private void writeToTable(StoragePath basePath, String instant, boolean update) throws IOException {
     String tableName = "test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath, tableName);
     // enable files and bloom_filters on the regular write client
@@ -246,7 +247,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     assertNoWriteErrors(statuses);
   }
 
-  private HoodieWriteConfig.Builder getWriteConfigBuilder(String basePath, String tableName) {
+  private HoodieWriteConfig.Builder getWriteConfigBuilder(StoragePath basePath, String tableName) {
     Properties properties = new Properties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     return HoodieWriteConfig.newBuilder()

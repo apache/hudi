@@ -389,8 +389,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
 
     // Simulate the complete data directory including ".hoodie_partition_metadata" file
-    File metaForP1 = new File(metaClient.getBasePath().toString() + "/p1", ".hoodie_partition_metadata");
-    File metaForP2 = new File(metaClient.getBasePath().toString() + "/p2", ".hoodie_partition_metadata");
+    File metaForP1 = new File(metaClient.getBasePath() + "/p1", ".hoodie_partition_metadata");
+    File metaForP2 = new File(metaClient.getBasePath() + "/p2", ".hoodie_partition_metadata");
     metaForP1.createNewFile();
     metaForP2.createNewFile();
 
@@ -768,7 +768,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
         HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
         List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
-            engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath().toString(), false);
+            engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath(), false);
         // partition should be physically deleted
         assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
         assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
@@ -1416,7 +1416,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder(FILES.getPartitionPath())
         .withStorage(metadataMetaClient.getStorage())
-        .withBasePath(metadataMetaClient.getBasePath().toString())
+        .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
         .withPartition(FILES.getPartitionPath())

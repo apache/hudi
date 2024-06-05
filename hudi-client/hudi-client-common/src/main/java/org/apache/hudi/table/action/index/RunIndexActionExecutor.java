@@ -220,8 +220,8 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
-      if (metadataPartitionExists(table.getMetaClient().getBasePath().toString(), context, partition)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePath().toString(), context, partition);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partition)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partition);
       }
     });
 

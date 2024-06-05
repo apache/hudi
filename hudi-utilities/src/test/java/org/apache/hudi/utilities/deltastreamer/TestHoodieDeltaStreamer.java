@@ -2884,7 +2884,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
     List<String> partitions = FSUtils.getAllPartitionPaths(
-        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath().toString(), false);
+        new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,

@@ -483,7 +483,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
-    String basePath = metaClient.getBasePath().toString();
+    StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
     // check metadata table is available to read.
@@ -617,7 +617,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   @VisibleForTesting
-  List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath, HoodieTableMetaClient metaClient) {
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
@@ -669,20 +669,20 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-  Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
+  Option<String> getPartitionCreationInstant(HoodieStorage storage, StoragePath basePath, String partition) {
     HoodiePartitionMetadata hoodiePartitionMetadata =
         new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, partition));
     return hoodiePartitionMetadata.readPartitionCreatedCommitTime();
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath,
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath,
                                     HoodieStorage storage) {
     return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath,
+  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath,
                                            HoodieStorage storage, HoodieTimeline completedTimeline) {
     List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
 

@@ -79,7 +79,7 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
 
   private void writeArchivedTimeline(int batchSize, long startTs) throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(this.metaClient);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(this.metaClient.getBasePath().toString())
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(this.metaClient.getBasePath())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
         .build();

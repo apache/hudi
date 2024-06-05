@@ -740,8 +740,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     String fileName1 = "data1_1_000" + extension;
     String fileName2 = "data2_1_000" + extension;
 
-    String filePath1 = metaClient.getBasePath().toString() + "/" + partition1 + "/" + fileName1;
-    String filePath2 = metaClient.getBasePath().toString() + "/" + partition1 + "/" + fileName2;
+    String filePath1 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName1;
+    String filePath2 = metaClient.getBasePath() + "/" + partition1 + "/" + fileName2;
 
     List<String> deletePathPatterns1 = Arrays.asList(filePath1, filePath2);
     List<String> successDeleteFiles1 = Collections.singletonList(filePath1);

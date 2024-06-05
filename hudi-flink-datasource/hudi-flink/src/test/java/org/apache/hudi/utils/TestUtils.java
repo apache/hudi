@@ -90,7 +90,7 @@ public class TestUtils {
   }
 
   @Nullable
-  public static String getNthCompleteInstant(String basePath, int n, String action) {
+  public static String getNthCompleteInstant(StoragePath basePath, int n, String action) {
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
     return metaClient.getActiveTimeline()

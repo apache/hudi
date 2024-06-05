@@ -329,11 +329,11 @@ public class TestHoodieIndex extends TestHoodieMetadataBase {
 
     // check column_stats partition exists
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    assertTrue(metadataPartitionExists(metaClient.getBasePath().toString(), context, COLUMN_STATS.getPartitionPath()));
+    assertTrue(metadataPartitionExists(metaClient.getBasePath(), context, COLUMN_STATS.getPartitionPath()));
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
 
     // delete the column_stats partition
-    deleteMetadataPartition(metaClient.getBasePath().toString(), context, COLUMN_STATS.getPartitionPath());
+    deleteMetadataPartition(metaClient.getBasePath(), context, COLUMN_STATS.getPartitionPath());
 
     // Now tagLocation for these records, they should be tagged correctly despite column_stats being enabled but not present
     hoodieTable = HoodieSparkTable.create(config, context, metaClient);

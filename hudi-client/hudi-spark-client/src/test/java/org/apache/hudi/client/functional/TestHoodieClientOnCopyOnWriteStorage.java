@@ -516,7 +516,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 

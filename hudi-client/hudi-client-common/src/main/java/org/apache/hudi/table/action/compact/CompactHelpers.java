@@ -88,7 +88,7 @@ public class CompactHelpers<T, I, K, O> {
           serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
-          "Failed to commit " + table.getMetaClient().getBasePath().toString() + " at time " + compactionCommitTime, e);
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
     }
   }
 
@@ -101,7 +101,7 @@ public class CompactHelpers<T, I, K, O> {
           serializeCommitMetadata(commitMetadata));
     } catch (IOException e) {
       throw new HoodieCompactionException(
-          "Failed to commit " + table.getMetaClient().getBasePath().toString() + " at time " + logCompactionCommitTime, e);
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
     }
   }
 

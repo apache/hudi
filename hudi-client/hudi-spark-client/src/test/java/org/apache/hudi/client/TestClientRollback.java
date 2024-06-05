@@ -193,7 +193,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFileName = table.getMetaClient().getBasePath().toString() + "/.hoodie/" + inst.getFileName();
+        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/" + inst.getFileName();
 
         //delete restore commit file
         assertTrue((new File(restoreFileName)).delete());
@@ -201,7 +201,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         if (!failedRestoreInflight) {
           //delete restore inflight file
           HoodieInstant inflightInst = new HoodieInstant(true, inst.getAction(), inst.getTimestamp());
-          assertTrue((new File(table.getMetaClient().getBasePath().toString() + "/.hoodie/" + inflightInst.getFileName())).delete());
+          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/" + inflightInst.getFileName())).delete());
         }
         try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
           //restore again
@@ -753,7 +753,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
         List<HoodieRollbackRequest> rollbackRequestList = partitionAndFileId3.keySet().stream()
             .map(partition -> new HoodieRollbackRequest(partition, EMPTY_STRING, EMPTY_STRING,
-                Collections.singletonList(metaClient.getBasePath().toString() + "/" + partition + "/"
+                Collections.singletonList(metaClient.getBasePath() + "/" + partition + "/"
                     + FileCreateUtils.baseFileName(commitTime3, partitionAndFileId3.get(p1))),
                 Collections.emptyMap()))
             .collect(Collectors.toList());

@@ -1004,8 +1004,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
-          if (metadataPartitionExists(metaClient.getBasePath().toString(), context, partitionType.getPartitionPath())) {
-            deleteMetadataPartition(metaClient.getBasePath().toString(), context, partitionType.getPartitionPath());
+          if (metadataPartitionExists(metaClient.getBasePath(), context, partitionType.getPartitionPath())) {
+            deleteMetadataPartition(metaClient.getBasePath(), context, partitionType.getPartitionPath());
           }
           clearMetadataTablePartitionsConfig(Option.of(partitionType), false);
         } catch (HoodieMetadataException e) {

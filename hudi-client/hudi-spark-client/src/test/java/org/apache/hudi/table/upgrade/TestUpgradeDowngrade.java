@@ -512,9 +512,9 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(),
         metaClient.getTableConfig().getProps());
 
-    String metadataTablePath =
-        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString());
-    if (metaClient.getStorage().exists(new StoragePath(metadataTablePath))) {
+    StoragePath metadataTablePath =
+        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+    if (metaClient.getStorage().exists(metadataTablePath)) {
       HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
           .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
       metaClient.getTableConfig().setTableVersion(HoodieTableVersion.FOUR);
@@ -924,8 +924,8 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     assertTableVersion(metaClient, expectedVersion);
 
     if (expectedVersion.versionCode() >= HoodieTableVersion.FOUR.versionCode()) {
-      String metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath().toString());
-      if (metaClient.getStorage().exists(new StoragePath(metadataTablePath))) {
+      StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+      if (metaClient.getStorage().exists(metadataTablePath)) {
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
             .setConf(metaClient.getStorageConf().newInstance()).setBasePath(metadataTablePath).build();
         assertTableVersion(mdtMetaClient, expectedVersion);

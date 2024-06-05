@@ -31,6 +31,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -120,6 +121,12 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    @Override
+    public Builder withBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 

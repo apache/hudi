@@ -914,7 +914,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   private List<String> getFailedIndexingCommitsToRollbackForMetadataTable(HoodieTableMetaClient metaClient) {
-    if (!isMetadataTable(metaClient.getBasePath().toString())) {
+    if (!isMetadataTable(metaClient.getBasePath())) {
       return Collections.emptyList();
     }
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()

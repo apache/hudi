@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
 import org.apache.avro.Schema;
@@ -269,7 +270,7 @@ public class TableCommand {
       throws Exception {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String tableName = client.getTableConfig().getTableName();
-    String tablePath = client.getBasePath().toString();
+    StoragePath tablePath = client.getBasePath();
     Map<String, String> oldProps = client.getTableConfig().propsMap();
 
     HoodieTableType currentType = client.getTableType();

@@ -124,7 +124,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                 }));
       } else {
         List<String> partitions = FSUtils.getAllPartitionPaths(
-            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath().toString());
+            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
         latestFilesMap = context.mapToPair(partitions, partitionPath -> {
           // Scan all partitions files with this commit time
           LOG.info("Collecting latest files in partition path " + partitionPath);

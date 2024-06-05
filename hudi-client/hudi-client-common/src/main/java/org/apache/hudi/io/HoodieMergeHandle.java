@@ -204,7 +204,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
       throw new HoodieUpsertException("Failed to initialize HoodieUpdateHandle for FileId: " + fileId + " on commit "
-          + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath().toString(), io);
+          + instantTime + " on path " + hoodieTable.getMetaClient().getBasePath(), io);
     }
   }
 

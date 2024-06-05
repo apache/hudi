@@ -478,7 +478,7 @@ public class HoodieFlinkWriteClient<T> extends
       case INSERT_OVERWRITE_TABLE:
         Map<String, List<String>> partitionToExistingFileIds = new HashMap<>();
         List<String> partitionPaths =
-            FSUtils.getAllPartitionPaths(context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath().toString());
+            FSUtils.getAllPartitionPaths(context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
         if (partitionPaths != null && partitionPaths.size() > 0) {
           context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of all partitions: " + config.getTableName());
           partitionToExistingFileIds = partitionPaths.stream().parallel()

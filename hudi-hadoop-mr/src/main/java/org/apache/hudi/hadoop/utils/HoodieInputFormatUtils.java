@@ -260,7 +260,7 @@ public class HoodieInputFormatUtils {
       return Option.empty();
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath().toString() : tableMetaClient.getBasePath().toString() + StoragePath.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath().toString() : tableMetaClient.getBasePath() + StoragePath.SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes

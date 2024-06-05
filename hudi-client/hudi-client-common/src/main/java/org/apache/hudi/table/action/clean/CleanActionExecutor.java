@@ -159,7 +159,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       try {
         if (!isNullOrEmpty(entry)) {
           deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
-              table.getMetaClient().getBasePath().toString() + "/" + entry);
+              table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {
         LOG.warn("Partition deletion failed " + entry);
