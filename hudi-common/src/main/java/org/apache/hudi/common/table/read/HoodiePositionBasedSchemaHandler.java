@@ -58,7 +58,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   private Schema.Field getPositionalMergeField() {
     return new Schema.Field(HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME,
-        Schema.create(Schema.Type.LONG), "", 0L);
+        Schema.create(Schema.Type.LONG), "", -1L);
   }
 
   @Override
