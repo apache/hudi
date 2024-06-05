@@ -27,18 +27,21 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
 
 /**
- * Schema visitor to produce name -> id map for internalSchema.
+ * Schema visitor to produce name -> position map for internalSchema. Positions are assigned in a depth-first manner.
  */
-public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
+public class NameToPositionVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
   private final Deque<String> fieldNames = new LinkedList<>();
   private final Map<String, Integer> nameToId = new HashMap<>();
+  private final AtomicInteger position = new AtomicInteger(0);
 
   @Override
   public void beforeField(Types.Field field) {
+    nameToId.put(createFullName(field.name(), fieldNames), position.getAndIncrement());
     fieldNames.push(field.name());
   }
 
@@ -49,6 +52,7 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public void beforeArrayElement(Types.Field elementField) {
+    nameToId.put(createFullName(InternalSchema.ARRAY_ELEMENT, fieldNames), position.getAndIncrement());
     fieldNames.push(elementField.name());
   }
 
@@ -59,6 +63,7 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public void beforeMapKey(Types.Field keyField) {
+    nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), position.getAndIncrement());
     fieldNames.push(keyField.name());
   }
 
@@ -69,6 +74,7 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public void beforeMapValue(Types.Field valueField) {
+    nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), position.getAndIncrement());
     fieldNames.push(valueField.name());
   }
 
@@ -89,20 +95,16 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public Map<String, Integer> field(Types.Field field, Map<String, Integer> fieldResult) {
-    nameToId.put(createFullName(field.name(), fieldNames), field.fieldId());
     return nameToId;
   }
 
   @Override
   public Map<String, Integer> array(Types.ArrayType array, Map<String, Integer> elementResult) {
-    nameToId.put(createFullName(InternalSchema.ARRAY_ELEMENT, fieldNames), array.elementId());
     return nameToId;
   }
 
   @Override
   public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
-    nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), map.keyId());
-    nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), map.valueId());
     return nameToId;
   }
 

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 
 import java.util.Arrays;
@@ -53,7 +54,7 @@ public class AvroSchemaTestUtils {
   }
 
   public static Schema.Field createNullablePrimitiveField(String name, Schema.Type type) {
-    return new Schema.Field(name, AvroSchemaUtils.createNullableSchema(type), null, null);
+    return new Schema.Field(name, AvroSchemaUtils.createNullableSchema(type), null, JsonProperties.NULL_VALUE);
   }
 
   public static Schema createRecord(String name, Schema.Field... fields) {
