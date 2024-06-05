@@ -62,6 +62,7 @@ class CompactionTask extends TableServiceTask {
     compactionCfg.runningMode = compactionRunningMode;
     compactionCfg.parallelism = parallelism;
     compactionCfg.retry = retry;
+    // HoodieWriteClient within HoodieCompactor is closed internally. not closing HoodieCleaner here is not leaking any resources.
     new HoodieCompactor(jsc, compactionCfg, props, metaClient).compact(retry);
   }
 

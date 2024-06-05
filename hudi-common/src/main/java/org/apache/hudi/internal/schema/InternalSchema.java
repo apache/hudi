@@ -37,6 +37,9 @@ import java.util.stream.Collectors;
  * used to support schema evolution.
  */
 public class InternalSchema implements Serializable {
+  public static final String ARRAY_ELEMENT = "element";
+  public static final String MAP_KEY = "key";
+  public static final String MAP_VALUE = "value";
 
   private static final InternalSchema EMPTY_SCHEMA = new InternalSchema(-1L, RecordType.get());
 
@@ -50,6 +53,7 @@ public class InternalSchema implements Serializable {
   private transient Map<Integer, Field> idToField = null;
   private transient Map<String, Integer> nameToId = null;
   private transient Map<Integer, String> idToName = null;
+  private transient Map<String, Integer> nameToPosition = null;
 
   public static InternalSchema getEmptyInternalSchema() {
     return EMPTY_SCHEMA;
@@ -266,6 +270,19 @@ public class InternalSchema implements Serializable {
       return -1;
     }
     return buildNameToId().getOrDefault(name, -1);
+  }
+
+  /**
+   * Returns the full name of the field and its position in the schema.
+   * This differs from its ID in cases where new fields are not appended to the end of schemas.
+   * The output is used when reconciling the order of fields while ingesting.
+   * @return a mapping from full field name to a position
+   */
+  public Map<String, Integer> getNameToPosition() {
+    if (nameToPosition == null) {
+      nameToPosition = InternalSchemaBuilder.getBuilder().buildNameToPosition(record);
+    }
+    return nameToPosition;
   }
 
   @Override

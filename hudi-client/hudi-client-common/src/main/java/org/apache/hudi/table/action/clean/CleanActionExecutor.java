@@ -69,7 +69,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime, boolean skipLocking) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
+    this.txnManager = new TransactionManager(config, table.getStorage());
     this.skipLocking = skipLocking;
   }
 
@@ -81,6 +81,12 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       boolean deleteResult = fs.delete(deletePath, isDirectory);
       if (deleteResult) {
         LOG.debug("Cleaned file at path :" + deletePath);
+      } else {
+        if (fs.exists(deletePath)) {
+          throw new HoodieIOException("Failed to delete path during clean execution " + deletePath);
+        } else {
+          LOG.debug("Already cleaned up file at path :" + deletePath);
+        }
       }
       return deleteResult;
     } catch (FileNotFoundException fio) {
@@ -91,7 +97,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private static Stream<Pair<String, PartitionCleanStat>> deleteFilesFunc(Iterator<Pair<String, CleanFileInfo>> cleanFileInfo, HoodieTable table) {
     Map<String, PartitionCleanStat> partitionCleanStatMap = new HashMap<>();
-    FileSystem fs = (FileSystem) table.getMetaClient().getStorage().getFileSystem();
+    FileSystem fs = (FileSystem) table.getStorage().getFileSystem();
 
     cleanFileInfo.forEachRemaining(partitionDelFileTuple -> {
       String partitionPath = partitionDelFileTuple.getLeft();
@@ -152,7 +158,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     partitionsToBeDeleted.forEach(entry -> {
       try {
         if (!isNullOrEmpty(entry)) {
-          deleteFileAndGetResult((FileSystem) table.getMetaClient().getStorage().getFileSystem(),
+          deleteFileAndGetResult((FileSystem) table.getStorage().getFileSystem(),
               table.getMetaClient().getBasePath() + "/" + entry);
         }
       } catch (IOException e) {

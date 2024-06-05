@@ -102,8 +102,10 @@ case class HoodieFileIndex(spark: SparkSession,
    */
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
+    new BucketIndexSupport(spark, metadataConfig, metaClient),
     new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient),
     new FunctionalIndexSupport(spark, metadataConfig, metaClient),
+    new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
     new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
   )
 
@@ -344,7 +346,7 @@ case class HoodieFileIndex(spark: SparkSession,
     //       and candidate files are obtained from these file slices.
 
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
-    if (isMetadataTableEnabled && isDataSkippingEnabled) {
+    if (isDataSkippingEnabled) {
       for(indexSupport: SparkBaseIndexSupport <- indicesSupport) {
         if (indexSupport.isIndexAvailable) {
           val prunedFileNames = indexSupport.computeCandidateFileNames(this, queryFilters, queryReferencedColumns,
@@ -400,13 +402,24 @@ case class HoodieFileIndex(spark: SparkSession,
   private def isFunctionalIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == FunctionalIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
+  private def isBucketIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == BucketIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
+  private def isPartitionStatsIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == PartitionStatsIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
+  private def isBloomFiltersIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == BloomFiltersIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
   private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 
   private def validateConfig(): Unit = {
     if (isDataSkippingEnabled && (!isMetadataTableEnabled || !isIndexEnabled)) {
       logWarning("Data skipping requires both Metadata Table and at least one of Column Stats Index, Record Level Index, or Functional Index" +
         " to be enabled as well! " + s"(isMetadataTableEnabled = $isMetadataTableEnabled, isColumnStatsIndexEnabled = $isColumnStatsIndexEnabled"
-        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled)")
+        + s", isRecordIndexApplicable = $isRecordIndexEnabled, isFunctionalIndexEnabled = $isFunctionalIndexEnabled, " +
+        s"isBucketIndexEnable = $isBucketIndexEnabled, isPartitionStatsIndexEnabled = $isPartitionStatsIndexEnabled)"
+        + s", isBloomFiltersIndexEnabled = $isBloomFiltersIndexEnabled)")
     }
   }
 

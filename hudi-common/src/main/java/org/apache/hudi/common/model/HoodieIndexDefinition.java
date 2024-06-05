@@ -24,12 +24,16 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 
 /**
- * Class representing the metadata for a functional index in Hudi.
+ * Class representing the metadata for a functional or secondary index in Hudi.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class HoodieFunctionalIndexDefinition implements Serializable {
+public class HoodieIndexDefinition implements Serializable {
 
   // Name of the index
   private String indexName;
@@ -45,14 +49,14 @@ public class HoodieFunctionalIndexDefinition implements Serializable {
   // Any other configuration or properties specific to the index
   private Map<String, String> indexOptions;
 
-  public HoodieFunctionalIndexDefinition() {
+  public HoodieIndexDefinition() {
   }
 
-  public HoodieFunctionalIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields,
-                                         Map<String, String> indexOptions) {
+  public HoodieIndexDefinition(String indexName, String indexType, String indexFunction, List<String> sourceFields,
+                               Map<String, String> indexOptions) {
     this.indexName = indexName;
     this.indexType = indexType;
-    this.indexFunction = indexFunction;
+    this.indexFunction = nonEmpty(indexFunction) ? indexFunction : EMPTY_STRING;
     this.sourceFields = sourceFields;
     this.indexOptions = indexOptions;
   }
@@ -79,12 +83,12 @@ public class HoodieFunctionalIndexDefinition implements Serializable {
 
   @Override
   public String toString() {
-    return "HoodieFunctionalIndexDefinition{"
-        + "indexName='" + indexName + '\''
-        + ", indexType='" + indexType + '\''
-        + ", indexFunction='" + indexFunction + '\''
-        + ", sourceFields=" + sourceFields
-        + ", indexOptions=" + indexOptions
-        + '}';
+    return new StringJoiner(", ", HoodieIndexDefinition.class.getSimpleName() + "[", "]")
+        .add("indexName='" + indexName + "'")
+        .add("indexType='" + indexType + "'")
+        .add("indexFunction='" + indexFunction + "'")
+        .add("sourceFields=" + sourceFields)
+        .add("indexOptions=" + indexOptions)
+        .toString();
   }
 }

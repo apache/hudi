@@ -30,6 +30,7 @@ parameters:
     type: object
     default:
       - 'hudi-common'
+      - 'hudi-hadoop-common'
       - 'hudi-client/hudi-spark-client'
   - name: job2UTModules
     type: object
@@ -45,6 +46,7 @@ parameters:
     type: object
     default:
       - 'hudi-common'
+      - 'hudi-hadoop-common'
       - 'hudi-flink-datasource'
       - 'hudi-flink-datasource/hudi-flink'
       - 'hudi-flink-datasource/hudi-flink1.14.x'
@@ -71,6 +73,7 @@ parameters:
       - '!hudi-client/hudi-spark-client'
       - '!hudi-cli'
       - '!hudi-common'
+      - '!hudi-hadoop-common'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
       - '!hudi-examples/hudi-examples-flink'
@@ -95,6 +98,7 @@ parameters:
       - '!hudi-client/hudi-spark-client'
       - '!hudi-cli'
       - '!hudi-common'
+      - '!hudi-hadoop-common'
       - '!hudi-examples'
       - '!hudi-examples/hudi-examples-common'
       - '!hudi-examples/hudi-examples-flink'

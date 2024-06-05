@@ -267,7 +267,8 @@
         <module name="CommentsIndentation"/>
         <module name="IllegalImport">
             <property name="regexp" value="true"/>
-            <property name="illegalPkgs" value="org\.apache\.commons, com\.google\.common, org\.apache\.log4j"/>
+            <property name="illegalPkgs"
+                      value="org\.apache\.commons, com\.google\.common, org\.apache\.log4j, org\.codehaus\.jackson"/>
             <property name="illegalClasses"
               value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule|runner)(.*)"/>
         </module>

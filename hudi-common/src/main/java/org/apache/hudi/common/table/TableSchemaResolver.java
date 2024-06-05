@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -43,6 +42,7 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
@@ -306,7 +306,8 @@ public class TableSchemaResolver {
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
             + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     StoragePath path = new StoragePath(filePath);
-    return FileFormatUtils.getInstance(path).readAvroSchema(metaClient.getStorageConf(), path);
+    return HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(path).readAvroSchema(metaClient.getStorage(), path);
   }
 
   private Schema readSchemaFromLogFile(StoragePath path) throws IOException {
@@ -473,7 +474,8 @@ public class TableSchemaResolver {
         // this is a log file
         schema = readSchemaFromLogFile(filePath);
       } else {
-        schema = FileFormatUtils.getInstance(filePath).readAvroSchema(metaClient.getStorageConf(), filePath);
+        schema = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(filePath).readAvroSchema(metaClient.getStorage(), filePath);
       }
     }
     return schema;

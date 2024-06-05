@@ -95,14 +95,14 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
 
   @Override
   public Map<String, Integer> array(Types.ArrayType array, Map<String, Integer> elementResult) {
-    nameToId.put(createFullName("element", fieldNames), array.elementId());
+    nameToId.put(createFullName(InternalSchema.ARRAY_ELEMENT, fieldNames), array.elementId());
     return nameToId;
   }
 
   @Override
   public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
-    nameToId.put(createFullName("key", fieldNames), map.keyId());
-    nameToId.put(createFullName("value", fieldNames), map.valueId());
+    nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), map.keyId());
+    nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), map.valueId());
     return nameToId;
   }
 

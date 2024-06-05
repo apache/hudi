@@ -54,6 +54,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -156,7 +157,7 @@ public class TestDataSourceReadWithDeletes extends SparkClientFunctionalTestHarn
     metaClient = HoodieTableMetaClient.reload(metaClient);
     client.startCommitWithTime(instant);
     List<WriteStatus> writeStatuses = client.upsert(writeRecords, instant).collect();
-    org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatuses);
+    assertNoWriteErrors(writeStatuses);
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return writeStatuses;
   }

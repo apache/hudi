@@ -38,7 +38,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
@@ -78,9 +78,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
-    StorageConfiguration<?> storageConf = table.getStorageConf().newInstance();
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
-    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storageConf)
+    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(
+            table.getStorage().newInstance(mergeHandle.getOldFilePath(), table.getStorageConf().newInstance()))
         .getReaderFactory(recordType)
         .getFileReader(writeConfig, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
@@ -111,10 +111,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
-        StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
-        bootstrapFileReader = HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType).newBootstrapFileReader(
+        HoodieStorage storage = table.getStorage().newInstance(
+            bootstrapFilePath, table.getStorageConf().newInstance());
+        bootstrapFileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
-            HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType)
+            HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType)
                 .getFileReader(writeConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());

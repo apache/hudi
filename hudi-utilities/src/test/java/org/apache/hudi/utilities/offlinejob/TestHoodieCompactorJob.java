@@ -36,7 +36,8 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.utilities.HoodieCompactor;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
@@ -47,9 +48,10 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
  */
 public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
 
-  @Test
-  public void testHoodieCompactorWithClean() throws Exception {
-    String tableBasePath = basePath + "/asyncCompaction";
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodieCompactorWithOptionalClean(boolean skipClean) throws Exception {
+    String tableBasePath = basePath + "/asyncCompaction_" + skipClean;
     Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("asyncCompaction")
@@ -86,7 +88,7 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
 
     // offline compaction schedule
     HoodieCompactor hoodieCompactorSchedule =
-        init(tableBasePath, true, "SCHEDULE", false);
+        init(tableBasePath, true, "SCHEDULE", skipClean);
     hoodieCompactorSchedule.compact(0);
     TestHelpers.assertNCompletedCommits(2, tableBasePath);
     TestHelpers.assertNCleanCommits(0, tableBasePath);
@@ -94,30 +96,32 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     writeData(true, client.createNewInstantTime(), 100, true);
     writeData(true, client.createNewInstantTime(), 100, true);
 
-    // offline compaction execute with sync clean
+    // offline compaction execute with optional clean
     HoodieCompactor hoodieCompactorExecute =
-        init(tableBasePath, false, "EXECUTE", true);
+        init(tableBasePath, false, "EXECUTE", skipClean);
     hoodieCompactorExecute.compact(0);
     TestHelpers.assertNCompletedCommits(5, tableBasePath);
-    TestHelpers.assertNCleanCommits(1, tableBasePath);
+    if (!skipClean) {
+      TestHelpers.assertNCleanCommits(1, tableBasePath);
+    }
   }
 
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private HoodieCompactor init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean isAutoClean) {
-    HoodieCompactor.Config compactionConfig = buildCompactionConfig(tableBasePath, runSchedule, scheduleAndExecute, isAutoClean);
+  private HoodieCompactor init(String tableBasePath, boolean runSchedule, String scheduleAndExecute, boolean skipClean) {
+    HoodieCompactor.Config compactionConfig = buildCompactionConfig(tableBasePath, runSchedule, scheduleAndExecute, skipClean);
     return new HoodieCompactor(jsc, compactionConfig);
   }
 
-  private HoodieCompactor.Config buildCompactionConfig(String basePath, boolean runSchedule, String runningMode, boolean isAutoClean) {
+  private HoodieCompactor.Config buildCompactionConfig(String basePath, boolean runSchedule, String runningMode, boolean skipClean) {
     HoodieCompactor.Config config = new HoodieCompactor.Config();
     config.basePath = basePath;
     config.runSchedule = runSchedule;
     config.runningMode = runningMode;
     config.configs.add("hoodie.metadata.enable=false");
-    config.configs.add(String.format("%s=%s", HoodieCleanConfig.AUTO_CLEAN.key(), isAutoClean));
+    config.skipClean = skipClean;
     config.configs.add(String.format("%s=%s", HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), 1));
     config.configs.add(String.format("%s=%s", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), 1));
     return config;

@@ -49,12 +49,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -246,7 +244,7 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
+    HoodieStorage storage = HoodieTestUtils.getStorage(baseFilePath);
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
     HoodieConfig cfg = new HoodieConfig();
@@ -269,7 +267,7 @@ public class HoodieFileSliceTestUtils {
     cfg.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.key(), "true");
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
-        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), conf, cfg,
+        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
             schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(

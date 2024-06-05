@@ -767,7 +767,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
         HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-        List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getBasePath(), false);
+        List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
+            engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath(), false);
         // partition should be physically deleted
         assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
         assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
@@ -826,7 +827,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
-        getHoodieSparkIOFactory(context.getStorageConf()).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
+        getHoodieSparkIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
             table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     records.forEach(entry -> {
@@ -1141,7 +1142,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
 
     HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
-        context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+        context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
     Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
         .readRecordIndex(records1.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
     assertEquals(0, result.size(), "RI should not return entries that are rolled back.");
@@ -1413,7 +1414,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     if (enableMetaFields) {
       schema = HoodieAvroUtils.addMetadataFields(schema);
     }
-    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
+    HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder(FILES.getPartitionPath())
         .withStorage(metadataMetaClient.getStorage())
         .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
@@ -1449,7 +1450,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     final HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
 
-    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase) getHoodieSparkIOFactory(context.getStorageConf())
+    HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase) getHoodieSparkIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(table.getConfig(), new StoragePath(baseFile.getPath()));
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
@@ -2284,7 +2285,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieSparkEngineContext(jsc);
-    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig config = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     SparkRDDWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (Bulk insert)
@@ -2355,7 +2356,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieSparkEngineContext(jsc);
-    HoodieWriteConfig initialConfig = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig initialConfig = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
     SparkRDDWriteClient client = getHoodieWriteClient(config);
@@ -3041,7 +3042,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
     doWriteOperation(testTable, InProcessTimeGenerator.createNewInstantTime(1));
     // ensure the compaction is triggered and executed
-    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true)) {
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath(), true)) {
       HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
       final HoodieActiveTimeline activeTimeline = metadataMetaClient.reloadActiveTimeline();
       Option<HoodieInstant> lastCompaction = activeTimeline.filterCompletedInstants()
@@ -3114,7 +3116,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
       validateMetadata(client);
 
-      Metrics metrics = Metrics.getInstance(writeConfig.getMetricsConfig(), storageConf);
+      Metrics metrics = Metrics.getInstance(writeConfig.getMetricsConfig(), storage);
       assertTrue(metrics.getRegistry().getGauges().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".count"));
       assertTrue(metrics.getRegistry().getGauges().containsKey(HoodieMetadataMetrics.INITIALIZE_STR + ".totalDuration"));
       assertTrue((Long) metrics.getRegistry().getGauges().get(HoodieMetadataMetrics.INITIALIZE_STR + ".count").getValue() >= 1L);
@@ -3274,23 +3276,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
-  }
-
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
-    return builder.withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .compactionSmallFileSize(smallFileSize)
-                // Set rollback to LAZY so no inflights are deleted
-                .insertSplitSize(insertSplitSize).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withStorageConfig(
-            HoodieStorageConfig.newBuilder()
-                .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
-                .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
-        .build();
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
@@ -3481,7 +3466,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       allRecords.addAll(secondBatchOfrecords);
 
       // RI should have created mappings for all the records inserted above
-      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader
           .readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mapping for all the records in firstCommit");
@@ -3496,7 +3482,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.delete(jsc.parallelize(recordsToDelete, 1).map(HoodieRecord::getKey), deleteTime);
 
       // RI should not return mappings for deleted records
-      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - recordsToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
@@ -3509,11 +3496,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       String deleteTime = client.startCommit();
       client.delete(jsc.emptyRDD(), deleteTime);
 
-      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      HoodieTableMetadata metadataReader = HoodieTableMetadata.create(
+          context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       assertTrue(metadataReader.getLatestCompactionTime().isPresent(), "Compaction should have taken place on MDT");
 
       // RI should not return mappings for deleted records
-      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       Map<String, List<HoodieRecordGlobalLocation>> result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size() - keysToDelete.size(), result.size(), "RI should not have mapping for deleted records");
       result.keySet().forEach(mappingKey -> assertFalse(keysToDelete.contains(mappingKey), "RI should not have mapping for deleted records"));
@@ -3523,7 +3511,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       client.upsert(jsc.parallelize(recordsToDelete, 1), reinsertTime).collect();
 
       // New mappings should have been created for re-inserted records and should map to the new commit time
-      metadataReader = HoodieTableMetadata.create(context, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
+      metadataReader = HoodieTableMetadata.create(context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath());
       result = metadataReader.readRecordIndex(allRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
       assertEquals(allRecords.size(), (int) result.values().stream().flatMap(List::stream).count(), "RI should have mappings for re-inserted records");
       for (String reInsertedKey : keysToDelete) {
@@ -3560,7 +3548,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Partitions should match
     FileSystemBackedTableMetadata fsBackedTableMetadata = new FileSystemBackedTableMetadata(
-        engineContext, metaClient.getTableConfig(), storageConf, config.getBasePath());
+        engineContext, metaClient.getTableConfig(), metaClient.getStorage(), config.getBasePath());
     List<String> fsPartitions = fsBackedTableMetadata.getAllPartitionPaths();
     List<String> metadataPartitions = tableMetadata.getAllPartitionPaths();
 
@@ -3686,7 +3674,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Metadata table has a fixed number of partitions
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, getMetadataTableBasePath(basePath), false);
+      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath), false);
       assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
 
       final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
@@ -3780,7 +3768,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private HoodieTableMetadata metadata(SparkRDDWriteClient client) {
     HoodieWriteConfig clientConfig = client.getConfig();
-    return HoodieTableMetadata.create(client.getEngineContext(), clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+    return HoodieTableMetadata.create(client.getEngineContext(), storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   private void changeTableVersion(HoodieTableVersion version) throws IOException {

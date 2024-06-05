@@ -429,6 +429,13 @@ object DataSourceWriteOptions {
   val RECORDKEY_FIELD = KeyGeneratorOptions.RECORDKEY_FIELD_NAME
 
   /**
+   * Secondary key field. Columns to be used as the secondary index columns. Actual value
+   * will be obtained by invoking .toString() on the field value. Nested fields can be specified using
+   * the dot notation eg: `a.b.c`
+   */
+  val SECONDARYKEY_COLUMN_NAME = KeyGeneratorOptions.SECONDARYKEY_COLUMN_NAME
+
+  /**
    * Partition path field. Value to be used at the `partitionPath` component of `HoodieKey`. Actual
    * value obtained by invoking .toString()
    */
@@ -460,6 +467,18 @@ object DataSourceWriteOptions {
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
     .defaultValue("true")
+    .withInferFunction(
+      JFunction.toJavaFunction((config: HoodieConfig) => {
+        if (config.getString(OPERATION) == WriteOperationType.BULK_INSERT.value
+          && !config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)
+          && config.getBooleanOrDefault(HoodieWriteConfig.COMBINE_BEFORE_INSERT)) {
+          // need to turn off row writing for BULK_INSERT without meta fields with turned on COMBINE_BEFORE_INSERT to prevent shortcutting and ignoring COMBINE_BEFORE_INSERT setting
+          Option.of("false")
+        } else {
+          Option.empty()
+        }
+      })
+    )
     .markAdvanced()
     .withDocumentation("When set to true, will perform write operations directly using the spark native " +
       "`Row` representation, avoiding any additional conversion costs.")

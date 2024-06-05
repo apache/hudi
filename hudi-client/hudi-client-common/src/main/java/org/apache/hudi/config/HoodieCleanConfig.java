@@ -180,7 +180,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withAlternatives("hoodie.clean.allow.multiple")
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .deprecatedAfter("1.0.0")
+      .deprecatedAfter("0.15.0")
       .withDocumentation("Allows scheduling/executing multiple cleans by enabling this config. If users prefer to strictly ensure clean requests should be mutually exclusive, "
           + ".i.e. a 2nd clean will not be scheduled if another clean is not yet completed to avoid repeat cleaning of same files, they might want to disable this config.");
 

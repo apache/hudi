@@ -21,9 +21,11 @@ import org.apache.hudi.HoodieConversionUtils;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -52,13 +54,13 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -70,7 +72,6 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
@@ -107,6 +108,7 @@ import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -129,9 +131,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
   protected SparkSession sparkSession;
-  protected StorageConfiguration<Configuration> storageConf;
   protected SQLContext sqlContext;
-  protected HoodieStorage storage;
   protected ExecutorService executorService;
   protected HoodieTableMetaClient metaClient;
   protected SparkRDDWriteClient writeClient;
@@ -398,6 +398,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     return readClient;
   }
 
+  @Override
   public SparkRDDWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     if (null != writeClient) {
       writeClient.close();
@@ -470,6 +471,22 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       }
     }
     return Pair.of(partitionPathStatMap, globalStat);
+  }
+
+  @Override
+  protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) {
+    client.startCommitWithTime(commitTime);
+    JavaRDD<HoodieRecord> insertRecordsRDD1 = jsc.parallelize(inserts, 2);
+    JavaRDD<WriteStatus> statusRDD = ((SparkRDDWriteClient) client).upsert(insertRecordsRDD1, commitTime);
+    if (autoCommitOff) {
+      client.commit(commitTime, statusRDD);
+    }
+    List<WriteStatus> statuses = statusRDD.collect();
+    assertNoWriteErrors(statuses);
+    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig(),
+        HoodieSparkKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
+
+    return statuses;
   }
 
   /**
@@ -553,7 +570,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   public HoodieTableMetadata metadata(HoodieWriteConfig clientConfig,
                                       HoodieEngineContext hoodieEngineContext) {
     return HoodieTableMetadata.create(
-        hoodieEngineContext, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+        hoodieEngineContext, storage, clientConfig.getMetadataConfig(), clientConfig.getBasePath());
   }
 
   protected void validateFilesPerPartition(HoodieTestTable testTable,
@@ -629,7 +646,8 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // Metadata table has a fixed number of partitions
     // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
     // in the .hoodie folder.
-    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, HoodieTableMetadata.getMetadataTableBasePath(basePath), false);
+    List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(
+        engineContext, storage, HoodieTableMetadata.getMetadataTableBasePath(basePath), false);
 
     List<MetadataPartitionType> enabledPartitionTypes = metadataWriter.getEnabledPartitionTypes();
 
@@ -680,10 +698,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }
     return new HoodieInstant(inflightOnly, "clean", instantTime);
-  }
-
-  protected HoodieTableMetaClient createMetaClient(String basePath) {
-    return HoodieTestUtils.createMetaClient(storageConf, basePath);
   }
 
   protected HoodieTableMetaClient createMetaClient(SparkSession spark, String basePath) {

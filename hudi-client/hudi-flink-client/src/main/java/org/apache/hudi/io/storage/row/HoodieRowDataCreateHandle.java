@@ -33,8 +33,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -91,7 +91,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.currTimer = HoodieTimer.start();
-    this.storage = table.getMetaClient().getStorage();
+    this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
@@ -175,8 +175,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     stat.setFileId(fileId);
     StoragePath storagePath = convertToStoragePath(path);
     stat.setPath(new StoragePath(writeConfig.getBasePath()), storagePath);
-    long fileSizeInBytes = FSUtils.getFileSize(
-        table.getMetaClient().getStorage(), storagePath);
+    long fileSizeInBytes = FSUtils.getFileSize(table.getStorage(), storagePath);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());

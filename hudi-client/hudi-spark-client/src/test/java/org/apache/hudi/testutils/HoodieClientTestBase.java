@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 
@@ -51,6 +52,8 @@ import java.util.List;
 import java.util.function.Function;
 
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForKeys;
+import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForRecords;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -176,6 +179,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
    * @param wrapped Actual Records Generation function
    * @return Wrapped Function
    */
+  @Override
   public Function2<List<HoodieRecord>, String, Integer> generateWrapRecordsFn(boolean isPreppedAPI,
       HoodieWriteConfig writeConfig,
       Function2<List<HoodieRecord>, String, Integer> wrapped) {
@@ -640,6 +644,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
   }
 
   public static FileFormatUtils getFileUtilsInstance(HoodieTableMetaClient metaClient) {
-    return FileFormatUtils.getInstance(metaClient.getTableConfig().getBaseFileFormat());
+    return HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
   }
 }
