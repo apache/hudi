@@ -50,7 +50,8 @@ bootstrapDF.write.format("hudi").
   option(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
   option(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY, "ts").
-  option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, "false").
+  option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, "true").
+  option("hoodie.bootstrap.partitionpath.translator.class", "org.apache.hudi.client.bootstrap.translator.DecodedBootstrapPartitionPathTranslator").
   option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL).
   option(HoodieBootstrapConfig.BOOTSTRAP_BASE_PATH_PROP, bootstrapBasePath).
   mode(SaveMode.Overwrite).
@@ -71,6 +72,7 @@ dfUpdates.write.format("hudi").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
   option(TABLE_NAME, tableName).
   option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL).
+  option(DataSourceWriteOptions.HIVE_STYLE_PARTITIONING.key, "true").
   option("hoodie.datasource.meta.sync.enable", "true").
   option("hoodie.datasource.hive_sync.database", database).
   option("hoodie.datasource.hive_sync.table", tableName).
