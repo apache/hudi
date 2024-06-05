@@ -117,16 +117,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     setSchemaEvolutionConfigs(augmentedStorageConf)
     val baseFileReader = super.buildReaderWithPartitionValues(spark, dataSchema, partitionSchema, requiredSchema,
       filters ++ requiredFilters, options, augmentedStorageConf.unwrapCopy())
-    val cdcFileReader = if (isCDC) {
-      super.buildReaderWithPartitionValues(
-        spark,
-        tableSchema.structTypeSchema,
-        StructType(Nil),
-        tableSchema.structTypeSchema,
-        Nil,
-        options,
-        new Configuration(hadoopConf))
-    }
 
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
@@ -190,8 +180,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fileSplits = hoodiePartitionCDCFileGroupSliceMapping.getFileSplits().toArray
           val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
           buildCDCRecordIterator(
-            fileGroupSplit, cdcFileReader.asInstanceOf[PartitionedFile => Iterator[InternalRow]],
-            broadcastedStorageConf.value, fileIndexProps, requiredSchema)
+            fileGroupSplit, parquetFileReader.value, broadcastedStorageConf.value,
+            fileIndexProps, options, requiredSchema)
 
         case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
           broadcastedStorageConf.value)
@@ -208,9 +198,10 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   }
 
   protected def buildCDCRecordIterator(cdcFileGroupSplit: HoodieCDCFileGroupSplit,
-                                       cdcFileReader: PartitionedFile => Iterator[InternalRow],
+                                       sparkParquetReader: SparkParquetReader,
                                        storageConf: StorageConfiguration[_],
                                        props: TypedProperties,
+                                       options: Map[String, String],
                                        requiredSchema: StructType): Iterator[InternalRow] = {
     props.setProperty(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, tableName)
     val cdcSchema = CDCRelation.FULL_CDC_SPARK_SCHEMA
@@ -220,11 +211,12 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       cdcFileGroupSplit,
       metaClient,
       storageConf,
-      cdcFileReader,
+      sparkParquetReader,
       tableSchema,
       cdcSchema,
       requiredSchema,
-      props)
+      props,
+      options)
   }
 
   private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
