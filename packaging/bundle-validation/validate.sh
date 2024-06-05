@@ -116,7 +116,7 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh Query and validate the results using HiveQL query2 JONVEX mor test..."
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
           -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
-          -e 'select _hoodie_partition_path,_hoodie_record_key,_hoodie_file_name from jonvex_trips_mor where begin_lat < 0.5'
+          -e 'select `_hoodie_partition_path`,`_hoodie_record_key`,`_hoodie_file_name` from jonvex_trips_mor where begin_lat < 0.5'
     echo "::warning::validate.sh Query and validate the results using HiveQL Done JONVEX mor test..."
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
     kill $DERBY_PID $HIVE_PID
