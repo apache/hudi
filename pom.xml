@@ -140,7 +140,7 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink1.18.version>1.18.0</flink1.18.version>
+    <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
