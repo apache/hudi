@@ -107,7 +107,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     val filtersForRead = (getHasLogFiles, getNeedsBootstrapMerge, hasRecordPosition) match {
       case (false, false, _) => filters
       case (false, true, true) => filters
-      case (_, _, true) => recordKeyFilters
+      //case (_, _, true) => recordKeyFilters
       case (_, _, _) => Seq.empty
     }
     (schemaForRead, filtersForRead)

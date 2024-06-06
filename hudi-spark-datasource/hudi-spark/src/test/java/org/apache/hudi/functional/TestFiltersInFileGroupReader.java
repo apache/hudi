@@ -91,5 +91,6 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
         .load(tableBasePath)
         .drop("city_to_state")
         .where("begin_lat > 0.5 and _hoodie_record_key LIKE '%00%'");
+        //.where("begin_lat > 0.5");
   }
 }
