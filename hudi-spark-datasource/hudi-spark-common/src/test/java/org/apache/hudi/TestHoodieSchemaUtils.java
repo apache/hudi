@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -239,6 +240,51 @@ public class TestHoodieSchemaUtils {
     }
   }
 
+  @Test
+  void testFieldReordering() {
+    // field order changes and incoming schema is missing an existing field
+    Schema start = createRecord("reorderFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createPrimitiveField("field2", Schema.Type.INT),
+        createPrimitiveField("field3", Schema.Type.INT));
+    Schema end = createRecord("reorderFields",
+        createPrimitiveField("field3", Schema.Type.INT),
+        createPrimitiveField("field1", Schema.Type.INT));
+    assertEquals(start, deduceWriterSchema(end, start, true));
+
+    // nested field ordering changes and new field is added
+    start = createRecord("reorderNestedFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createPrimitiveField("field2", Schema.Type.INT),
+        createArrayField("field3", createRecord("reorderNestedFields.field3",
+            createPrimitiveField("nestedField1", Schema.Type.INT),
+            createPrimitiveField("nestedField2", Schema.Type.INT),
+            createPrimitiveField("nestedField3", Schema.Type.INT))),
+        createPrimitiveField("field4", Schema.Type.INT));
+    end = createRecord("reorderNestedFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createPrimitiveField("field2", Schema.Type.INT),
+        createPrimitiveField("field5", Schema.Type.INT),
+        createArrayField("field3", createRecord("reorderNestedFields.field3",
+            createPrimitiveField("nestedField2", Schema.Type.INT),
+            createPrimitiveField("nestedField1", Schema.Type.INT),
+            createPrimitiveField("nestedField3", Schema.Type.INT),
+            createPrimitiveField("nestedField4", Schema.Type.INT))),
+        createPrimitiveField("field4", Schema.Type.INT));
+
+    Schema expected = createRecord("reorderNestedFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createPrimitiveField("field2", Schema.Type.INT),
+        createArrayField("field3", createRecord("reorderNestedFields.field3",
+            createPrimitiveField("nestedField1", Schema.Type.INT),
+            createPrimitiveField("nestedField2", Schema.Type.INT),
+            createPrimitiveField("nestedField3", Schema.Type.INT),
+            createNullableField("nestedField4", Schema.Type.INT))),
+        createPrimitiveField("field4", Schema.Type.INT),
+        createNullableField("field5", Schema.Type.INT));
+    assertEquals(expected, deduceWriterSchema(end, start, true));
+  }
+
   private static Schema deduceWriterSchema(Schema incomingSchema, Schema latestTableSchema) {
     return deduceWriterSchema(incomingSchema, latestTableSchema, false);
   }
@@ -277,6 +323,10 @@ public class TestHoodieSchemaUtils {
 
   private static Schema.Field createPrimitiveField(String name, Schema.Type type) {
     return new Schema.Field(name, Schema.create(type), null, null);
+  }
+
+  private static Schema.Field createNullableField(String name, Schema.Type type) {
+    return new Schema.Field(name, Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(type))), null, JsonProperties.NULL_VALUE);
   }
   
   private static Schema createRecord(String name, Schema.Field... fields) {

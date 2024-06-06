@@ -103,9 +103,8 @@ object HoodieSchemaUtils {
           CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
         val mergeIntoWrites = opts.getOrDefault(SQL_MERGE_INTO_WRITES.key(),
           SQL_MERGE_INTO_WRITES.defaultValue.toString).toBoolean
-
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
           AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
@@ -201,8 +200,9 @@ object HoodieSchemaUtils {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts)
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String],
+                                 shouldReorderColumns: Boolean): Schema = {
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, opts, shouldReorderColumns)
   }
 
 
