@@ -116,6 +116,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
+  public static final ConfigProperty<HoodieTableVersion> INITIAL_VERSION = ConfigProperty
+          .key("hoodie.table.initial.version")
+          .defaultValue(HoodieTableVersion.ZERO)
+          .withDocumentation("Initial Version of table when the table was created.Used for upgrade/downgrade"
+                  + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
+                  + "when the table is initially setup.");
+
   public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
@@ -510,6 +517,15 @@ public class HoodieTableConfig extends HoodieConfig {
     return contains(VERSION)
         ? HoodieTableVersion.versionFromCode(getInt(VERSION))
         : VERSION.defaultValue();
+  }
+
+  /**
+   * @return the hoodie.table.initial.version from hoodie.properties file.
+   */
+  public HoodieTableVersion getTableInitialVersion() {
+    return contains(INITIAL_VERSION)
+            ? HoodieTableVersion.versionFromCode(getInt(INITIAL_VERSION))
+            : INITIAL_VERSION.defaultValue();
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
