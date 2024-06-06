@@ -137,17 +137,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     if (getUseRecordPosition) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
-      val javaSet = new java.util.HashSet[String]()
-      javaSet.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+      val rowIndexColumn = new java.util.HashSet[String]()
+      rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       val skeletonProjection = projectRecord(skeletonRequiredSchema,
-        AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, javaSet))
+        AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, rowIndexColumn))
       //If we have log files, we will want to do position based merging with those as well,
       //so leave the row index column at the end
       val dataProjection = if (getHasLogFiles) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,
-          AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, javaSet))
+          AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, rowIndexColumn))
       }
 
       //Always use internal row for positional merge because
