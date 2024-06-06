@@ -117,11 +117,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     return internalRow.copy();
   }
 
-  @Override
-  public boolean supportsPositionField() {
-    return HoodieSparkUtils.gteqSpark3_5();
-  }
-
   private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
     StructType structType = getCachedSchema(recordSchema);
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =

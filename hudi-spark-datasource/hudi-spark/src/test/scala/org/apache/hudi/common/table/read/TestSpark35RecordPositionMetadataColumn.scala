@@ -79,7 +79,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
       val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
       _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
       val reader = sparkAdapter.createParquetFileReader(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
-      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema)
+      val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema, shouldUseRecordPosition = true)
 
       // Confirm if the schema is as expected.
       assertEquals(4, requiredSchema.fields.length)

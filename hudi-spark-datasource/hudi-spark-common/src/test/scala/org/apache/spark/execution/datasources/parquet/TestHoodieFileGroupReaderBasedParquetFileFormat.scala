@@ -56,7 +56,7 @@ class TestHoodieFileGroupReaderBasedParquetFileFormat extends SparkClientFunctio
     val requiredSchema = StructType(fields)
 
     val appliedSchema: StructType = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(
-      requiredSchema)
+      requiredSchema, true)
     assertEquals(3, appliedSchema.fields.length)
     assertTrue(appliedSchema.fields.map(f => f.name).contains(ROW_INDEX_TEMPORARY_COLUMN_NAME))
   }
