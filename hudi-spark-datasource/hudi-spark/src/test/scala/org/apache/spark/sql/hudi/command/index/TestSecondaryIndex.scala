@@ -69,7 +69,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
             "Secondary index already exists: idx_price_1"
           )
 
-          spark.sql(s"show indexes from $tableName").show()
           checkAnswer(s"show indexes from $tableName")(
             Seq("idx_name", "name", "lucene", "", "{\"block_size\":\"1024\"}"),
             Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
@@ -78,7 +77,6 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           checkAnswer(s"drop index idx_name on $tableName")()
           checkException(s"drop index idx_name on $tableName")("Secondary index not exists: idx_name")
 
-          spark.sql(s"show indexes from $tableName").show()
           checkAnswer(s"show indexes from $tableName")(
             Seq("idx_price", "price", "lucene", "{\"price\":{\"order\":\"desc\"}}", "{\"block_size\":\"512\"}")
           )
@@ -98,67 +96,98 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
   test("Test Secondary Index Creation With hudi_metadata TVF") {
     if (HoodieSparkUtils.gteqSpark3_2) {
-      withTempDir { tmp => {
-        val tableName = generateTableName
-        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      withTempDir {
+        tmp => {
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  ts bigint,
-             |  id string,
-             |  rider string,
-             |  driver string,
-             |  fare int,
-             |  city string,
-             |  state string
-             |) using hudi
-             | options (
-             |  primaryKey ='id',
-             |  type = 'mor',
-             |  preCombineField = 'ts',
-             |  hoodie.metadata.enable = 'true',
-             |  hoodie.metadata.record.index.enable = 'true',
-             |  hoodie.metadata.index.secondary.enable = 'true',
-             |  hoodie.datasource.write.recordkey.field = 'id'
-             | )
-             | partitioned by(state)
-             | location '$basePath'
-       """.stripMargin)
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values
-             | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
-             | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
-             | """.stripMargin
-        )
+          createTempTableAndInsert(tableName, basePath)
 
-        // validate record_index created successfully
-        val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
-        assert(metadataDF.count() == 2)
+          // validate record_index created successfully
+          val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
+          assert(metadataDF.count() == 2)
 
-        var metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
-        // create secondary index
-        spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
-        metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(basePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
-        assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+          var metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+          // create secondary index
+          spark.sql(s"create index idx_city on $tableName using secondary_index(city)")
+          metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_city"))
+          assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
 
-        checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-          Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
-          Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
-        )
-      }
+          checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+            Seq("austin", "e96c4396-3fad-413a-a942-4cb36106d720"),
+            Seq("san_francisco", "334e26e9-8355-45cc-97c6-c31daf0df330")
+          )
+        }
       }
     }
   }
 
+  test("Test Secondary Index Creation Failure For Multiple Fields") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir {
+        tmp => {
+          val tableName = generateTableName
+          val basePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          createTempTableAndInsert(tableName, basePath)
+
+          // validate record_index created successfully
+          val metadataDF = spark.sql(s"select key from hudi_metadata('$basePath') where type=5")
+          assert(metadataDF.count() == 2)
+
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(basePath)
+            .setConf(HoodieTestUtils.getDefaultStorageConf)
+            .build()
+          assert(metaClient.getTableConfig.getMetadataPartitions.contains("record_index"))
+          // create secondary index throws error when trying to create on multiple fields at a time
+          checkException(sql = s"create index idx_city on $tableName using secondary_index(city,state)")(
+            "Only one column can be indexed for functional or secondary index."
+          )
+        }
+      }
+    }
+  }
+
+  private def createTempTableAndInsert(tableName: String, basePath: String) = {
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  ts bigint,
+         |  id string,
+         |  rider string,
+         |  driver string,
+         |  fare int,
+         |  city string,
+         |  state string
+         |) using hudi
+         | options (
+         |  primaryKey ='id',
+         |  type = 'mor',
+         |  preCombineField = 'ts',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.metadata.index.secondary.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'id'
+         | )
+         | partitioned by(state)
+         | location '$basePath'
+       """.stripMargin)
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values
+         | (1695159649087, '334e26e9-8355-45cc-97c6-c31daf0df330', 'rider-A', 'driver-K', 19, 'san_francisco', 'california'),
+         | (1695091554787, 'e96c4396-3fad-413a-a942-4cb36106d720', 'rider-B', 'driver-M', 27, 'austin', 'texas')
+         | """.stripMargin
+    )
+  }
 }

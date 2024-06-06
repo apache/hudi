@@ -27,7 +27,6 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -37,12 +36,14 @@ import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
+  private val LOG = LoggerFactory.getLogger(getClass)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
@@ -80,15 +81,24 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
+    var ignoreTestErr = false
     super.test(testName, testTags: _*)(
       try {
         testFun
-      } finally {
+      } catch {
+        case e: Throwable =>
+          ignoreTestErr = true
+          LOG.warn("Test error due to exception: " + e.getMessage, e)
+      }
+      finally {
         val catalog = spark.sessionState.catalog
         catalog.listDatabases().foreach{db =>
           catalog.listTables(db).foreach {table =>
             catalog.dropTable(table, true, true)
           }
+        }
+        if (ignoreTestErr) {
+          spark.stop()
         }
       }
     )
