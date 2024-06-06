@@ -19,13 +19,9 @@
 package org.apache.hudi.internal.schema.visitor;
 
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -34,20 +30,16 @@ import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFu
 /**
  * Schema visitor to produce name -> position map for internalSchema. Positions are assigned in a depth-first manner.
  */
-public class NameToPositionVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
-  private final Deque<String> fieldNames = new LinkedList<>();
-  private final Map<String, Integer> nameToId = new HashMap<>();
+public class NameToPositionVisitor extends AbstractNameVisitor<Map<String, Integer>> {
   private final AtomicInteger position = new AtomicInteger(0);
+  public NameToPositionVisitor() {
+    super(new HashMap<>());
+  }
 
   @Override
   public void beforeField(Types.Field field) {
     nameToId.put(createFullName(field.name(), fieldNames), position.getAndIncrement());
     fieldNames.push(field.name());
-  }
-
-  @Override
-  public void afterField(Types.Field field) {
-    fieldNames.pop();
   }
 
   @Override
@@ -57,40 +49,15 @@ public class NameToPositionVisitor extends InternalSchemaVisitor<Map<String, Int
   }
 
   @Override
-  public void afterArrayElement(Types.Field elementField) {
-    fieldNames.pop();
-  }
-
-  @Override
   public void beforeMapKey(Types.Field keyField) {
     nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), position.getAndIncrement());
     fieldNames.push(keyField.name());
   }
 
   @Override
-  public void afterMapKey(Types.Field keyField) {
-    fieldNames.pop();
-  }
-
-  @Override
   public void beforeMapValue(Types.Field valueField) {
     nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), position.getAndIncrement());
     fieldNames.push(valueField.name());
-  }
-
-  @Override
-  public void afterMapValue(Types.Field valueField) {
-    fieldNames.pop();
-  }
-
-  @Override
-  public Map<String, Integer> schema(InternalSchema schema, Map<String, Integer> recordResult) {
-    return nameToId;
-  }
-
-  @Override
-  public Map<String, Integer> record(Types.RecordType record, List<Map<String, Integer>> fieldResults) {
-    return nameToId;
   }
 
   @Override
@@ -105,11 +72,6 @@ public class NameToPositionVisitor extends InternalSchemaVisitor<Map<String, Int
 
   @Override
   public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
-    return nameToId;
-  }
-
-  @Override
-  public Map<String, Integer> primitive(Type.PrimitiveType primitive) {
     return nameToId;
   }
 }
