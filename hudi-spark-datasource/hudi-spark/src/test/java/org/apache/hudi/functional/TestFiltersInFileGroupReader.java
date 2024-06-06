@@ -39,7 +39,7 @@ import java.util.Map;
  */
 @Tag("functional")
 public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
-  
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFiltersInFileFormat(boolean mergeUseRecordPositions) {

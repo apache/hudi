@@ -206,3 +206,4 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     }
   }
 }
+

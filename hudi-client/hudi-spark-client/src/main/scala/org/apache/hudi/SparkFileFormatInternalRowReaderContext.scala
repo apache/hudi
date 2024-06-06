@@ -259,8 +259,8 @@ object SparkFileFormatInternalRowReaderContext {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   }
 
-  def getAppliedRequiredSchema(requiredSchema: StructType, shouldUseRecordPosition: Boolean): StructType = {
-    if (shouldUseRecordPosition) {
+  def getAppliedRequiredSchema(requiredSchema: StructType, shouldAddRecordPosition: Boolean): StructType = {
+    if (shouldAddRecordPosition) {
       val metadata = new MetadataBuilder()
         .putString(METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
         .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
