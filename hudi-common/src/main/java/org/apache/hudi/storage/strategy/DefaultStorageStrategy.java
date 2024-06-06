@@ -20,28 +20,36 @@ package org.apache.hudi.storage.strategy;
 
 import org.apache.hudi.storage.StoragePath;
 
+import java.util.Map;
+
 public class DefaultStorageStrategy implements StorageStrategy {
-  public DefaultStorageStrategy() {
+  String basePath;
+  String storagePrefix;
+
+  public DefaultStorageStrategy(String basePath, Map<String, String> props) {
+    // basePath == storagePrefix with DefaultStorageStrategy
+    this.basePath = basePath;
+    this.storagePrefix = basePath;
   }
 
   @Override
-  public String getStorageLocation(String partitionPath, String fileId) {
-    return null;
+  public StoragePath getStorageLocation(String partitionPath, String fileId) {
+    return new StoragePath(String.format("%s/%s", storagePrefix, partitionPath));
   }
 
   @Override
   public StoragePath getStorageLocation(StoragePath filePath) {
-    return null;
+    return filePath;
   }
 
   @Override
   public String getBasePath() {
-    return null;
+    return basePath;
   }
 
   @Override
-  public String getStoragePath() {
-    return null;
+  public String getStoragePrefix() {
+    return storagePrefix;
   }
 
 }

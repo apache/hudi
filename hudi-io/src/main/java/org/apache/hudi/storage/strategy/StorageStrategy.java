@@ -33,11 +33,11 @@ public interface StorageStrategy extends Serializable {
    * @param fileId file ID
    * @return a storage location string for a data file
    */
-  String getStorageLocation(String partitionPath, String fileId);
+  StoragePath getStorageLocation(String partitionPath, String fileId);
 
   StoragePath getStorageLocation(StoragePath filePath);
 
   String getBasePath();
 
-  String getStoragePath();
+  String getStoragePrefix();
 }

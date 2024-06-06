@@ -2782,14 +2782,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder fromFile(File propertiesFile) throws IOException {
       try (FileReader reader = new FileReader(propertiesFile)) {
-        this.writeConfig.getProps().load(reader);
+        writeConfig.getProps().load(reader);
         return this;
       }
     }
 
     public Builder fromInputStream(InputStream inputStream) throws IOException {
       try {
-        this.writeConfig.getProps().load(inputStream);
+        writeConfig.getProps().load(inputStream);
         return this;
       } finally {
         inputStream.close();
@@ -3215,7 +3215,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withProperties(Properties properties) {
-      this.writeConfig.getProps().putAll(properties);
+      writeConfig.getProps().putAll(properties);
       return this;
     }
 
