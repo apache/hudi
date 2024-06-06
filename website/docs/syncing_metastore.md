@@ -10,7 +10,7 @@ Hive metastore as well. This unlocks the capability to query Hudi tables not onl
 interactive query engines such as Presto and Trino. In this document, we will go through different ways to sync the Hudi
 table to Hive metastore.
 
-## Spark datasource example
+## Spark Data Source example
 
 Prerequisites: setup hive metastore properly and configure the Spark installation to point to the hive metastore by placing `hive-site.xml` under `$SPARK_HOME/conf`
 
