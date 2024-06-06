@@ -172,6 +172,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
+  /**
+   * Creates file record iterator to read bootstrap skeleton or data file
+   *
+   * @param requiredFields list of fields that are expected to be read from the file
+   * @param allFields      list of all fields in the data file to be read
+   * @param file           file to be read
+   * @return pair of the record iterator of the file, and the schema of the data being read
+   */
   private Option<Pair<ClosableIterator<T>,Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
                                                                                        List<Schema.Field> allFields,
                                                                                        BaseFile file) throws IOException {

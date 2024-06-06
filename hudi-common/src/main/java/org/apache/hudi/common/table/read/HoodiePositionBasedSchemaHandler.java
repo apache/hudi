@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
@@ -45,27 +46,33 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   }
 
   @Override
-  protected Schema prepareSchema() {
-    Schema preMergeSchema = super.prepareSchema();
-    return readerContext.getHasLogFiles()
+  protected Schema prepareRequiredSchema() {
+    Schema preMergeSchema = super.prepareRequiredSchema();
+    return readerContext.supportsPositionField() && readerContext.getHasLogFiles()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
 
-  private Schema addPositionalMergeCol(Schema input) {
+  @Override
+  public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
+    Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
+    if (readerContext.supportsPositionField()) {
+      if (!dataAndMetaCols.getLeft().isEmpty()) {
+        dataAndMetaCols.getLeft().add(getPositionalMergeField());
+      }
+      if (!dataAndMetaCols.getRight().isEmpty()) {
+        dataAndMetaCols.getRight().add(getPositionalMergeField());
+      }
+    }
+    return dataAndMetaCols;
+  }
+
+  private static Schema addPositionalMergeCol(Schema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
-  private Schema.Field getPositionalMergeField() {
+  private static Schema.Field getPositionalMergeField() {
     return new Schema.Field(HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME,
         Schema.create(Schema.Type.LONG), "", -1L);
-  }
-
-  @Override
-  public Schema createSchemaFromFields(List<Schema.Field> fields) {
-    if (readerContext.getHasLogFiles()) {
-      fields.add(getPositionalMergeField());
-    }
-    return super.createSchemaFromFields(fields);
   }
 }

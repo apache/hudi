@@ -118,12 +118,8 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   }
 
   @Override
-  public long extractRecordPosition(InternalRow record, Schema recordSchema, String fieldName, long providedPositionIfNeeded) {
-    Object position = getFieldValueFromInternalRow(record, recordSchema, fieldName);
-    if (position != null) {
-      return (long) position;
-    }
-    return providedPositionIfNeeded;
+  public boolean supportsPositionField() {
+    return HoodieSparkUtils.gteqSpark3_5();
   }
 
   private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {

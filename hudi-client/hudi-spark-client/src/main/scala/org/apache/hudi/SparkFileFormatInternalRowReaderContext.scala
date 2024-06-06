@@ -61,7 +61,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                               recordKeyColumn: String,
                                               filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
-  lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
+  private lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def getFileRecordIterator(filePath: StoragePath,
@@ -70,6 +70,9 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
+    if (AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)) {
+      assert(supportsPositionField())
+    }
     val structType: StructType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
       val projection: UnsafeProjection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
@@ -99,9 +102,9 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       case (false, false, _) =>
         (structType, filters)
       case (false, true, true) =>
-        (getAppliedRequiredSchema(structType), filters)
+        (getAppliedRequiredSchema(structType, supportsPositionField()), filters)
       case (true, _, true) =>
-        (getAppliedRequiredSchema(structType), recordKeyFilters)
+        (getAppliedRequiredSchema(structType, supportsPositionField()), recordKeyFilters)
       case (_, _, _) =>
         (structType, Seq.empty)
       }
@@ -134,16 +137,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                skeletonRequiredSchema: Schema,
                                dataFileIterator: ClosableIterator[Any],
                                dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
-    if (getUseRecordPosition) {
+    if (HoodieSparkUtils.gteqSpark3_5) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val rowIndexColumn = new java.util.HashSet[String]()
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
+      //always remove the row index column from the skeleton because the data file will also have the same column
       val skeletonProjection = projectRecord(skeletonRequiredSchema,
         AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, rowIndexColumn))
-      //If we have log files, we will want to do position based merging with those as well,
-      //so leave the row index column at the end
-      val dataProjection = if (getHasLogFiles) {
+
+      //If we need to do position based merging with log files we will leave the row index column at the end
+      val dataProjection = if (getHasLogFiles && getUseRecordPosition) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,
@@ -252,7 +256,9 @@ object SparkFileFormatInternalRowReaderContext {
     filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
   }
 
-  def getAppliedRequiredSchema(requiredSchema: StructType): StructType = {
+  def getAppliedRequiredSchema(requiredSchema: StructType,
+                               shouldUseRecordPosition: Boolean): StructType = {
+    if (shouldUseRecordPosition) {
       val metadata = new MetadataBuilder()
         .putString(METADATA_COL_ATTR_KEY, ROW_INDEX_TEMPORARY_COLUMN_NAME)
         .putBoolean(FILE_SOURCE_METADATA_COL_ATTR_KEY, value = true)
@@ -260,6 +266,9 @@ object SparkFileFormatInternalRowReaderContext {
         .build()
       val rowIndexField = StructField(ROW_INDEX_TEMPORARY_COLUMN_NAME, LongType, nullable = false, metadata)
       StructType(requiredSchema.fields.filterNot(isIndexTempColumn) :+ rowIndexField)
+    } else {
+      requiredSchema
+    }
   }
 
   private def isIndexTempColumn(field: StructField): Boolean = {
