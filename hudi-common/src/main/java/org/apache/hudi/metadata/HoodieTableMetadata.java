@@ -30,11 +30,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.expression.Expression;
+import org.apache.hudi.internal.schema.Types;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -49,6 +51,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Interface that supports querying various pieces of metadata about a hudi table.
  */
 public interface HoodieTableMetadata extends Serializable, AutoCloseable {
+
+  Logger LOG = LoggerFactory.getLogger(HoodieTableMetadata.class);
 
   // Table name suffix
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";
@@ -124,6 +128,7 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
+      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
     }
 
     return createFSBackedTableMetadata(engineContext, metadataConfig, datasetBasePath);
