@@ -135,8 +135,8 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
+      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
     }
-    LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
     return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
   }
 
