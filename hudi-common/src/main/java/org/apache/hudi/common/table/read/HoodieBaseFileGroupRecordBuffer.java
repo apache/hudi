@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -195,37 +193,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       //       it since these records will be put into records(Map).
       return Option.of(Pair.of(record, metadata));
     }
-  }
-
-  /**
-   * Merge a delete record with another record (data, or delete).
-   *
-   * @param deleteRecord
-   * @param existingRecordMetadataPair
-   * @return
-   */
-  protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord,
-                                                            Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
-    if (existingRecordMetadataPair != null) {
-      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
-      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
-      // For same ordering values, uses the natural order(arrival time semantics).
-      Comparable existingOrderingVal = readerContext.getOrderingValue(
-          existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-          payloadProps);
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      // Checks the ordering value does not equal to 0
-      // because we use 0 as the default value which means natural order
-      boolean chooseExisting = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-          && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
-      if (chooseExisting) {
-        // The DELETE message is obsolete if the old message has greater orderingVal.
-        return Option.empty();
-      }
-    }
-    // Do delete.
-    return Option.of(deleteRecord);
   }
 
   /**
