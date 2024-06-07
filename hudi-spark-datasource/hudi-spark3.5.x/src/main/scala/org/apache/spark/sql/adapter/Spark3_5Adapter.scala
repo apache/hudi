@@ -54,11 +54,15 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
         case plan if !plan.resolved => None
         // NOTE: When resolving Hudi table we allow [[Filter]]s and [[Project]]s be applied
         //       on top of it
-        case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2.v1Table) =>
+        case PhysicalOperation(_, _, DataSourceV2Relation(v2: V2TableWithV1Fallback, _, _, _, _)) if isHoodieTable(v2) =>
           Some(v2.v1Table)
         case _ => None
       }
     }
+  }
+
+  def isHoodieTable(v2Table: V2TableWithV1Fallback): Boolean = {
+    v2Table.getClass.getName.contains("HoodieInternalV2Table")
   }
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]

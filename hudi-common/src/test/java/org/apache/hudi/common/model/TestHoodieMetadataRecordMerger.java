@@ -59,7 +59,7 @@ public class TestHoodieMetadataRecordMerger {
     List<HoodieRecord> updateRecordList = dataGen.generateUpdates("0001", newRecordList);
     HoodieMetadataRecordMerger recordMerger = new HoodieMetadataRecordMerger();
     List<Pair<HoodieRecord, Schema>> mergedRecords = recordMerger.fullOuterMerge(newRecordList.get(0), AVRO_SCHEMA, updateRecordList.get(0), AVRO_SCHEMA, new TypedProperties());
-    assertEquals(1, mergedRecords.size());
-    assertEquals(updateRecordList.get(0), mergedRecords.get(0).getLeft());
+    assertEquals(2, mergedRecords.size());
+    assertEquals(updateRecordList.get(0), mergedRecords.get(1).getLeft());
   }
 }

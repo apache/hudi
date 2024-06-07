@@ -22,7 +22,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Types;
 
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -31,8 +30,11 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Tests {@link InternalSchemaUtils}.
@@ -54,7 +56,7 @@ public class TestInternalSchemaUtils {
             Types.Field.get(3, "float", Types.FloatType.get()),
             Types.Field.get(4, "double", Types.DoubleType.get())
         })));
-    Assertions.assertEquals(prunedSchema, checkedSchema);
+    assertEquals(prunedSchema, checkedSchema);
 
     // nest schema
     Types.RecordType nestRecord = getNestRecordType();
@@ -71,17 +73,17 @@ public class TestInternalSchemaUtils {
   public void testInternalSchemaVisitor() {
     Types.RecordType nestRecord = getNestRecordType();
     Map<String, Integer> result = InternalSchemaBuilder.getBuilder().buildNameToId(nestRecord);
-    Assertions.assertEquals(result.size(), 12);
-    Assertions.assertEquals(result.get("locations.value.long"), 11);
-    Assertions.assertEquals(result.get("locations.value.lat"), 10);
-    Assertions.assertEquals(result.get("locations.value"), 9);
-    Assertions.assertEquals(result.get("locations.key"), 8);
-    Assertions.assertEquals(result.get("doubles.element"), 7);
+    assertEquals(result.size(), 12);
+    assertEquals(result.get("locations.value.long"), 11);
+    assertEquals(result.get("locations.value.lat"), 10);
+    assertEquals(result.get("locations.value"), 9);
+    assertEquals(result.get("locations.key"), 8);
+    assertEquals(result.get("doubles.element"), 7);
 
     Types.RecordType simpleRecord = getSimpleRecordType();
     Map<String, Integer> result1 = InternalSchemaBuilder.getBuilder().buildNameToId(simpleRecord);
-    Assertions.assertEquals(result1.size(), 5);
-    Assertions.assertEquals(result1.get("double"), 4);
+    assertEquals(result1.size(), 5);
+    assertEquals(result1.get("double"), 4);
   }
 
   @Test
@@ -91,7 +93,27 @@ public class TestInternalSchemaUtils {
     new ObjectOutputStream(baos).writeObject(intType);
     Types.IntType deserializedIntType = (Types.IntType)
         new ObjectInputStream(new ByteArrayInputStream(baos.toByteArray())).readObject();
-    Assertions.assertEquals(intType, deserializedIntType);
+    assertEquals(intType, deserializedIntType);
+  }
+
+  @Test
+  void testFieldOrderingVisitor() {
+    Types.RecordType nestRecord = getNestRecordType();
+    Map<String, Integer> result = new InternalSchema(nestRecord).getNameToPosition();
+    Map<String, Integer> expected = new HashMap<>();
+    expected.put("id", 0);
+    expected.put("data", 1);
+    expected.put("preferences", 2);
+    expected.put("preferences.feature1", 3);
+    expected.put("preferences.feature2", 4);
+    expected.put("doubles", 5);
+    expected.put("doubles.element", 6);
+    expected.put("locations", 7);
+    expected.put("locations.key", 8);
+    expected.put("locations.value", 9);
+    expected.put("locations.value.lat", 10);
+    expected.put("locations.value.long", 11);
+    assertEquals(expected, result);
   }
 
   public Types.RecordType getNestRecordType() {

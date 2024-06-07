@@ -20,6 +20,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.internal.SQLConf
@@ -46,15 +47,15 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
    * @param requiredSchema  desired output schema of the data
    * @param partitionSchema schema of the partition columns. Partition values will be appended to the end of every row
    * @param filters         filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf      the hadoop conf
+   * @param storageConf     the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   final def read(file: PartitionedFile,
                  requiredSchema: StructType,
                  partitionSchema: StructType,
                  filters: Seq[Filter],
-                 sharedConf: Configuration): Iterator[InternalRow] = {
-    val conf = new Configuration(sharedConf)
+                 storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    val conf = storageConf.unwrapCopy()
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
     ParquetWriteSupport.setSchema(requiredSchema, conf)

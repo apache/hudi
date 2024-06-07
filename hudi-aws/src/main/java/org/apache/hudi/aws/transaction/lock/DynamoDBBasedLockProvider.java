@@ -47,6 +47,7 @@ import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,13 +59,13 @@ import java.util.concurrent.TimeUnit;
  * using DynamoDB. Users need to have access to AWS DynamoDB to be able to use this lock.
  */
 @NotThreadSafe
-public class DynamoDBBasedLockProvider implements LockProvider<LockItem> {
+public class DynamoDBBasedLockProvider implements LockProvider<LockItem>, Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedLockProvider.class);
 
   private static final String DYNAMODB_ATTRIBUTE_NAME = "key";
 
-  private final AmazonDynamoDBLockClient client;
+  private final transient AmazonDynamoDBLockClient client;
   private final String tableName;
   private final String dynamoDBPartitionKey;
   protected final DynamoDbBasedLockConfig dynamoDBLockConfiguration;

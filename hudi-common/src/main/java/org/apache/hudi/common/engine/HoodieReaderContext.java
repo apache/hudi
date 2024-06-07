@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -33,6 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -51,6 +53,78 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+
+  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private String tablePath = null;
+  private String latestCommitTime = null;
+  private HoodieRecordMerger recordMerger = null;
+  private Boolean hasLogFiles = null;
+  private Boolean hasBootstrapBaseFile = null;
+  private Boolean needsBootstrapMerge = null;
+
+  // Getter and Setter for schemaHandler
+  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+    return schemaHandler;
+  }
+
+  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+    this.schemaHandler = schemaHandler;
+  }
+
+  public String getTablePath() {
+    if (tablePath == null) {
+      throw new IllegalStateException("Table path not set in reader context.");
+    }
+    return tablePath;
+  }
+
+  public void setTablePath(String tablePath) {
+    this.tablePath = tablePath;
+  }
+
+  public String getLatestCommitTime() {
+    return latestCommitTime;
+  }
+
+  public void setLatestCommitTime(String latestCommitTime) {
+    this.latestCommitTime = latestCommitTime;
+  }
+
+  public HoodieRecordMerger getRecordMerger() {
+    return recordMerger;
+  }
+
+  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+    this.recordMerger = recordMerger;
+  }
+
+  // Getter and Setter for hasLogFiles
+  public boolean getHasLogFiles() {
+    return hasLogFiles;
+  }
+
+  public void setHasLogFiles(boolean hasLogFiles) {
+    this.hasLogFiles = hasLogFiles;
+  }
+
+  // Getter and Setter for hasBootstrapBaseFile
+  public boolean getHasBootstrapBaseFile() {
+    return hasBootstrapBaseFile;
+  }
+
+  public void setHasBootstrapBaseFile(boolean hasBootstrapBaseFile) {
+    this.hasBootstrapBaseFile = hasBootstrapBaseFile;
+  }
+
+  // Getter and Setter for needsBootstrapMerge
+  public boolean getNeedsBootstrapMerge() {
+    return needsBootstrapMerge;
+  }
+
+  public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
+    this.needsBootstrapMerge = needsBootstrapMerge;
+  }
+
   // These internal key names are only used in memory for record metadata and merging,
   // and should not be persisted to storage.
   public static final String INTERNAL_META_RECORD_KEY = "_0";
@@ -228,11 +302,17 @@ public abstract class HoodieReaderContext<T> {
    * Creates a function that will reorder records of schema "from" to schema of "to"
    * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
    *
-   * @param from the schema of records to be passed into UnaryOperator
-   * @param to   the schema of records produced by UnaryOperator
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
+
+  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+    return projectRecord(from, to, Collections.emptyMap());
+  }
 
   /**
    * Extracts the record position value from the record itself.

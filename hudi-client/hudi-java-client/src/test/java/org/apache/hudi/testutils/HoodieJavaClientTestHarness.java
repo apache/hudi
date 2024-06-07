@@ -17,6 +17,7 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -50,7 +51,6 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -63,6 +63,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.JavaHoodieIndexFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -106,6 +107,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForKeys;
+import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForRecords;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -121,10 +124,8 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaClientTestHarness.class);
 
-  protected StorageConfiguration<Configuration> storageConf;
   protected HoodieJavaEngineContext context;
   protected TestJavaTaskContextSupplier taskContextSupplier;
-  protected HoodieStorage storage;
   protected ExecutorService executorService;
   protected HoodieTableFileSystemView tableView;
   protected HoodieJavaWriteClient writeClient;
@@ -239,6 +240,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     }
   }
 
+  @Override
   protected HoodieJavaWriteClient getHoodieWriteClient(HoodieWriteConfig cfg) {
     if (null != writeClient) {
       writeClient.close();
@@ -262,6 +264,20 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   protected HoodieTableMetadata metadata(HoodieWriteConfig clientConfig, HoodieEngineContext engineContext) {
     return HoodieTableMetadata.create(engineContext, metaClient.getStorage(), clientConfig.getMetadataConfig(), clientConfig.getBasePath());
+  }
+
+  @Override
+  protected List<WriteStatus> writeAndVerifyBatch(BaseHoodieWriteClient client, List<HoodieRecord> inserts, String commitTime, boolean populateMetaFields, boolean autoCommitOff) throws IOException {
+    client.startCommitWithTime(commitTime);
+    List<WriteStatus> statusRDD = ((HoodieJavaWriteClient) client).upsert(inserts, commitTime);
+    if (autoCommitOff) {
+      client.commit(commitTime, statusRDD);
+    }
+    List<WriteStatus> statuses = statusRDD;
+    assertNoWriteErrors(statuses);
+    verifyRecordsWritten(commitTime, populateMetaFields, inserts, statuses, client.getConfig(),
+        HoodieAvroKeyGeneratorFactory.createKeyGenerator(client.getConfig().getProps()));
+    return statuses;
   }
 
   /**
@@ -739,6 +755,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
    * @param wrapped      Actual Records Generation function
    * @return Wrapped Function
    */
+  @Override
   public Function2<List<HoodieRecord>, String, Integer> generateWrapRecordsFn(boolean isPreppedAPI,
                                                                               HoodieWriteConfig writeConfig,
                                                                               Function2<List<HoodieRecord>, String, Integer> wrapped) {
@@ -1027,12 +1044,4 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     return builder;
   }
 
-  public static FileFormatUtils getFileUtilsInstance(HoodieTableMetaClient metaClient) {
-    return HoodieIOFactory.getIOFactory(metaClient.getStorage())
-        .getFileFormatUtils(metaClient.getTableConfig().getBaseFileFormat());
-  }
-
-  protected HoodieTableMetaClient createMetaClient() {
-    return HoodieTestUtils.createMetaClient(storageConf, basePath);
-  }
 }

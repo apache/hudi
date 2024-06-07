@@ -135,7 +135,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
         latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath),
-        tableSchema, requestedSchema, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
+        tableSchema, requestedSchema, Option.empty(), metaClient, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
         fileSplit.getLength(), false, maxMemoryForMerge, spillableMapPath, spillMapType, bitmaskCompressEnabled);
     this.fileGroupReader.initRecordIterators();
     // it expects the partition columns to be at the end

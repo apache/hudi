@@ -83,12 +83,14 @@ import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -761,7 +763,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromFilesystem(String initializationTime, Set<String> pendingDataInstants) {
-    List<StoragePath> pathsToList = new LinkedList<>();
+    if (dataMetaClient.getActiveTimeline().countInstants() == 0) {
+      return Collections.emptyList();
+    }
+    Queue<StoragePath> pathsToList = new ArrayDeque<>();
     pathsToList.add(new StoragePath(dataWriteConfig.getBasePath()));
 
     List<DirectoryInfo> partitionsToBootstrap = new LinkedList<>();
@@ -773,15 +778,17 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
       int numDirsToList = Math.min(fileListingParallelism, pathsToList.size());
+      List<StoragePath> pathsToProcess = new ArrayList<>(numDirsToList);
+      for (int i = 0; i < numDirsToList; i++) {
+        pathsToProcess.add(pathsToList.poll());
+      }
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
-      List<DirectoryInfo> processedDirectories = engineContext.map(pathsToList.subList(0, numDirsToList), path -> {
+      List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
         HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
         return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
       }, numDirsToList);
-
-      pathsToList = new LinkedList<>(pathsToList.subList(numDirsToList, pathsToList.size()));
 
       // If the listing reveals a directory, add it to queue. If the listing reveals a hoodie partition, add it to
       // the results.
@@ -815,10 +822,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime, Set<String> pendingDataInstants) throws IOException {
-    List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + StoragePath.SEPARATOR_CHAR + partitionPath).collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
+    List<DirectoryInfo> dirinfoList = new ArrayList<>(partitionFileMap.size());
     for (Map.Entry<String, List<StoragePathInfo>> entry : partitionFileMap.entrySet()) {
       dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime, pendingDataInstants));
     }

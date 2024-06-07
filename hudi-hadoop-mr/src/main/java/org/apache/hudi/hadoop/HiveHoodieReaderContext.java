@@ -245,7 +245,10 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to) {
+  public UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    if (!renamedColumns.isEmpty()) {
+      throw new IllegalStateException("Schema evolution is not supported in the filegroup reader for Hive currently");
+    }
     return HoodieArrayWritableAvroUtils.projectRecord(from, to);
   }
 

@@ -62,8 +62,8 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
   protected String bootstrapTargetPath = null;
   protected String hudiBasePath = null;
 
-  protected static int nInserts = 100;
-  protected static int nUpdates = 20;
+  protected int nInserts = 100;
+  protected int nUpdates = 20;
   protected static String[] dashPartitionPaths = {"2016-03-14","2016-03-15", "2015-03-16", "2015-03-17"};
   protected static String[] slashPartitionPaths = {"2016/03/15", "2015/03/16", "2015/03/17"};
   protected String bootstrapType;

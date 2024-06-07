@@ -37,11 +37,13 @@ import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
+import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
 
 import java.util.Map;
 import java.util.function.UnaryOperator;
+
+import scala.Function1;
 
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
@@ -69,15 +71,30 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
 
   @Override
   public Object getValue(InternalRow row, Schema schema, String fieldName) {
-    StructType structType = getCachedSchema(schema);
-    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
-        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
-    if (cachedNestedFieldPath.isDefined()) {
-      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
-    } else {
-      return null;
+    return getFieldValueFromInternalRow(row, schema, fieldName);
+  }
+
+  @Override
+  public String getRecordKey(InternalRow row, Schema schema) {
+    return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
+  }
+
+  @Override
+  public Comparable getOrderingValue(Option<InternalRow> rowOption,
+                                     Map<String, Object> metadataMap,
+                                     Schema schema,
+                                     TypedProperties props) {
+    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
+
+    if (!rowOption.isPresent()) {
+      return 0;
+    }
+
+    String orderingFieldName = ConfigUtils.getOrderingField(props);
+    Object value = getFieldValueFromInternalRow(rowOption.get(), schema, orderingFieldName);
+    return value != null ? (Comparable) value : 0;
   }
 
   @Override
@@ -100,18 +117,27 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
     return internalRow.copy();
   }
 
-  @Override
-  public long extractRecordPosition(InternalRow record, Schema recordSchema, String fieldName, long providedPositionIfNeeded) {
-    Object position = getValue(record, recordSchema, fieldName);
-    if (position != null) {
-      return (long) position;
+  private Object getFieldValueFromInternalRow(InternalRow row, Schema recordSchema, String fieldName) {
+    StructType structType = getCachedSchema(recordSchema);
+    scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
+        HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
+    if (cachedNestedFieldPath.isDefined()) {
+      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
+      return HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
+    } else {
+      return null;
     }
-    return providedPositionIfNeeded;
   }
 
   @Override
-  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to) {
-    UnsafeProjection projection = HoodieInternalRowUtils.generateUnsafeProjectionAlias(getCachedSchema(from), getCachedSchema(to));
-    return projection::apply;
+  public UnaryOperator<InternalRow> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    Function1<InternalRow, UnsafeRow> unsafeRowWriter =
+        HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
+    return row -> (InternalRow) unsafeRowWriter.apply(row);
+
+  }
+
+  protected UnaryOperator<InternalRow> getIdentityProjection() {
+    return row -> row;
   }
 }
