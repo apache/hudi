@@ -26,11 +26,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENAB
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
@@ -109,6 +108,12 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     (avroSchema, internalSchemaOpt)
   }
 
+  protected lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
+    timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+  } else {
+    ""
+  }
+
   protected lazy val tableStructSchema: StructType = {
     val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
@@ -161,9 +166,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    val shouldUseBootstrapFastRead = optParams.getOrElse(DATA_QUERIES_ONLY.key(), "false").toBoolean
-
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
   }
 
   protected lazy val mandatoryFieldsForMerging: Seq[String] =
@@ -239,8 +242,8 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     } else {
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
-        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
+        metaClient.getTableConfig.getTableName, mergeType, mandatoryFields, true, isBootstrap,
+        false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits, shouldUseRecordPosition, Seq.empty)
     }
   }
 
@@ -284,7 +287,8 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        true, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        true, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }
@@ -315,7 +319,8 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, isBootstrap, false, shouldUseRecordPosition, Seq.empty)
+        false, isBootstrap, false, fileIndex.isInstanceOf[HoodieCDCFileIndex], validCommits,
+        shouldUseRecordPosition, Seq.empty)
     }
   }
 }
@@ -343,7 +348,8 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
       new HoodieFileGroupReaderBasedParquetFileFormat(
         tableState, HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
         metaClient.getTableConfig.getTableName, mergeType, mandatoryFields,
-        false, isBootstrap, true, shouldUseRecordPosition, fileIndex.getRequiredFilters)
+        false, isBootstrap, true, fileIndex.isInstanceOf[HoodieCDCFileIndex],
+        validCommits, shouldUseRecordPosition, fileIndex.getRequiredFilters)
     }
   }
 }

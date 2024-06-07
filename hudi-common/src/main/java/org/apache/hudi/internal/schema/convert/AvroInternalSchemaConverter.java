@@ -18,12 +18,15 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -42,6 +45,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.avro.Schema.Type.STRING;
 import static org.apache.avro.Schema.Type.UNION;
 
 /**
@@ -71,6 +75,75 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema convert(InternalSchema internalSchema, String name) {
     return buildAvroSchemaFromInternalSchema(internalSchema, name);
+  }
+
+  public static InternalSchema pruneAvroSchemaToInternalSchema(Schema schema, InternalSchema originSchema) {
+    List<String> pruneNames = collectColNamesFromSchema(schema);
+    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
+  }
+
+  /**
+   * Collect all the leaf nodes names.
+   *
+   * @param schema a avro schema.
+   * @return leaf nodes full names.
+   */
+  @VisibleForTesting
+  static List<String> collectColNamesFromSchema(Schema schema) {
+    List<String> result = new ArrayList<>();
+    Deque<String> visited = new LinkedList<>();
+    collectColNamesFromAvroSchema(schema, visited, result);
+    return result;
+  }
+
+  private static void collectColNamesFromAvroSchema(Schema schema, Deque<String> visited, List<String> resultSet) {
+    switch (schema.getType()) {
+      case RECORD:
+        List<Schema.Field> fields = schema.getFields();
+        for (Schema.Field f : fields) {
+          visited.push(f.name());
+          collectColNamesFromAvroSchema(f.schema(), visited, resultSet);
+          visited.pop();
+          addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
+        }
+        return;
+
+      case UNION:
+        collectColNamesFromAvroSchema(AvroSchemaUtils.resolveNullableSchema(schema), visited, resultSet);
+        return;
+
+      case ARRAY:
+        visited.push("element");
+        collectColNamesFromAvroSchema(schema.getElementType(), visited, resultSet);
+        visited.pop();
+        addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
+        return;
+
+      case MAP:
+        addFullNameIfLeafNode(STRING, "key", visited, resultSet);
+        visited.push("value");
+        collectColNamesFromAvroSchema(schema.getValueType(), visited, resultSet);
+        visited.pop();
+        addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
+        return;
+
+      default:
+    }
+  }
+
+  private static void addFullNameIfLeafNode(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
+    addFullNameIfLeafNode(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+  }
+
+  private static void addFullNameIfLeafNode(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
+    switch (type) {
+      case RECORD:
+      case ARRAY:
+      case MAP:
+        return;
+      default:
+        resultSet.add(InternalSchemaUtils.createFullName(name, visited));
+    }
   }
 
   /**
@@ -504,7 +577,7 @@ public class AvroInternalSchemaConverter {
         return LogicalTypes.decimal(decimal.precision(), decimal.scale())
             .addToSchema(fixedSchema);
       }
-      
+
       default:
         throw new UnsupportedOperationException(
                 "Unsupported type ID: " + primitive.typeId());
