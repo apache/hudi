@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.HashID;
-import org.apache.hudi.storage.StorageIOUtils;
+import org.apache.hudi.io.util.StorageIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import java.util.Map;
@@ -39,7 +39,7 @@ public class ObjectStoreStorageStrategy implements StorageStrategy {
   public ObjectStoreStorageStrategy(String basePath, Map<String, String> props) {
     this.basePath = basePath;
     this.tableName = props.get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
-    this.storagePrefix = props.getOrDefault(HoodieStorageConfig.HOODIE_STORAGE_PREFIX.key(), basePath);
+    this.storagePrefix = props.getOrDefault(HoodieStorageConfig.STORAGE_PREFIX.key(), basePath);
 
     ValidationUtils.checkArgument(StringUtils.nonEmpty(this.basePath));
     ValidationUtils.checkArgument(StringUtils.nonEmpty(this.tableName));

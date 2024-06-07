@@ -51,6 +51,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.io.util.StorageIOUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -60,6 +61,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -125,6 +128,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected StoragePath metaPath;
 
   private transient HoodieStorage storage;
+  private transient StorageStrategy dataStorageStrategy;
   private boolean loadActiveTimelineOnLoad;
   protected StorageConfiguration<?> storageConf;
   private HoodieTableType tableType;
@@ -155,6 +159,8 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, payloadClassName, recordMergerStrategy);
+    this.dataStorageStrategy = StorageIOUtils.createStorageStrategy(tableConfig.getStorageStrategy(),
+        basePath, tableConfig.getTableName(), tableConfig.getStoragePrefix());
     this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
@@ -417,6 +423,16 @@ public class HoodieTableMetaClient implements Serializable {
 
   public StorageConfiguration<?> getStorageConf() {
     return storageConf;
+  }
+
+  public StorageStrategy getDataStorageStrategy() {
+    return dataStorageStrategy != null
+        ? dataStorageStrategy
+        : new DefaultStorageStrategy(basePath.toString());
+  }
+
+  public void setDataStorageStrategy(StorageStrategy storageStrategy) {
+    this.dataStorageStrategy = storageStrategy;
   }
 
   /**

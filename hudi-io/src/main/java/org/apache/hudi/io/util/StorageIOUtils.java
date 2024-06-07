@@ -16,18 +16,23 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.storage;
+package org.apache.hudi.io.util;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.inline.InLineFSUtils;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 /**
  * Methods borrowed from FSUtils
@@ -107,6 +112,20 @@ public class StorageIOUtils {
 
   public static StoragePath getPathWithoutSchemeAndAuthority(StoragePath path) {
     return path.getPathWithoutSchemeAndAuthority();
+  }
+
+  public static StorageStrategy createStorageStrategy(String className,
+                                                      String basePath,
+                                                      String tableName,
+                                                      String storagePrefix) {
+    return (StorageStrategy) ReflectionUtils.loadClass(className, new Class<?>[] {String.class, Map.class},
+        basePath,
+        new HashMap<String, String>() {
+          {
+            put("hoodie.table.name", tableName);
+            put("hoodie.storage.prefix", storagePrefix);
+          }
+        });
   }
 
   /**

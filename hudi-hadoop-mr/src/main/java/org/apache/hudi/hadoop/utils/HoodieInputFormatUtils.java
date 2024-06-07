@@ -63,6 +63,7 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -522,10 +523,11 @@ public class HoodieInputFormatUtils {
    */
   public static List<StoragePathInfo> listAffectedFilesForCommits(Configuration hadoopConf,
                                                                   StoragePath basePath,
+                                                                  StorageStrategy storageStrategy,
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
-    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf), storageStrategy);
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
       fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));

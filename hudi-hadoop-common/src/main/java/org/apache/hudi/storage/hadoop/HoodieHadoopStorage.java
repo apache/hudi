@@ -45,6 +45,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
@@ -58,13 +59,19 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
+  /* TODO: Remove this consturctor, this is used to track non-strat usages*/
   public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
     super(conf);
+    fs = null;
+  }
+
+  public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    super(conf, storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class));
   }
 
-  public HoodieHadoopStorage(Path path, Configuration conf) {
-    super(HadoopFSUtils.getStorageConf(conf));
+  public HoodieHadoopStorage(Path path, Configuration conf, StorageStrategy storageStrategy) {
+    super(HadoopFSUtils.getStorageConf(conf), storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf);
   }
 

@@ -32,6 +32,11 @@ public class DefaultStorageStrategy implements StorageStrategy {
     this.storagePrefix = basePath;
   }
 
+  public DefaultStorageStrategy(String basePath) {
+    this.basePath = basePath;
+    this.storagePrefix = basePath;
+  }
+
   @Override
   public StoragePath getStorageLocation(String partitionPath, String fileId) {
     return new StoragePath(String.format("%s/%s", storagePrefix, partitionPath));

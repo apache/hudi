@@ -51,6 +51,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -310,10 +311,10 @@ public class HoodieRealtimeRecordReaderUtils {
     return appendNullSchemaFields(schema, fieldsToAdd);
   }
 
-  public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
+  public static HoodieFileReader getBaseFileReader(Path path, JobConf conf, StorageStrategy storageStrategy) throws IOException {
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    return HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, conf))
+    return HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, conf, storageStrategy))
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, convertToStoragePath(path));
   }
