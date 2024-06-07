@@ -42,7 +42,6 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
                                           Option<InternalSchema> internalSchemaOpt,
                                           HoodieTableConfig hoodieTableConfig) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
-
   }
 
   @Override

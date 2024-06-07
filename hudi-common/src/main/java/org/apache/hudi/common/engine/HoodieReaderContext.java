@@ -315,6 +315,8 @@ public abstract class HoodieReaderContext<T> {
       Object position = getValue(record, schema, fieldName);
       if (position != null) {
         return (long) position;
+      } else {
+        throw new IllegalStateException("Record position extraction failed");
       }
     }
     return providedPositionIfNeeded;
