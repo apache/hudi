@@ -205,3 +205,9 @@ dff1ccd7315 [ENG-10157][HUDI-7821] Handle case where older proto message is read
 57edb88606d [ENG-10204][MINOR] Avoid logging full commit metadata at info level (#743)
 7084e2bd9b4 [ENG-10119][INTERNAL] Use latest client method instead of providing -1 version (#736)
 649ae3a3758 [ENG-9739][INTERNAL] Upgrade to version release-v1.17.0 (#739)
+
+---[2024-06-06 19:02:17] [release-v1.18.1] Upgrade to version release-v1.18.1---
+d79d8c0d4d3 [ENG-9437][HUDI-7713] Enforce ordering of fields during schema reconciliation (#749)
+22ba18c1af3 [ENG-10381][MINOR] Add logs whenever fallback to fs listing even with MDT enabled (#750)
+cc1cfd8a6fc [ENG-10231][MINOR] Allow recreation of metrics instance for base path (#748)
+0422c65b40d [AUDIT-813] Upgrade to version release-v1.18.0 (#747)
