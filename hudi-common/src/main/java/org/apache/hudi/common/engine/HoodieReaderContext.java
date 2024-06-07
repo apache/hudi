@@ -311,7 +311,7 @@ public abstract class HoodieReaderContext<T> {
    * @return the record position in the base file.
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
-    if (supportsPositionField()) {
+    if (supportsParquetRowIndex()) {
       Object position = getValue(record, schema, fieldName);
       if (position != null) {
         return (long) position;
@@ -320,7 +320,7 @@ public abstract class HoodieReaderContext<T> {
     return providedPositionIfNeeded;
   }
 
-  public boolean supportsPositionField() {
+  public boolean supportsParquetRowIndex() {
     return false;
   }
 
