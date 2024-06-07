@@ -79,6 +79,8 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
   protected void runComparison(boolean mergeUseRecordPositions) {
     compareDf(createDf(hudiBasePath, true, mergeUseRecordPositions), createDf(hudiBasePath, false, false));
     compareDf(createDf(bootstrapTargetPath, true, mergeUseRecordPositions), createDf(bootstrapTargetPath, false, false));
+    compareDf(createDf2(hudiBasePath, true, mergeUseRecordPositions), createDf2(hudiBasePath, false, false));
+    compareDf(createDf2(bootstrapTargetPath, true, mergeUseRecordPositions), createDf2(bootstrapTargetPath, false, false));
   }
 
   protected Dataset<Row> createDf(String tableBasePath, Boolean fgReaderEnabled, Boolean mergeUseRecordPositions) {
@@ -91,5 +93,17 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
         .load(tableBasePath)
         .drop("city_to_state")
         .where("begin_lat > 0.5 and _hoodie_record_key LIKE '%00%'");
+  }
+
+  protected Dataset<Row> createDf2(String tableBasePath, Boolean fgReaderEnabled, Boolean mergeUseRecordPositions) {
+    //The chances of a uuid containing 00 with the 8-4-4-4-12 format is around 90%
+    //for bootstrap, _hoodie_record_key is in the skeleton while begin_lat is in the data
+    //We have a record key filter so that tests MORs filter pushdown with position based merging
+    return sparkSession.read().format("hudi")
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), fgReaderEnabled)
+        .option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), mergeUseRecordPositions)
+        .load(tableBasePath)
+        .drop("city_to_state")
+        .where("begin_lat > 0.5 or _hoodie_record_key LIKE '%00%'");
   }
 }

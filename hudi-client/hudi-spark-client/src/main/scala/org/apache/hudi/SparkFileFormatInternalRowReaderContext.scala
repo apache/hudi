@@ -26,6 +26,7 @@ import org.apache.hudi.SparkFileFormatInternalRowReaderContext.getAppliedRequire
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
@@ -61,7 +62,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                               recordKeyColumn: String,
                                               filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
-  private lazy val recordKeyFilters: Seq[Filter] = filters.filter(f => f.references.exists(c => c.equalsIgnoreCase(recordKeyColumn)))
+  private lazy val filtersAreSafeForBootstrap = SparkFileFormatInternalRowReaderContext.filtersAreSafeForBootstrap(filters)
+  private lazy val filtersAreSafeForMor = SparkFileFormatInternalRowReaderContext.filtersAreSafeForMor(filters, recordKeyColumn)
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
 
   override def supportsPositionField: Boolean = {
@@ -106,8 +108,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     val schemaForRead = getAppliedRequiredSchema(structType, hasRecordPosition)
     val filtersForRead = (getHasLogFiles, getNeedsBootstrapMerge, hasRecordPosition) match {
       case (false, false, _) => filters
-      case (false, true, true) => filters
-      //case (_, _, true) => recordKeyFilters
+      case (false, true, true) if filtersAreSafeForBootstrap => filters
+      case (_, _, true) if filtersAreSafeForMor  => filters
       case (_, _, _) => Seq.empty
     }
     (schemaForRead, filtersForRead)
@@ -271,6 +273,17 @@ object SparkFileFormatInternalRowReaderContext {
     } else {
       requiredSchema
     }
+  }
+
+  def filtersAreSafeForBootstrap(filters: Seq[Filter]): Boolean = {
+    !filters.exists(f => {
+      val metaRefCount = f.references.count(c => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.toLowerCase))
+      !(metaRefCount == f.references.length || metaRefCount == 0)
+    })
+  }
+
+  def filtersAreSafeForMor(filters: Seq[Filter], recordKeyColumn: String): Boolean = {
+    !filters.exists(f => f.references.exists(c => !c.equalsIgnoreCase(recordKeyColumn)))
   }
 
   private def isIndexTempColumn(field: StructField): Boolean = {
