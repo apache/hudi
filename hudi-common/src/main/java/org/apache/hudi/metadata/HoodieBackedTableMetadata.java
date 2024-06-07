@@ -43,7 +43,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -81,6 +80,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADAT
 import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FILES;
@@ -210,7 +210,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     //       records matching the key-prefix
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
-    ValidationUtils.checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(!partitionFileSlices.isEmpty(), "Number of file slices for partition " + partitionName + " should be > 0");
 
     return (shouldLoadInMemory ? HoodieListData.lazy(partitionFileSlices) :
         engineContext.parallelize(partitionFileSlices))
@@ -263,7 +263,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
     final int numFileSlices = partitionFileSlices.size();
-    ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
     // Lookup keys from each file slice
     if (numFileSlices == 1) {
@@ -310,7 +310,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
     final int numFileSlices = partitionFileSlices.size();
-    ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
     // Lookup keys from each file slice
     if (numFileSlices == 1) {
@@ -507,10 +507,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           kv.getKey(),
           kv.getValue(),
           (oldRecordList, newRecordList) -> {
-            // TODO(vinay): Remove this assert and handle secondary keys correctly
-            assert oldRecordList.size() <= 1;
-            assert newRecordList.size() <= 1;
-
             List<HoodieRecord<HoodieMetadataPayload>> mergedRecordList = new ArrayList<>();
             HoodieMetadataPayload mergedPayload = null;
             HoodieKey key = null;
@@ -872,7 +868,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     List<FileSlice> partitionFileSlices = partitionFileSliceMap.computeIfAbsent(partitionName,
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, metadataFileSystemView, partitionName));
     final int numFileSlices = partitionFileSlices.size();
-    ValidationUtils.checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
+    checkState(numFileSlices > 0, "Number of file slices for partition " + partitionName + " should be > 0");
 
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Lookup keys from each file slice");
     HoodieData<FileSlice> partitionRDD = engineContext.parallelize(partitionFileSlices);
@@ -960,7 +956,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       logRecordsMap.forEach((secondaryKey, logRecords) -> {
         List<HoodieRecord<HoodieMetadataPayload>> recordList = new ArrayList<>();
         logRecords.values().forEach(record -> {
-          recordList.add((HoodieRecord<HoodieMetadataPayload>)record);
+          recordList.add((HoodieRecord<HoodieMetadataPayload>) record);
         });
         resultMap.put(secondaryKey, recordList);
       });
@@ -994,13 +990,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             // Merge the records
             HoodieRecord<HoodieMetadataPayload> newRecord = logRecords.get(recordKey);
             HoodieMetadataPayload newPayload = newRecord.getData();
-
-            assert recordKey.equals(newPayload.getRecordKeyFromSecondaryIndex());
-
+            checkState(recordKey.equals(newPayload.getRecordKeyFromSecondaryIndex()), "Record key mismatch between log record and secondary index record");
             // The rules for merging the prevRecord and the latestRecord is noted below. Note that this only applies for SecondaryIndex
             // records in the metadata table (which is the only user of this API as of this implementation)
             // 1. Iff latestRecord is deleted (i.e it is a tombstone) AND prevRecord is null (i.e not buffered), then discard latestRecord
-            //    TODO: Should this be an assertible condition? Why would delta-log-files have a 'deleted' tombstone marker if the
             //    basefile never had a matching record?
             // 2. Iff latestRecord is deleted AND prevRecord is non-null, then remove prevRecord from the buffer AND discard the latestRecord
             // 3. Iff latestRecord is not deleted AND prevRecord is non-null, then remove the prevRecord from the buffer AND retain the latestRecord
