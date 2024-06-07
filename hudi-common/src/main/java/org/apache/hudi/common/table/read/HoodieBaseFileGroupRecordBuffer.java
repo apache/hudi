@@ -311,9 +311,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     return Option.empty();
   }
 
-  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+  protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 

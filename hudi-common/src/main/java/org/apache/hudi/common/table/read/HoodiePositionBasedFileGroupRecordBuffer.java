@@ -233,15 +233,15 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
    *  2. The key of the record is not contained in the set.
    */
   protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema dataBlockSchema) {
+    // No keys are specified. Cannot skip at all.
+    if (keys.isEmpty()) {
+      return false;
+    }
+
     String recordKey = readerContext.getValue(record, dataBlockSchema, keyFieldName).toString();
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");
-    }
-
-    // No keys are specified. Cannot skip at all.
-    if (keys.isEmpty()) {
-      return false;
     }
 
     // When the record key matches with one of the keys or key prefixes, can not skip.

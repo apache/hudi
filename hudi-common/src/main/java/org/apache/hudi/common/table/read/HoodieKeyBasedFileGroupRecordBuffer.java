@@ -122,6 +122,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     return records.containsKey(recordKey);
   }
 
+  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    return hasNextBaseRecord(baseRecord, logRecordInfo);
+  }
+
   @Override
   protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
