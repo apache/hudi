@@ -44,7 +44,6 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
-import scala.::
 import scala.collection.mutable
 
 /**
