@@ -161,6 +161,10 @@ public class RepairsCommand {
       newProps.load(fileInputStream);
     }
     Map<String, String> oldProps = client.getTableConfig().propsMap();
+    // Copy Initial Version from old-props to new-props
+    if (oldProps.containsKey(HoodieTableConfig.INITIAL_VERSION.key())) {
+      newProps.put(HoodieTableConfig.INITIAL_VERSION.key(), newProps.getProperty(HoodieTableConfig.INITIAL_VERSION.key()))
+    }
     HoodieTableConfig.create(client.getStorage(), client.getMetaPath(), newProps);
     // reload new props as checksum would have been added
     newProps =
