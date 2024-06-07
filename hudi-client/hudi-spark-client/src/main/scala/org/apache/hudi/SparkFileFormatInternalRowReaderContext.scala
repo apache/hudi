@@ -22,7 +22,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -44,6 +44,7 @@ import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
+import scala.::
 import scala.collection.mutable
 
 /**
@@ -60,11 +61,12 @@ import scala.collection.mutable
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               recordKeyColumn: String,
-                                              filters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
+                                              filters: Seq[Filter],
+                                              requiredFilters: Seq[Filter]) extends BaseSparkInternalRowReaderContext {
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
-  private lazy val filtersAreSafeForBootstrap = SparkFileFormatInternalRowReaderContext.filtersAreSafeForBootstrap(filters)
-  private lazy val filtersAreSafeForMor = SparkFileFormatInternalRowReaderContext.filtersAreSafeForMor(filters, recordKeyColumn)
+  private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
+  private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsPositionField: Boolean = {
     HoodieSparkUtils.gteqSpark3_5
@@ -106,13 +108,13 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
 
   private def getSchemaAndFiltersForRead(structType: StructType, hasRecordPosition: Boolean): (StructType, Seq[Filter]) = {
     val schemaForRead = getAppliedRequiredSchema(structType, hasRecordPosition)
-    val filtersForRead = (getHasLogFiles, getNeedsBootstrapMerge, hasRecordPosition) match {
-      case (false, false, _) => filters
-      case (false, true, true) if filtersAreSafeForBootstrap => filters
-      case (_, _, true) if filtersAreSafeForMor  => filters
-      case (_, _, _) => Seq.empty
+    if (!getHasLogFiles && !getNeedsBootstrapMerge) {
+      (schemaForRead, allFilters)
+    } else if (!getHasLogFiles && hasRecordPosition) {
+      (schemaForRead, bootstrapSafeFilters)
+    } else {
+      (schemaForRead, requiredFilters)
     }
-    (schemaForRead, filtersForRead)
   }
 
   /**
@@ -279,15 +281,13 @@ object SparkFileFormatInternalRowReaderContext {
     }
   }
 
-  def filtersAreSafeForBootstrap(filters: Seq[Filter]): Boolean = {
-    !filters.exists(f => {
-      val metaRefCount = f.references.count(c => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.toLowerCase))
-      !(metaRefCount == f.references.length || metaRefCount == 0)
-    })
-  }
-
-  def filtersAreSafeForMor(filters: Seq[Filter], recordKeyColumn: String): Boolean = {
-    !filters.exists(f => f.references.exists(c => !c.equalsIgnoreCase(recordKeyColumn)))
+  /**
+   * Only valid if there is support for record positions and no log files
+   * Filters are safe for bootstrap if meta col filters are independent from data col filters.
+   */
+  def filterIsSafeForBootstrap(filter: Filter): Boolean = {
+    val metaRefCount = filter.references.count(c => HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(c.toLowerCase))
+    metaRefCount == filter.references.length || metaRefCount == 0
   }
 
   private def isIndexTempColumn(field: StructField): Boolean = {

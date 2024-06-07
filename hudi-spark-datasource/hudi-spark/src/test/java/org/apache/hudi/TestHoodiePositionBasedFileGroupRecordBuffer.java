@@ -40,7 +40,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Schema;
@@ -62,10 +61,7 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
   private final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF);
@@ -175,21 +171,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
   }
 
   @Test
-  public void testProcessDeleteBlockWithCustomMerger() throws Exception {
-    prepareBuffer(true);
-    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
-    buffer.processDeleteBlock(deleteBlock);
-    assertEquals(50, buffer.getLogRecords().size());
-    assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
-  }
-
-  @Test
   public void testProcessDeleteBlockWithoutPositions() throws Exception {
     prepareBuffer(false);
     HoodieDeleteBlock deleteBlock = getDeleteBlockWithoutPositions();
-    Exception exception = assertThrows(
-        HoodieValidationException.class, () -> buffer.processDeleteBlock(deleteBlock));
-    assertTrue(exception.getMessage().contains("No record position info is found"));
+    buffer.processDeleteBlock(deleteBlock);
+    assertEquals(50, buffer.getLogRecords().size());
   }
 
   public static class CustomMerger implements HoodieRecordMerger {

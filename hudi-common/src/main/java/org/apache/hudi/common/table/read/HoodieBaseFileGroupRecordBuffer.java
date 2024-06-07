@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -37,25 +36,18 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
@@ -319,61 +311,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     return Option.empty();
   }
 
-  /**
-   * Filter a record for downstream processing when:
-   *  1. A set of pre-specified keys exists.
-   *  2. The key of the record is not contained in the set.
-   */
-  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema writerSchema) {
-    String recordKey = readerContext.getValue(record, writerSchema, keyFieldName).toString();
-    // Can not extract the record key, throw.
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("Can not extract the key for a record");
-    }
-
-    // No keys are specified. Cannot skip at all.
-    if (keys.isEmpty()) {
-      return false;
-    }
-
-    // When the record key matches with one of the keys or key prefixes, can not skip.
-    if ((isFullKey && keys.contains(recordKey))
-        || (!isFullKey && keys.stream().anyMatch(recordKey::startsWith))) {
-      return false;
-    }
-
-    // Otherwise, this record is not needed.
-    return true;
-  }
-
-  /**
-   * Extract the record positions from a log block header.
-   *
-   * @param logBlock
-   * @return
-   * @throws IOException
-   */
-  protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock) throws IOException {
-    List<Long> blockPositions = new ArrayList<>();
-
-    Roaring64NavigableMap positions = logBlock.getRecordPositions();
-    if (positions == null || positions.isEmpty()) {
-      throw new HoodieValidationException("No record position info is found when attempt to do position based merge.");
-    }
-
-    Iterator<Long> iterator = positions.iterator();
-    while (iterator.hasNext()) {
-      blockPositions.add(iterator.next());
-    }
-
-    if (blockPositions.isEmpty()) {
-      throw new HoodieCorruptedDataException("No positions are extracted.");
-    }
-
-    return blockPositions;
-  }
-
-  protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
+  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
         baseRecord, readerSchema);
 
