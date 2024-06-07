@@ -84,7 +84,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
     val metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build
     val recordKeyField = new HoodieSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
-    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty)
+    new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, Seq.empty)
   }
 
   override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {

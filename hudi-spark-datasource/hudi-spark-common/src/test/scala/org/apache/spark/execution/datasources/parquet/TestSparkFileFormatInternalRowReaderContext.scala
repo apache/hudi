@@ -20,11 +20,11 @@
 package org.apache.spark.execution.datasources.parquet
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext
-import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filtersAreSafeForBootstrap, filtersAreSafeForMor}
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext.filterIsSafeForBootstrap
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.spark.sql.sources.{And, IsNotNull, IsNull, Or}
+import org.apache.spark.sql.sources.{And, IsNotNull, Or}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -32,62 +32,29 @@ import org.junit.jupiter.api.Test
 class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
 
   @Test
-  def testMorFilters(): Unit = {
-    val recordKeyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName
-    assertTrue(filtersAreSafeForMor(Seq.empty, recordKeyField))
-
-    val recordKeyFilter = IsNotNull(recordKeyField)
-    assertTrue(filtersAreSafeForMor(Seq(recordKeyFilter), recordKeyField))
-    assertTrue(filtersAreSafeForMor(Seq(recordKeyFilter, recordKeyFilter, recordKeyFilter), recordKeyField))
-    val differentRecordKeyFilter = IsNull(recordKeyField)
-    assertTrue(filtersAreSafeForMor(Seq(recordKeyFilter, differentRecordKeyFilter), recordKeyField))
-
-    val otherFieldFilter = IsNotNull("someotherfield")
-    assertFalse(filtersAreSafeForMor(Seq(otherFieldFilter), recordKeyField))
-    assertFalse(filtersAreSafeForMor(Seq(otherFieldFilter, recordKeyFilter), recordKeyField))
-
-    val complexFilter = Or(recordKeyFilter, otherFieldFilter)
-    assertFalse(filtersAreSafeForMor(Seq(complexFilter), recordKeyField))
-
-    val legalComplexFilter = Or(recordKeyFilter, differentRecordKeyFilter)
-    assertTrue(filtersAreSafeForMor(Seq(legalComplexFilter),recordKeyField))
-
-    val nestedFilter = And(complexFilter, legalComplexFilter)
-    assertFalse(filtersAreSafeForMor(Seq(nestedFilter), recordKeyField))
-
-    val legalNestedFilter = And(legalComplexFilter, recordKeyFilter)
-    assertTrue(filtersAreSafeForMor(Seq(legalNestedFilter), recordKeyField))
-  }
-
-  @Test
   def testBootstrapFilters(): Unit = {
     val recordKeyField = HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName
     val commitTimeField = HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName
-    assertTrue(filtersAreSafeForBootstrap(Seq.empty))
 
     val recordKeyFilter = IsNotNull(recordKeyField)
-    assertTrue(filtersAreSafeForBootstrap(Seq(recordKeyFilter)))
-    assertTrue(filtersAreSafeForBootstrap(Seq(recordKeyFilter, recordKeyFilter, recordKeyFilter)))
+    assertTrue(filterIsSafeForBootstrap(recordKeyFilter))
     val commitTimeFilter = IsNotNull(commitTimeField)
-    assertTrue(filtersAreSafeForBootstrap(Seq(recordKeyFilter, commitTimeFilter)))
+    assertTrue(filterIsSafeForBootstrap(commitTimeFilter))
 
     val dataFieldFilter = IsNotNull("someotherfield")
-    assertTrue(filtersAreSafeForBootstrap(Seq(dataFieldFilter)))
-    assertTrue(filtersAreSafeForBootstrap(Seq(dataFieldFilter, recordKeyFilter)))
+    assertTrue(filterIsSafeForBootstrap(dataFieldFilter))
 
     val legalComplexFilter = Or(recordKeyFilter, commitTimeFilter)
-    assertTrue(filtersAreSafeForBootstrap(Seq(legalComplexFilter)))
-    assertTrue(filtersAreSafeForBootstrap(Seq(dataFieldFilter, dataFieldFilter)))
+    assertTrue(filterIsSafeForBootstrap(legalComplexFilter))
 
     val illegalComplexFilter = Or(recordKeyFilter, dataFieldFilter)
-    assertFalse(filtersAreSafeForBootstrap(Seq(illegalComplexFilter)))
-    assertFalse(filtersAreSafeForBootstrap(Seq(illegalComplexFilter, dataFieldFilter, recordKeyFilter)))
+    assertFalse(filterIsSafeForBootstrap(illegalComplexFilter))
 
     val illegalNestedFilter = And(legalComplexFilter, illegalComplexFilter)
-    assertFalse(filtersAreSafeForBootstrap(Seq(illegalNestedFilter)))
+    assertFalse(filterIsSafeForBootstrap(illegalNestedFilter))
 
     val legalNestedFilter = And(legalComplexFilter, recordKeyFilter)
-    assertTrue(filtersAreSafeForBootstrap(Seq(legalNestedFilter)))
+    assertTrue(filterIsSafeForBootstrap(legalNestedFilter))
   }
 
   @Test
