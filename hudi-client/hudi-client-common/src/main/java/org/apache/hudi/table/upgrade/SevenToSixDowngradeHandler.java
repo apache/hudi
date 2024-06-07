@@ -26,10 +26,13 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
+ * There is no format change between table version 6 and 7.
+ * Table version 7 is meant for required bridge release upgrade before upgrading to 1.0.
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.
  */
 public class SevenToSixDowngradeHandler implements DowngradeHandler {
+
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     return Collections.emptyMap();
