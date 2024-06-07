@@ -105,7 +105,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
     ctx.setTablePath(metaClient.getBasePathV2().toString());
     ctx.setLatestCommitTime(metaClient.createNewInstantTime());
-    ctx.setUseRecordPosition(true);
+    ctx.setShouldMergeUseRecordPosition(true);
     ctx.setHasBootstrapBaseFile(false);
     ctx.setHasLogFiles(true);
     ctx.setNeedsBootstrapMerge(false);
