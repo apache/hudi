@@ -252,7 +252,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   public static RecordMergeMode getRecordMergeMode(Properties props) {
-    String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE).toUpperCase();
+    String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase();
     return RecordMergeMode.valueOf(mergeMode);
   }
 
