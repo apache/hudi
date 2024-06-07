@@ -58,7 +58,6 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
-  private Boolean useRecordPosition = null;
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -121,15 +120,6 @@ public abstract class HoodieReaderContext<T> {
 
   public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
     this.needsBootstrapMerge = needsBootstrapMerge;
-  }
-
-  // Getter and Setter for useRecordPosition
-  public boolean getUseRecordPosition() {
-    return useRecordPosition;
-  }
-
-  public void setUseRecordPosition(boolean useRecordPosition) {
-    this.useRecordPosition = useRecordPosition;
   }
 
   // These internal key names are only used in memory for record metadata and merging,
@@ -311,17 +301,7 @@ public abstract class HoodieReaderContext<T> {
    * @return the record position in the base file.
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
-    if (supportsPositionField()) {
-      Object position = getValue(record, schema, fieldName);
-      if (position != null) {
-        return (long) position;
-      }
-    }
     return providedPositionIfNeeded;
-  }
-
-  public boolean supportsPositionField() {
-    return false;
   }
 
   /**
