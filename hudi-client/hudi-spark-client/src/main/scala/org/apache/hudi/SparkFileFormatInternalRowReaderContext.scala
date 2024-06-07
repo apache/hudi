@@ -36,7 +36,7 @@ import org.apache.hudi.util.CloseableInternalRowIterator
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -130,6 +130,14 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
   }
 
+  /**
+   * Merge the skeleton file and data file iterators into a single iterator that will produce rows that contain all columns from the
+   * skeleton file iterator, followed by all columns in the data file iterator
+   *
+   * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
+   * @param dataFileIterator     iterator over data files that were bootstrapped into the hudi table
+   * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
+   */
   override def mergeBootstrapReaders(skeletonFileIterator: ClosableIterator[InternalRow],
                                      skeletonRequiredSchema: Schema,
                                      dataFileIterator: ClosableIterator[InternalRow],
