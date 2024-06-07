@@ -17,16 +17,19 @@
  * under the License.
  */
 
-package org.apache.hudi.functional
+package org.apache.spark.execution.datasources.parquet
 
+import org.apache.hudi.SparkFileFormatInternalRowReaderContext
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filtersAreSafeForBootstrap, filtersAreSafeForMor}
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.spark.sql.sources.{And, IsNotNull, IsNull, Or}
-import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
-import org.junit.jupiter.api.{Tag, Test}
+import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 
-@Tag("functional")
-class TestFileGroupReaderFilterUtils {
+class TestSparkFileFormatInternalRowReaderContext extends SparkClientFunctionalTestHarness {
 
   @Test
   def testMorFilters(): Unit = {
@@ -87,4 +90,16 @@ class TestFileGroupReaderFilterUtils {
     assertTrue(filtersAreSafeForBootstrap(Seq(legalNestedFilter)))
   }
 
+  @Test
+  def testGetAppliedRequiredSchema(): Unit = {
+    val fields = Array(
+      StructField("column_a", LongType, nullable = false),
+      StructField("column_b", StringType, nullable = false))
+    val requiredSchema = StructType(fields)
+
+    val appliedSchema: StructType = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(
+      requiredSchema, true)
+    assertEquals(3, appliedSchema.fields.length)
+    assertTrue(appliedSchema.fields.map(f => f.name).contains(ROW_INDEX_TEMPORARY_COLUMN_NAME))
+  }
 }
