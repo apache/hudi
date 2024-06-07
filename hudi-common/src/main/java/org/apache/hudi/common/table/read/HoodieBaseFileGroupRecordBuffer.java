@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -27,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.Option;
@@ -50,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
@@ -65,6 +68,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
+
+  protected Comparable maxValue;
 
   public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
                                          Schema readerSchema,
@@ -84,6 +89,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
+    this.maxValue = AvroSchemaUtils.getMaxValueOfField(baseFileSchema.getField(ConfigUtils.getOrderingField(payloadProps)));
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -155,7 +161,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // the `older` in the merge API
       Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = enablePartialMerging
           ? recordMerger.partialMerge(
-          readerContext.constructHoodieRecord(Option.of(record), metadata),
+          readerContext.constructHoodieRecord(Option.ofNullable(record), metadata),
           (Schema) metadata.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
@@ -163,7 +169,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           readerSchema,
           payloadProps)
           : recordMerger.merge(
-          readerContext.constructHoodieRecord(Option.of(record), metadata),
+          readerContext.constructHoodieRecord(Option.ofNullable(record), metadata),
           (Schema) metadata.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
@@ -177,15 +183,18 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
       HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
-      // If pre-combine returns existing record, no need to update it
       if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
+          return Option.of(Pair.of(
+              combinedRecord.getData(),
+              enablePartialMerging
+                  ? readerContext.updateSchemaAndResetOrderingValInMetadata(metadata, combinedRecordAndSchema.getRight())
+                  : metadata));
+
+      } else {
+        existingRecordMetadataPair.getRight().put(INTERNAL_META_ORDERING_FIELD, combinedRecord.getOrderingValue(combinedRecordAndSchema.getRight(), payloadProps));
         return Option.of(Pair.of(
-            combinedRecord.getData(),
-            enablePartialMerging
-                ? readerContext.updateSchemaAndResetOrderingValInMetadata(metadata, combinedRecordAndSchema.getRight())
-                : metadata));
+            combinedRecord.getData(), existingRecordMetadataPair.getRight()));
       }
-      return Option.empty();
     } else {
       // Put the record as is
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

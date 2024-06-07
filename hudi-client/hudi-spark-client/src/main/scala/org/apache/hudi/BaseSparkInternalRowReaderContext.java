@@ -98,16 +98,19 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public HoodieRecord<InternalRow> constructHoodieRecord(Option<InternalRow> rowOption,
                                                          Map<String, Object> metadataMap) {
+    HoodieRecord<InternalRow> record;
     if (!rowOption.isPresent()) {
-      return new HoodieEmptyRecord<>(
+      record = new HoodieEmptyRecord<>(
           new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY),
               (String) metadataMap.get(INTERNAL_META_PARTITION_PATH)),
           HoodieRecord.HoodieRecordType.SPARK);
+    } else {
+      Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+      InternalRow row = rowOption.get();
+      record = new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
     }
-
-    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
-    InternalRow row = rowOption.get();
-    return new HoodieSparkRecord(row, HoodieInternalRowUtils.getCachedSchema(schema));
+    record.setOrderingValue((Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD));
+   return record;
   }
 
   @Override

@@ -102,7 +102,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
@@ -112,12 +112,19 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) throws IOException {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
-    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
-    if (recordOpt.isPresent()) {
-      records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+    Comparable orderingVal = deleteRecord.getOrderingValue();
+    if (orderingVal == null) {
+      orderingVal = maxValue;
+    }
+    Option<Pair<T, Map<String, Object>>> mergedRecordAndMetadata = doProcessNextDataRecord(null,
+        readerContext.generateMetadataForRecord(deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), orderingVal),
+        existingRecordMetadataPair);
+    if (mergedRecordAndMetadata.isPresent()) {
+      records.put(recordKey, Pair.of(
+          Option.ofNullable(readerContext.seal(mergedRecordAndMetadata.get().getLeft())),
+          mergedRecordAndMetadata.get().getRight()));
     }
   }
 

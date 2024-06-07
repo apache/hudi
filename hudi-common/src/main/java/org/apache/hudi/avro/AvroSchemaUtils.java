@@ -25,9 +25,12 @@ import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -522,4 +525,42 @@ public class AvroSchemaUtils {
   public static String createSchemaErrorString(String errorMessage, Schema writerSchema, Schema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
+
+  public static Comparable getMaxValueOfField(Schema.Field field) {
+    switch (field.schema().getType()) {
+      case RECORD:
+      case ENUM:
+      case ARRAY:
+      case MAP:
+        throw new IllegalArgumentException("field cannot have max value");
+      case UNION:
+        return getMaxValueOfType(resolveNullableSchema(field.schema()));
+      default:
+        return getMaxValueOfType(field.schema());
+    }
+  }
+
+  private static Comparable getMaxValueOfType(Schema schema) {
+
+    switch (schema.getType()) {
+      case NULL:
+      case BYTES:
+      case BOOLEAN:
+        throw new IllegalArgumentException("field cannot have max value");
+      case INT:
+        return Integer.MAX_VALUE;
+      case LONG:
+        return Long.MAX_VALUE;
+      case FLOAT:
+        return Float.MAX_VALUE;
+      case DOUBLE:
+        return Double.MAX_VALUE;
+      case FIXED:
+        throw new UnsupportedOperationException("Currently Unsuported to get max of fixed field");
+      default:
+        throw new UnsupportedOperationException("Currently Unsuported to get max of fixed field");
+    }
+  }
+
 }
+
