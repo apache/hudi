@@ -67,6 +67,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
@@ -1082,6 +1083,59 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
           verifyArchival(expectedArchiveInstants, expectedActiveInstants, commitsAfterArchival);
         }
+      }
+    }
+  }
+
+  @Test
+  public void testArchiveTableWithCleanerEarliestArchivalTime() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 4, 5, 2);
+
+    // min archival commits is 4 and max archival commits is 5
+    // (either clean commits has to be > 5 or commits has to be greater than 5)
+    // and so, after 6th instant, 2 instants will be archived.
+    // Instant 1 -> 10 are commits except 6 which is a clean instant.
+    // Clean instants have EARLIEST_COMMIT_TO_NOT_ARCHIVE set as 3 till clean instant 14.
+    // At 15th clean instant, EARLIEST_COMMIT_TO_NOT_ARCHIVE is set as 10.
+    Map<String, Integer> cleanStats = new HashMap<>();
+    cleanStats.put("p1", 1);
+    cleanStats.put("p2", 2);
+    for (int i = 1; i <= 15; i++) {
+      if (i != 6 && i <= 10) {
+        testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2") : Collections.emptyList(), Arrays.asList("p1", "p2"), 20);
+      } else {
+        String commitToNotArchive = "00000003";
+        if (i == 15) {
+          // only 15th clean commit has set commitToNotArchive as 10. Before 15th clean commit only commits
+          // 1 and 2 should be archived.
+          commitToNotArchive = "00000010";
+        }
+        testTable.doClean(String.format("%08d", i), cleanStats, Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, commitToNotArchive));
+      }
+      // trigger archival
+      Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
+      List<HoodieInstant> originalCommits = commitsList.getKey();
+      List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
+      if (i <= 6) {
+        assertEquals(originalCommits, commitsAfterArchival);
+      } else if (i < 15) {
+        // clean instants have not been archived yet, only two commits have been archived since
+        // EARLIEST_COMMIT_TO_NOT_ARCHIVE is set as 3
+        assertEquals(i - 2, commitsAfterArchival.size(), commitsAfterArchival.toString());
+      } else {
+        // At 15th clean instant, EARLIEST_COMMIT_TO_NOT_ARCHIVE is set as 10
+        // active commits were 3,4,5,7,8,9,10 => After archival only 4 instants would remain 7,8,9,10
+        // clean instants were 6,11,12,13,14,15 => After archival only 4 instants would remain 12,13,14,15
+        List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
+        expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000007", "00000008", "00000009", "00000010")));
+        expectedActiveInstants.addAll(
+            getActiveCommitInstants(Arrays.asList("00000012", "00000013", "00000014", "00000015"), HoodieTimeline.CLEAN_ACTION));
+        List<HoodieInstant> expectedArchivedInstants = new ArrayList<>();
+        expectedArchivedInstants.addAll(getAllArchivedCommitInstants(
+            Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005"), HoodieTimeline.COMMIT_ACTION));
+        expectedArchivedInstants.addAll(getAllArchivedCommitInstants(
+            Arrays.asList("00000006", "00000011"), HoodieTimeline.CLEAN_ACTION));
+        verifyArchival(expectedArchivedInstants, expectedActiveInstants, commitsAfterArchival);
       }
     }
   }
