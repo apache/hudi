@@ -886,7 +886,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // after implicit type change, read the table with vectorized read enabled
     //fg reader with mor does not support vectorized currently and will auto read by row
-    if (HoodieSparkUtils.gteqSpark3_3 && (!useFileGroupReader || isCow)) {
+    if (HoodieSparkUtils.gteqSpark3_3 && !useFileGroupReader) {
       assertThrows(classOf[SparkException]){
         withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
           readTable(tempRecordPath, useFileGroupReader)
