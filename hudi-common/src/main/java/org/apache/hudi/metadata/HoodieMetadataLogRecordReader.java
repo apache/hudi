@@ -43,7 +43,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 
 /**
  * Metadata log-block records reading implementation, internally relying on
@@ -253,7 +253,7 @@ public class HoodieMetadataLogRecordReader implements Closeable {
     }
 
     private boolean shouldUseMetadataMergedLogRecordScanner() {
-      return PARTITION_NAME_SECONDARY_INDEX.equals(partitionName);
+      return partitionName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX);
     }
   }
 }

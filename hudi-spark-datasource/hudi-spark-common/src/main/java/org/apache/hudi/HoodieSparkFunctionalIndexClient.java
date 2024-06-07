@@ -85,6 +85,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     if (indexExists(metaClient, indexName)) {
       throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
     }
+    checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
