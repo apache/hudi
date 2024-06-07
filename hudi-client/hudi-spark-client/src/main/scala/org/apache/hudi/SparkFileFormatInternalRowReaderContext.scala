@@ -169,24 +169,23 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, rowIndexColumn))
       }
 
+      //row index will always be the last column
+      val skeletonRowIndex = skeletonRequiredSchema.getFields.size() - 1
+      val dataRowIndex = dataRequiredSchema.getFields.size() - 1
+
       //Always use internal row for positional merge because
       //we need to iterate row by row when merging
       new CachingIterator[InternalRow] {
         val combinedRow = new JoinedRow()
 
-        //position column will always be at the end of the row
-        private def getPos(row: InternalRow): Long = {
-          row.getLong(row.numFields-1)
-        }
-
         private def getNextSkeleton: (InternalRow, Long) = {
           val nextSkeletonRow = skeletonFileIterator.next().asInstanceOf[InternalRow]
-          (nextSkeletonRow, getPos(nextSkeletonRow))
+          (nextSkeletonRow, nextSkeletonRow.getLong(skeletonRowIndex))
         }
 
         private def getNextData: (InternalRow, Long) = {
           val nextDataRow = dataFileIterator.next().asInstanceOf[InternalRow]
-          (nextDataRow, getPos(nextDataRow))
+          (nextDataRow,  nextDataRow.getLong(dataRowIndex))
         }
 
         override def close(): Unit = {
