@@ -455,6 +455,15 @@ public interface HoodieTimeline extends Serializable {
     return predicateToApply.test(commit1, commit2);
   }
 
+  static String minTimestamp(String commit1, String commit2) {
+    if (commit1 == null) {
+      return commit2;
+    } else if (commit2 == null) {
+      return commit1;
+    }
+    return GREATER_THAN.test(commit1, commit2) ? commit2 : commit1;
+  }
+
   /**
    * Returns the smaller of the given two instants.
    */
