@@ -87,8 +87,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach{db =>
-          catalog.listTables(db).foreach {table =>
+        catalog.listDatabases().foreach { db =>
+          catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
           }
         }
