@@ -152,15 +152,15 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
 
   private def showLatestFileSlices(metaClient: HoodieTableMetaClient,
                                    fsView: HoodieTableFileSystemView,
-                                   partitions: JList[String],
+                                   partitions: Seq[String],
                                    maxInstant: String,
                                    merge: Boolean): JList[Row] = {
     var fileSliceStream: JStream[FileSlice] = JStream.empty()
     val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
     if (merge) {
-      partitions.forEach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestMergedFileSlicesBeforeOrOn(p, maxInstant)))
+      partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestMergedFileSlicesBeforeOrOn(p, maxInstant)))
     } else {
-      partitions.forEach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestFileSlices(p)))
+      partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestFileSlices(p)))
     }
     val rows = new JArrayList[Row]
     fileSliceStream.iterator().asScala.foreach {
@@ -259,7 +259,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       } else {
         maxInstant
       }
-      showLatestFileSlices(metaClient, fsView, fsView.getPartitionNames, maxInstantForMerge, merge)
+      showLatestFileSlices(metaClient, fsView, fsView.getPartitionNames.asScala, maxInstantForMerge, merge)
     } else {
       showAllFileSlices(fsView)
     }
