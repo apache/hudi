@@ -111,7 +111,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final String action;
   private final String timestamp;
   private final String completionTime;
-
+  private final boolean useCompletionTimeInFileName;
   /**
    * Load the instant from the meta FileStatus.
    */
@@ -136,7 +136,14 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           state = State.COMPLETED;
         }
       }
-      completionTime = timestamps.length > 1 ? timestamps[1] : null;
+      if (timestamps.length > 1) {
+        completionTime = timestamps[1];
+        useCompletionTimeInFileName = true;
+      } else {
+        // make completion time tracking behavior consistent between active and archived instants.
+        completionTime = timestamps[0];
+        useCompletionTimeInFileName = false;
+      }
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
@@ -148,6 +155,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.action = action;
     this.timestamp = timestamp;
     this.completionTime = null;
+    this.useCompletionTimeInFileName = false;
   }
 
   public HoodieInstant(State state, String action, String timestamp) {
@@ -155,6 +163,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.action = action;
     this.timestamp = timestamp;
     this.completionTime = null;
+    this.useCompletionTimeInFileName = false;
   }
 
   public HoodieInstant(State state, String action, String timestamp, String completionTime) {
@@ -162,6 +171,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     this.action = action;
     this.timestamp = timestamp;
     this.completionTime = completionTime;
+    this.useCompletionTimeInFileName = completionTime != null;
   }
 
   public boolean isCompleted() {
@@ -259,8 +269,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = timestamp + "_" + completionTime;
+    String timestampWithCompletionTime = useCompletionTimeInFileName ? timestamp + "_" + completionTime : timestamp;
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:

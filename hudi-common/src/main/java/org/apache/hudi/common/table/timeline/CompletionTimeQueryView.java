@@ -319,12 +319,14 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
     this.metaClient.getActiveTimeline()
         .filterCompletedInstants().getInstantsAsStream()
         .forEach(instant -> setCompletionTime(instant.getTimestamp(), instant.getCompletionTime()));
-    // then load the archived instants.
-    HoodieArchivedTimeline.loadInstants(metaClient,
-        new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
-        HoodieArchivedTimeline.LoadMode.TIME,
-        r -> true,
-        this::readCompletionTime);
+    if (LSMTimeline.isSupportingLayout(metaClient)) {
+      // then load the archived instants.
+      HoodieArchivedTimeline.loadInstants(metaClient,
+              new HoodieArchivedTimeline.StartTsFilter(this.cursorInstant),
+              HoodieArchivedTimeline.LoadMode.TIME,
+              r -> true,
+              this::readCompletionTime);
+    }
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {
