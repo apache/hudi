@@ -259,7 +259,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
       } else {
         maxInstant
       }
-      showLatestFileSlices(metaClient, fsView, fsView.getPartitionNames.asScala, maxInstantForMerge, merge)
+      showLatestFileSlices(metaClient, fsView, fsView.getPartitionNames.asScala.toSeq, maxInstantForMerge, merge)
     } else {
       showAllFileSlices(fsView)
     }
