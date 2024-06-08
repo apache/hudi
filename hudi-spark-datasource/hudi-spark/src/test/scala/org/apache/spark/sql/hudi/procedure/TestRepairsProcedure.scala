@@ -141,6 +141,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
+          |[hoodie.table.initial.version,8,8]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
