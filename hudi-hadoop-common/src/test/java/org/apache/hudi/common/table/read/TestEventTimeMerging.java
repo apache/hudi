@@ -33,11 +33,16 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.OperationType.DELETE;
@@ -95,6 +100,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     // Specify the instant time for each file.
     instantTimes = Arrays.asList(
         "001", "002", "003", "004", "005");
+    shouldWritePositions = Arrays.asList(false, false, false, false, false);
   }
 
   @BeforeEach
@@ -107,10 +113,12 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     setUpMockCommits();
   }
 
-  @Test
-  public void testWithOneLogFile() throws IOException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testWithOneLogFile(boolean useRecordPositions) throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and a log file.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2);
+    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(2, useRecordPositions);
     List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
     List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
@@ -124,10 +132,12 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
-  @Test
-  public void testWithTwoLogFiles() throws IOException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testWithTwoLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and two log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3);
+    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions);
     List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
     List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
@@ -141,10 +151,12 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
-  @Test
-  public void testWithThreeLogFiles() throws IOException, InterruptedException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testWithThreeLogFiles(boolean useRecordPositions) throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and three log files.
-    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4);
+    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions);
     List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
     List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
@@ -173,5 +185,33 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     }
     assertEquals(leftKeysExpected, leftKeysActual);
     assertEquals(leftTimestampsExpected, leftTimestampsActual);
+  }
+
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testPositionMergeFallback(boolean log1haspositions, boolean log2haspositions,
+                                        boolean log3haspositions, boolean log4haspositions) throws IOException, InterruptedException {
+    shouldWritePositions = Arrays.asList(true, log1haspositions, log2haspositions, log3haspositions, log4haspositions);
+    // The FileSlice contains a base file and three log files.
+    ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true);
+    List<String> leftKeysExpected = Arrays.asList("1", "2", "6", "7", "8", "9", "10");
+    List<Long> leftTimestampsExpected = Arrays.asList(4L, 4L, 2L, 2L, 2L, 2L, 2L);
+    List<String> leftKeysActual = new ArrayList<>();
+    List<Long> leftTimestampsActual = new ArrayList<>();
+    while (iterator.hasNext()) {
+      IndexedRecord record = iterator.next();
+      leftKeysActual.add(record.get(AVRO_SCHEMA.getField(ROW_KEY).pos()).toString());
+      leftTimestampsActual.add((Long) record.get(AVRO_SCHEMA.getField("timestamp").pos()));
+    }
+    assertEquals(leftKeysExpected, leftKeysActual);
+    assertEquals(leftTimestampsExpected, leftTimestampsActual);
+  }
+
+  private static Stream<Arguments> testArgs() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    for (int i = 0; i < 16; i++) {
+      b.add(Arguments.of(i % 2 == 0, (i/2) % 2 == 0,  (i/4) % 2 == 0, (i/8) % 2 == 0));
+    }
+    return b.build();
   }
 }

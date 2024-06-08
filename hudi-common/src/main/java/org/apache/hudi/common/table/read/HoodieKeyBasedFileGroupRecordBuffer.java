@@ -113,8 +113,12 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
-    records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        (String) recordKey, deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue())));
+    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
+    if (recordOpt.isPresent()) {
+      records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
+          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+    }
   }
 
   @Override

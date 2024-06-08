@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -50,6 +52,7 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -98,7 +101,6 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
     }
-
     // Prepare key filters.
     Set<String> keys = new HashSet<>();
     boolean isFullKey = true;
@@ -174,10 +176,31 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       super.processDeleteBlock(deleteBlock);
       return;
     }
+    if (recordMerger.getMergingStrategy().equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+      for (Long recordPosition : recordPositions) {
+        records.put(recordPosition,
+            Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0L)));
+      }
+      return;
+    }
 
-    for (Long recordPosition : recordPositions) {
-      records.put(recordPosition,
-          Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0)));
+    int recordIndex = 0;
+    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
+    while (it.hasNext()) {
+      DeleteRecord record = it.next();
+      long recordPosition = recordPositions.get(recordIndex++);
+      processNextDeletedRecord(record, recordPosition);
+    }
+  }
+
+  @Override
+  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
+    Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
+    Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
+    if (recordOpt.isPresent()) {
+      String recordKey = recordOpt.get().getRecordKey();
+      records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
+          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
     }
   }
 
@@ -195,7 +218,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     }
 
     nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
-        ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+        ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
     Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
 
     Map<String, Object> metadata = readerContext.generateMetadataForRecord(
