@@ -80,6 +80,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -1301,6 +1302,11 @@ public class HoodieTableMetaClient implements Serializable {
         if (recordMergerStrategy != null) {
           tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
         }
+        inferRecordMergeMode();
+        validateMergeConfigs();
+        if (recordMergeMode != null) {
+          tableConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+        }
       }
 
       if (null != tableCreateSchema) {
@@ -1400,6 +1406,41 @@ public class HoodieTableMetaClient implements Serializable {
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
         throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    }
+
+    private void inferRecordMergeMode() {
+      if (null == recordMergeMode) {
+        // Precedence (highest to lowest): payload class name, payload type, record merger strategy
+        boolean payloadClassNameSet = null != payloadClassName;
+        boolean payloadTypeSet = null != payloadType;
+        boolean recordMergerStrategySet = null != recordMergerStrategy;
+
+        if (payloadClassNameSet) {
+          if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+            recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+          } else if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+            recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+          } else {
+            recordMergeMode = RecordMergeMode.CUSTOM;
+          }
+        } else if (payloadTypeSet) {
+          if (payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())) {
+            recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+          } else if (payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())) {
+            recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+          } else {
+            recordMergeMode = RecordMergeMode.CUSTOM;
+          }
+        } else if (recordMergerStrategySet) {
+          // NOTE: the merger strategy supports both overwrite with the latest and the event time ordering.
+          recordMergeMode = RecordMergeMode.CUSTOM;
+        } else {
+          LOG.warn("One of the payload class name, payload type, or record merger strategy"
+              + " must be set for the MERGE_ON_READ table");
+          recordMergeMode = RecordMergeMode.valueOf(RECORD_MERGE_MODE.defaultValue());
+          LOG.warn("Setting the record merge mode to the default: " + recordMergeMode);
+        }
+      }
     }
 
     private void validateMergeConfigs() {
