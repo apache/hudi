@@ -171,7 +171,7 @@ public class HoodieFileSliceTestUtils {
   ) {
     return createDataBlock(
         dataBlockType,
-        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation( "", "", Long.parseLong((String) r.get(1))-1)))
+        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", Long.parseLong((String) r.get(1)) - 1)))
             .collect(Collectors.toList()),
         header,
         logFilePath,
@@ -230,13 +230,13 @@ public class HoodieFileSliceTestUtils {
         .map(r -> {
           String rowKey = (String) r.get(r.getSchema().getField(ROW_KEY).pos());
           String partitionPath = (String) r.get(r.getSchema().getField(PARTITION_PATH).pos());
-          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation( "", "", Long.parseLong((String) r.get(1))-1));
+          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "", Long.parseLong((String) r.get(1)) - 1));
         })
         .collect(Collectors.toList());
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), Long.parseLong((String) ((IndexedRecord) r.getData()).get(1))-1))
+                r.getKey(), r.getOrderingValue(schema, props)), Long.parseLong((String) ((IndexedRecord) r.getData()).get(1)) - 1))
             .collect(Collectors.toList()),
         writePositions,
         header

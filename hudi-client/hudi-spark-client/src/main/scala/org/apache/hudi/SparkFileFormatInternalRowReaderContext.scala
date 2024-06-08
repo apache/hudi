@@ -57,6 +57,7 @@ import scala.collection.mutable
  *                          not required for reading a file group with only log files.
  * @param recordKeyColumn   column name for the recordkey
  * @param filters           spark filters that might be pushed down into the reader
+ * @param requiredFilters   filters that are required and should always be used, even in merging situations
  */
 class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetReader,
                                               recordKeyColumn: String,
@@ -67,7 +68,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
   private lazy val allFilters = filters ++ requiredFilters
 
-  override def supportsPositionField: Boolean = {
+  override def supportsParquetRowIndex: Boolean = {
     HoodieSparkUtils.gteqSpark3_5
   }
 
@@ -77,9 +78,9 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                      dataSchema: Schema,
                                      requiredSchema: Schema,
                                      storage: HoodieStorage): ClosableIterator[InternalRow] = {
-    val hasPositionField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
-    if (hasPositionField) {
-      assert(supportsPositionField())
+    val hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME)
+    if (hasRowIndexField) {
+      assert(supportsParquetRowIndex())
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
@@ -99,17 +100,17 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       // each row if they are given. That is the only usage of the partition values in the reader.
       val fileInfo = sparkAdapter.getSparkPartitionedFileUtils
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
-      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasPositionField)
+      val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
         readSchema, StructType(Seq.empty), readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 
-  private def getSchemaAndFiltersForRead(structType: StructType, hasRecordPosition: Boolean): (StructType, Seq[Filter]) = {
-    val schemaForRead = getAppliedRequiredSchema(structType, hasRecordPosition)
+  private def getSchemaAndFiltersForRead(structType: StructType, hasRowIndexField: Boolean): (StructType, Seq[Filter]) = {
+    val schemaForRead = getAppliedRequiredSchema(structType, hasRowIndexField)
     if (!getHasLogFiles && !getNeedsBootstrapMerge) {
       (schemaForRead, allFilters)
-    } else if (!getHasLogFiles && hasRecordPosition) {
+    } else if (!getHasLogFiles && hasRowIndexField) {
       (schemaForRead, bootstrapSafeFilters)
     } else {
       (schemaForRead, requiredFilters)
@@ -151,7 +152,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
                                skeletonRequiredSchema: Schema,
                                dataFileIterator: ClosableIterator[Any],
                                dataRequiredSchema: Schema): ClosableIterator[InternalRow] = {
-    if (supportsPositionField()) {
+    if (supportsParquetRowIndex()) {
       assert(AvroSchemaUtils.containsFieldInSchema(skeletonRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       assert(AvroSchemaUtils.containsFieldInSchema(dataRequiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME))
       val rowIndexColumn = new java.util.HashSet[String]()
@@ -161,31 +162,30 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
-      val dataProjection = if (getHasLogFiles && getUseRecordPosition) {
+      val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,
           AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, rowIndexColumn))
       }
 
+      //row index will always be the last column
+      val skeletonRowIndex = skeletonRequiredSchema.getFields.size() - 1
+      val dataRowIndex = dataRequiredSchema.getFields.size() - 1
+
       //Always use internal row for positional merge because
       //we need to iterate row by row when merging
       new CachingIterator[InternalRow] {
         val combinedRow = new JoinedRow()
 
-        //position column will always be at the end of the row
-        private def getPos(row: InternalRow): Long = {
-          row.getLong(row.numFields-1)
-        }
-
         private def getNextSkeleton: (InternalRow, Long) = {
           val nextSkeletonRow = skeletonFileIterator.next().asInstanceOf[InternalRow]
-          (nextSkeletonRow, getPos(nextSkeletonRow))
+          (nextSkeletonRow, nextSkeletonRow.getLong(skeletonRowIndex))
         }
 
         private def getNextData: (InternalRow, Long) = {
           val nextDataRow = dataFileIterator.next().asInstanceOf[InternalRow]
-          (nextDataRow, getPos(nextDataRow))
+          (nextDataRow,  nextDataRow.getLong(dataRowIndex))
         }
 
         override def close(): Unit = {
@@ -281,7 +281,7 @@ object SparkFileFormatInternalRowReaderContext {
   }
 
   /**
-   * Only valid if there is support for record positions and no log files
+   * Only valid if there is support for RowIndexField and no log files
    * Filters are safe for bootstrap if meta col filters are independent from data col filters.
    */
   def filterIsSafeForBootstrap(filter: Filter): Boolean = {

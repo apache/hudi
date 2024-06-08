@@ -63,7 +63,7 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
 public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedFileGroupRecordBuffer<T> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodiePositionBasedFileGroupRecordBuffer.class);
 
-  public static final String ROW_INDEX_COLUMN_NAME = "row_index";
+  private static final String ROW_INDEX_COLUMN_NAME = "row_index";
   public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
   private long nextRecordPosition = 0L;
   private boolean needToDoHybridStrategy = false;
@@ -84,12 +84,12 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   public BufferType getBufferType() {
-    return readerContext.getUseRecordPosition() ? BufferType.POSITION_BASED_MERGE : super.getBufferType();
+    return readerContext.getShouldMergeUseRecordPosition() ? BufferType.POSITION_BASED_MERGE : super.getBufferType();
   }
 
   @Override
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
-    if (!readerContext.getUseRecordPosition()) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
       super.processDataBlock(dataBlock, keySpecOpt);
       return;
     }
@@ -145,7 +145,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   }
 
   private void fallbackToKeyBasedBuffer() {
-    readerContext.setUseRecordPosition(false);
+    readerContext.setShouldMergeUseRecordPosition(false);
     //need to make a copy of the keys to avoid concurrent modification exception
     ArrayList<Serializable> positions = new ArrayList<>(records.keySet());
     for (Serializable position : positions) {
@@ -164,7 +164,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
-    if (!readerContext.getUseRecordPosition()) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
       super.processDeleteBlock(deleteBlock);
       return;
     }
@@ -213,7 +213,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
 
   @Override
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
-    if (!readerContext.getUseRecordPosition()) {
+    if (!readerContext.getShouldMergeUseRecordPosition()) {
       return doHasNextFallbackBaseRecord(baseRecord);
     }
 
@@ -238,7 +238,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (needToDoHybridStrategy) {
       //see if there is a delete block with record positions
       nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema,
-          ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+          ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo  = records.remove(nextRecordPosition++);
       if (logRecordInfo != null) {
         //we have a delete that was not able to be converted. Since it is the newest version, the record is deleted

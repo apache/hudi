@@ -48,7 +48,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return readerContext.getUseRecordPosition() && readerContext.getHasLogFiles()
+    return readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
@@ -56,7 +56,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (readerContext.supportsPositionField()) {
+    if (readerContext.supportsParquetRowIndex()) {
       if (!dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
         dataAndMetaCols.getRight().add(getPositionalMergeField());

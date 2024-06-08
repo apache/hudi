@@ -90,7 +90,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     assertFalse(allBaseFiles.isEmpty)
 
     val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema,
-        new SparkFileFormatInternalRowReaderContext(reader, "userid", Seq.empty, Seq.empty).supportsPositionField)
+        new SparkFileFormatInternalRowReaderContext(reader, "userid", Seq.empty, Seq.empty).supportsParquetRowIndex)
 
     // Confirm if the schema is as expected.
     if (HoodieSparkUtils.gteqSpark3_5) {

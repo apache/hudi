@@ -106,10 +106,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setRecordMerger(this.recordMerger);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
-    readerContext.setUseRecordPosition(shouldUseRecordPosition);
+    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
-    readerContext.setSchemaHandler(readerContext.supportsPositionField()
+    readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();

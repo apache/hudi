@@ -210,7 +210,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     for (int i = 0; i < 16; i++) {
-      b.add(Arguments.of(i % 2 == 0, (i/2) % 2 == 0,  (i/4) % 2 == 0, (i/8) % 2 == 0));
+      b.add(Arguments.of(i % 2 == 0, (i / 2) % 2 == 0,  (i / 4) % 2 == 0, (i / 8) % 2 == 0));
     }
     return b.build();
   }

@@ -61,6 +61,7 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFileGroupReaderOnSpark {
@@ -101,7 +102,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
     ctx.setTablePath(metaClient.getBasePathV2().toString());
     ctx.setLatestCommitTime(metaClient.createNewInstantTime());
-    ctx.setUseRecordPosition(true);
+    ctx.setShouldMergeUseRecordPosition(true);
     ctx.setHasBootstrapBaseFile(false);
     ctx.setHasLogFiles(true);
     ctx.setNeedsBootstrapMerge(false);
@@ -168,6 +169,15 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     assertEquals(50, buffer.getLogRecords().size());
     // With record positions, we do not need the record keys.
     assertNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
+  }
+
+  @Test
+  public void testProcessDeleteBlockWithCustomMerger() throws Exception {
+    prepareBuffer(true);
+    HoodieDeleteBlock deleteBlock = getDeleteBlockWithPositions();
+    buffer.processDeleteBlock(deleteBlock);
+    assertEquals(50, buffer.getLogRecords().size());
+    assertNotNull(buffer.getLogRecords().get(0L).getRight().get(INTERNAL_META_RECORD_KEY));
   }
 
   @Test

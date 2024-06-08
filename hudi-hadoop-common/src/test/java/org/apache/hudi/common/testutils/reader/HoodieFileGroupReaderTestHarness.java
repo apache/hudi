@@ -95,6 +95,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
       throws IOException, InterruptedException {
     return getFileGroupIterator(numFiles, false);
   }
+
   protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions)
       throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());

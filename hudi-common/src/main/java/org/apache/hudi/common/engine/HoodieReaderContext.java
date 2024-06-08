@@ -58,7 +58,7 @@ public abstract class HoodieReaderContext<T> {
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
-  private Boolean useRecordPosition = null;
+  private Boolean shouldMergeUseRecordPosition = null;
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
@@ -124,12 +124,12 @@ public abstract class HoodieReaderContext<T> {
   }
 
   // Getter and Setter for useRecordPosition
-  public boolean getUseRecordPosition() {
-    return useRecordPosition;
+  public boolean getShouldMergeUseRecordPosition() {
+    return shouldMergeUseRecordPosition;
   }
 
-  public void setUseRecordPosition(boolean useRecordPosition) {
-    this.useRecordPosition = useRecordPosition;
+  public void setShouldMergeUseRecordPosition(boolean shouldMergeUseRecordPosition) {
+    this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
   }
 
   // These internal key names are only used in memory for record metadata and merging,
@@ -311,16 +311,18 @@ public abstract class HoodieReaderContext<T> {
    * @return the record position in the base file.
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
-    if (supportsPositionField()) {
+    if (supportsParquetRowIndex()) {
       Object position = getValue(record, schema, fieldName);
       if (position != null) {
         return (long) position;
+      } else {
+        throw new IllegalStateException("Record position extraction failed");
       }
     }
     return providedPositionIfNeeded;
   }
 
-  public boolean supportsPositionField() {
+  public boolean supportsParquetRowIndex() {
     return false;
   }
 

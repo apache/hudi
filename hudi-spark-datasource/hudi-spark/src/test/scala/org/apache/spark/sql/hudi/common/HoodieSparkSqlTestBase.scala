@@ -27,6 +27,7 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
+
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
@@ -81,24 +82,15 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
-    var ignoreTestErr = false
     super.test(testName, testTags: _*)(
       try {
         testFun
-      } catch {
-        case e: Throwable =>
-          ignoreTestErr = true
-          LOG.warn("Test error due to exception: " + e.getMessage, e)
-      }
-      finally {
+      } finally {
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach{db =>
-          catalog.listTables(db).foreach {table =>
+        catalog.listDatabases().foreach { db =>
+          catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
           }
-        }
-        if (ignoreTestErr) {
-          spark.stop()
         }
       }
     )
