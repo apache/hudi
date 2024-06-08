@@ -46,8 +46,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;

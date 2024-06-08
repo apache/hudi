@@ -1415,16 +1415,16 @@ public class HoodieTableMetaClient implements Serializable {
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
                   || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
-              "Payload class name or type should be consistent with the record merge mode");
+              "Payload class name or type should be consistent with the record merge mode OVERWRITE_WITH_LATEST");
           break;
         case EVENT_TIME_ORDERING:
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
                   || (payloadClassNameSet && payloadClassName.equals(DefaultHoodieRecordPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())),
-              "Payload class name or type should be consistent with the record merge mode");
+              "Payload class name or type should be consistent with the record merge mode EVENT_TIME_ORDERING");
           checkArgument(!recordMergerStrategySet
                   || recordMergerStrategy.equals(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID),
-              "Record merger strategy should be consistent with the record merging mode");
+              "Record merger strategy should be consistent with the record merging mode EVENT_TIME_ORDERING");
           break;
         case CUSTOM:
         default:
