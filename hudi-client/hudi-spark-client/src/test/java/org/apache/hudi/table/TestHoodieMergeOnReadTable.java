@@ -213,7 +213,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
           .map(baseFile -> new Path(baseFile.getPath()).getParent().toString())
           .collect(Collectors.toList());
       List<GenericRecord> recordsRead = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf(), inputPaths,
-          basePath(), new JobConf(storageConf().unwrap()), true, false);
+          basePath(), new JobConf(storageConf().unwrap()), true, populateMetaFields);
       // Wrote 20 records in 2 batches
       assertEquals(40, recordsRead.size(), "Must contain 40 records");
     }
