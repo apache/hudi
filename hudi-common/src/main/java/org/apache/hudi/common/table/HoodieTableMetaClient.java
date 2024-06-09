@@ -1457,21 +1457,33 @@ public class HoodieTableMetaClient implements Serializable {
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
                   || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
-              "Payload class name or type should be consistent with the record merge mode OVERWRITE_WITH_LATEST");
+              constructMergeConfigErrorMessage());
           break;
         case EVENT_TIME_ORDERING:
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
                   || (payloadClassNameSet && payloadClassName.equals(DefaultHoodieRecordPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())),
-              "Payload class name or type should be consistent with the record merge mode EVENT_TIME_ORDERING");
+              constructMergeConfigErrorMessage());
           checkArgument(!recordMergerStrategySet
                   || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID),
-              "Record merger strategy should be consistent with the record merging mode EVENT_TIME_ORDERING");
+              "Record merger strategy (" + (recordMergerStrategySet ? recordMergerStrategy : "null")
+                  + ") should be consistent with the record merging mode EVENT_TIME_ORDERING");
           break;
         case CUSTOM:
         default:
           // No op
       }
+    }
+
+    private String constructMergeConfigErrorMessage() {
+      StringBuilder stringBuilder = new StringBuilder();
+      stringBuilder.append("Payload class name (");
+      stringBuilder.append(payloadClassName != null ? payloadClassName : "null");
+      stringBuilder.append(") or type (");
+      stringBuilder.append(payloadType != null ? payloadType : "null");
+      stringBuilder.append(") should be consistent with the record merge mode ");
+      stringBuilder.append(recordMergeMode);
+      return stringBuilder.toString();
     }
   }
 }

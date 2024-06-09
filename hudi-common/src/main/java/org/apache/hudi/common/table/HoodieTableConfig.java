@@ -178,7 +178,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
-      .defaultValue(RecordMergeMode.OVERWRITE_WITH_LATEST.name())
+      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
