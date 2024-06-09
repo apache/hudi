@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.avro.AvroSchemaUtils.{checkSchemaCompatible, checkValidEvolution, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
-import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -32,7 +32,6 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
-
 import org.apache.avro.Schema
 import org.slf4j.LoggerFactory
 
@@ -133,7 +132,7 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema)
+        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema, setNullForMissingColumns)
       } else {
         canonicalizedSourceSchema
       }
@@ -163,7 +162,9 @@ object HoodieSchemaUtils {
     internalSchemaOpt match {
       case Some(internalSchema) =>
         // Apply schema evolution, by auto-merging write schema and read schema
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
+        val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
+        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema, setNullForMissingColumns)
         val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema

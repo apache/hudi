@@ -57,11 +57,13 @@ public class AvroSchemaEvolutionUtils {
    * for example: incoming schema:  int a, int b, int d;   oldTableSchema int a, int b, int c, int d
    * we must guarantee the column c is missing semantic, instead of delete semantic.
    *
-   * @param incomingSchema implicitly evolution of avro when hoodie write operation
-   * @param oldTableSchema old internalSchema
+   * @param incomingSchema            implicitly evolution of avro when hoodie write operation
+   * @param oldTableSchema            old internalSchema
+   * @param makeMissingFieldsNullable if true, fields missing from the incoming schema when compared to the oldTableSchema will become
+   *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
+  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
     /* If incoming schema is null, we fall back on table schema. */
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
@@ -121,26 +123,28 @@ public class AvroSchemaEvolutionUtils {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
 
-    // mark columns missing from incoming schema as nullable
-    Set<String> visited = new HashSet<>();
-    diffFromOldSchema.stream()
-        // ignore meta fields
-        .filter(col -> !META_FIELD_NAMES.contains(col))
-        .sorted()
-        .forEach(col -> {
-          // if parent is marked as nullable, only update the parent and not all the missing children field
-          String parent = TableChangesHelper.getParentName(col);
-          if (!visited.contains(parent)) {
-            typeChange.updateColumnNullability(col, true);
-          }
-          visited.add(col);
-        });
+    if (makeMissingFieldsNullable) {
+      // mark columns missing from incoming schema as nullable
+      Set<String> visited = new HashSet<>();
+      diffFromOldSchema.stream()
+          // ignore meta fields
+          .filter(col -> !META_FIELD_NAMES.contains(col))
+          .sorted()
+          .forEach(col -> {
+            // if parent is marked as nullable, only update the parent and not all the missing children field
+            String parent = TableChangesHelper.getParentName(col);
+            if (!visited.contains(parent)) {
+              typeChange.updateColumnNullability(col, true);
+            }
+            visited.add(col);
+          });
+    }
 
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
   }
 
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema) {
-    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema)), oldTableSchema.getFullName());
+  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), false), oldTableSchema.getFullName());
   }
 
   /**
