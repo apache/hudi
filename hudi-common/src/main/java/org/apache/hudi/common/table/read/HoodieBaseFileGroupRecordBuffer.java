@@ -357,6 +357,12 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               older, olderInfoMap, readerSchema, payloadProps);
           Comparable newOrderingValue = readerContext.getOrderingValue(
               newer, newerInfoMap, readerSchema, payloadProps);
+          if (isDeleteRecordWithNaturalOrder(older, oldOrderingValue)) {
+            return newer;
+          }
+          if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
+            return Option.empty();
+          }
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
           }
@@ -478,5 +484,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
         .orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
+  }
+
+  private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
+                                                 Comparable orderingValue) {
+    return !rowOption.isPresent() && orderingValue.equals(0);
   }
 }
