@@ -41,6 +41,10 @@ public class AvroSchemaTestUtils {
     return new Schema.Field(name, Schema.createArray(schema), null, null);
   }
 
+  public static Schema.Field createNullableArrayField(String name, Schema schema) {
+    return new Schema.Field(name, Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.createArray(schema)), null, Schema.Field.NULL_VALUE);
+  }
+
   public static Schema.Field createMapField(String name, Schema.Type type) {
     return createMapField(name, Schema.create(type));
   }

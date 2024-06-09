@@ -38,6 +38,7 @@ import java.util.Map;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createArrayField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createMapField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createNestedField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullableArrayField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullablePrimitiveField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createPrimitiveField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createRecord;
@@ -202,7 +203,7 @@ public class TestHoodieSchemaUtils {
       Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
       Schema expected = createRecord("missingSimpleField",
           createPrimitiveField("field1", Schema.Type.INT),
-          createNullableField("field2", Schema.Type.INT),
+          createNullablePrimitiveField("field2", Schema.Type.INT),
           createPrimitiveField("field3", Schema.Type.INT));
       assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
@@ -252,9 +253,9 @@ public class TestHoodieSchemaUtils {
       Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
       Schema expected = createRecord("missingComplexField",
           createPrimitiveField("field1", Schema.Type.INT),
-          createNullableField("field2", Schema.Type.INT),
+          createNullablePrimitiveField("field2", Schema.Type.INT),
           createArrayField("field3", createRecord("nestedRecord",
-              createNullableField("nestedField1", Schema.Type.INT),
+              createNullablePrimitiveField("nestedField1", Schema.Type.INT),
               createPrimitiveField("nestedField2", Schema.Type.INT),
               createPrimitiveField("nestedField3", Schema.Type.INT))),
           createPrimitiveField("field4", Schema.Type.INT));
