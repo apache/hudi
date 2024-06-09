@@ -229,10 +229,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           case OVERWRITE_WITH_LATEST:
             return Option.empty();
           case EVENT_TIME_ORDERING:
-            Comparable incomingOrderingValue = readerContext.getOrderingValue(
-                Option.of(record), metadata, readerSchema, payloadProps);
             Comparable existingOrderingValue = readerContext.getOrderingValue(
                 existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema, payloadProps);
+            if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingValue)) {
+              return Option.empty();
+            }
+            Comparable incomingOrderingValue = readerContext.getOrderingValue(
+                Option.of(record), metadata, readerSchema, payloadProps);
             if (compareTo(incomingOrderingValue, existingOrderingValue) > 0) {
               return Option.of(Pair.of(record, metadata));
             }
@@ -388,11 +391,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         case EVENT_TIME_ORDERING:
           Comparable oldOrderingValue = readerContext.getOrderingValue(
               older, olderInfoMap, readerSchema, payloadProps);
-          Comparable newOrderingValue = readerContext.getOrderingValue(
-              newer, newerInfoMap, readerSchema, payloadProps);
           if (isDeleteRecordWithNaturalOrder(older, oldOrderingValue)) {
             return newer;
           }
+          Comparable newOrderingValue = readerContext.getOrderingValue(
+              newer, newerInfoMap, readerSchema, payloadProps);
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }

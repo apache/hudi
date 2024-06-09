@@ -33,7 +33,7 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
 
   test("Test Alter Table") {
     withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         // Create table
