@@ -34,11 +34,13 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -152,6 +154,32 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   /**
+   * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
+   *
+   * @param o1 {@link Comparable} object.
+   * @param o2 other {@link Comparable} object to compare to.
+   * @return comparison result.
+   */
+  @VisibleForTesting
+  static int compareTo(Comparable o1, Comparable o2) {
+    // TODO(HUDI-7848): fix the delete records to contain the correct ordering value type
+    //  so this util with the number comparison is not necessary.
+    try {
+      return o1.compareTo(o2);
+    } catch (ClassCastException e) {
+      if (o1 instanceof Number && o2 instanceof Number) {
+        Long o1LongValue = ((Number) o1).longValue();
+        Long o2LongValue = ((Number) o2).longValue();
+        return o1LongValue.compareTo(o2LongValue);
+      } else {
+        throw new IllegalArgumentException("Cannot compare values in different types: " + o1 + ", " + o2);
+      }
+    } catch (Throwable e) {
+      throw new HoodieException("Cannot compare values: " + o1 + ", " + o2, e);
+    }
+  }
+
+  /**
    * Merge two log data records if needed.
    *
    * @param record
@@ -200,7 +228,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                 Option.of(record), metadata, readerSchema, payloadProps);
             Comparable existingOrderingValue = readerContext.getOrderingValue(
                 existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema, payloadProps);
-            if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
+            if (compareTo(incomingOrderingValue, existingOrderingValue) > 0) {
               return Option.of(Pair.of(record, metadata));
             }
             return Option.empty();
@@ -363,7 +391,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-          if (oldOrderingValue.compareTo(oldOrderingValue.getClass().cast(newOrderingValue)) > 0) {
+          if (compareTo(oldOrderingValue, newOrderingValue) > 0) {
             return older;
           }
           return newer;
