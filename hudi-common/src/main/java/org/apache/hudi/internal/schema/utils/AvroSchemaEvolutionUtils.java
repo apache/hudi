@@ -144,7 +144,7 @@ public class AvroSchemaEvolutionUtils {
   }
 
   public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), false), oldTableSchema.getFullName());
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable), oldTableSchema.getFullName());
   }
 
   /**
