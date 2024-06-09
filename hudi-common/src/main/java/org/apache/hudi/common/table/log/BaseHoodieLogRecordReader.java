@@ -98,7 +98,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
-
+  // Record merge mode
   protected final RecordMergeMode recordMergeMode;
   private final TypedProperties payloadProps;
   // Log File Paths
