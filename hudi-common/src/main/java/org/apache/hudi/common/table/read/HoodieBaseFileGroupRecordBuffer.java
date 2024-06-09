@@ -155,6 +155,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
   /**
    * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
+   * If one of the {@link Comparable}s is a String, assumes that both are String values for comparison.
    *
    * @param o1 {@link Comparable} object.
    * @param o2 other {@link Comparable} object to compare to.
@@ -171,11 +172,15 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         Long o1LongValue = ((Number) o1).longValue();
         Long o2LongValue = ((Number) o2).longValue();
         return o1LongValue.compareTo(o2LongValue);
+      } else if (o1 instanceof String || o2 instanceof String) {
+        return o1.toString().compareTo(o2.toString());
       } else {
-        throw new IllegalArgumentException("Cannot compare values in different types: " + o1 + ", " + o2);
+        throw new IllegalArgumentException("Cannot compare values in different types: "
+            + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")");
       }
     } catch (Throwable e) {
-      throw new HoodieException("Cannot compare values: " + o1 + ", " + o2, e);
+      throw new HoodieException("Cannot compare values: "
+          + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
     }
   }
 
