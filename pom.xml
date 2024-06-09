@@ -130,7 +130,7 @@
     <orc.spark.version>1.6.0</orc.spark.version>
     <orc.flink.version>1.5.6</orc.flink.version>
     <roaringbitmap.version>0.9.47</roaringbitmap.version>
-    <airlift.version>0.25</airlift.version>
+    <airlift.version>0.27</airlift.version>
     <tally.version>0.13.0</tally.version>
     <prometheus.version>0.8.0</prometheus.version>
     <aws.sdk.httpclient.version>4.5.13</aws.sdk.httpclient.version>
@@ -140,7 +140,7 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
-    <flink1.18.version>1.18.0</flink1.18.version>
+    <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
@@ -185,7 +185,7 @@
     <scala.version>${scala12.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
-    <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
+    <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.spark_pre31.version>3.0.1</scalatest.spark_pre31.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>

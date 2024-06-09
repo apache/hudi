@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -37,7 +38,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -48,9 +48,9 @@ import java.util.Map;
  * {@link #hasNext} method is called.
  */
 public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+
   public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             Schema readerSchema,
-                                             Schema baseFileSchema,
+                                             HoodieTableMetaClient hoodieTableMetaClient,
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
                                              HoodieRecordMerger recordMerger,
@@ -59,7 +59,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
                                              String spillableMapBasePath,
                                              ExternalSpillableMap.DiskMapType diskMapType,
                                              boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
         recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -134,35 +134,14 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
 
-      String recordKey = readerContext.getRecordKey(baseRecord, baseFileSchema);
+      String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (hasNextBaseRecord(baseRecord, logRecordInfo)) {
         return true;
       }
     }
 
     // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-    return false;
+    return hasNextLogRecord();
   }
 }

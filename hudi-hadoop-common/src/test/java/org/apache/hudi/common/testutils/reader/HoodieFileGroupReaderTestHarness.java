@@ -120,7 +120,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             properties,
             new HoodieHadoopStorage(basePath, storageConf),
             tableConfig,
-            readerContext
+            readerContext,
+            metaClient
         );
 
     fileGroupReader.initRecordIterators();

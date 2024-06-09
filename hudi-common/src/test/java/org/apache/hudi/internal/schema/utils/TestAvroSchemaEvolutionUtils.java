@@ -152,9 +152,9 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testArrayType() {
-    Type arrayNestRecordType = Types.ArrayType.get(1, false,
-        Types.RecordType.get(Arrays.asList(Types.Field.get(2, false, "a", Types.FloatType.get()),
-            Types.Field.get(3, false, "b", Types.FloatType.get()))));
+    Type arrayNestRecordType = Types.ArrayType.get(0, false,
+        Types.RecordType.get(Arrays.asList(Types.Field.get(1, false, "a", Types.FloatType.get()),
+            Types.Field.get(2, false, "b", Types.FloatType.get()))));
 
     Schema schema = SchemaBuilder.array().items(create("t1",
         new Schema.Field("a", Schema.create(Schema.Type.FLOAT), null, null),
@@ -526,15 +526,16 @@ public class TestAvroSchemaEvolutionUtils {
         new Schema.Field("d2", AvroInternalSchemaConverter.nullableSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))), null, JsonProperties.NULL_VALUE));
 
     Schema simpleCheckSchema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
-        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null},"
-        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null},{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null},"
         + "{\"name\":\"d\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+        + "{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null},"
+        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null},{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null},"
         + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
     Schema simpleReconcileSchema = AvroInternalSchemaConverter.convert(AvroSchemaEvolutionUtils
         .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema)), "schemaNameFallback");
-    Assertions.assertEquals(simpleReconcileSchema, simpleCheckSchema);
+    Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 }

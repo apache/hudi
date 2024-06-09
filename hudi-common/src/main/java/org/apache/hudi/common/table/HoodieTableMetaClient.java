@@ -76,6 +76,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -623,6 +624,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     initializeBootstrapDirsIfNotExists(basePath, storage);
+    // When the table is initialized, set the initial version to be the current version.
+    props.put(INITIAL_VERSION.key(), String.valueOf(HoodieTableVersion.current().versionCode()));
     HoodieTableConfig.create(storage, metaPathDir, props);
   }
 

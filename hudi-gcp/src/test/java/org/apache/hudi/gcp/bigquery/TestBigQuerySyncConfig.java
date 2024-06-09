@@ -35,7 +35,6 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PART
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SOURCE_URI_PREFIX;
-import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_SYNC_BASE_PATH;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_TABLE_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA;
@@ -54,7 +53,6 @@ public class TestBigQuerySyncConfig {
     props.setProperty(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE.key(), "true");
     props.setProperty(BIGQUERY_SYNC_SOURCE_URI.key(), "gs://test-bucket/dwh/table_name/dt=*");
     props.setProperty(BIGQUERY_SYNC_SOURCE_URI_PREFIX.key(), "gs://test-bucket/dwh/table_name/");
-    props.setProperty(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), "gs://test-bucket/dwh/table_name");
     props.setProperty(BIGQUERY_SYNC_PARTITION_FIELDS.key(), "a,b");
     props.setProperty(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), "true");
     BigQuerySyncConfig syncConfig = new BigQuerySyncConfig(props);
@@ -65,7 +63,6 @@ public class TestBigQuerySyncConfig {
     assertEquals(true, syncConfig.getBoolean(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE));
     assertEquals("gs://test-bucket/dwh/table_name/dt=*", syncConfig.getString(BIGQUERY_SYNC_SOURCE_URI));
     assertEquals("gs://test-bucket/dwh/table_name/", syncConfig.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX));
-    assertEquals("gs://test-bucket/dwh/table_name", syncConfig.getString(BIGQUERY_SYNC_SYNC_BASE_PATH));
     assertEquals(Arrays.asList("a", "b"), syncConfig.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS));
     assertEquals(true, syncConfig.getBoolean(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA));
   }

@@ -21,6 +21,7 @@ package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -37,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -85,6 +88,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     writeConfigs.put("hoodie.delete.shuffle.parallelism", "1");
     writeConfigs.put("hoodie.merge.small.file.group.candidates.limit", "0");
     writeConfigs.put("hoodie.compact.inline", "false");
+    writeConfigs.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true");
     commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
 
     String[] partitionPaths = dataGen.getPartitionPaths();
@@ -98,13 +102,22 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     Option<String> partitionNameOpt = StringUtils.isNullOrEmpty(partitionPaths[0])
         ? Option.empty() : Option.of(partitionPaths[0]);
 
+    HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
+    ctx.setTablePath(metaClient.getBasePathV2().toString());
+    ctx.setLatestCommitTime(metaClient.createNewInstantTime());
+    ctx.setShouldMergeUseRecordPosition(true);
+    ctx.setHasBootstrapBaseFile(false);
+    ctx.setHasLogFiles(true);
+    ctx.setNeedsBootstrapMerge(false);
+    ctx.setRecordMerger(useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger());
+    ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
+        Option.empty(), metaClient.getTableConfig()));
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
-        getHoodieReaderContext(getBasePath(), avroSchema),
-        avroSchema,
-        avroSchema,
+        ctx,
+        metaClient,
         partitionNameOpt,
         partitionFields,
-        useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger(),
+        ctx.getRecordMerger(),
         new TypedProperties(),
         1024 * 1024 * 1000,
         metaClient.getTempFolderPath(),

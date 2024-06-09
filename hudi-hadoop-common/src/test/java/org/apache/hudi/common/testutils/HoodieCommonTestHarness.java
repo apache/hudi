@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -26,6 +27,8 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -45,6 +48,9 @@ public class HoodieCommonTestHarness {
   protected HoodieTableMetaClient metaClient;
   @TempDir
   public java.nio.file.Path tempDir;
+
+  protected StorageConfiguration<Configuration> storageConf;
+  protected HoodieStorage storage;
 
   protected void setTableName(String tableName) {
     this.tableName = tableName;

@@ -24,20 +24,26 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
@@ -45,17 +51,19 @@ import org.roaringbitmap.longlong.Roaring64NavigableMap;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
-  protected final Schema baseFileSchema;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
   protected final HoodieRecordMerger recordMerger;
@@ -65,10 +73,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
   protected T nextRecord;
   protected boolean enablePartialMerging = false;
+  protected InternalSchema internalSchema;
+  protected HoodieTableMetaClient hoodieTableMetaClient;
 
   public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                         Schema readerSchema,
-                                         Schema baseFileSchema,
+                                         HoodieTableMetaClient hoodieTableMetaClient,
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
                                          HoodieRecordMerger recordMerger,
@@ -78,12 +87,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          ExternalSpillableMap.DiskMapType diskMapType,
                                          boolean isBitCaskDiskMapCompressionEnabled) {
     this.readerContext = readerContext;
-    this.readerSchema = readerSchema;
-    this.baseFileSchema = baseFileSchema;
+    this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMerger = recordMerger;
     this.payloadProps = payloadProps;
+    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
+    this.hoodieTableMetaClient = hoodieTableMetaClient;
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),
@@ -173,7 +183,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       if (!combinedRecordAndSchemaOpt.isPresent()) {
         return Option.empty();
       }
-      
+
       Pair<HoodieRecord, Schema> combinedRecordAndSchema = combinedRecordAndSchemaOpt.get();
       HoodieRecord<T> combinedRecord = combinedRecordAndSchema.getLeft();
 
@@ -232,7 +242,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    * @param dataBlock
    * @param keySpecOpt
    * @return
-   * @throws IOException
    */
   protected Pair<ClosableIterator<T>, Schema> getRecordsIterator(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) {
     ClosableIterator<T> blockRecordsIterator;
@@ -242,7 +251,34 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     } else {
       blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
     }
-    return Pair.of(blockRecordsIterator, dataBlock.getSchema());
+    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    return Pair.of(new CloseableMappingIterator<>(
+        blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+  }
+
+  /**
+   * Get final Read Schema for support evolution.
+   * step1: find the fileSchema for current dataBlock.
+   * step2: determine whether fileSchema is compatible with the final read internalSchema.
+   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   *
+   * @param dataBlock current processed block
+   * @return final read schema.
+   */
+  protected Option<Pair<Function<T,T>, Schema>> composeEvolvedSchemaTransformer(
+      HoodieDataBlock dataBlock) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+
+    long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime,
+        hoodieTableMetaClient, false);
+    Pair<InternalSchema, Map<String,String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+        true, false, false).mergeSchemaGetRenamed();
+    Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName());
+    assert mergedAvroSchema.equals(readerSchema);
+    return Option.of(Pair.of(readerContext.projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
   }
 
   /**
@@ -256,7 +292,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    * @throws IOException
    */
   protected Option<T> merge(Option<T> older, Map<String, Object> olderInfoMap,
-                          Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
+                            Option<T> newer, Map<String, Object> newerInfoMap) throws IOException {
     if (!older.isPresent()) {
       return newer;
     }
@@ -275,6 +311,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
     if (mergedRecord.isPresent()
         && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), payloadProps)) {
+      if (!mergedRecord.get().getRight().equals(readerSchema)) {
+        return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+      }
       return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
     }
     return Option.empty();
@@ -285,8 +324,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    *  1. A set of pre-specified keys exists.
    *  2. The key of the record is not contained in the set.
    */
-  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys) {
-    String recordKey = readerContext.getValue(record, readerSchema, keyFieldName).toString();
+  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema writerSchema) {
+    String recordKey = readerContext.getValue(record, writerSchema, keyFieldName).toString();
     // Can not extract the record key, throw.
     if (recordKey == null || recordKey.isEmpty()) {
       throw new HoodieKeyException("Can not extract the key for a record");
@@ -332,5 +371,52 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
 
     return blockPositions;
+  }
+
+  protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {
+    Map<String, Object> metadata = readerContext.generateMetadataForRecord(
+        baseRecord, readerSchema);
+
+    Option<T> resultRecord = logRecordInfo != null
+        ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
+        : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
+    if (resultRecord.isPresent()) {
+      nextRecord = readerContext.seal(resultRecord.get());
+      return true;
+    }
+    return false;
+  }
+
+  protected boolean hasNextLogRecord() throws IOException {
+    if (logRecordIterator == null) {
+      logRecordIterator = records.values().iterator();
+    }
+
+    while (logRecordIterator.hasNext()) {
+      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
+      Option<T> resultRecord;
+      resultRecord = merge(Option.empty(), Collections.emptyMap(),
+          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
+      if (resultRecord.isPresent()) {
+        nextRecord = readerContext.seal(resultRecord.get());
+        return true;
+      }
+    }
+    return false;
+  }
+
+  protected Pair<Function<T, T>, Schema> getSchemaTransformerWithEvolvedSchema(HoodieDataBlock dataBlock) {
+    Option<Pair<Function<T, T>, Schema>> schemaEvolutionTransformerOpt =
+        composeEvolvedSchemaTransformer(dataBlock);
+
+    // In case when schema has been evolved original persisted records will have to be
+    // transformed to adhere to the new schema
+    Function<T, T> transformer =
+        schemaEvolutionTransformerOpt.map(Pair::getLeft)
+            .orElse(Function.identity());
+
+    Schema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight)
+        .orElseGet(dataBlock::getSchema);
+    return Pair.of(transformer, evolvedSchema);
   }
 }

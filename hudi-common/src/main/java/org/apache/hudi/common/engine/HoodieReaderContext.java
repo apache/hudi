@@ -22,6 +22,8 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -32,9 +34,12 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.UnaryOperator;
+
+import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
  * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
@@ -48,6 +53,88 @@ import java.util.function.UnaryOperator;
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+
+  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private String tablePath = null;
+  private String latestCommitTime = null;
+  private HoodieRecordMerger recordMerger = null;
+  private Boolean hasLogFiles = null;
+  private Boolean hasBootstrapBaseFile = null;
+  private Boolean needsBootstrapMerge = null;
+  private Boolean shouldMergeUseRecordPosition = null;
+
+  // Getter and Setter for schemaHandler
+  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+    return schemaHandler;
+  }
+
+  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+    this.schemaHandler = schemaHandler;
+  }
+
+  public String getTablePath() {
+    if (tablePath == null) {
+      throw new IllegalStateException("Table path not set in reader context.");
+    }
+    return tablePath;
+  }
+
+  public void setTablePath(String tablePath) {
+    this.tablePath = tablePath;
+  }
+
+  public String getLatestCommitTime() {
+    return latestCommitTime;
+  }
+
+  public void setLatestCommitTime(String latestCommitTime) {
+    this.latestCommitTime = latestCommitTime;
+  }
+
+  public HoodieRecordMerger getRecordMerger() {
+    return recordMerger;
+  }
+
+  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+    this.recordMerger = recordMerger;
+  }
+
+  // Getter and Setter for hasLogFiles
+  public boolean getHasLogFiles() {
+    return hasLogFiles;
+  }
+
+  public void setHasLogFiles(boolean hasLogFiles) {
+    this.hasLogFiles = hasLogFiles;
+  }
+
+  // Getter and Setter for hasBootstrapBaseFile
+  public boolean getHasBootstrapBaseFile() {
+    return hasBootstrapBaseFile;
+  }
+
+  public void setHasBootstrapBaseFile(boolean hasBootstrapBaseFile) {
+    this.hasBootstrapBaseFile = hasBootstrapBaseFile;
+  }
+
+  // Getter and Setter for needsBootstrapMerge
+  public boolean getNeedsBootstrapMerge() {
+    return needsBootstrapMerge;
+  }
+
+  public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
+    this.needsBootstrapMerge = needsBootstrapMerge;
+  }
+
+  // Getter and Setter for useRecordPosition
+  public boolean getShouldMergeUseRecordPosition() {
+    return shouldMergeUseRecordPosition;
+  }
+
+  public void setShouldMergeUseRecordPosition(boolean shouldMergeUseRecordPosition) {
+    this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
+  }
+
   // These internal key names are only used in memory for record metadata and merging,
   // and should not be persisted to storage.
   public static final String INTERNAL_META_RECORD_KEY = "_0";
@@ -113,7 +200,10 @@ public abstract class HoodieReaderContext<T> {
    * @param schema The Avro schema of the record.
    * @return The record key in String.
    */
-  public abstract String getRecordKey(T record, Schema schema);
+  public String getRecordKey(T record, Schema schema) {
+    Object val = getValue(record, schema, RECORD_KEY_METADATA_FIELD);
+    return val.toString();
+  }
 
   /**
    * Gets the ordering value in particular type.
@@ -124,10 +214,23 @@ public abstract class HoodieReaderContext<T> {
    * @param props        Properties.
    * @return The ordering value.
    */
-  public abstract Comparable getOrderingValue(Option<T> recordOption,
-                                              Map<String, Object> metadataMap,
-                                              Schema schema,
-                                              TypedProperties props);
+  public Comparable getOrderingValue(Option<T> recordOption,
+                                     Map<String, Object> metadataMap,
+                                     Schema schema,
+                                     TypedProperties props) {
+    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
+    }
+
+    if (!recordOption.isPresent()) {
+      return 0;
+    }
+
+    String orderingFieldName = ConfigUtils.getOrderingField(props);
+    Object value = getValue(recordOption.get(), schema, orderingFieldName);
+    return value != null ? (Comparable) value : 0;
+
+  }
 
   /**
    * Constructs a new {@link HoodieRecord} based on the record of engine-specific type and metadata for merging.
@@ -197,20 +300,29 @@ public abstract class HoodieReaderContext<T> {
    * skeleton file iterator, followed by all columns in the data file iterator
    *
    * @param skeletonFileIterator iterator over bootstrap skeleton files that contain hudi metadata columns
-   * @param dataFileIterator iterator over data files that were bootstrapped into the hudi table
+   * @param dataFileIterator     iterator over data files that were bootstrapped into the hudi table
    * @return iterator that concatenates the skeletonFileIterator and dataFileIterator
    */
-  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator, ClosableIterator<T> dataFileIterator);
+  public abstract ClosableIterator<T> mergeBootstrapReaders(ClosableIterator<T> skeletonFileIterator,
+                                                            Schema skeletonRequiredSchema,
+                                                            ClosableIterator<T> dataFileIterator,
+                                                            Schema dataRequiredSchema);
 
   /**
    * Creates a function that will reorder records of schema "from" to schema of "to"
    * all fields in "to" must be in "from", but not all fields in "from" must be in "to"
    *
-   * @param from the schema of records to be passed into UnaryOperator
-   * @param to the schema of records produced by UnaryOperator
+   * @param from           the schema of records to be passed into UnaryOperator
+   * @param to             the schema of records produced by UnaryOperator
+   * @param renamedColumns map of renamed columns where the key is the new name from the query and
+   *                       the value is the old name that exists in the file
    * @return a function that takes in a record and returns the record with reordered columns
    */
-  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to);
+  public abstract UnaryOperator<T> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns);
+
+  public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
+    return projectRecord(from, to, Collections.emptyMap());
+  }
 
   /**
    * Extracts the record position value from the record itself.
@@ -218,7 +330,19 @@ public abstract class HoodieReaderContext<T> {
    * @return the record position in the base file.
    */
   public long extractRecordPosition(T record, Schema schema, String fieldName, long providedPositionIfNeeded) {
+    if (supportsParquetRowIndex()) {
+      Object position = getValue(record, schema, fieldName);
+      if (position != null) {
+        return (long) position;
+      } else {
+        throw new IllegalStateException("Record position extraction failed");
+      }
+    }
     return providedPositionIfNeeded;
+  }
+
+  public boolean supportsParquetRowIndex() {
+    return false;
   }
 
   /**

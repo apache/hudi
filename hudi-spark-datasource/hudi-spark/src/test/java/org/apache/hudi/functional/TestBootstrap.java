@@ -253,6 +253,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     long timestamp = Instant.now().toEpochMilli();
     Schema schema = generateNewDataSetAndReturnSchema(timestamp, totalRecords, partitions, bootstrapBasePath);
     HoodieWriteConfig config = getConfigBuilder(schema.toString())
+        .withPreCombineField("timestamp")
         .withAutoCommit(true)
         .withSchema(schema.toString())
         .withKeyGenerator(keyGeneratorClass)
