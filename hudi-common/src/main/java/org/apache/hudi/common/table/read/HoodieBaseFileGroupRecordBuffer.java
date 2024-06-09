@@ -363,7 +363,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-          if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
+          if (oldOrderingValue.compareTo(oldOrderingValue.getClass().cast(newOrderingValue)) > 0) {
             return older;
           }
           return newer;
@@ -488,6 +488,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
   private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
                                                  Comparable orderingValue) {
-    return !rowOption.isPresent() && orderingValue.equals(0);
+    return rowOption.isEmpty() && orderingValue.equals(0);
   }
 }
