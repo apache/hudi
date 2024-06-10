@@ -30,10 +30,19 @@ public class DefaultStreamContext implements StreamContext {
 
   private final SchemaProvider schemaProvider;
   private final Option<SourceProfileSupplier> sourceProfileSupplier;
+  private final Option<StreamProfileSupplier> streamProfileSupplier;
 
-  public DefaultStreamContext(SchemaProvider schemaProvider, Option<SourceProfileSupplier> sourceProfileSupplier) {
+  public DefaultStreamContext(SchemaProvider schemaProvider,
+                              Option<SourceProfileSupplier> sourceProfileSupplier) {
+    this(schemaProvider, sourceProfileSupplier, Option.empty());
+  }
+
+  public DefaultStreamContext(SchemaProvider schemaProvider,
+                              Option<SourceProfileSupplier> sourceProfileSupplier,
+                              Option<StreamProfileSupplier> streamProfileSupplier) {
     this.schemaProvider = schemaProvider;
     this.sourceProfileSupplier = sourceProfileSupplier;
+    this.streamProfileSupplier = streamProfileSupplier;
   }
 
   @Override
@@ -44,5 +53,10 @@ public class DefaultStreamContext implements StreamContext {
   @Override
   public Option<SourceProfileSupplier> getSourceProfileSupplier() {
     return sourceProfileSupplier;
+  }
+
+  @Override
+  public Option<StreamProfileSupplier> getStreamProfileSupplier() {
+    return streamProfileSupplier;
   }
 }
