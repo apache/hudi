@@ -221,7 +221,7 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
-    <aws.sdk.version>2.18.40</aws.sdk.version>
+    <aws.sdk.version>2.25.69</aws.sdk.version>
     <proto.version>3.21.7</proto.version>
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
