@@ -679,11 +679,6 @@ public class HoodieStreamer implements Serializable {
 
     private final Option<ConfigurationHotUpdateStrategy> configurationHotUpdateStrategyOpt;
 
-<<<<<<< HEAD
-    public StreamSyncService(Config cfg, HoodieSparkEngineContext hoodieSparkContext,
-                             FileSystem fs, Configuration conf,
-                             Option<TypedProperties> properties, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
-=======
     public StreamSyncService(Config cfg,
                              HoodieSparkEngineContext hoodieSparkContext,
                              FileSystem fs,
@@ -691,7 +686,6 @@ public class HoodieStreamer implements Serializable {
                              Option<TypedProperties> properties,
                              Option<SourceProfileSupplier> sourceProfileSupplier,
                              Option<StreamProfileSupplier> streamProfileSupplier) throws IOException {
->>>>>>> e8130e5daa (Add ability to configure bulk insert write parallelism)
       super(HoodieIngestionConfig.newBuilder()
           .isContinuous(cfg.continuousMode)
           .withMinSyncInternalSeconds(cfg.minSyncIntervalSeconds).build());
@@ -745,13 +739,8 @@ public class HoodieStreamer implements Serializable {
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
           props, hoodieSparkContext.jsc(), cfg.transformerClassNames);
 
-<<<<<<< HEAD
-      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
-          fs, conf, this::onInitializingWriteClient, new DefaultStreamContext(schemaProvider, sourceProfileSupplier));
-=======
       streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext, fs, conf, this::onInitializingWriteClient,
                                   new DefaultStreamContext(schemaProvider, sourceProfileSupplier, streamProfileSupplier));
->>>>>>> e8130e5daa (Add ability to configure bulk insert write parallelism)
     }
 
     public StreamSyncService(HoodieStreamer.Config cfg,
@@ -786,14 +775,10 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-<<<<<<< HEAD
+
       streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext,
           (FileSystem) storage.getFileSystem(), hiveConf, this::onInitializingWriteClient,
-          new DefaultStreamContext(schemaProvider, Option.empty()));
-=======
-      streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkContext, fs, hiveConf, this::onInitializingWriteClient,
-                                  new DefaultStreamContext(schemaProvider, Option.empty(), Option.empty()));
->>>>>>> e8130e5daa (Add ability to configure bulk insert write parallelism)
+          new DefaultStreamContext(schemaProvider, Option.empty(), Option.empty()));
     }
 
     @Override
