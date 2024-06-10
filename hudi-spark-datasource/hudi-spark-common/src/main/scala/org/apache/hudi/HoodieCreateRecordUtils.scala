@@ -27,9 +27,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.common.util.StringUtils
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
@@ -123,6 +123,8 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+          val precombine = config.getString(PRECOMBINE_FIELD)
+          val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
 
           // handle dropping partition columns
           it.map { avroRec =>
@@ -140,8 +142,8 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
+            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
+              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME), recordLocation)

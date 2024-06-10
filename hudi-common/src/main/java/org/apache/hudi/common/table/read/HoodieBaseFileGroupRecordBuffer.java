@@ -89,7 +89,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(payloadProps);
     this.recordMerger = recordMerger;
-    if (recordMerger.getRecordMergeMode() != this.recordMergeMode) {
+    //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
+    if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
       throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
     }
     this.payloadProps = payloadProps;
