@@ -251,6 +251,18 @@ public abstract class HoodieReaderContext<T> {
   public abstract T seal(T record);
 
   /**
+   * Compares values in different types which can contain engine-specific types.
+   *
+   * @param o1 {@link Comparable} object.
+   * @param o2 other {@link Comparable} object to compare to.
+   * @return comparison result.
+   */
+  public int compareTo(Comparable o1, Comparable o2) {
+    throw new IllegalArgumentException("Cannot compare values in different types: "
+        + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")");
+  }
+
+  /**
    * Generates metadata map based on the information.
    *
    * @param recordKey     Record key in String.
