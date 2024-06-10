@@ -43,6 +43,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,6 +60,7 @@ import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
+import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.compareTo;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -84,6 +86,41 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                   List<T> actualRecordList,
                                                   Schema schema,
                                                   String fileGroupId);
+
+  public abstract Comparable getComparableUTF8String(String value);
+
+  @Test
+  public void testCompareToComparable() {
+    // Test same type
+    assertEquals(1, compareTo(Boolean.TRUE, Boolean.FALSE));
+    assertEquals(0, compareTo(Boolean.TRUE, Boolean.TRUE));
+    assertEquals(-1, compareTo(Boolean.FALSE, Boolean.TRUE));
+    assertEquals(1, compareTo(20, 15));
+    assertEquals(0, compareTo(15, 15));
+    assertEquals(-1, compareTo(10, 15));
+    assertEquals(1, compareTo(1.1f, 1.0f));
+    assertEquals(0, compareTo(1.0f, 1.0f));
+    assertEquals(-1, compareTo(0.9f, 1.0f));
+    assertEquals(1, compareTo(1.1, 1.0));
+    assertEquals(0, compareTo(1.0, 1.0));
+    assertEquals(-1, compareTo(0.9, 1.0));
+    assertEquals(1, compareTo("value2", "value1"));
+    assertEquals(0, compareTo("value1", "value1"));
+    assertEquals(-1, compareTo("value1", "value2"));
+    // Test different types which are comparable
+    assertEquals(1, compareTo(Long.MAX_VALUE / 2L, 10));
+    assertEquals(1, compareTo(20, 10L));
+    assertEquals(0, compareTo(10L, 10));
+    assertEquals(0, compareTo(10, 10L));
+    assertEquals(-1, compareTo(10, Long.MAX_VALUE));
+    assertEquals(-1, compareTo(10L, 20));
+    assertEquals(1, compareTo(getComparableUTF8String("value2"), "value1"));
+    assertEquals(1, compareTo("value2", getComparableUTF8String("value1")));
+    assertEquals(0, compareTo(getComparableUTF8String("value1"), "value1"));
+    assertEquals(0, compareTo("value1", getComparableUTF8String("value1")));
+    assertEquals(-1, compareTo(getComparableUTF8String("value1"), "value2"));
+    assertEquals(-1, compareTo("value1", getComparableUTF8String("value2")));
+  }
 
   private static Stream<Arguments> testArguments() {
     return Stream.of(
