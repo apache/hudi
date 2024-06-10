@@ -1460,7 +1460,6 @@ public class HoodieTableMetaClient implements Serializable {
                   || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
               constructMergeConfigErrorMessage());
-          checkArgument(StringUtils.isNullOrEmpty(preCombineField), "Source ordering cannot be set when OVERWRITE_WITH_LATEST merge mode is used");
           break;
         case EVENT_TIME_ORDERING:
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
