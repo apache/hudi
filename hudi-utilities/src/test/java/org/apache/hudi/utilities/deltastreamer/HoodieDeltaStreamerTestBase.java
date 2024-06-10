@@ -40,6 +40,8 @@ import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
+import org.apache.hudi.utilities.streamer.StreamProfile;
+import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
@@ -47,6 +49,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
@@ -512,6 +515,20 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     return rows;
   }
 
+  long numberOfFilesWrittenInLatestCommit(String tablePath, SQLContext sqlContext) {
+    final String tempViewName = "num_files_latest_commit_table";
+    sqlContext.clearCache();
+    Dataset<Row> df = sqlContext.read().options(hudiOpts)
+        .format("org.apache.hudi")
+        .load(tablePath);
+
+    df.createOrReplaceTempView(tempViewName);
+
+    return sparkSession.sql(String.format("SELECT COUNT(DISTINCT _hoodie_file_name) AS unique_file_count FROM %s "
+            + "WHERE _hoodie_commit_time = (SELECT MAX(_hoodie_commit_time) FROM %s)", tempViewName, tempViewName)
+    ).first().getLong(0);
+  }
+
   void assertDistanceCount(long expected, String tablePath, SQLContext sqlContext) {
     sqlContext.clearCache();
     sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tablePath).registerTempTable("tmp_trips");
@@ -753,6 +770,34 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN, firstRollback.getTimestamp()));
       int numCommits = commitsTimeline.countInstants();
       assertTrue(minExpectedCommits <= numCommits, "Got=" + numCommits + ", exp >=" + minExpectedCommits);
+    }
+  }
+
+  protected static class TestStreamProfileSupplier implements StreamProfileSupplier {
+
+    private final TestStreamProfile testStreamProfile;
+
+    public TestStreamProfileSupplier(int bulkInsertWriteParallelism) {
+      this.testStreamProfile = new TestStreamProfile(bulkInsertWriteParallelism);
+    }
+
+    @Override
+    public StreamProfile getStreamProfile() {
+      return testStreamProfile;
+    }
+
+    private static class TestStreamProfile implements StreamProfile {
+
+      private final int bulkInsertWriteParallelism;
+
+      public TestStreamProfile(int bulkInsertWriteParallelism) {
+        this.bulkInsertWriteParallelism = bulkInsertWriteParallelism;
+      }
+
+      @Override
+      public int getBulkInsertWriteParallelism() {
+        return bulkInsertWriteParallelism;
+      }
     }
   }
 }

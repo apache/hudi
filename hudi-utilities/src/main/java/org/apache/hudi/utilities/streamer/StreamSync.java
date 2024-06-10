@@ -248,6 +248,8 @@ public class StreamSync implements Serializable, Closeable {
    */
   private transient SparkRDDWriteClient writeClient;
 
+  private final Option<StreamContext> streamContext;
+
   private Option<BaseErrorTableWriter> errorTableWriter = Option.empty();
   private HoodieErrorTableConfig.ErrorWriteFailureStrategy errorWriteFailureStrategy;
 
@@ -280,7 +282,7 @@ public class StreamSync implements Serializable, Closeable {
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
     this.useRowWriter = useRowWriter;
-
+    this.streamContext = Option.empty();
   }
 
   @Deprecated
@@ -304,6 +306,7 @@ public class StreamSync implements Serializable, Closeable {
     this.autoGenerateRecordKeys = KeyGenUtils.enableAutoGenerateRecordKeys(props);
     this.keyGenClassName = getKeyGeneratorClassName(new TypedProperties(props));
     this.conf = conf;
+    this.streamContext = Option.of(streamContext);
 
     HoodieWriteConfig hoodieWriteConfig = getHoodieClientConfig();
     this.metrics = (HoodieIngestionMetrics) ReflectionUtils.loadClass(cfg.ingestionMetricsClass, hoodieWriteConfig.getMetricsConfig());
@@ -821,6 +824,7 @@ public class StreamSync implements Serializable, Closeable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
     WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime);
+
     JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
 
@@ -949,6 +953,16 @@ public class StreamSync implements Serializable, Closeable {
 
     if (useRowWriter) {
       Dataset<Row> df = (Dataset<Row>) inputBatch.getBatch().orElseGet(() -> hoodieSparkContext.getSqlContext().emptyDataFrame());
+
+      if (streamContext.isPresent()
+          && streamContext.get().getStreamProfileSupplier().isPresent()) {
+        int writeParallelism = streamContext.get().getStreamProfileSupplier().get().getStreamProfile().getBulkInsertWriteParallelism();
+        if (writeParallelism > 0) {
+          LOG.info("Repartitioning Bulk Insert Row Writer input records based on stream profile to " + writeParallelism);
+          df = df.repartition(writeParallelism);
+        }
+      }
+
       HoodieWriteConfig hoodieWriteConfig = prepareHoodieConfigForRowWriter(inputBatch.getSchemaProvider().getTargetSchema());
       BaseDatasetBulkInsertCommitActionExecutor executor = new HoodieStreamerDatasetBulkInsertCommitActionExecutor(hoodieWriteConfig, writeClient, instantTime);
       writeClientWriteResult = new WriteClientWriteResult(executor.execute(df, !HoodieStreamerUtils.getPartitionColumns(props).isEmpty()).getWriteStatuses());
@@ -959,6 +973,7 @@ public class StreamSync implements Serializable, Closeable {
         records = DataSourceUtils.dropDuplicates(hoodieSparkContext.jsc(), records, writeClient.getConfig());
       }
 
+
       HoodieWriteResult writeResult = null;
       switch (cfg.operation) {
         case INSERT:
@@ -968,6 +983,14 @@ public class StreamSync implements Serializable, Closeable {
           writeClientWriteResult = new WriteClientWriteResult(writeClient.upsert(records, instantTime));
           break;
         case BULK_INSERT:
+          if (streamContext.isPresent()
+              && streamContext.get().getStreamProfileSupplier().isPresent()) {
+            int writeParallelism = streamContext.get().getStreamProfileSupplier().get().getStreamProfile().getBulkInsertWriteParallelism();
+            if (writeParallelism > 0) {
+              LOG.info("Repartitioning Bulk Insert input records based on stream profile to " + writeParallelism);
+              records = records.repartition(writeParallelism);
+            }
+          }
           writeClientWriteResult = new WriteClientWriteResult(writeClient.bulkInsert(records, instantTime, createUserDefinedBulkInsertPartitioner(writeClient.getConfig())));
           break;
         case INSERT_OVERWRITE:
@@ -1276,7 +1299,7 @@ public class StreamSync implements Serializable, Closeable {
     }
   }
 
-  class WriteClientWriteResult {
+  static class WriteClientWriteResult {
     private Map<String, List<String>> partitionToReplacedFileIds = Collections.emptyMap();
     private JavaRDD<WriteStatus> writeStatusRDD;
 

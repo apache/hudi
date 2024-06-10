@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -30,12 +31,14 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
@@ -82,5 +85,19 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     ErrorEvent<String> expectedErrorEvent = new ErrorEvent<>("{\"timestamp\": 1000, \"_row_key\": \"key1\", \"partition_path\": \"path1\", \"rider\": null, \"driver\": \"driver\"}",
         ErrorEvent.ErrorReason.RECORD_CREATION);
     assertEquals(Collections.singletonList(expectedErrorEvent), actualErrorEvents);
+  }
+
+  public static HoodieStreamer initializeHoodieStreamer(HoodieStreamer.Config cfg,
+                                         JavaSparkContext jssc,
+                                         Option<SourceProfileSupplier> sourceProfileSupplier,
+                                         Option<StreamProfileSupplier> streamProfileSupplier) throws IOException {
+    return new HoodieStreamer(
+        cfg,
+        jssc,
+        FSUtils.getFs(cfg.targetBasePath, jssc.hadoopConfiguration()),
+        jssc.hadoopConfiguration(),
+        Option.empty(),
+        sourceProfileSupplier,
+        streamProfileSupplier);
   }
 }
