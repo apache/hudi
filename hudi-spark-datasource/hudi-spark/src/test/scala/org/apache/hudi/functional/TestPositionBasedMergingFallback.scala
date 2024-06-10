@@ -21,10 +21,10 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieRecordMerger
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.common.model.{HoodieRecordMerger, OverwriteWithLatestAvroPayload, OverwriteWithLatestMerger}
 import org.apache.hudi.common.util
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -65,7 +65,8 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @MethodSource(Array("testArgs"))
-  def testPositionFallback(updateWithRecordPositions: String, deleteWithRecordPositions: String, secondUpdateWithPositions: String): Unit = {
+  def testPositionFallbackWithOverwriteMerger(updateWithRecordPositions: String, deleteWithRecordPositions: String,
+                                              secondUpdateWithPositions: String): Unit = {
     val columns = Seq("ts", "key", "name", "_hoodie_is_deleted")
     val data = Seq(
       (10, "1", "A", false),
@@ -74,16 +75,17 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
       (10, "4", "D", false),
       (10, "5", "E", false))
 
+    val commonOpts: Map[String, String] = Map(RECORDKEY_FIELD.key() -> "key", "hoodie.table.name" -> "test_table",
+      TABLE_TYPE.key() -> "MERGE_ON_READ", HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet",
+      DataSourceWriteOptions.RECORD_MERGER_IMPLS.key() -> classOf[OverwriteWithLatestMerger].getName,
+      HoodieCommonConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.OVERWRITE_WITH_LATEST.name(),
+      DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key() -> HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> "true")
+
     val inserts = sparkSession.createDataFrame(data).toDF(columns: _*)
     inserts.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option("hoodie.table.name", "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(commonOpts).
       option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true").
       mode(Overwrite).
       save(basePath)
@@ -93,15 +95,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     val updates = sparkSession.createDataFrame(updateData).toDF(columns: _*)
 
     updates.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option("hoodie.table.name", "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(commonOpts).
       option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), updateWithRecordPositions).
       mode(Append).
       save(basePath)
@@ -110,15 +104,7 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
 
     val deletes = sparkSession.createDataFrame(deletesData).toDF(columns: _*)
     deletes.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option("hoodie.table.name", "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(commonOpts).
       option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), deleteWithRecordPositions).
       mode(Append).
       save(basePath)
@@ -127,22 +113,84 @@ class TestPositionBasedMergingFallback extends HoodieSparkClientTestBase {
     val secondUpdateData = Seq((14, "5", "E_3", false), (3, "3", "C_3", false))
     val secondUpdates = sparkSession.createDataFrame(secondUpdateData).toDF(columns: _*)
     secondUpdates.write.format("hudi").
-      option(RECORDKEY_FIELD.key(), "key").
-      option(PRECOMBINE_FIELD.key(), "ts").
-      option("hoodie.table.name", "test_table").
-      option(TABLE_TYPE.key(), "MERGE_ON_READ").
-      option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(commonOpts).
       option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), secondUpdateWithPositions).
       mode(Append).
       save(basePath)
 
     val df = sparkSession.read.format("hudi").
-      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID).
-      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger").
+      option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID).
+      option(DataSourceWriteOptions.RECORD_MERGER_IMPLS.key(), classOf[OverwriteWithLatestMerger].getName).
+      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "true").load(basePath)
+    val finalDf = df.select("ts", "key", "name")
+    val finalColumns = Seq("ts", "key", "name")
+
+    val finalExpectedData = Seq(
+      (11, "1", "A_1"),
+      (9, "2", "B_1"),
+      (3, "3", "C_3"),
+      (14, "5", "E_3"))
+
+    val expectedDf = sparkSession.createDataFrame(finalExpectedData).toDF(finalColumns: _*)
+
+    assertEquals(0, finalDf.except(expectedDf).count())
+    assertEquals(0, expectedDf.except(finalDf).count())
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testArgs"))
+  def testPositionFallbackWithDefaultMerger(updateWithRecordPositions: String, deleteWithRecordPositions: String,
+                                            secondUpdateWithPositions: String): Unit = {
+    val columns = Seq("ts", "key", "name", "_hoodie_is_deleted")
+    val data = Seq(
+      (10, "1", "A", false),
+      (10, "2", "B", false),
+      (10, "3", "C", false),
+      (10, "4", "D", false),
+      (10, "5", "E", false))
+
+    val commonOpts = Map(RECORDKEY_FIELD.key() -> "key", "hoodie.table.name" -> "test_table",
+      PRECOMBINE_FIELD.key() -> "ts", TABLE_TYPE.key() -> "MERGE_ON_READ",
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> "parquet",
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> "true")
+
+    val inserts = sparkSession.createDataFrame(data).toDF(columns: _*)
+    inserts.write.format("hudi").
+      options(commonOpts).
+      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true").
+      mode(Overwrite).
+      save(basePath)
+
+    val updateData = Seq((11, "1", "A_1", false), (9, "2", "B_1", false))
+
+    val updates = sparkSession.createDataFrame(updateData).toDF(columns: _*)
+
+    updates.write.format("hudi").
+      options(commonOpts).
+      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), updateWithRecordPositions).
+      mode(Append).
+      save(basePath)
+
+    val deletesData = Seq((10, "4", "D",  true), (10, "3", "C", true))
+
+    val deletes = sparkSession.createDataFrame(deletesData).toDF(columns: _*)
+    deletes.write.format("hudi").
+      options(commonOpts).
+      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), deleteWithRecordPositions).
+      mode(Append).
+      save(basePath)
+
+
+    val secondUpdateData = Seq((14, "5", "E_3", false), (3, "3", "C_3", false))
+    val secondUpdates = sparkSession.createDataFrame(secondUpdateData).toDF(columns: _*)
+    secondUpdates.write.format("hudi").
+      options(commonOpts).
+      option(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), secondUpdateWithPositions).
+      mode(Append).
+      save(basePath)
+
+    val df = sparkSession.read.format("hudi").
       option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
       option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "true").load(basePath)
     val finalDf = df.select("ts", "key", "name")

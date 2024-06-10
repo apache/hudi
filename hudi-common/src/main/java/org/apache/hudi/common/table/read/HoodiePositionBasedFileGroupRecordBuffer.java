@@ -52,7 +52,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -157,6 +156,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
         records.remove(position);
       } else {
         //if it's a delete record and the key is null, then we need to still use positions
+        //this happens when we read the positions using logBlock.getRecordPositions()
+        //instead of reading the delete records themselves
         needToDoHybridStrategy = true;
       }
     }
@@ -176,20 +177,24 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       super.processDeleteBlock(deleteBlock);
       return;
     }
-    if (recordMerger.getMergingStrategy().equals(DEFAULT_MERGER_STRATEGY_UUID)) {
-      for (Long recordPosition : recordPositions) {
-        records.put(recordPosition,
-            Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0L)));
-      }
-      return;
-    }
 
-    int recordIndex = 0;
-    Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
-    while (it.hasNext()) {
-      DeleteRecord record = it.next();
-      long recordPosition = recordPositions.get(recordIndex++);
-      processNextDeletedRecord(record, recordPosition);
+    switch (recordMergeMode) {
+      case OVERWRITE_WITH_LATEST:
+        for (Long recordPosition : recordPositions) {
+          records.putIfAbsent(recordPosition,
+              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0L)));
+        }
+        return;
+      case EVENT_TIME_ORDERING:
+      case CUSTOM:
+      default:
+        int recordIndex = 0;
+        Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
+        while (it.hasNext()) {
+          DeleteRecord record = it.next();
+          long recordPosition = recordPositions.get(recordIndex++);
+          processNextDeletedRecord(record, recordPosition);
+        }
     }
   }
 

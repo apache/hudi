@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -58,6 +59,7 @@ public abstract class HoodieReaderContext<T> {
   private String tablePath = null;
   private String latestCommitTime = null;
   private HoodieRecordMerger recordMerger = null;
+  private RecordMergeMode recordMergeMode = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;

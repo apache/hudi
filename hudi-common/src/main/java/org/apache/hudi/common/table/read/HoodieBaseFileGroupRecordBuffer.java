@@ -89,6 +89,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(payloadProps);
     this.recordMerger = recordMerger;
+    if (recordMerger.getRecordMergeMode() != this.recordMergeMode) {
+      throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
+    }
     this.payloadProps = payloadProps;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
@@ -285,21 +288,28 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord,
                                                             Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
     if (existingRecordMetadataPair != null) {
-      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
-      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
-      // For same ordering values, uses the natural order(arrival time semantics).
-      Comparable existingOrderingVal = readerContext.getOrderingValue(
-          existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-          payloadProps);
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      // Checks the ordering value does not equal to 0
-      // because we use 0 as the default value which means natural order
-      boolean chooseExisting = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-          && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
-      if (chooseExisting) {
-        // The DELETE message is obsolete if the old message has greater orderingVal.
-        return Option.empty();
+      switch (recordMergeMode) {
+        case OVERWRITE_WITH_LATEST:
+          return Option.empty();
+        case EVENT_TIME_ORDERING:
+        case CUSTOM:
+        default:
+          Comparable existingOrderingVal = readerContext.getOrderingValue(
+              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
+              payloadProps);
+          if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
+            return Option.empty();
+          }
+          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+          // Checks the ordering value does not equal to 0
+          // because we use 0 as the default value which means natural order
+          boolean chooseExisting = !deleteOrderingVal.equals(0)
+              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+          if (chooseExisting) {
+            // The DELETE message is obsolete if the old message has greater orderingVal.
+            return Option.empty();
+          }
       }
     }
     // Do delete.

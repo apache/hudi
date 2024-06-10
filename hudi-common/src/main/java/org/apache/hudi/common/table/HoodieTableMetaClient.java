@@ -79,6 +79,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -1415,7 +1416,8 @@ public class HoodieTableMetaClient implements Serializable {
         boolean recordMergerStrategySet = null != recordMergerStrategy;
 
         if (!recordMergerStrategySet
-            || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+            || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)
+            || recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
           if (payloadClassNameSet) {
             if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
               recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
@@ -1458,6 +1460,7 @@ public class HoodieTableMetaClient implements Serializable {
                   || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
                   || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
               constructMergeConfigErrorMessage());
+          checkArgument(StringUtils.isNullOrEmpty(preCombineField), "Source ordering cannot be set when OVERWRITE_WITH_LATEST merge mode is used");
           break;
         case EVENT_TIME_ORDERING:
           checkArgument((!payloadClassNameSet && !payloadTypeSet)
