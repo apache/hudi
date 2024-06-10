@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -58,6 +60,8 @@ public class TestCustomMerger extends HoodieFileGroupReaderTestHarness {
     readerContext = new HoodieTestReaderContext(
         Option.of(new CustomAvroMerger()),
         Option.of(HoodieRecordTestPayload.class.getName()));
+    properties.setProperty(
+        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:
