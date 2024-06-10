@@ -157,26 +157,33 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
    * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
    * If one of the {@link Comparable}s is a String, assumes that both are String values for comparison.
    *
+   * @param readerContext {@link HoodieReaderContext} instance.
    * @param o1 {@link Comparable} object.
    * @param o2 other {@link Comparable} object to compare to.
    * @return comparison result.
    */
   @VisibleForTesting
-  static int compareTo(Comparable o1, Comparable o2) {
+  static int compareTo(HoodieReaderContext readerContext, Comparable o1, Comparable o2) {
     // TODO(HUDI-7848): fix the delete records to contain the correct ordering value type
     //  so this util with the number comparison is not necessary.
     try {
       return o1.compareTo(o2);
     } catch (ClassCastException e) {
-      if (o1 instanceof Number && o2 instanceof Number) {
+      boolean isO1LongOrInteger = (o1 instanceof Long || o1 instanceof Integer);
+      boolean isO2LongOrInteger = (o2 instanceof Long || o2 instanceof Integer);
+      boolean isO1DoubleOrFloat = (o1 instanceof Double || o1 instanceof Float);
+      boolean isO2DoubleOrFloat = (o2 instanceof Double || o2 instanceof Float);
+      if (isO1LongOrInteger && isO2LongOrInteger) {
         Long o1LongValue = ((Number) o1).longValue();
         Long o2LongValue = ((Number) o2).longValue();
         return o1LongValue.compareTo(o2LongValue);
-      } else if (o1 instanceof String || o2 instanceof String) {
-        return o1.toString().compareTo(o2.toString());
+      } else if ((isO1LongOrInteger && isO2DoubleOrFloat)
+          || (isO1DoubleOrFloat && isO2LongOrInteger)) {
+        Double o1DoubleValue = ((Number) o1).doubleValue();
+        Double o2DoubleValue = ((Number) o2).doubleValue();
+        return o1DoubleValue.compareTo(o2DoubleValue);
       } else {
-        throw new IllegalArgumentException("Cannot compare values in different types: "
-            + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")");
+        return readerContext.compareTo(o1, o2);
       }
     } catch (Throwable e) {
       throw new HoodieException("Cannot compare values: "
@@ -236,7 +243,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             }
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
                 Option.of(record), metadata, readerSchema, payloadProps);
-            if (compareTo(incomingOrderingValue, existingOrderingValue) > 0) {
+            if (compareTo(readerContext, incomingOrderingValue, existingOrderingValue) > 0) {
               return Option.of(Pair.of(record, metadata));
             }
             return Option.empty();
@@ -399,7 +406,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-          if (compareTo(oldOrderingValue, newOrderingValue) > 0) {
+          if (compareTo(readerContext, oldOrderingValue, newOrderingValue) > 0) {
             return older;
           }
           return newer;
