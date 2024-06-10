@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -37,12 +38,12 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 /**
@@ -53,11 +54,11 @@ import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STR
  */
 public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
   private static final String ROW_INDEX_COLUMN_NAME = "row_index";
+  public static final String ROW_INDEX_TEMPORARY_COLUMN_NAME = "_tmp_metadata_" + ROW_INDEX_COLUMN_NAME;
   private long nextRecordPosition = 0L;
 
   public HoodiePositionBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                                  Schema readerSchema,
-                                                  Schema baseFileSchema,
+                                                  HoodieTableMetaClient hoodieTableMetaClient,
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
@@ -66,7 +67,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
                                                   String spillableMapBasePath,
                                                   ExternalSpillableMap.DiskMapType diskMapType,
                                                   boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt,
         recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
@@ -92,27 +93,30 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
       // partial merging.
       enablePartialMerging = true;
     }
-    
+
     // Extract positions from data block.
     List<Long> recordPositions = extractRecordPositions(dataBlock);
+    Pair<Function<T, T>, Schema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
 
-    // TODO: return an iterator that can generate sequence number with the record.
-    //  Then we can hide this logic into data block.
+    // TODO: Return an iterator that can generate sequence number with the record.
+    //       Then we can hide this logic into data block.
     try (ClosableIterator<T> recordIterator = dataBlock.getEngineRecordIterator(readerContext)) {
       int recordIndex = 0;
       while (recordIterator.hasNext()) {
         T nextRecord = recordIterator.next();
 
         // Skip a record if it is not contained in the specified keys.
-        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys)) {
+        if (shouldSkip(nextRecord, dataBlock.getKeyFieldName(), isFullKey, keys, dataBlock.getSchema())) {
           recordIndex++;
           continue;
         }
 
         long recordPosition = recordPositions.get(recordIndex++);
+
+        T evolvedNextRecord = schemaTransformerWithEvolvedSchema.getLeft().apply(nextRecord);
         processNextDataRecord(
-            nextRecord,
-            readerContext.generateMetadataForRecord(nextRecord, readerSchema),
+            evolvedNextRecord,
+            readerContext.generateMetadataForRecord(evolvedNextRecord, schemaTransformerWithEvolvedSchema.getRight()),
             recordPosition
         );
       }
@@ -176,37 +180,14 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieBaseFileG
     // Handle merging.
     while (baseFileIterator.hasNext()) {
       T baseRecord = baseFileIterator.next();
-      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_COLUMN_NAME, nextRecordPosition);
+      nextRecordPosition = readerContext.extractRecordPosition(baseRecord, readerSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME, nextRecordPosition);
       Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(nextRecordPosition++);
-
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (hasNextBaseRecord(baseRecord, logRecordInfo)) {
         return true;
       }
     }
 
     // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-
-    return false;
+    return hasNextLogRecord();
   }
 }

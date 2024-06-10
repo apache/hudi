@@ -219,7 +219,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
    */
   @ParameterizedTest
   @MethodSource("configParamsForSorting")
-  public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws IOException {
+  public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws Exception {
     Map<String, String> options = new HashMap<>();
     // Record key is handled specially
     if (sortColumn.equals("_row_key")) {

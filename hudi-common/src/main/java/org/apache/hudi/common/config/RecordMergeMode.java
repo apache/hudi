@@ -17,20 +17,20 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.config;
 
-import org.apache.hudi.common.config.TypedProperties;
+@EnumDescription("Determines the logic of merging updates")
+public enum RecordMergeMode {
+  @EnumFieldDescription("Using transaction time to merge records, i.e., the record from later "
+      + "transaction overwrites the earlier record with the same key.")
+  OVERWRITE_WITH_LATEST,
 
-import org.apache.avro.Schema;
+  @EnumFieldDescription("Using event time as the ordering to merge records, i.e., the record "
+      + "with the larger event time overwrites the record with the smaller event time on the "
+      + "same key, regardless of transaction time. The event time or preCombine field needs "
+      + "to be specified by the user.")
+  EVENT_TIME_ORDERING,
 
-/**
- * A class holding the state that is needed by {@code HoodieFileGroupReader},
- * e.g., schema, merging strategy, etc.
- */
-public class HoodieFileGroupReaderState {
-  public String tablePath;
-  public String latestCommitTime;
-  public Schema baseFileAvroSchema;
-  public Schema logRecordAvroSchema;
-  public TypedProperties mergeProps = new TypedProperties();
+  @EnumFieldDescription("Using custom merging logic specified by the user.")
+  CUSTOM
 }

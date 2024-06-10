@@ -37,12 +37,14 @@ import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
+  private val LOG = LoggerFactory.getLogger(getClass)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
@@ -85,8 +87,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach{db =>
-          catalog.listTables(db).foreach {table =>
+        catalog.listDatabases().foreach { db =>
+          catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
           }
         }

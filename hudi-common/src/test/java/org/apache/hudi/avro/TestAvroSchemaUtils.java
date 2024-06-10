@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -28,6 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -256,10 +258,9 @@ public class TestAvroSchemaUtils {
         () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, BROKEN_SCHEMA, true, false, Collections.emptySet()));
   }
 
-  /* [HUDI-7045] should uncomment this test
   @Test
   public void testAppendFieldsToSchemaDedupNested() {
-    Schema full_schema = new Schema.Parser().parse("{\n"
+    Schema fullSchema = new Schema.Parser().parse("{\n"
         + "  \"type\": \"record\",\n"
         + "  \"namespace\": \"example.schema\",\n"
         + "  \"name\": \"source\",\n"
@@ -292,7 +293,7 @@ public class TestAvroSchemaUtils {
         + "  ]\n"
         + "}\n");
 
-    Schema missing_field_schema = new Schema.Parser().parse("{\n"
+    Schema missingFieldSchema = new Schema.Parser().parse("{\n"
         + "  \"type\": \"record\",\n"
         + "  \"namespace\": \"example.schema\",\n"
         + "  \"name\": \"source\",\n"
@@ -321,9 +322,8 @@ public class TestAvroSchemaUtils {
         + "  ]\n"
         + "}\n");
 
-      Option<Schema.Field> missingField = AvroSchemaUtils.findNestedField(full_schema, "nested_record.long");
-      assertTrue(missingField.isPresent());
-      assertEquals(full_schema, AvroSchemaUtils.appendFieldsToSchemaDedupNested(missing_field_schema, Collections.singletonList(missingField.get())));
+    Option<Schema.Field> missingField = AvroSchemaUtils.findNestedField(fullSchema, "nested_record.long");
+    assertTrue(missingField.isPresent());
+    assertEquals(fullSchema, AvroSchemaUtils.appendFieldsToSchemaDedupNested(missingFieldSchema, Collections.singletonList(missingField.get())));
   }
-  */
 }

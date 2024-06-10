@@ -22,17 +22,23 @@ import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.table.timeline.{CompletionTimeQueryView, HoodieDefaultTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.{Function, Supplier}
-import java.util.stream.Collectors
+import java.util.stream.{Collectors, Stream => JStream}
+import java.util.{ArrayList => JArrayList, List => JList}
 
 import scala.collection.JavaConverters._
 
 class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure with ProcedureBuilder {
+
+  private val ALL_PARTITIONS = "ALL_PARTITIONS"
+
   private val PARAMETERS_ALL: Array[ProcedureParameter] = Array[ProcedureParameter](
     ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
@@ -40,7 +46,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     ProcedureParameter.optional(3, "include_in_flight", DataTypes.BooleanType, false),
     ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
     ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(6, "path_regex", DataTypes.StringType, "*/*/*")
+    ProcedureParameter.optional(6, "path_regex", DataTypes.StringType, ALL_PARTITIONS)
   )
 
   private val OUTPUT_TYPE_ALL: StructType = StructType(Array[StructField](
@@ -54,16 +60,11 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     StructField("delta_files", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
-  private val PARAMETERS_LATEST: Array[ProcedureParameter] = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType),
-    ProcedureParameter.optional(1, "max_instant", DataTypes.StringType, ""),
-    ProcedureParameter.optional(2, "include_max", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(3, "include_inflight", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(4, "exclude_compaction", DataTypes.BooleanType, false),
-    ProcedureParameter.optional(5, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(6, "partition_path", DataTypes.StringType),
-    ProcedureParameter.optional(7, "merge", DataTypes.BooleanType, true)
-
+  private val PARAMETERS_LATEST: Array[ProcedureParameter] =
+    PARAMETERS_ALL ++ Array[ProcedureParameter](
+      // Keep it for compatibility with older version, `path_regex` can replace it
+      ProcedureParameter.optional(7, "partition_path", DataTypes.StringType, ALL_PARTITIONS),
+      ProcedureParameter.optional(8, "merge", DataTypes.BooleanType, true)
   )
 
   private val OUTPUT_TYPE_LATEST: StructType = StructType(Array[StructField](
@@ -82,17 +83,16 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     StructField("delta_files_compaction_unscheduled", DataTypes.StringType, nullable = true, Metadata.empty)
   ))
 
-  private def buildFileSystemView(table: Option[Any],
+  private def buildFileSystemView(basePath: String,
+                                  metaClient: HoodieTableMetaClient,
                                   globRegex: String,
                                   maxInstant: String,
                                   includeMaxInstant: Boolean,
                                   includeInflight: Boolean,
                                   excludeCompaction: Boolean
                                  ): HoodieTableFileSystemView = {
-    val basePath = getBasePath(table)
-    val metaClient = createMetaClient(jsc, basePath)
     val storage = metaClient.getStorage
-    val statuses = if (globRegex == PARAMETERS_ALL.apply(6).default) {
+    val statuses = if (globRegex == ALL_PARTITIONS) {
       FSUtils.getAllDataPathInfo(storage, new StoragePath(basePath))
     } else {
       val globPath = String.format("%s/%s/*", basePath, globRegex)
@@ -124,12 +124,12 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     }
 
     val filteredTimeline = new HoodieDefaultTimeline(
-      new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
+      new JArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
     new HoodieTableFileSystemView(metaClient, filteredTimeline, statuses)
   }
 
-  private def showAllFileSlices(fsView: HoodieTableFileSystemView): java.util.List[Row] = {
-    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
+  private def showAllFileSlices(fsView: HoodieTableFileSystemView): JList[Row] = {
+    val rows: JList[Row] = new JArrayList[Row]
     fsView.getAllFileGroups.iterator().asScala.foreach(fg => {
       fg.getAllFileSlices.iterator().asScala.foreach(fs => {
         val fileId = fg.getFileGroupId.getFileId
@@ -150,25 +150,19 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     rows
   }
 
-  private def showLatestFileSlices(fsView: HoodieTableFileSystemView,
-                                   table: Option[Any],
-                                   partition: String,
+  private def showLatestFileSlices(metaClient: HoodieTableMetaClient,
+                                   fsView: HoodieTableFileSystemView,
+                                   partitions: Seq[String],
                                    maxInstant: String,
-                                   merge: Boolean): java.util.List[Row] = {
-    var fileSliceStream: java.util.stream.Stream[FileSlice] = null
-    val basePath = getBasePath(table)
-    val metaClient = createMetaClient(jsc, basePath)
+                                   merge: Boolean): JList[Row] = {
+    var fileSliceStream: JStream[FileSlice] = JStream.empty()
     val completionTimeQueryView = new CompletionTimeQueryView(metaClient)
-    if (!merge) {
-      fileSliceStream = fsView.getLatestFileSlices(partition)
+    if (merge) {
+      partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestMergedFileSlicesBeforeOrOn(p, maxInstant)))
     } else {
-      fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(partition, if (maxInstant.isEmpty) {
-        metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp
-      } else {
-        maxInstant
-      })
+      partitions.foreach(p => fileSliceStream = JStream.concat(fileSliceStream, fsView.getLatestFileSlices(p)))
     }
-    val rows: java.util.List[Row] = new java.util.ArrayList[Row]
+    val rows = new JArrayList[Row]
     fileSliceStream.iterator().asScala.foreach {
       fs => {
         val fileId = fs.getFileId
@@ -204,7 +198,7 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
         val logFilesCommitTimeNonEqualInstantTime = fs.getLogFiles.iterator().asScala
           .filter(logFile => !logFile.getDeltaCommitTime.equals(fs.getBaseInstantTime))
           .mkString("[", ",", "]")
-        rows.add(Row(partition, fileId, baseInstantTime, baseFilePath, baseFileSize, numLogFiles, sumLogFileSize,
+        rows.add(Row(fs.getFileGroupId.getPartitionPath, fileId, baseInstantTime, baseFilePath, baseFileSize, numLogFiles, sumLogFileSize,
           logFilesScheduledForCompactionTotalSize, logFilesUnscheduledTotalSize, logSelectedForCompactionToBaseRatio,
           logUnscheduledToBaseRatio, logFilesCommitTimeEqualInstantTime, logFilesCommitTimeNonEqualInstantTime
         ))
@@ -234,15 +228,40 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     val includeInflight = getArgValueOrDefault(args, parameters(3)).get.asInstanceOf[Boolean]
     val excludeCompaction = getArgValueOrDefault(args, parameters(4)).get.asInstanceOf[Boolean]
     val limit = getArgValueOrDefault(args, parameters(5)).get.asInstanceOf[Int]
-    val rows: java.util.List[Row] = if (!showLatest) {
-      val globRegex = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
-      val fsView = buildFileSystemView(table, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
-      showAllFileSlices(fsView)
+    val globRegex = if (showLatest) {
+      val isPathRegexDefined = isArgDefined(args, parameters(6))
+      val isPartitionPathDefined = isArgDefined(args, parameters(7))
+      if (isPathRegexDefined && isPartitionPathDefined) {
+        throw new HoodieException("path_regex and partition_path cannot be used together")
+      }
+      if (isPathRegexDefined) {
+        getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
+      } else {
+        getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[String]
+      }
     } else {
-      val partitionPath = getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
-      val merge = getArgValueOrDefault(args, parameters(7)).get.asInstanceOf[Boolean]
-      val fsView = buildFileSystemView(table, partitionPath, maxInstant, includeMax, includeInflight, excludeCompaction)
-      showLatestFileSlices(fsView, table, partitionPath, maxInstant, merge)
+      getArgValueOrDefault(args, parameters(6)).get.asInstanceOf[String]
+    }
+    val basePath = getBasePath(table)
+    val metaClient = createMetaClient(jsc, basePath)
+    val fsView = buildFileSystemView(basePath, metaClient, globRegex, maxInstant, includeMax, includeInflight, excludeCompaction)
+    val rows = if (showLatest) {
+      val merge = getArgValueOrDefault(args, parameters(8)).get.asInstanceOf[Boolean]
+      val maxInstantForMerge = if (merge && maxInstant.isEmpty) {
+        val lastInstant = metaClient.getActiveTimeline.filterCompletedAndCompactionInstants().lastInstant()
+        if (lastInstant.isPresent) {
+          lastInstant.get().getTimestamp
+        } else {
+          // scalastyle:off return
+          return Seq.empty
+          // scalastyle:on return
+        }
+      } else {
+        maxInstant
+      }
+      showLatestFileSlices(metaClient, fsView, fsView.getPartitionNames.asScala.toSeq, maxInstantForMerge, merge)
+    } else {
+      showAllFileSlices(fsView)
     }
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }

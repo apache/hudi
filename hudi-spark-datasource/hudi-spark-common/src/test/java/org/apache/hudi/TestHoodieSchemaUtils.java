@@ -27,16 +27,20 @@ import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 
-import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createArrayField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createMapField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createNestedField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullablePrimitiveField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createPrimitiveField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -279,9 +283,9 @@ public class TestHoodieSchemaUtils {
             createPrimitiveField("nestedField1", Schema.Type.INT),
             createPrimitiveField("nestedField2", Schema.Type.INT),
             createPrimitiveField("nestedField3", Schema.Type.INT),
-            createNullableField("nestedField4", Schema.Type.INT))),
+            createNullablePrimitiveField("nestedField4", Schema.Type.INT))),
         createPrimitiveField("field4", Schema.Type.INT),
-        createNullableField("field5", Schema.Type.INT));
+        createNullablePrimitiveField("field5", Schema.Type.INT));
     assertEquals(expected, deduceWriterSchema(end, start, true));
   }
 
@@ -295,42 +299,6 @@ public class TestHoodieSchemaUtils {
     TYPED_PROPERTIES.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(), addNull.toString());
     return HoodieSchemaUtils.deduceWriterSchema(incomingSchema, Option.ofNullable(latestTableSchema),
         Option.empty(), TYPED_PROPERTIES);
-  }
-
-  private static Schema.Field createNestedField(String name, Schema.Type type) {
-    return createNestedField(name, Schema.create(type));
-  }
-
-  private static Schema.Field createNestedField(String name, Schema schema) {
-    return new Schema.Field(name, createRecord(name, new Schema.Field("nested", schema, null, null)), null, null);
-  }
-
-  private static Schema.Field createArrayField(String name, Schema.Type type) {
-    return createArrayField(name, Schema.create(type));
-  }
-
-  private static Schema.Field createArrayField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createArray(schema), null, null);
-  }
-
-  private static Schema.Field createMapField(String name, Schema.Type type) {
-    return createMapField(name, Schema.create(type));
-  }
-
-  private static Schema.Field createMapField(String name, Schema schema) {
-    return new Schema.Field(name, Schema.createMap(schema), null, null);
-  }
-
-  private static Schema.Field createPrimitiveField(String name, Schema.Type type) {
-    return new Schema.Field(name, Schema.create(type), null, null);
-  }
-
-  private static Schema.Field createNullableField(String name, Schema.Type type) {
-    return new Schema.Field(name, Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(type))), null, JsonProperties.NULL_VALUE);
-  }
-  
-  private static Schema createRecord(String name, Schema.Field... fields) {
-    return Schema.createRecord(name, null, null, false, Arrays.asList(fields));
   }
 
 }

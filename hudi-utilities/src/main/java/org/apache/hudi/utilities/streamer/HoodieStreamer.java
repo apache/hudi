@@ -446,7 +446,7 @@ public class HoodieStreamer implements Serializable {
     }
 
     public static TypedProperties getProps(Configuration conf, Config cfg) {
-      return cfg.propsFilePath.isEmpty()
+      return cfg.propsFilePath.isEmpty() || cfg.propsFilePath.equals(DEFAULT_DFS_SOURCE_PROPERTIES)
           ? buildProperties(cfg.configs)
           : readConfig(conf, new Path(cfg.propsFilePath), cfg.configs).getProps();
     }
