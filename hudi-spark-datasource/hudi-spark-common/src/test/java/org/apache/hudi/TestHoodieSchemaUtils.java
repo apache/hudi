@@ -278,7 +278,11 @@ public class TestHoodieSchemaUtils {
     Schema end = createRecord("reorderFields",
         createPrimitiveField("field3", Schema.Type.INT),
         createPrimitiveField("field1", Schema.Type.INT));
-    assertEquals(start, deduceWriterSchema(end, start, true));
+    Schema expected = createRecord("reorderFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createNullablePrimitiveField("field2", Schema.Type.INT),
+        createPrimitiveField("field3", Schema.Type.INT));
+    assertEquals(expected, deduceWriterSchema(end, start, true));
 
     // nested field ordering changes and new field is added
     start = createRecord("reorderNestedFields",
@@ -300,7 +304,7 @@ public class TestHoodieSchemaUtils {
             createPrimitiveField("nestedField4", Schema.Type.INT))),
         createPrimitiveField("field4", Schema.Type.INT));
 
-    Schema expected = createRecord("reorderNestedFields",
+    expected = createRecord("reorderNestedFields",
         createPrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field2", Schema.Type.INT),
         createArrayField("field3", createRecord("reorderNestedFields.field3",
