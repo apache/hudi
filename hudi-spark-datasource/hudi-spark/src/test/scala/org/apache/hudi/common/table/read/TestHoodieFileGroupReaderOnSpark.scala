@@ -19,8 +19,6 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
@@ -28,14 +26,19 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.{HoodieSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.{HoodieSparkKryoRegistrar, SparkConf}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**
@@ -113,5 +116,9 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
       spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
     assertEquals(0, expectedDf.except(actualDf).count())
     assertEquals(0, actualDf.except(expectedDf).count())
+  }
+
+  override def getComparableUTF8String(value: String): Comparable[_] = {
+    UTF8String.fromString(value)
   }
 }

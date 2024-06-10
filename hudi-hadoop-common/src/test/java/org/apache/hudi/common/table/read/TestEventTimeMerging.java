@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
@@ -60,6 +62,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
         Option.of(HoodieRecordTestPayload.class.getName()));
+    properties.setProperty(
+        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:

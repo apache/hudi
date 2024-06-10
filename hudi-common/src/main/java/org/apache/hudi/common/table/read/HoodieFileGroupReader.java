@@ -19,7 +19,9 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -46,11 +48,13 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A file group reader that iterates through the records in a single file group.
@@ -73,6 +77,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long length;
   // Core structure to store and process records.
   private final HoodieFileGroupRecordBuffer<T> recordBuffer;
+  private final RecordMergeMode recordMergeMode;
   private ClosableIterator<T> baseFileIterator;
   private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
@@ -102,6 +107,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.props = props;
     this.start = start;
     this.length = length;
+    this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
     readerContext.setRecordMerger(this.recordMerger);
     readerContext.setTablePath(tablePath);
@@ -154,11 +160,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
     BaseFile dataFile = baseFile.getBootstrapBaseFile().get();
-    Pair<List<Schema.Field>,List<Schema.Field>> requiredFields = readerContext.getSchemaHandler().getBootstrapRequiredFields();
-    Pair<List<Schema.Field>,List<Schema.Field>> allFields = readerContext.getSchemaHandler().getBootstrapDataFields();
-    Option<Pair<ClosableIterator<T>,Schema>> dataFileIterator =
+    Pair<List<Schema.Field>, List<Schema.Field>> requiredFields = readerContext.getSchemaHandler().getBootstrapRequiredFields();
+    Pair<List<Schema.Field>, List<Schema.Field>> allFields = readerContext.getSchemaHandler().getBootstrapDataFields();
+    Option<Pair<ClosableIterator<T>, Schema>> dataFileIterator =
         makeBootstrapBaseFileIteratorHelper(requiredFields.getRight(), allFields.getRight(), dataFile);
-    Option<Pair<ClosableIterator<T>,Schema>> skeletonFileIterator =
+    Option<Pair<ClosableIterator<T>, Schema>> skeletonFileIterator =
         makeBootstrapBaseFileIteratorHelper(requiredFields.getLeft(), allFields.getLeft(), baseFile);
     if (!dataFileIterator.isPresent() && !skeletonFileIterator.isPresent()) {
       throw new IllegalStateException("should not be here if only partition cols are required");
@@ -180,9 +186,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
    * @param file           file to be read
    * @return pair of the record iterator of the file, and the schema of the data being read
    */
-  private Option<Pair<ClosableIterator<T>,Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
-                                                                                       List<Schema.Field> allFields,
-                                                                                       BaseFile file) throws IOException {
+  private Option<Pair<ClosableIterator<T>, Schema>> makeBootstrapBaseFileIteratorHelper(List<Schema.Field> requiredFields,
+                                                                                        List<Schema.Field> allFields,
+                                                                                        BaseFile file) throws IOException {
     if (requiredFields.isEmpty()) {
       return Option.empty();
     }
@@ -225,6 +231,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withPartition(getRelativePartitionPath(
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
         .withRecordMerger(recordMerger)
+        .withRecordMergeMode(recordMergeMode)
         .withRecordBuffer(recordBuffer)
         .build();
     logRecordReader.close();
@@ -242,6 +249,11 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
     return new HoodieFileGroupReaderIterator<>(this);
+  }
+
+  public static RecordMergeMode getRecordMergeMode(Properties props) {
+    String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase();
+    return RecordMergeMode.valueOf(mergeMode);
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {

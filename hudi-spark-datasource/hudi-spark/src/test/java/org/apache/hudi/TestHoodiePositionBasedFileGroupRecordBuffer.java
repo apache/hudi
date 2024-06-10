@@ -19,7 +19,9 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
@@ -109,13 +111,15 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     ctx.setRecordMerger(useCustomMerger ? new CustomMerger() : new HoodieSparkRecordMerger());
     ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig()));
+    TypedProperties props = new TypedProperties();
+    props.put(HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
         partitionNameOpt,
         partitionFields,
         ctx.getRecordMerger(),
-        new TypedProperties(),
+        props,
         1024 * 1024 * 1000,
         metaClient.getTempFolderPath(),
         ExternalSpillableMap.DiskMapType.ROCKS_DB,

@@ -185,7 +185,7 @@
     <scala.version>${scala12.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
-    <apache-rat-plugin.version>0.13</apache-rat-plugin.version>
+    <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
     <scalatest.spark_pre31.version>3.0.1</scalatest.spark_pre31.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>

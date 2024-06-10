@@ -39,6 +39,7 @@ import org.apache.spark.sql.HoodieUnsafeRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -135,6 +136,15 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         HoodieInternalRowUtils.getCachedUnsafeRowWriter(getCachedSchema(from), getCachedSchema(to), renamedColumns);
     return row -> (InternalRow) unsafeRowWriter.apply(row);
 
+  }
+
+  @Override
+  public int compareTo(Comparable o1, Comparable o2) {
+    if ((o1 instanceof String && o2 instanceof UTF8String)
+        || (o1 instanceof UTF8String && o2 instanceof String)) {
+      return o1.toString().compareTo(o2.toString());
+    }
+    return super.compareTo(o1, o2);
   }
 
   protected UnaryOperator<InternalRow> getIdentityProjection() {
