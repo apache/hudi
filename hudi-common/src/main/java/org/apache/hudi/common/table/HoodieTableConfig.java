@@ -198,6 +198,17 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.compaction.record.merger.strategy")
       .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .withInferFunction(cfg -> {
+        switch (RecordMergeMode.valueOf(cfg.getStringOrDefault(RECORD_MERGE_MODE))) {
+          case EVENT_TIME_ORDERING:
+            return Option.of(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
+          case OVERWRITE_WITH_LATEST:
+            return Option.of(HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID);
+          case CUSTOM:
+          default:
+            return Option.empty();
+        }
+      })
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
