@@ -574,24 +574,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // makes sense only when clean policy is num commits based or hours based.
       Option<HoodieInstant> earliestToRetain = getEarliestCommitToRetain();
       if (!savepointedTimestamps.isEmpty()) { // if savepoints are found.
-        if (savepointedTimestamps.size() == 1) {
-          earliestCommitToNotArchive = Option.of(savepointedTimestamps.get(0));
-        } else {
-          // find the first savepoint timestamp
-          List<String> savepointsClone = new ArrayList<>(savepointedTimestamps);
-          Collections.sort(savepointsClone);
-          earliestCommitToNotArchive = Option.of(savepointsClone.get(0));
-        }
+        // find the first savepoint timestamp
+        earliestCommitToNotArchive = Option.fromJavaOptional(savepointedTimestamps.stream().sorted().findFirst());
 
         // earliest commit to not archive = min (earliest commit to retain, earliest commit to not archive)
-        if (earliestToRetain.isPresent() && HoodieTimeline.compareTimestamps(earliestCommitToNotArchive.get(), HoodieTimeline.GREATER_THAN, earliestToRetain.get().getTimestamp())) {
-          earliestCommitToNotArchive = Option.of(earliestToRetain.get().getTimestamp());
-          LOG.info(String.format("Setting Earliest Commit to Not Archive same as Earliest commit to retain to %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
-              Arrays.toString(savepointedTimestamps.toArray())));
-        } else {
-          LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
-              Arrays.toString(savepointedTimestamps.toArray())));
+        if (earliestToRetain.isPresent()) {
+          earliestCommitToNotArchive = Option.of(HoodieTimeline.minTimestamp(earliestToRetain.get().getTimestamp(), earliestCommitToNotArchive.get()));
         }
+        LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
+            earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
       } else {
         // no savepoints found.
         // lets set the value regardless. Would help us differentiate older versions of hudi where this will not be set vs latest version where this will be set to either earliest savepoint

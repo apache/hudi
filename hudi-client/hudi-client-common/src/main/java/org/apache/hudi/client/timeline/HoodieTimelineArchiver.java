@@ -22,6 +22,7 @@ package org.apache.hudi.client.timeline;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -40,6 +42,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -59,6 +62,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.ArchivalUtils.getMinAndMaxInstantsToKeep;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
@@ -138,6 +142,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION, HoodieTimeline.ROLLBACK_ACTION))
         .filterCompletedInstants();
+    Option<String> lastCleanInstantTimestamp = table.getActiveTimeline().getCleanerTimeline().lastInstant().map(HoodieInstant::getTimestamp);
 
     // Since the commit instants to archive is continuous, we can use the latest commit instant to archive as the
     // right boundary to collect the clean or rollback instants to archive.
@@ -150,8 +155,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     //  CommitInstantsToArchive: commit1, commit2, commit3, commit4, commit5
     //  CleanAndRollbackInstantsToArchive: clean1, clean2, rollback1
 
+    String timestampToNotArchive = HoodieTimeline.minTimestamp(latestCommitInstantToArchive.getTimestamp(), lastCleanInstantTimestamp.orElse(null));
     return cleanAndRollbackTimeline.getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, latestCommitInstantToArchive.getTimestamp()))
+        .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, timestampToNotArchive))
         .collect(Collectors.toList());
   }
 
@@ -264,10 +270,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .map(Option::get)
         .min(HoodieInstant.COMPARATOR);
 
-    // Step2: We cannot archive any commits which are made after the first savepoint present,
+    // Step2: We cannot archive any commits which are later than EarliestCommitToNotArchive.
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
-    Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
+    Option<String> earliestCommitToNotArchive = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
 
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
         .filter(s -> {
@@ -275,9 +281,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             // skip savepoint commits and proceed further
             return !savepointTimestamps.contains(s.getTimestamp());
           } else {
-            // if no savepoint present, then don't filter
-            // stop at first savepoint commit
-            return !firstSavepoint.isPresent() || compareTimestamps(s.getTimestamp(), LESSER_THAN, firstSavepoint.get().getTimestamp());
+            // stop at earliest commit to not archive
+            return !(earliestCommitToNotArchive.isPresent() && compareTimestamps(earliestCommitToNotArchive.get(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
           }
         }).filter(s -> earliestInstantToRetain
             .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
@@ -358,6 +363,25 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
 
     return true;
+  }
+
+  private Option<String> getEarliestCommitToNotArchive(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+    // if clean policy is based on file versions, earliest commit to not archive may not be set. So, we have to explicitly check the savepoint timeline
+    // and guard against the first one.
+    String earliestInstantToNotArchive = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(null);
+    if (config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+      if (cleanInstantOpt.isPresent()) {
+        HoodieInstant cleanInstant = cleanInstantOpt.get();
+        String cleanerEarliestInstantToNotArchive = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+                ? cleanInstant
+                : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+            .getExtraMetadata().getOrDefault(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
+        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+      }
+    }
+    return Option.ofNullable(earliestInstantToNotArchive);
   }
 
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
