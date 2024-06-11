@@ -27,6 +27,9 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+/**
+ * Avro Merger that always chooses the newer record
+ */
 public class OverwriteWithLatestMerger implements HoodieRecordMerger {
 
   @Override
