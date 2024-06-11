@@ -38,6 +38,7 @@ import java.util.Map;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createArrayField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createMapField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createNestedField;
+import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullableArrayField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createNullablePrimitiveField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createPrimitiveField;
 import static org.apache.hudi.avro.AvroSchemaTestUtils.createRecord;
@@ -199,7 +200,12 @@ public class TestHoodieSchemaUtils {
         createPrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field3", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingSimpleField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createNullablePrimitiveField("field2", Schema.Type.INT),
+          createPrimitiveField("field3", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -220,7 +226,16 @@ public class TestHoodieSchemaUtils {
         createPrimitiveField("field2", Schema.Type.INT),
         createPrimitiveField("field4", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingComplexField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createPrimitiveField("field2", Schema.Type.INT),
+          createNullableArrayField("field3", createRecord("nestedRecord",
+              createPrimitiveField("nestedField1", Schema.Type.INT),
+              createPrimitiveField("nestedField2", Schema.Type.INT),
+              createPrimitiveField("nestedField3", Schema.Type.INT))),
+          createPrimitiveField("field4", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -235,7 +250,16 @@ public class TestHoodieSchemaUtils {
             createPrimitiveField("nestedField3", Schema.Type.INT))),
         createPrimitiveField("field4", Schema.Type.INT));
     try {
-      assertEquals(start, deduceWriterSchema(end, start, allowDroppedColumns));
+      Schema actual = deduceWriterSchema(end, start, allowDroppedColumns);
+      Schema expected = createRecord("missingComplexField",
+          createPrimitiveField("field1", Schema.Type.INT),
+          createNullablePrimitiveField("field2", Schema.Type.INT),
+          createArrayField("field3", createRecord("nestedRecord",
+              createNullablePrimitiveField("nestedField1", Schema.Type.INT),
+              createPrimitiveField("nestedField2", Schema.Type.INT),
+              createPrimitiveField("nestedField3", Schema.Type.INT))),
+          createPrimitiveField("field4", Schema.Type.INT));
+      assertEquals(expected, actual);
       assertTrue(allowDroppedColumns);
     } catch (MissingSchemaFieldException e) {
       assertFalse(allowDroppedColumns);
@@ -254,7 +278,11 @@ public class TestHoodieSchemaUtils {
     Schema end = createRecord("reorderFields",
         createPrimitiveField("field3", Schema.Type.INT),
         createPrimitiveField("field1", Schema.Type.INT));
-    assertEquals(start, deduceWriterSchema(end, start, true));
+    Schema expected = createRecord("reorderFields",
+        createPrimitiveField("field1", Schema.Type.INT),
+        createNullablePrimitiveField("field2", Schema.Type.INT),
+        createPrimitiveField("field3", Schema.Type.INT));
+    assertEquals(expected, deduceWriterSchema(end, start, true));
 
     // nested field ordering changes and new field is added
     start = createRecord("reorderNestedFields",
@@ -276,7 +304,7 @@ public class TestHoodieSchemaUtils {
             createPrimitiveField("nestedField4", Schema.Type.INT))),
         createPrimitiveField("field4", Schema.Type.INT));
 
-    Schema expected = createRecord("reorderNestedFields",
+    expected = createRecord("reorderNestedFields",
         createPrimitiveField("field1", Schema.Type.INT),
         createPrimitiveField("field2", Schema.Type.INT),
         createArrayField("field3", createRecord("reorderNestedFields.field3",
