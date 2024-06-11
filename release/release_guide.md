@@ -283,9 +283,9 @@ Here is how to go about a bug fix release.
 
 - Create a branch in your repo (<user>/hudi).
 - Cherry-pick commits from master that needs to be part of this release. (git cherry-pick commit-hash). You need to manually resolve the conflicts. For eg, a file might have been moved to a diff class in master where as in your release branch, it could be in older place. You need to take a call where to place it. Similar things like file addition, file deletion, etc.
-- Update the release version by running "mvn versions:set -DnewVersion=${RELEASE}-rc${RC_NUM}", with "RELEASE" as the version and "RC_NUM" as the RC number.  Make sure the version changes are intended.  Then git commit the changes.
+- Update the release version by running `mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}`, with "RELEASE" as the version and "RC_NUM" as the RC number.  Make sure the version changes are intended.  Then git commit the changes.
 - Ensure both compilation and tests are good.
-- I assume you will have apache/hudi as upstream. If not add it as upstream
+- If apache/hudi is not set as upstream, then add it as upstream: `git remote add upstream https://github.com/apache/hudi.git`
 - Once the branch is ready with all commits, go ahead and push your branch to upstream.
 - Go to apache/hudi repo locally and pull this branch. Here after you can work on this branch and push to origin when need be.
 - Do not forget to set the env variables from above section.
