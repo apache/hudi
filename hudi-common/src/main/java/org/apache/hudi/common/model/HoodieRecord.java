@@ -20,7 +20,6 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -190,17 +189,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.newLocation = record.newLocation;
     this.sealed = record.sealed;
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
-  }
-
-  @VisibleForTesting
-  public HoodieRecord(T data, HoodieRecordLocation currentLocation) {
-    this.currentLocation = currentLocation;
-    this.data = data;
-  }
-
-  @VisibleForTesting
-  public HoodieRecord(HoodieKey key, T data, HoodieRecordLocation currentLocation) {
-    this(key, data, null, currentLocation, null);
   }
 
   public HoodieRecord() {}

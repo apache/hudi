@@ -22,7 +22,6 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -54,14 +53,12 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data);
   }
 
-  @VisibleForTesting
   public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(key, data, currentLocation);
+    super(key, data, null, currentLocation, null);
   }
 
-  @VisibleForTesting
   public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
-    super(data, currentLocation);
+    super(null, data, null, currentLocation, null);
   }
 
   public HoodieAvroIndexedRecord(
