@@ -19,6 +19,7 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.aws.testutils.GlueTestUtil;
+import org.apache.hudi.sync.common.model.FieldSchema;
 
 import org.apache.parquet.schema.MessageType;
 import org.junit.jupiter.api.AfterAll;
@@ -30,10 +31,12 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.glue.model.Column;
 import software.amazon.awssdk.services.glue.model.CreateTableRequest;
 import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.DeleteTableResponse;
+import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.GetTableResponse;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
@@ -41,9 +44,14 @@ import software.amazon.awssdk.services.glue.model.Table;
 import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -140,9 +148,76 @@ class TestAWSGlueSyncClient {
     CompletableFuture<DeleteTableResponse> future = CompletableFuture.completedFuture(response);
     // mock aws glue delete table call
     Mockito.when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenReturn(future);
-
     awsGlueSyncClient.dropTable("test");
     // verify if aws glue delete table method called once
     verify(mockAwsGlue, times(1)).deleteTable(any(DeleteTableRequest.class));
+  }
+
+  @Test
+  void testMetastoreFieldSchemas() {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
+        Column.builder().name("age").type("int").comment("person's age").build());
+    List<Column> partitionKeys = Arrays.asList(Column.builder().name("city").type("string").comment("person's city").build());
+    CompletableFuture<GetTableResponse> tableResponse = getTableWithDefaultProps(tableName, columns, partitionKeys);
+    // mock aws glue get table call
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
+    List<FieldSchema> fields = awsGlueSyncClient.getMetastoreFieldSchemas(tableName);
+    // verify if fields are present
+    assertEquals(3, fields.size(), "Glue table schema contain 3 fields");
+    assertEquals("name", fields.get(0).getName(), "glue table first column should be name");
+    assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
+    assertEquals("person's city", fields.get(2).getComment().get(), "glue table third column comment should be age");
+  }
+
+  @Test
+  void testMetastoreFieldSchemas_EmptyPartitions() {
+    String tableName = "testTable";
+    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
+        Column.builder().name("age").type("int").comment("person's age").build());
+    CompletableFuture<GetTableResponse> tableResponse = getTableWithDefaultProps(tableName, columns, Collections.emptyList());
+    // mock aws glue get table call
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
+    List<FieldSchema> fields = awsGlueSyncClient.getMetastoreFieldSchemas(tableName);
+    // verify if fields are present
+    assertEquals(2, fields.size(), "Glue table schema contain 2 fields");
+    assertEquals("name", fields.get(0).getName(), "glue table first column should be name");
+    assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
+  }
+
+  @Test
+  void testMetastoreFieldSchemas_ExceptionThrows() {
+    String tableName = "testTable";
+    // mock aws glue get table call to throw an exception
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenThrow(EntityNotFoundException.class);
+    assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.getMetastoreFieldSchemas(tableName));
+  }
+
+  private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
+    String databaseName = "testdb";
+    String inputFormatClass = "inputFormat";
+    String outputFormatClass = "outputFormat";
+    String serdeClass = "serde";
+    HashMap<String, String> serdeProperties = new HashMap<>();
+    HashMap<String, String> tableProperties = new HashMap<>();
+    software.amazon.awssdk.services.glue.model.StorageDescriptor storageDescriptor = software.amazon.awssdk.services.glue.model.StorageDescriptor.builder()
+        .serdeInfo(SerDeInfo.builder().serializationLibrary(serdeClass).parameters(serdeProperties).build())
+        .inputFormat(inputFormatClass)
+        .columns(columns)
+        .outputFormat(outputFormatClass)
+        .build();
+    Table table = Table.builder()
+        .name(tableName)
+        .tableType("COPY_ON_WRITE")
+        .parameters(new HashMap<>())
+        .storageDescriptor(storageDescriptor)
+        .partitionKeys(partitionColumns)
+        .parameters(tableProperties)
+        .databaseName(databaseName)
+        .build();
+    GetTableResponse response = GetTableResponse.builder()
+        .table(table)
+        .build();
+    return CompletableFuture.completedFuture(response);
   }
 }
