@@ -86,7 +86,7 @@ public class HoodieFileSliceTestUtils {
   public static final String PARTITION_PATH = "partition_path";
   public static final String RIDER = "rider";
   public static final String ROW_KEY = "_row_key";
-  public static final int recordKeyIndex = AVRO_SCHEMA.getField(ROW_KEY).pos();
+  public static final int RECORD_KEY_INDEX = AVRO_SCHEMA.getField(ROW_KEY).pos();
   public static final String TIMESTAMP = "timestamp";
   public static final HoodieTestDataGenerator DATA_GEN =
       new HoodieTestDataGenerator(0xDEED);
@@ -173,7 +173,7 @@ public class HoodieFileSliceTestUtils {
   ) {
     return createDataBlock(
         dataBlockType,
-        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", keyToPositionMap.get(r.get(recordKeyIndex)))))
+        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", keyToPositionMap.get(r.get(RECORD_KEY_INDEX)))))
             .collect(Collectors.toList()),
         header,
         logFilePath,
@@ -233,13 +233,13 @@ public class HoodieFileSliceTestUtils {
         .map(r -> {
           String rowKey = (String) r.get(r.getSchema().getField(ROW_KEY).pos());
           String partitionPath = (String) r.get(r.getSchema().getField(PARTITION_PATH).pos());
-          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(recordKeyIndex))));
+          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(RECORD_KEY_INDEX))));
         })
         .collect(Collectors.toList());
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), keyToPositionMap.get(((IndexedRecord) r.getData()).get(recordKeyIndex))))
+                r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
         writePositions,
         header
