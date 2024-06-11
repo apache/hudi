@@ -207,6 +207,7 @@ public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarn
     assertEquals(leftTimestampsExpected, leftTimestampsActual);
   }
 
+  //generate all possible combos of 4 booleans
   private static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     for (int i = 0; i < 16; i++) {
