@@ -480,7 +480,7 @@ public class TestAvroSchemaEvolutionUtils {
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema);
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema, false);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -501,6 +501,32 @@ public class TestAvroSchemaEvolutionUtils {
             Types.RecordType.get(
                 Types.Field.get(15, false, "nest1", Types.BooleanType.get()),
                 Types.Field.get(16, true, "nest2", Types.BooleanType.get())))
+    );
+    Assertions.assertEquals(result.getRecord(), checkedRecord);
+  }
+
+  @Test
+  void testEvolutionSchemaNonNullableColumnDrop() {
+    Types.RecordType oldRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "data", Types.StringType.get()),
+        Types.Field.get(2, false, "data2", Types.StringType.get())
+    );
+    InternalSchema oldSchema = new InternalSchema(oldRecord);
+    Types.RecordType evolvedRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "data", Types.StringType.get()),
+        Types.Field.get(3, true, "data3", Types.StringType.get())
+    );
+    evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
+    Schema evolvedAvroSchema = AvroInternalSchemaConverter.convert(evolvedRecord, "test1");
+    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedAvroSchema, oldSchema, true);
+    Types.RecordType checkedRecord = Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, true, "data", Types.StringType.get()),
+        Types.Field.get(2, true, "data2", Types.StringType.get()),
+        Types.Field.get(3, true, "data3", Types.StringType.get())
+
     );
     Assertions.assertEquals(result.getRecord(), checkedRecord);
   }
@@ -535,7 +561,7 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
     Schema simpleReconcileSchema = AvroInternalSchemaConverter.convert(AvroSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema)), "schemaNameFallback");
+        .reconcileSchema(incomingSchema, AvroInternalSchemaConverter.convert(schema), false), "schemaNameFallback");
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 }

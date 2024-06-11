@@ -18,15 +18,20 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.action.TableChangesHelper;
 
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -38,6 +43,8 @@ import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverte
  * Utility methods to support evolve old avro schema based on a given schema.
  */
 public class AvroSchemaEvolutionUtils {
+  private static final Set<String> META_FIELD_NAMES = Arrays.stream(HoodieRecord.HoodieMetadataField.values())
+      .map(HoodieRecord.HoodieMetadataField::getFieldName).collect(Collectors.toSet());
 
   /**
    * Support reconcile from a new avroSchema.
@@ -52,11 +59,13 @@ public class AvroSchemaEvolutionUtils {
    * for example: incoming schema:  int a, int b, int d;   oldTableSchema int a, int b, int c, int d
    * we must guarantee the column c is missing semantic, instead of delete semantic.
    *
-   * @param incomingSchema implicitly evolution of avro when hoodie write operation
-   * @param oldTableSchema old internalSchema
+   * @param incomingSchema            implicitly evolution of avro when hoodie write operation
+   * @param oldTableSchema            old internalSchema
+   * @param makeMissingFieldsNullable if true, fields missing from the incoming schema when compared to the oldTableSchema will become
+   *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
+  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
     /* If incoming schema is null, we fall back on table schema. */
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
@@ -116,11 +125,28 @@ public class AvroSchemaEvolutionUtils {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
 
+    if (makeMissingFieldsNullable) {
+      // mark columns missing from incoming schema as nullable
+      Set<String> visited = new HashSet<>();
+      diffFromOldSchema.stream()
+          // ignore meta fields
+          .filter(col -> !META_FIELD_NAMES.contains(col))
+          .sorted()
+          .forEach(col -> {
+            // if parent is marked as nullable, only update the parent and not all the missing children field
+            String parent = TableChangesHelper.getParentName(col);
+            if (!visited.contains(parent)) {
+              typeChange.updateColumnNullability(col, true);
+            }
+            visited.add(col);
+          });
+    }
+
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
   }
 
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema) {
-    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema)), oldTableSchema.getFullName());
+  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable), oldTableSchema.getFullName());
   }
 
   /**
