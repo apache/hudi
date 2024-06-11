@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -55,6 +56,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
@@ -75,11 +78,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @TempDir
   protected java.nio.file.Path tempDir;
 
+  protected String customRecordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+
   public abstract StorageConfiguration<?> getStorageConf();
 
   public abstract String getBasePath();
 
   public abstract HoodieReaderContext<T> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf);
+
+  public abstract String getRecordPayloadForMergeMode(RecordMergeMode mergeMode);
 
   public abstract void commitToTable(List<String> recordList, String operation,
                                      Map<String, String> writeConfigs);
@@ -93,7 +100,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   @Test
   public void testCompareToComparable() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs());
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING));
     // Prepare a table for initializing reader context
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       commitToTable(recordsToStrings(dataGen.generateInserts("001", 1)), BULK_INSERT.value(), writeConfigs);
@@ -170,7 +177,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testReadFileGroupInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs());
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
@@ -194,7 +201,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   @ParameterizedTest
   @MethodSource("testArguments")
   public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs());
+    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(recordMergeMode));
     writeConfigs.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logDataBlockFormat);
     // Use InMemoryIndex to generate log only mor table
     writeConfigs.put("hoodie.index.type", "INMEMORY");
@@ -212,7 +219,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
   }
 
-  private Map<String, String> getCommonConfigs() {
+  private Map<String, String> getCommonConfigs(RecordMergeMode recordMergeMode) {
     Map<String, String> configMapping = new HashMap<>();
     configMapping.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     configMapping.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
@@ -225,6 +232,21 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     configMapping.put("hoodie.delete.shuffle.parallelism", "1");
     configMapping.put("hoodie.merge.small.file.group.candidates.limit", "0");
     configMapping.put("hoodie.compact.inline", "false");
+    configMapping.put(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    configMapping.put("hoodie.datasource.write.payload.class", getRecordPayloadForMergeMode(recordMergeMode));
+    switch (recordMergeMode) {
+      case OVERWRITE_WITH_LATEST:
+        configMapping.put("hoodie.datasource.write.record.merger.strategy", OVERWRITE_MERGER_STRATEGY_UUID);
+        configMapping.put("hoodie.datasource.write.precombine.field", "");
+        break;
+      case CUSTOM:
+        configMapping.put("hoodie.datasource.write.record.merger.strategy", customRecordMergerStrategy);
+        break;
+      case EVENT_TIME_ORDERING:
+      default:
+        configMapping.put("hoodie.datasource.write.record.merger.strategy", DEFAULT_MERGER_STRATEGY_UUID);
+        break;
+    }
     return configMapping;
   }
 

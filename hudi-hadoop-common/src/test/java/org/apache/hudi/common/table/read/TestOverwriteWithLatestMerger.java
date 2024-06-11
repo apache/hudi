@@ -21,12 +21,12 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.testutils.HoodieTestTable;
-import org.apache.hudi.common.testutils.reader.HoodieAvroRecordTestMerger;
 import org.apache.hudi.common.testutils.reader.HoodieFileGroupReaderTestHarness;
 import org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils;
-import org.apache.hudi.common.testutils.reader.HoodieRecordTestPayload;
 import org.apache.hudi.common.testutils.reader.HoodieTestReaderContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -53,17 +53,15 @@ import static org.apache.hudi.common.testutils.reader.DataGenerationPlan.Operati
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
+public class TestOverwriteWithLatestMerger extends HoodieFileGroupReaderTestHarness {
   @BeforeAll
   public static void setUp() throws IOException {
-    // Create dedicated merger to avoid current delete logic holes.
-    // TODO: Unify delete logic (HUDI-7240).
-    HoodieAvroRecordMerger merger = new HoodieAvroRecordTestMerger();
+    HoodieRecordMerger merger = new OverwriteWithLatestMerger();
     readerContext = new HoodieTestReaderContext(
         Option.of(merger),
-        Option.of(HoodieRecordTestPayload.class.getName()));
+        Option.of(OverwriteWithLatestAvroPayload.class.getName()));
     properties.setProperty(
-        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+        HoodieCommonConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.OVERWRITE_WITH_LATEST.name());
 
     // -------------------------------------------------------------
     // The test logic is as follows:
@@ -76,16 +74,14 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     //    Current existing keys: [6, 7, 8, 9, 10]
     // 3. After adding the second log file,
     //    we tried to add the records with keys from 1 to 3 back,
-    //    but we cannot since their ordering value is 1 < 3.
-    //    Current existing keys: [6, 7, 8, 9, 10]
+    //    Current existing keys: [1, 2, 3, 6, 7, 8, 9, 10]
     // 4. After adding the third log file,
     //    we tried to delete records with keys from 6 to 8,
     //    but we cannot since their ordering value is 1 < 2.
-    //    Current existing keys: [6, 7, 8, 9, 10]
+    //    Current existing keys: [1, 2, 3, 9, 10]
     // 5. After adding the fourth log file,
-    //    we tried to add the records with keys from 1 to 2 back,
-    //    and it worked since their ordering value is 4 > 3.
-    //    Current existing keys: [1, 2, 6, 7, 8, 9, 10]
+    //    we tried to add the records with keys from 2 to 4
+    //    Current existing keys: [1, 2, 3, 4, 9, 10]
     // -------------------------------------------------------------
 
     // Specify the key column values for each file.
@@ -94,7 +90,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
         new HoodieFileSliceTestUtils.KeyRange(1, 5),
         new HoodieFileSliceTestUtils.KeyRange(1, 3),
         new HoodieFileSliceTestUtils.KeyRange(6, 8),
-        new HoodieFileSliceTestUtils.KeyRange(1, 2));
+        new HoodieFileSliceTestUtils.KeyRange(2, 4));
     // Specify the value of `timestamp` column for each file.
     timestamps = Arrays.asList(
         2L, 3L, 1L, 1L, 4L);
@@ -109,7 +105,7 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
 
   @BeforeEach
   public void initialize() throws Exception {
-    setTableName(TestEventTimeMerging.class.getName());
+    setTableName(TestOverwriteWithLatestMerger.class.getName());
     initPath(tableName);
     initMetaClient();
     initTestDataGenerator(new String[]{PARTITION_PATH});
@@ -142,8 +138,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and two log files.
     ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(3, useRecordPositions);
-    List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
+    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "6", "7", "8", "9", "10");
+    List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L, 2L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
     List<Long> leftTimestampsActual = new ArrayList<>();
     while (iterator.hasNext()) {
@@ -161,8 +157,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(useRecordPositions, useRecordPositions, useRecordPositions, useRecordPositions);
     // The FileSlice contains a base file and three log files.
     ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(4, useRecordPositions);
-    List<String> leftKeysExpected = Arrays.asList("6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(2L, 2L, 2L, 2L, 2L);
+    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "9", "10");
+    List<Long> leftTimestampsExpected = Arrays.asList(1L, 1L, 1L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
     List<Long> leftTimestampsActual = new ArrayList<>();
     while (iterator.hasNext()) {
@@ -178,8 +174,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
   public void testWithFourLogFiles() throws IOException, InterruptedException {
     // The FileSlice contains a base file and three log files.
     ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(4L, 4L, 2L, 2L, 2L, 2L, 2L);
+    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
+    List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
     List<Long> leftTimestampsActual = new ArrayList<>();
     while (iterator.hasNext()) {
@@ -198,8 +194,8 @@ public class TestEventTimeMerging extends HoodieFileGroupReaderTestHarness {
     shouldWritePositions = Arrays.asList(true, log1haspositions, log2haspositions, log3haspositions, log4haspositions);
     // The FileSlice contains a base file and three log files.
     ClosableIterator<IndexedRecord> iterator = getFileGroupIterator(5, true);
-    List<String> leftKeysExpected = Arrays.asList("1", "2", "6", "7", "8", "9", "10");
-    List<Long> leftTimestampsExpected = Arrays.asList(4L, 4L, 2L, 2L, 2L, 2L, 2L);
+    List<String> leftKeysExpected = Arrays.asList("1", "2", "3", "4", "9", "10");
+    List<Long> leftTimestampsExpected = Arrays.asList(1L, 4L, 4L, 4L, 2L, 2L);
     List<String> leftKeysActual = new ArrayList<>();
     List<Long> leftTimestampsActual = new ArrayList<>();
     while (iterator.hasNext()) {

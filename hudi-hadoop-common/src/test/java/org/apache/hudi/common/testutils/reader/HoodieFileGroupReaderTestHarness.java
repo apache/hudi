@@ -54,6 +54,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static List<DataGenerationPlan.OperationType> operationTypes;
   // Set the instantTime for each record set.
   protected static List<String> instantTimes;
+  protected static List<Boolean> shouldWritePositions;
 
   // Environmental variables.
   protected static StorageConfiguration<?> storageConf;
@@ -92,6 +93,11 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
   protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles)
       throws IOException, InterruptedException {
+    return getFileGroupIterator(numFiles, false);
+  }
+
+  protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions)
+      throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
     Option<FileSlice> fileSliceOpt =
@@ -101,6 +107,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),
             instantTimes.subList(0, numFiles),
+            shouldWritePositions.subList(0, numFiles),
             basePath,
             PARTITION_PATH,
             FILE_ID
@@ -114,7 +121,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             basePath,
             "1000", // Not used internally.
             AVRO_SCHEMA,
-            false,
+            shouldReadPositions,
             0L,
             Long.MAX_VALUE,
             properties,

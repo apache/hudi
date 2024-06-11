@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -39,26 +38,19 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
-import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
@@ -97,6 +89,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(payloadProps);
     this.recordMerger = recordMerger;
+    //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
+    if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
+      throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
+    }
     this.payloadProps = payloadProps;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
@@ -293,21 +289,28 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected Option<DeleteRecord> doProcessNextDeletedRecord(DeleteRecord deleteRecord,
                                                             Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) {
     if (existingRecordMetadataPair != null) {
-      // Merge and store the merged record. The ordering val is taken to decide whether the same key record
-      // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
-      // For same ordering values, uses the natural order(arrival time semantics).
-      Comparable existingOrderingVal = readerContext.getOrderingValue(
-          existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-          payloadProps);
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-      // Checks the ordering value does not equal to 0
-      // because we use 0 as the default value which means natural order
-      boolean chooseExisting = !deleteOrderingVal.equals(0)
-          && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-          && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
-      if (chooseExisting) {
-        // The DELETE message is obsolete if the old message has greater orderingVal.
-        return Option.empty();
+      switch (recordMergeMode) {
+        case OVERWRITE_WITH_LATEST:
+          return Option.empty();
+        case EVENT_TIME_ORDERING:
+        case CUSTOM:
+        default:
+          Comparable existingOrderingVal = readerContext.getOrderingValue(
+              existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
+              payloadProps);
+          if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
+            return Option.empty();
+          }
+          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+          // Checks the ordering value does not equal to 0
+          // because we use 0 as the default value which means natural order
+          boolean chooseExisting = !deleteOrderingVal.equals(0)
+              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
+              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+          if (chooseExisting) {
+            // The DELETE message is obsolete if the old message has greater orderingVal.
+            return Option.empty();
+          }
       }
     }
     // Do delete.
@@ -426,60 +429,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return Option.empty();
       }
     }
-  }
-
-  /**
-   * Filter a record for downstream processing when:
-   * 1. A set of pre-specified keys exists.
-   * 2. The key of the record is not contained in the set.
-   */
-  protected boolean shouldSkip(T record, String keyFieldName, boolean isFullKey, Set<String> keys, Schema writerSchema) {
-    String recordKey = readerContext.getValue(record, writerSchema, keyFieldName).toString();
-    // Can not extract the record key, throw.
-    if (recordKey == null || recordKey.isEmpty()) {
-      throw new HoodieKeyException("Can not extract the key for a record");
-    }
-
-    // No keys are specified. Cannot skip at all.
-    if (keys.isEmpty()) {
-      return false;
-    }
-
-    // When the record key matches with one of the keys or key prefixes, can not skip.
-    if ((isFullKey && keys.contains(recordKey))
-        || (!isFullKey && keys.stream().anyMatch(recordKey::startsWith))) {
-      return false;
-    }
-
-    // Otherwise, this record is not needed.
-    return true;
-  }
-
-  /**
-   * Extract the record positions from a log block header.
-   *
-   * @param logBlock
-   * @return
-   * @throws IOException
-   */
-  protected static List<Long> extractRecordPositions(HoodieLogBlock logBlock) throws IOException {
-    List<Long> blockPositions = new ArrayList<>();
-
-    Roaring64NavigableMap positions = logBlock.getRecordPositions();
-    if (positions == null || positions.isEmpty()) {
-      throw new HoodieValidationException("No record position info is found when attempt to do position based merge.");
-    }
-
-    Iterator<Long> iterator = positions.iterator();
-    while (iterator.hasNext()) {
-      blockPositions.add(iterator.next());
-    }
-
-    if (blockPositions.isEmpty()) {
-      throw new HoodieCorruptedDataException("No positions are extracted.");
-    }
-
-    return blockPositions;
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {

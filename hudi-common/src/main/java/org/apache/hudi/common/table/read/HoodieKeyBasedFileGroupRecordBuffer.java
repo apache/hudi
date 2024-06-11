@@ -102,7 +102,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
@@ -126,17 +126,19 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     return records.containsKey(recordKey);
   }
 
+  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    return hasNextBaseRecord(baseRecord, logRecordInfo);
+  }
+
   @Override
   protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Handle merging.
     while (baseFileIterator.hasNext()) {
-      T baseRecord = baseFileIterator.next();
-
-      String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
-      Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-      if (hasNextBaseRecord(baseRecord, logRecordInfo)) {
+      if (hasNextBaseRecord(baseFileIterator.next())) {
         return true;
       }
     }
