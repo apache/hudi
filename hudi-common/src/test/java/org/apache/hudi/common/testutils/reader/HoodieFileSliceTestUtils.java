@@ -86,6 +86,7 @@ public class HoodieFileSliceTestUtils {
   public static final String PARTITION_PATH = "partition_path";
   public static final String RIDER = "rider";
   public static final String ROW_KEY = "_row_key";
+  public static final int recordKeyIndex = AVRO_SCHEMA.getField(ROW_KEY).pos();
   public static final String TIMESTAMP = "timestamp";
   public static final HoodieTestDataGenerator DATA_GEN =
       new HoodieTestDataGenerator(0xDEED);
@@ -167,11 +168,12 @@ public class HoodieFileSliceTestUtils {
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
       StoragePath logFilePath,
-      boolean writePositions
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) {
     return createDataBlock(
         dataBlockType,
-        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", Long.parseLong((String) r.get(1)) - 1)))
+        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", keyToPositionMap.get(r.get(recordKeyIndex)))))
             .collect(Collectors.toList()),
         header,
         logFilePath,
@@ -224,19 +226,20 @@ public class HoodieFileSliceTestUtils {
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
       Schema schema,
       Properties props,
-      boolean writePositions
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) {
     List<HoodieRecord> hoodieRecords = records.stream()
         .map(r -> {
           String rowKey = (String) r.get(r.getSchema().getField(ROW_KEY).pos());
           String partitionPath = (String) r.get(r.getSchema().getField(PARTITION_PATH).pos());
-          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "", Long.parseLong((String) r.get(1)) - 1));
+          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(recordKeyIndex))));
         })
         .collect(Collectors.toList());
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), Long.parseLong((String) ((IndexedRecord) r.getData()).get(1)) - 1))
+                r.getKey(), r.getOrderingValue(schema, props)), keyToPositionMap.get(((IndexedRecord) r.getData()).get(recordKeyIndex))))
             .collect(Collectors.toList()),
         writePositions,
         header
@@ -291,7 +294,8 @@ public class HoodieFileSliceTestUtils {
       String logInstantTime,
       int version,
       HoodieLogBlock.HoodieLogBlockType blockType,
-      boolean writePositions
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) throws InterruptedException, IOException {
     try (HoodieLogFormat.Writer writer =
              HoodieLogFormat.newWriterBuilder()
@@ -307,11 +311,11 @@ public class HoodieFileSliceTestUtils {
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new StoragePath(logFilePath), writePositions);
+            blockType, records, header, new StoragePath(logFilePath), writePositions, keyToPositionMap);
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
-            records, header, schema, PROPERTIES, writePositions);
+            records, header, schema, PROPERTIES, writePositions, keyToPositionMap);
         writer.appendBlock(deleteBlock);
       }
     }
@@ -334,6 +338,7 @@ public class HoodieFileSliceTestUtils {
     HoodieBaseFile baseFile = null;
     List<HoodieLogFile> logFiles = new ArrayList<>();
 
+    Map<String, Long> keyToPositionMap = new HashMap<>();
     // Generate a base file with records.
     DataGenerationPlan baseFilePlan = plans.get(0);
     if (!baseFilePlan.getRecordKeys().isEmpty()) {
@@ -345,6 +350,9 @@ public class HoodieFileSliceTestUtils {
           records,
           schema,
           baseFilePlan.getInstantTime());
+      for (int i = 0; i < baseFilePlan.getRecordKeys().size(); i++) {
+        keyToPositionMap.put(baseFilePlan.getRecordKeys().get(i), (long) i);
+      }
     }
 
     // Rest of plans are for log files.
@@ -368,7 +376,8 @@ public class HoodieFileSliceTestUtils {
           logFilePlan.getInstantTime(),
           i,
           blockType,
-          logFilePlan.getWritePositions()));
+          logFilePlan.getWritePositions(),
+          keyToPositionMap));
     }
 
     // Assemble the FileSlice finally.
