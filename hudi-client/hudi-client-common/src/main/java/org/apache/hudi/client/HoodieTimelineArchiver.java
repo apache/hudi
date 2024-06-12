@@ -30,6 +30,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -46,6 +47,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -58,6 +60,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -397,7 +400,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .collect(Collectors.groupingBy(HoodieInstant::getAction)).values().stream()
         .map(hoodieInstants -> {
           if (hoodieInstants.size() > this.maxInstantsToKeep) {
-            return hoodieInstants.subList(0, hoodieInstants.size() - this.minInstantsToKeep);
+            return hoodieInstants.subList(0, hoodieInstants.size() - Math.max(this.minInstantsToKeep, 1));
           } else {
             return new ArrayList<HoodieInstant>();
           }
@@ -438,9 +441,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     }
 
     // NOTE: We cannot have any holes in the commit timeline.
-    // We cannot archive any commits which are made after the first savepoint present,
+    // We cannot archive any commits which are later than EarliestCommitToNotArchive.
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
-    Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
+    Option<String> earliestCommitToNotArchiveOpt = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // For Merge-On-Read table, inline or async compaction is enabled
@@ -469,9 +472,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
               // skip savepoint commits and proceed further
               return !savepointTimestamps.contains(s.getTimestamp());
             } else {
-              // if no savepoint present, then don't filter
-              // stop at first savepoint commit
-              return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().getTimestamp(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
+              Option<String> firstSavepointOpt = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+              Option<String> commitToNotArchiveOpt = earliestCommitToNotArchiveOpt;
+              if (firstSavepointOpt.isPresent() && earliestCommitToNotArchiveOpt.isPresent()
+                  && compareTimestamps(firstSavepointOpt.get(), LESSER_THAN, earliestCommitToNotArchiveOpt.get())) {
+                LOG.error("earliestCommitToNotArchive {} is greater than first savepoint {}, using first savepoint as the commitToNotArchive",
+                    earliestCommitToNotArchiveOpt.get(), firstSavepointOpt.get());
+                commitToNotArchiveOpt = firstSavepointOpt;
+              }
+              // stop at earliest commit to not archive
+              return !(commitToNotArchiveOpt.isPresent() && compareTimestamps(commitToNotArchiveOpt.get(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
             }
           }).filter(s -> {
             // oldestCommitToRetain is the highest completed commit instant that is less than the oldest inflight instant.
@@ -493,6 +503,25 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     } else {
       return Stream.empty();
     }
+  }
+
+  private Option<String> getEarliestCommitToNotArchive(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+    // if clean policy is based on file versions, earliest commit to not archive may not be set. So, we have to explicitly check the savepoint timeline
+    // and guard against the first one.
+    String earliestInstantToNotArchive = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(null);
+    if (config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
+      if (cleanInstantOpt.isPresent()) {
+        HoodieInstant cleanInstant = cleanInstantOpt.get();
+        String cleanerEarliestInstantToNotArchive = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+                ? cleanInstant
+                : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+            .getExtraMetadata().getOrDefault(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
+        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+      }
+    }
+    return Option.ofNullable(earliestInstantToNotArchive);
   }
 
   private Stream<HoodieInstant> getInstantsToArchive() throws IOException {

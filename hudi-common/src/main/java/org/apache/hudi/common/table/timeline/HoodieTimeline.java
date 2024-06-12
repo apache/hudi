@@ -426,6 +426,15 @@ public interface HoodieTimeline extends Serializable {
     return predicateToApply.test(commit1, commit2);
   }
 
+  static String minTimestamp(String commit1, String commit2) {
+    if (StringUtils.isNullOrEmpty(commit1)) {
+      return commit2;
+    } else if (StringUtils.isNullOrEmpty(commit2)) {
+      return commit1;
+    }
+    return GREATER_THAN.test(commit1, commit2) ? commit2 : commit1;
+  }
+
   /**
    * Return true if specified timestamp is in range (startTs, endTs].
    */

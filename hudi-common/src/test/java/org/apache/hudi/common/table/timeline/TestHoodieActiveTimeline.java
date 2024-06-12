@@ -599,6 +599,17 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testMinTimestamp() {
+    String timestamp1 = "20240601040632402";
+    String timestamp2 = "20250601040632402";
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(null, timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp("", timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, null));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, ""));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, timestamp2));
+  }
+
+  @Test
   public void testParseDateFromInstantTime() throws ParseException {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";

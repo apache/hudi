@@ -79,6 +79,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_2;
   public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
+  public static final String EARLIEST_COMMIT_TO_NOT_ARCHIVE = "earliest_commit_to_not_archive";
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -88,6 +89,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieWriteConfig config;
   private transient HoodieEngineContext context;
   private List<String> savepointedTimestamps;
+  private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+  private Option<String> earliestCommitToNotArchive = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -124,11 +127,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
     HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
     return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
-  }
-
-  private Stream<String> getPartitionsFromSavepoint(String savepointTime) {
-    HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
-    return metadata.getPartitionMetadata().keySet().stream();
   }
 
   private HoodieSavepointMetadata getSavepointMetadata(String savepointTimestamp) {
@@ -203,8 +201,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForIncrementalCleaning(HoodieCleanMetadata cleanMetadata,
       Option<HoodieInstant> newInstantToRetain) {
-    boolean isSavepointDeleted = isAnySavepointDeleted(cleanMetadata);
-    if (isSavepointDeleted) {
+
+    boolean isAnySavepointDeleted = isAnySavepointDeleted(cleanMetadata);
+    if (isAnySavepointDeleted) {
       LOG.info("Since savepoints have been removed compared to previous clean, triggering clean planning for all partitions");
       return getPartitionPathsForFullCleaning();
     } else {
@@ -552,13 +551,50 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * Returns earliest commit to retain based on cleaning policy.
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
-    return CleanerUtils.getEarliestCommitToRetain(
-        hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
-        config.getCleanerPolicy(),
-        config.getCleanerCommitsRetained(),
-        Instant.now(),
-        config.getCleanerHoursRetained(),
-        hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+    if (!earliestCommitToRetain.isPresent()) {
+      earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
+          hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
+          config.getCleanerPolicy(),
+          config.getCleanerCommitsRetained(),
+          Instant.now(),
+          config.getCleanerHoursRetained(),
+          hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+    }
+    return earliestCommitToRetain;
+  }
+
+  /**
+   * Returns earliest commit to not archive to assist with guarding archival.
+   * @return
+   */
+  public Option<String> getEarliestCommitToNotArchive() {
+    // compute only if not set
+    if (!earliestCommitToNotArchive.isPresent() && config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) { // earliest commit to retain and earliest commit to not archive
+      // makes sense only when clean policy is num commits based or hours based.
+      Option<HoodieInstant> earliestToRetain = getEarliestCommitToRetain();
+      if (!savepointedTimestamps.isEmpty()) { // if savepoints are found.
+        // find the first savepoint timestamp
+        earliestCommitToNotArchive = Option.fromJavaOptional(savepointedTimestamps.stream().sorted().findFirst());
+
+        // earliest commit to not archive = min (earliest commit to retain, earliest commit to not archive)
+        if (earliestToRetain.isPresent()) {
+          earliestCommitToNotArchive = Option.of(HoodieTimeline.minTimestamp(earliestToRetain.get().getTimestamp(), earliestCommitToNotArchive.get()));
+        }
+        LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
+            earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
+      } else {
+        // no savepoints found.
+        // lets set the value regardless. Would help us differentiate older versions of hudi where this will not be set vs latest version where this will be set to either earliest savepoint
+        // or the earliest commit to retain.
+        if (earliestToRetain.isPresent()) {
+          LOG.info(String.format("Setting Earliest Commit to Not Archive same as Earliest commit to retain to %s", earliestToRetain.get().getTimestamp()));
+          earliestCommitToNotArchive = Option.of(earliestToRetain.get().getTimestamp());
+        } else {
+          earliestCommitToNotArchive = Option.empty();
+        }
+      }
+    }
+    return earliestCommitToNotArchive;
   }
 
   /**

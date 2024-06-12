@@ -923,6 +923,10 @@ public class HoodieTestTable {
   }
 
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
+    return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyMap());
+  }
+
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, Map<String, String> extraMetadata) throws IOException {
     Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
     for (Map.Entry<String, Integer> entry : partitionFileCountsToDelete.entrySet()) {
       partitionFilesToDelete.put(entry.getKey(), getEarliestFilesInPartition(entry.getKey(), entry.getValue()));
@@ -933,8 +937,11 @@ public class HoodieTestTable {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
-    addClean(commitTime, cleanerMeta.getKey(), cleanerMeta.getValue());
-    return cleanerMeta.getValue();
+    HoodieCleanMetadata cleanMetadata = cleanerMeta.getValue();
+    cleanerMeta.getKey().setExtraMetadata(extraMetadata);
+    cleanMetadata.setExtraMetadata(extraMetadata);
+    addClean(commitTime, cleanerMeta.getKey(), cleanMetadata);
+    return cleanMetadata;
   }
 
   /**
