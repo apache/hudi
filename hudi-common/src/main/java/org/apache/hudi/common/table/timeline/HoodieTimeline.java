@@ -456,9 +456,9 @@ public interface HoodieTimeline extends Serializable {
   }
 
   static String minTimestamp(String commit1, String commit2) {
-    if (commit1 == null) {
+    if (StringUtils.isNullOrEmpty(commit1)) {
       return commit2;
-    } else if (commit2 == null) {
+    } else if (StringUtils.isNullOrEmpty(commit2)) {
       return commit1;
     }
     return GREATER_THAN.test(commit1, commit2) ? commit2 : commit1;
