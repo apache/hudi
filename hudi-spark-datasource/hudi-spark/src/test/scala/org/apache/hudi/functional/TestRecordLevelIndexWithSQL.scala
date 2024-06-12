@@ -21,7 +21,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
@@ -187,5 +187,42 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     spark.sql(s"insert into dummy_table values('row3', 'row1', 'p2')")
 
     assertEquals(2, spark.read.format("hudi").options(hudiOpts).load(dummyTablePath).filter("not_record_key_col in ('row1', 'abc')").count())
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testPrunedStoragePaths(includeLogFiles: Boolean): Unit = {
+    val hudiOpts = commonOpts ++ metadataOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ")
+    val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+    if (includeLogFiles) {
+      // number of updates are set to same size as number of inserts so that every partition gets
+      // a log file. Further onlyUpdates is set to true so that no inserts are included in the batch.
+      doWriteAndValidateDataAndRecordIndex(hudiOpts,
+        operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Append,
+        validate = false,
+        numUpdates = df.collect().length,
+        onlyUpdates = true)
+    }
+    val globbedPaths = basePath + "/2015/03/16," + basePath + "/2015/03/17," + basePath + "/2016/03/15"
+    val fileIndex = new HoodieFileIndex(sparkSession, metaClient, Option.empty, Map("glob.paths" -> globbedPaths), includeLogFiles = includeLogFiles)
+    val selectedPartition = "2016/03/15"
+    val partitionFilter: Expression = EqualTo(AttributeReference("partition", StringType)(), Literal(selectedPartition))
+    val prunedPaths = fileIndex.getFileSlicesForPrunedPartitions(Seq(partitionFilter))
+    val storagePaths = RecordLevelIndexSupport.getPrunedStoragePaths(prunedPaths, fileIndex)
+    // verify pruned paths contain the selected partition and the size of the pruned file paths
+    // when includeLogFiles is set to true, there are two storages paths - base file and log file
+    // every partition contains only one file slice
+    assertEquals(if (includeLogFiles) 2 else 1, storagePaths.size)
+    assertTrue(storagePaths.forall(path => path.toString.contains(selectedPartition)))
+
+    val recordKey: String = df.filter("partition = '" + selectedPartition + "'").limit(1).collect().apply(0).getAs("_row_key")
+    val dataFilter = EqualTo(attribute("_row_key"), Literal(recordKey))
+    val rliIndexSupport = new RecordLevelIndexSupport(spark, getConfig.getMetadataConfig, metaClient)
+    val fileNames = rliIndexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
+    assertEquals(if (includeLogFiles) 2 else 1, fileNames.get.size)
   }
 }

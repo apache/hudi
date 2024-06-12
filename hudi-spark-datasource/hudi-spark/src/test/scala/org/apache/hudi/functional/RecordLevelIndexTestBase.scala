@@ -79,6 +79,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   val commonOptsWithSecondaryIndexSITest = commonOptsNewTableSITest ++ secondaryIndexOpts
   var mergedDfList: List[DataFrame] = List.empty
+  var metaClientReloaded = false
 
   @BeforeEach
   override def setUp() {
@@ -180,12 +181,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   protected def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],
                                                    operation: String,
                                                    saveMode: SaveMode,
-                                                   validate: Boolean = true): DataFrame = {
+                                                   validate: Boolean = true,
+                                                   numUpdates: Int = 1,
+                                                   onlyUpdates: Boolean = false): DataFrame = {
     var latestBatch: mutable.Buffer[String] = null
     if (operation == UPSERT_OPERATION_OPT_VAL) {
       val instantTime = getInstantTime()
-      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, 1))
-      records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates))
+      if (!onlyUpdates) {
+        records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+      }
       latestBatch = records.asScala
     } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
@@ -204,6 +209,12 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     deletedDf.cache()
     if (validate) {
       validateDataAndRecordIndices(hudiOpts, deletedDf)
+    }
+    if (!metaClientReloaded) {
+      // initialization of meta client is required again after writing data so that
+      // latest table configs are picked up
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      metaClientReloaded = true
     }
     deletedDf.unpersist()
     latestBatchDf
@@ -273,7 +284,6 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],
                                            deletedDf: DataFrame = sparkSession.emptyDataFrame): Unit = {
-    metaClient = HoodieTableMetaClient.reload(metaClient)
     val writeConfig = getWriteConfig(hudiOpts)
     val metadata = metadataWriter(writeConfig).getTableMetadata
     val readDf = spark.read.format("hudi").load(basePath)
