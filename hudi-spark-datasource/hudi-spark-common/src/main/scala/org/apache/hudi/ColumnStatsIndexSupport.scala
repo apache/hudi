@@ -60,7 +60,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   @transient private lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient private lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePathV2.toString)
+    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
 
   @transient private lazy val cachedColumnStatsIndexViews: ParHashMap[Seq[String], DataFrame] = ParHashMap()
 
@@ -341,7 +341,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath.toString)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     val colStatsDF = spark.read.format("org.apache.hudi")
       .options(metadataConfig.getProps.asScala)

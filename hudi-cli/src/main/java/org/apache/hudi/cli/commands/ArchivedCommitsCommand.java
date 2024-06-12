@@ -181,7 +181,7 @@ public class ArchivedCommitsCommand {
 
     System.out.println("===============> Showing only " + limit + " archived commits <===============");
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
-    String basePath = metaClient.getBasePath();
+    StoragePath basePath = metaClient.getBasePath();
     StoragePath archivePath =
         new StoragePath(metaClient.getArchivePath() + "/.commits_.archive*");
     List<StoragePathInfo> pathInfoList =

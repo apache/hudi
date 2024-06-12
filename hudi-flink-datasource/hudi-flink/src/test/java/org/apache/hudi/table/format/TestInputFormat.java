@@ -351,7 +351,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .skipCompaction(false)
         .build();
 
@@ -392,7 +392,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
@@ -431,7 +431,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
@@ -451,7 +451,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // read from the compaction commit
-    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.COMMIT_ACTION);
+    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath().toString(), 0, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
     IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
@@ -496,7 +496,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
@@ -516,7 +516,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // read from the clustering commit
-    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath().toString(), 0, HoodieTimeline.REPLACE_COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
     IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);
@@ -582,7 +582,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .build();
 
     // timeline: c1, c2.inflight, c3.inflight, c4
@@ -651,7 +651,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
@@ -668,7 +668,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // read from the latest commit
-    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 1, HoodieTimeline.COMMIT_ACTION);
+    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath().toString(), 1, HoodieTimeline.COMMIT_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
     IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, null, false);

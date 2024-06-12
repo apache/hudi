@@ -116,7 +116,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
 
-  protected lazy val basePath: Path = new Path(metaClient.getBasePathV2.toUri)
+  protected lazy val basePath: Path = new Path(metaClient.getBasePath.toUri)
 
   // NOTE: Record key-field is assumed singular here due to the either of
   //          - In case Hudi's meta fields are enabled: record key will be pre-materialized (stored) as part
@@ -483,7 +483,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    */
 
   protected def getPartitionColumnsAsInternalRow(file: StoragePathInfo): InternalRow =
-    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePathV2, shouldExtractPartitionValuesFromPartitionPath)
+    getPartitionColumnsAsInternalRowInternal(file, metaClient.getBasePath, shouldExtractPartitionValuesFromPartitionPath)
 
   protected def getPartitionColumnsAsInternalRowInternal(file: StoragePathInfo, basePath: StoragePath,
                                                          extractPartitionValuesFromPartitionPath: Boolean): InternalRow = {
@@ -599,7 +599,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val validCommits = timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
 
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
     conf

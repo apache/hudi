@@ -625,7 +625,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -780,7 +780,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -859,7 +859,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -1638,7 +1638,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // delete rollback.completed instant to mimic failed rollback of clustering. and then trigger rollback of clustering again. same rollback instant should be used.
     HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath(), rollbackInstant.getTimestamp());
+    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().toString(), rollbackInstant.getTimestamp());
     metaClient.reloadActiveTimeline();
 
     // create replace commit requested meta file so that rollback will not throw FileNotFoundException
@@ -1648,7 +1648,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
 
     // trigger clustering again. no new rollback instants should be generated.
     try {
@@ -2256,15 +2256,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(),
               HoodieCommitMetadata.class);
-      String basePath = table.getMetaClient().getBasePath();
+      StoragePath basePath = table.getMetaClient().getBasePath();
       Collection<String> commitPathNames =
-          commitMetadata.getFileIdAndFullPaths(new StoragePath(basePath)).values();
+          commitMetadata.getFileIdAndFullPaths(basePath).values();
 
       // Read from commit file
       try (InputStream inputStream = storage.open(testTable.getCommitFilePath(instantTime))) {
         String everything = FileIOUtils.readAsUTFString(inputStream);
         HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new StoragePath(basePath));
+        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
         // Compare values in both to make sure they are equal.
         for (String pathName : paths.values()) {
           assertTrue(commitPathNames.contains(pathName));

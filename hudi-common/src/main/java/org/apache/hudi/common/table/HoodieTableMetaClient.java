@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -190,17 +191,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Returns base path of the table
    */
-  public StoragePath getBasePathV2() {
-    return basePath;
-  }
-
-  /**
-   * @return Base path
-   * @deprecated please use {@link #getBasePathV2()}
-   */
-  @Deprecated
-  public String getBasePath() {
-    return basePath.toString(); // this invocation is cached
+  public StoragePath getBasePath() {
+    return basePath; // this invocation is cached
   }
 
   /**
@@ -293,6 +285,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   public TimelineLayoutVersion getTimelineLayoutVersion() {
     return timelineLayoutVersion;
+  }
+
+  public Boolean isMetadataTable() {
+    return HoodieTableMetadata.isMetadataTable(getBasePath().toString());
   }
 
   public HoodieStorage getStorage() {

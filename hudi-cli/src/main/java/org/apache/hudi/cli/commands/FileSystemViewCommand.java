@@ -239,9 +239,9 @@ public class FileSystemViewCommand {
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(client.getStorageConf().newInstance())
-        .setBasePath(client.getBasePath()).setLoadActiveTimelineOnLoad(true).build();
+        .setBasePath(client.getBasePath().toString()).setLoadActiveTimelineOnLoad(true).build();
     HoodieStorage storage = HoodieCLI.storage;
-    String globPath = String.format("%s/%s/*", client.getBasePath(), globRegex);
+    String globPath = String.format("%s/%s/*", client.getBasePath().toString(), globRegex);
     List<StoragePathInfo> pathInfoList = FSUtils.getGlobStatusExcludingMetaFolder(storage, new StoragePath(globPath));
     Stream<HoodieInstant> instantsStream;
 

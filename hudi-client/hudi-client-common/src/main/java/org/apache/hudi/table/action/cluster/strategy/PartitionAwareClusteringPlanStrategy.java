@@ -126,24 +126,24 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    LOG.info("Scheduling clustering for " + metaClient.getBasePath());
+    LOG.info("Scheduling clustering for {}", metaClient.getBasePath().toString());
     HoodieWriteConfig config = getWriteConfig();
 
     String partitionSelected = config.getClusteringPartitionSelected();
-    LOG.info("Scheduling clustering partitionSelected: " + partitionSelected);
+    LOG.info("Scheduling clustering partitionSelected: {}", partitionSelected);
     List<String> partitionPaths;
 
     if (StringUtils.isNullOrEmpty(partitionSelected)) {
       // get matched partitions if set
       partitionPaths = getRegexPatternMatchedPartitions(config, FSUtils.getAllPartitionPaths(
-          getEngineContext(), metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath()));
+          getEngineContext(), metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString()));
       // filter the partition paths if needed to reduce list status
     } else {
       partitionPaths = Arrays.asList(partitionSelected.split(","));
     }
 
     partitionPaths = filterPartitionPaths(partitionPaths);
-    LOG.info("Scheduling clustering partitionPaths: " + partitionPaths);
+    LOG.info("Scheduling clustering partitionPaths: {}", partitionPaths);
 
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no clustering plan

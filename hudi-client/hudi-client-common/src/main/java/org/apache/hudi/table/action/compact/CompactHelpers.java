@@ -87,7 +87,7 @@ public class CompactHelpers<T, I, K, O> {
           Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
     } catch (IOException e) {
       throw new HoodieCompactionException(
-          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + compactionCommitTime, e);
+          "Failed to commit " + table.getMetaClient().getBasePath().toString() + " at time " + compactionCommitTime, e);
     }
   }
 
@@ -99,19 +99,19 @@ public class CompactHelpers<T, I, K, O> {
           Option.of(getUTF8Bytes(commitMetadata.toJsonString())));
     } catch (IOException e) {
       throw new HoodieCompactionException(
-          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + logCompactionCommitTime, e);
+          "Failed to commit " + table.getMetaClient().getBasePath().toString() + " at time " + logCompactionCommitTime, e);
     }
   }
 
   public Option<InstantRange> getInstantRange(HoodieTableMetaClient metaClient) {
-    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePath().toString())
         ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
   }
 
   private InstantRange getMetadataLogReaderInstantRange(HoodieTableMetaClient metadataMetaClient) {
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
         .setConf(metadataMetaClient.getStorageConf().newInstance())
-        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePathV2().toString()))
+        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePath().toString()))
         .build();
     Set<String> validInstants = HoodieTableMetadataUtil.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
     return InstantRange.builder()

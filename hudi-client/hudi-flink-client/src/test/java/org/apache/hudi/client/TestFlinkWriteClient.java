@@ -45,7 +45,7 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
   public void testWriteClientAndTableServiceClientWithTimelineServer(
       boolean enableEmbeddedTimelineServer) throws IOException {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(metaClient.getBasePathV2().toString())
+        .withPath(metaClient.getBasePath().toString())
         .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
         .build();
 

@@ -251,7 +251,7 @@ public class HoodieInputFormatUtils {
       return Option.empty();
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + StoragePath.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath().toString() : tableMetaClient.getBasePath().toString() + StoragePath.SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes
@@ -450,9 +450,9 @@ public class HoodieInputFormatUtils {
         // with "."
         continue;
       }
-      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath()))) {
+      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath().toString()))) {
         for (HoodieTableMetaClient metaClient : metaClientList) {
-          if (inputPath.toString().contains(metaClient.getBasePath())) {
+          if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
             metadata = metaClient;
             if (!grouped.containsKey(metadata)) {
               grouped.put(metadata, new ArrayList<>());
@@ -474,7 +474,7 @@ public class HoodieInputFormatUtils {
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
     for (Path path : snapshotPaths) {
       // Find meta client associated with the input path
-      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath()))
+      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath().toString()))
           .forEach(metaClient -> grouped.get(metaClient).add(path));
     }
     return grouped;

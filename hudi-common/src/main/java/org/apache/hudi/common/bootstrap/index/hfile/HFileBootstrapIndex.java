@@ -80,7 +80,7 @@ public class HFileBootstrapIndex extends BootstrapIndex {
       HoodieStorage storage = metaClient.getStorage();
       // The metadata table is never bootstrapped, so the bootstrap index is always absent
       // for the metadata table.  The fs.exists calls are avoided for metadata table.
-      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString()) && storage.exists(indexByPartitionPath) && storage.exists(indexByFilePath);
+      isPresent = !HoodieTableMetadata.isMetadataTable(metaClient.getBasePath().toString()) && storage.exists(indexByPartitionPath) && storage.exists(indexByFilePath);
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }

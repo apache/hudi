@@ -51,7 +51,7 @@ public class DatasetBulkInsertOverwriteTableCommitActionExecutor extends Dataset
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context,
         table.getStorage(),
         writeConfig.getMetadataConfig(),
-        table.getMetaClient().getBasePathV2().toString());
+        table.getMetaClient().getBasePath().toString());
 
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();

@@ -2742,7 +2742,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
     LOG.info("new props: {}", hoodieProps);
-    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), METAFOLDER_NAME);
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), METAFOLDER_NAME);
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer
@@ -2813,7 +2813,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: " + hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
     LOG.info("new props: " + hoodieProps);
-    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), ".hoodie");
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), ".hoodie");
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer
@@ -2910,7 +2910,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(HoodieTestUtils.getDefaultStorageConf()).build();
-    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath(), false, false);
+    List<String> partitions = FSUtils.getAllPartitionPaths(new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient.getStorage(), metaClient.getBasePath().toString(), false, false);
     StorageConfiguration hadoopConf = metaClient.getStorageConf();
     HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(engContext, metaClient,
