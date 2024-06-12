@@ -19,7 +19,6 @@
 package org.apache.hudi.functional
 
 import java.util.function.Consumer
-
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, QuickstartUtils}
@@ -31,6 +30,7 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.JavaScalaConverters
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestBase {
   var spark: SparkSession = null
@@ -73,7 +73,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
     val hoodieTableType = HoodieTableType.COPY_ON_WRITE
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(5))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(JavaScalaConverters.convertJavaListToScalaSeq(records), 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("_hoodie_change_columns", lit(null).cast(StringType)).withColumn("ts", lit(1L))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
@@ -126,7 +126,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
   def testOverwriteWithLatestPartialUpdatesAvroPayloadOutOfOrder(hoodieTableType: HoodieTableType): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(JavaScalaConverters.convertJavaListToScalaSeq(records), 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("_hoodie_change_columns", lit(null).cast(StringType)).withColumn("ts", lit(2L))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
@@ -168,7 +168,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
   def testOverwriteWithLatestPartialUpdatesAvroPayloadPrecombine(hoodieTableType: HoodieTableType): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(JavaScalaConverters.convertJavaListToScalaSeq(records), 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L)).withColumn("_hoodie_change_columns", typedLit(null).cast(StringType))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
@@ -218,7 +218,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
   def testOverwriteWithLatestPartialUpdatesAvroPayloadDelete(hoodieTableType: HoodieTableType): Unit = {
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(JavaScalaConverters.convertJavaListToScalaSeq(records), 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L))
         .withColumn("_hoodie_is_deleted", lit(false))
         .withColumn("_hoodie_change_columns", typedLit(null).cast(StringType))
@@ -270,7 +270,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
 
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(1))
-    val recordsRDD = spark.sparkContext.parallelize(records, 2)
+    val recordsRDD = spark.sparkContext.parallelize(JavaScalaConverters.convertJavaListToScalaSeq(records), 2)
     val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING)).withColumn("ts", lit(1L)).withColumn("_hoodie_change_columns", typedLit(null).cast(StringType))
     inputDF.write.format("hudi")
       .options(getQuickstartWriteConfigs)
@@ -323,7 +323,7 @@ class TestOverwriteWithLatestPartialUpdatesAvroPayload extends HoodieClientTestB
     assertEquals(readOptimizedDF.select("fare").collectAsList().get(0).getDouble(0), inputDF.select("fare").collectAsList().get(0).getDouble(0))
     assertNull(readOptimizedDF.select("_hoodie_change_columns").collectAsList().get(0).getString(0))
 
-    val compactionOptions = getQuickstartWriteConfigs ++ Map(
+    val compactionOptions = getQuickstartWriteConfigs.asScala ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key() -> HoodieTableType.MERGE_ON_READ.name(),
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key ->"partitionpath",
