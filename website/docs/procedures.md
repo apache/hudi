@@ -1158,15 +1158,15 @@ Show file system views of a table.
 
 **Input**
 
-| Parameter Name     | Type    | Required | Default Value | Description                          |
-|--------------------|---------|----------|---------------|--------------------------------------|
-| table              | String  | Y        | None          | Hudi table name                      |
-| max_instant        | String  | N        | ""            | Max instant time                     |
-| include_max        | Boolean | N        | false         | Include max instant                  |
-| include_in_flight  | Boolean | N        | false         | Include in flight                    |
-| exclude_compaction | Boolean | N        | false         | Exclude compaction                   |
-| limit              | Int     | N        | 10            | Max number of records to be returned |
-| path_regex         | String  | N        | "\*\/\*\/\*"  | Pattern of path                      |
+| Parameter Name     | Type    | Required | Default Value    | Description                          |
+|--------------------|---------|----------|------------------|--------------------------------------|
+| table              | String  | Y        | None             | Hudi table name                      |
+| max_instant        | String  | N        | ""               | Max instant time                     |
+| include_max        | Boolean | N        | false            | Include max instant                  |
+| include_in_flight  | Boolean | N        | false            | Include in flight                    |
+| exclude_compaction | Boolean | N        | false            | Exclude compaction                   |
+| limit              | Int     | N        | 10               | Max number of records to be returned |
+| path_regex         | String  | N        | "ALL_PARTITIONS" | Pattern of path                      |
 
 **Output**
 
@@ -1197,15 +1197,16 @@ Show latest file system view of a table.
 
 **Input**
 
-| Parameter Name     | Type    | Required | Default Value | Description                          |
-|--------------------|---------|----------|---------------|--------------------------------------|
-| table              | String  | Y        | None          | Hudi table name                      |
-| max_instant        | String  | N        | ""            | Max instant time                     |
-| include_max        | Boolean | N        | false         | Include max instant                  |
-| include_in_flight  | Boolean | N        | false         | Include in flight                    |
-| exclude_compaction | Boolean | N        | false         | Exclude compaction                   |
-| partition_path     | String  | Y        | None          | Partition path                       |
-| merge              | Boolean | N        | false         | Merge results                        |
+| Parameter Name     | Type    | Required | Default Value    | Description                          |
+|--------------------|---------|----------|------------------|--------------------------------------|
+| table              | String  | Y        | None             | Hudi table name                      |
+| max_instant        | String  | N        | ""               | Max instant time                     |
+| include_max        | Boolean | N        | false            | Include max instant                  |
+| include_in_flight  | Boolean | N        | false            | Include in flight                    |
+| exclude_compaction | Boolean | N        | false            | Exclude compaction                   |
+| path_regex         | String  | N        | "ALL_PARTITIONS" | Pattern of path                      |
+| partition_path     | String  | N        | "ALL_PARTITIONS" | Partition path                       |
+| merge              | Boolean | N        | false            | Merge results                        |
 
 **Output**
 
