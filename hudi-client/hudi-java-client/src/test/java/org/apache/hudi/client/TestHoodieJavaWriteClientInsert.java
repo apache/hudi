@@ -112,7 +112,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
-        .withPath(metaClient.getBasePath().toString())
+        .withPath(metaClient.getBasePath())
         .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
         .build();
 

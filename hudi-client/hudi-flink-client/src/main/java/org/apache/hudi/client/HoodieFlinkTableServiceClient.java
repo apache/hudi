@@ -142,7 +142,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
           Option.of(getUTF8Bytes(metadata.toJsonString())));
     } catch (IOException e) {
       throw new HoodieClusteringException(
-          "Failed to commit " + table.getMetaClient().getBasePath().toString() + " at time " + clusteringCommitTime, e);
+          "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(clusteringInstant));
     }

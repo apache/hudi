@@ -261,7 +261,7 @@ public class TimelineUtils {
 
       return false;
     } catch (IOException e) {
-      throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath().toString(), e);
+      throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
   }
 

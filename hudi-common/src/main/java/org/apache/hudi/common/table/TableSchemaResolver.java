@@ -300,7 +300,7 @@ public class TableSchemaResolver {
         .fromBytes(activeTimeline.getInstantDetails(lastCompactionCommit).get(), HoodieCommitMetadata.class);
     String filePath = compactionMetadata.getFileIdAndFullPaths(metaClient.getBasePath()).values().stream().findAny()
         .orElseThrow(() -> new IllegalArgumentException("Could not find any data file written for compaction "
-            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath().toString()));
+            + lastCompactionCommit + ", could not get schema for table " + metaClient.getBasePath()));
     StoragePath path = new StoragePath(filePath);
     return HoodieIOFactory.getIOFactory(metaClient.getStorage())
         .getFileFormatUtils(path).readAvroSchema(metaClient.getStorage(), path);
@@ -508,6 +508,6 @@ public class TableSchemaResolver {
   }
 
   private Supplier<Exception> schemaNotFoundError() {
-    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath().toString());
+    return () -> new HoodieSchemaNotFoundException("No schema found for table at " + metaClient.getBasePath());
   }
 }

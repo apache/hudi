@@ -71,6 +71,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -389,8 +390,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieCommitMetadata hoodieCommitMetadata = doWriteOperationWithMeta(testTable, instant1, INSERT);
 
     // Simulate the complete data directory including ".hoodie_partition_metadata" file
-    File metaForP1 = new File(metaClient.getBasePath().toString() + "/p1", ".hoodie_partition_metadata");
-    File metaForP2 = new File(metaClient.getBasePath().toString() + "/p2", ".hoodie_partition_metadata");
+    File metaForP1 = new File(metaClient.getBasePath() + "/p1", ".hoodie_partition_metadata");
+    File metaForP2 = new File(metaClient.getBasePath() + "/p2", ".hoodie_partition_metadata");
     metaForP1.createNewFile();
     metaForP2.createNewFile();
 
@@ -713,6 +714,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(12) // cannot restore to before the oldest compaction on MDT as there are no base files before that time
             .build())
         .build();
+    // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11 (Spark >= 3.3)
+    // Java 8 date/time type `java.time.LocalDate` is not supported by default
+    JsonUtils.registerModules();
     init(tableType, writeConfig);
     testTableOperationsForMetaIndexImpl(writeConfig);
   }
@@ -762,7 +766,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         metadataWriter.deletePartitions("0000003", Arrays.asList(COLUMN_STATS));
 
         HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-        List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath().toString(), false, false);
+        List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient.getStorage(), metadataMetaClient.getBasePath(), false, false);
         // partition should be physically deleted
         assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
         assertFalse(metadataTablePartitions.contains(COLUMN_STATS.getPartitionPath()));
@@ -1009,7 +1013,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // collect all commit meta files from metadata table.
       List<StoragePathInfo> metaFiles = metaClient.getStorage()
-          .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "/metadata/.hoodie"));
+          .listDirectEntries(new StoragePath(metaClient.getMetaPath(), "metadata/.hoodie"));
       List<StoragePathInfo> commit3Files = metaFiles.stream()
           .filter(pathInfo ->
               pathInfo.getPath().getName().equals(newCommitTime3 + "." + HoodieTimeline.DELTA_COMMIT_ACTION)).collect(Collectors.toList());
@@ -1320,7 +1324,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
     HoodieMetadataLogRecordReader logRecordReader = HoodieMetadataLogRecordReader.newBuilder()
         .withStorage(metadataMetaClient.getStorage())
-        .withBasePath(metadataMetaClient.getBasePath().toString())
+        .withBasePath(metadataMetaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withLatestInstantTime(latestCommitTimestamp)
         .withPartition(FILES.getPartitionPath())

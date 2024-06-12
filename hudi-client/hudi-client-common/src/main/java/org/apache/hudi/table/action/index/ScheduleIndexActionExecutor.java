@@ -134,8 +134,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
   private void abort(HoodieInstant indexInstant) {
     // delete metadata partition
     partitionIndexTypes.forEach(partitionType -> {
-      if (metadataPartitionExists(table.getMetaClient().getBasePath().toString(), context, partitionType)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePath().toString(), context, partitionType);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partitionType)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partitionType);
       }
     });
     // delete requested instant

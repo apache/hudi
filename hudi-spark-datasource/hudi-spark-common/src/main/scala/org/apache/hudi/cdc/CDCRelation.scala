@@ -188,7 +188,7 @@ object CDCRelation {
       options: Map[String, String]): CDCRelation = {
 
     if (!isCDCEnabled(metaClient)) {
-      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath.toString}")
+      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
     val startingInstant = options.getOrElse(DataSourceReadOptions.BEGIN_INSTANTTIME.key(),

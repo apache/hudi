@@ -110,7 +110,7 @@ public class CompactionTestUtils {
       }
     });
 
-    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
+    metaClient = createMetaClient(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
     Map<HoodieFileGroupId, Pair<String, HoodieCompactionOperation>> pendingCompactionMap =
         CompactionUtils.getAllPendingCompactionOperations(metaClient);
 
