@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -236,7 +237,7 @@ public class AvroSchemaUtils {
       isUnion = true;
       foundSchema = resolveNullableSchema(foundSchema);
     }
-    Schema newSchema = Schema.createRecord(foundSchema.getName(), foundSchema.getDoc(), foundSchema.getNamespace(), false, Collections.singletonList(nestedPart.get()));
+    Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
@@ -259,10 +260,7 @@ public class AvroSchemaUtils {
         fields.add(new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()));
       }
     }
-
-    Schema newSchema = Schema.createRecord(a.getName(), a.getDoc(), a.getNamespace(), a.isError());
-    newSchema.setFields(fields);
-    return newSchema;
+    return createNewSchemaFromFieldsWithReference(a, fields);
   }
 
   /**
@@ -292,17 +290,22 @@ public class AvroSchemaUtils {
       fields.addAll(newFields);
     }
 
-    Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
-    newSchema.setFields(fields);
-    return newSchema;
+    return createNewSchemaFromFieldsWithReference(schema, fields);
   }
 
-  public static Schema removeFieldsFromSchema(Schema schema, Set<String> fieldNames) {
-    List<Schema.Field> fields = schema.getFields().stream()
-        .filter(field -> !fieldNames.contains(field.name()))
-        .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
-        .collect(Collectors.toList());
+  /**
+   * Create a new schema but maintain all meta info from the old schema
+   *
+   * @param schema schema to get the meta info from
+   * @param fields list of fields in order that will be in the new schema
+   *
+   * @return schema with fields from fields, and metadata from schema
+   */
+  public static Schema createNewSchemaFromFieldsWithReference(Schema schema, List<Schema.Field> fields) {
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    for (Map.Entry<String, Object> prop : schema.getObjectProps().entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
     newSchema.setFields(fields);
     return newSchema;
   }
