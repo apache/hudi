@@ -42,6 +42,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -62,6 +63,7 @@ import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
@@ -712,9 +714,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Returns the possible invalid data file name with given marker files.
+   * Returns the all data file name based on markers.
    */
-  protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
+  protected Set<String> getDataPathsBasedOnMarkers(WriteMarkers markers) throws IOException {
     return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
   }
 
@@ -737,24 +739,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
-
-      if (!markers.doesMarkerDirExist()) {
-        // can happen if it was an empty write say.
-        return;
-      }
-
-      // we are not including log appends here, since they are already fail-safe.
-      Set<String> invalidDataPaths = getInvalidDataPaths(markers);
-      Set<String> validDataPaths = stats.stream()
-          .map(HoodieWriteStat::getPath)
-          .filter(p -> p.endsWith(this.getBaseFileExtension()))
-          .collect(Collectors.toSet());
-
-      // Contains list of partially created files. These needs to be cleaned up.
-      invalidDataPaths.removeAll(validDataPaths);
-
-
+      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats);
 
       if (!invalidDataPaths.isEmpty()) {
         if (shouldFailOnDuplicateDataFileDetection) {
@@ -786,6 +771,50 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } catch (IOException ioe) {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
+  }
+
+  public void doValidateCommitMetadataConsistency(String instantTs, List<HoodieWriteStat> stats) throws IOException {
+    if (config.doPostCommitValidateCommitMetadataConsistency()) {
+      String basePath = getMetaClient().getBasePath();
+      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats);
+
+      if (invalidDataPaths.isEmpty()) {
+        return;
+      }
+      // if there were spurious/duplicate data files found, pre commit marker based reconciliation should have deleted the files.
+      checkForInvalidFileExistence(context, instantTs, basePath, invalidDataPaths);
+    }
+  }
+
+  private void checkForInvalidFileExistence(HoodieEngineContext context, String commitTime, String basePath, Set<String> invalidDataFilePaths) {
+    List<String> nonDeletedInvalidFiles = context.map(new ArrayList<>(invalidDataFilePaths), (SerializableFunction<String, String>) v1 -> {
+      Path filePath = new Path(basePath, v1);
+      final FileSystem fileSystem = metaClient.getFs();
+      return fileSystem.exists(filePath) ? v1 : null;
+    }, invalidDataFilePaths.size()).stream().filter(fileName -> !StringUtils.isNullOrEmpty(fileName)).collect(Collectors.toList());
+
+    if (!nonDeletedInvalidFiles.isEmpty()) {
+      throw new HoodieException(String.format("Failing commit %s due to presence of spurious data files in addition to markers = %s ",
+          commitTime, Arrays.toString(nonDeletedInvalidFiles.toArray())));
+    }
+  }
+
+  @VisibleForTesting
+  public Set<String> getInvalidDataFilePaths(String instantTs, List<HoodieWriteStat> stats) throws IOException {
+    WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
+    if (!markers.doesMarkerDirExist()) {
+      // can happen if it was an empty write say.
+      return Collections.emptySet();
+    }
+    Set<String> invalidDataPaths = getDataPathsBasedOnMarkers(markers);
+    Set<String> validDataPaths = stats.stream()
+        .map(HoodieWriteStat::getPath)
+        .filter(p -> p.endsWith(this.getBaseFileExtension()))
+        .collect(Collectors.toSet());
+
+    // Contains list of partially created files. These needs to be cleaned up.
+    invalidDataPaths.removeAll(validDataPaths);
+    return invalidDataPaths;
   }
 
   /**

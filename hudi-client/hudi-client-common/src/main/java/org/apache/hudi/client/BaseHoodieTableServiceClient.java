@@ -470,7 +470,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     // TODO : Where is shouldComplete used ?
     if (shouldComplete && clusteringMetadata.getCommitMetadata().isPresent()) {
-      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(convertToWriteStatus(writeMetadata)));
+      completeClustering((HoodieReplaceCommitMetadata) clusteringMetadata.getCommitMetadata().get(), table, clusteringInstant, Option.ofNullable(convertToWriteStatus(clusteringMetadata)));
     }
     return clusteringMetadata;
   }
@@ -491,7 +491,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected abstract HoodieWriteMetadata<O> convertToOutputMetadata(HoodieWriteMetadata<T> writeMetadata);
 
-  protected abstract HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<T> writeMetadata);
+  protected abstract HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<O> clusteringMetadata);
 
   private void completeClustering(HoodieReplaceCommitMetadata metadata,
                                   HoodieTable table,
@@ -514,6 +514,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       LOG.info("Committing Clustering {}", clusteringCommitTime);
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
+
+      // before transitioning to complete, lets do post commit validation
+      table.doValidateCommitMetadataConsistency(clusteringCommitTime, writeStats);
 
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           clusteringInstant,

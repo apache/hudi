@@ -67,8 +67,8 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   }
 
   @Override
-  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> writeMetadata) {
-    return HoodieListData.eager(writeMetadata.getWriteStatuses());
+  protected HoodieData<WriteStatus> convertToWriteStatus(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata) {
+    return HoodieListData.eager(clusteringMetadata.getWriteStatuses());
   }
 
   @Override

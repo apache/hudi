@@ -743,6 +743,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, compaction plan will be written to aux in addition to timeline. This might be required to not break athena which might use hudi 0.13.x to read "
           + "these tables written using 0.14.x ");
 
+  public static final ConfigProperty<String> VALIDATE_COMMIT_METADATA_CONSISTENCY = ConfigProperty
+      .key("hoodie.validate.commit.metadata.consistency")
+      .defaultValue("false")
+      .withDocumentation("Just before wrapping up a commit, do validate commit metadata consistency. "
+          + "Compare with markers and ensure there are no additional duplicate files found");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1334,6 +1340,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldFailOnDuplicateDataFileDetection() {
     return getBoolean(FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION);
+  }
+
+  public boolean doPostCommitValidateCommitMetadataConsistency() {
+    return getBoolean(VALIDATE_COMMIT_METADATA_CONSISTENCY);
   }
 
   public int getWriteBufferLimitBytes() {
@@ -3103,6 +3113,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withCompactionPlanToAuxFolder(boolean writeCompactionPlanToAuxFolder) {
       writeConfig.setValue(WRITE_COMPACTION_PLAN_TO_AUX_FOLDER, String.valueOf(writeCompactionPlanToAuxFolder));
+      return this;
+    }
+
+    public Builder doValidateCommitMetadataConsistency(boolean doPostCommitValidateMetadataConsistency) {
+      writeConfig.setValue(VALIDATE_COMMIT_METADATA_CONSISTENCY, String.valueOf(doPostCommitValidateMetadataConsistency));
       return this;
     }
 

@@ -1468,6 +1468,19 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @Test
+  public void testClusteringWithPostCommitMetadataValidation() throws Exception {
+    // setup clustering config.
+    HoodieClusteringConfig clusteringConfig = HoodieClusteringConfig.newBuilder().withClusteringMaxNumGroups(10)
+        .withClusteringTargetPartitions(0).withInlineClusteringNumCommits(1).withInlineClustering(true)
+        .fromProperties(getDisabledRowWriterProperties())
+        .build();
+    Properties props = getPropertiesForKeyGen();
+    props.put(HoodieWriteConfig.VALIDATE_COMMIT_METADATA_CONSISTENCY.key(), "true");
+    testInsertAndClustering(clusteringConfig, true, true, false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "",
+        props);
+  }
+
+  @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     String partitionPath = "2015/03/16";
     testInsertTwoBatches(true, partitionPath);
@@ -1753,14 +1766,23 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   private List<HoodieRecord> testInsertAndClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields, boolean completeClustering) throws Exception {
-    return testInsertAndClustering(clusteringConfig, populateMetaFields, completeClustering, false, "", "", "");
+    return testInsertAndClustering(clusteringConfig, populateMetaFields, completeClustering, false, "", "", "", getPropertiesForKeyGen());
   }
 
   private List<HoodieRecord> testInsertAndClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields,
                                                      boolean completeClustering, boolean assertSameFileIds, String validatorClasses,
                                                      String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation) throws Exception {
+    return testInsertAndClustering(clusteringConfig, populateMetaFields, completeClustering, assertSameFileIds, validatorClasses, sqlQueryForEqualityValidation,
+        sqlQueryForSingleResultValidation, getPropertiesForKeyGen());
+  }
+
+  private List<HoodieRecord> testInsertAndClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields,
+                                                     boolean completeClustering, boolean assertSameFileIds, String validatorClasses,
+                                                     String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation,
+                                                     Properties properties) throws Exception {
     Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords = testInsertTwoBatches(populateMetaFields);
-    testClustering(clusteringConfig, populateMetaFields, completeClustering, assertSameFileIds, validatorClasses, sqlQueryForEqualityValidation, sqlQueryForSingleResultValidation, allRecords);
+    testClustering(clusteringConfig, populateMetaFields, completeClustering, assertSameFileIds, validatorClasses, sqlQueryForEqualityValidation, sqlQueryForSingleResultValidation, allRecords,
+        properties);
     return allRecords.getLeft().getLeft();
   }
 
@@ -1833,11 +1855,11 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private void testClustering(HoodieClusteringConfig clusteringConfig, boolean populateMetaFields, boolean completeClustering, boolean assertSameFileIds,
                               String validatorClasses, String sqlQueryForEqualityValidation, String sqlQueryForSingleResultValidation,
-                              Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords) throws IOException {
+                              Pair<Pair<List<HoodieRecord>, List<String>>, Set<HoodieFileGroupId>> allRecords, Properties properties) throws IOException {
 
     HoodieWriteConfig config = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY).withAutoCommit(false)
         .withClusteringConfig(clusteringConfig)
-        .withProps(getPropertiesForKeyGen()).build();
+        .withProps(properties).build();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> clusterMetadata =
         performClustering(clusteringConfig, populateMetaFields, completeClustering, validatorClasses, sqlQueryForEqualityValidation, sqlQueryForSingleResultValidation, allRecords.getLeft());
     if (assertSameFileIds) {
