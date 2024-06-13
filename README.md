@@ -74,7 +74,7 @@ title, i.e., `[AUDIT-<ID>]`, `[ONHS-<ID>]`, or `[ENG-<ID>]`. There are four case
     temporary hotfix.
 - **Release cut**: create AUDIT ticket and PR with the AUDIT ticket in the title (e.g.,
   `[AUDIT-689] Upgrade to release`), by
-  following [Dataplane Rollout Process](https://app.clickup.com/18029943/v/dc/h67bq-7724/h67bq-72820)
+  following [Dataplane Rollout Process](https://app.clickup.com/18029943/v/dc/h67bq-25107/h67bq-72820)
 - **Other cases**: in the cases of internal or cherrypick PRs, add `[INTERNAL]` or `[CHERRYPICK]` to the PR title.
   - For example:
     `[ENG-1234][INTERNAL] Internal tooling changes`, `[ENG-5678][CHERRYPICK] Cherrypick community OSS changes`, etc.
@@ -134,7 +134,7 @@ The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version,
 3.4.0. The default Scala version is 2.12. Refer to the table below for building with different Spark and Scala versions.
 
 | Maven build options       | Expected Spark bundle jar name               | Notes                                            |
-|:--------------------------|:---------------------------------------------|:-------------------------------------------------|
+| :------------------------ | :------------------------------------------- | :----------------------------------------------- |
 | (empty)                   | hudi-spark3.2-bundle_2.12                    | For Spark 3.2.x and Scala 2.12 (default options) |
 | `-Dspark2.4 -Dscala-2.11` | hudi-spark2.4-bundle_2.11                    | For Spark 2.4.4 and Scala 2.11                   |
 | `-Dspark3.0`              | hudi-spark3.0-bundle_2.12                    | For Spark 3.0.x and Scala 2.12                   |
@@ -169,7 +169,7 @@ Flink is Scala-free since 1.15.x, there is no need to specify the Scala version 
 Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options        | Expected Flink bundle jar name | Notes                            |
-|:---------------------------|:-------------------------------|:---------------------------------|
+| :------------------------- | :----------------------------- | :------------------------------- |
 | (empty)                    | hudi-flink1.17-bundle          | For Flink 1.17 (default options) |
 | `-Dflink1.17`              | hudi-flink1.17-bundle          | For Flink 1.17 (same as default) |
 | `-Dflink1.16`              | hudi-flink1.16-bundle          | For Flink 1.16                   |
