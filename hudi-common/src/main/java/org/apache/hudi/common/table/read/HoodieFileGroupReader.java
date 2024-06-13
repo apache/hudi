@@ -83,33 +83,50 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
 
-  public HoodieFileGroupReader(HoodieFileGroupReader.Builder b) {
-    this.readerContext = b.readerContext;
-    this.storage = b.storage;
-    this.hoodieBaseFileOption = b.fileSlice.getBaseFile();
-    this.logFiles = b.fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
-    this.props = b.props;
-    this.start = b.start;
-    this.length = b.length;
+  HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
+                               HoodieStorage storage,
+                               String tablePath,
+                               String latestCommitTime,
+                               FileSlice fileSlice,
+                               Schema dataSchema,
+                               Schema requestedSchema,
+                               Option<InternalSchema> internalSchemaOpt,
+                               HoodieTableMetaClient hoodieTableMetaClient,
+                               TypedProperties props,
+                               HoodieTableConfig tableConfig,
+                               long start,
+                               long length,
+                               boolean shouldUseRecordPosition,
+                               long maxMemorySizeInBytes,
+                               String spillableMapBasePath,
+                               ExternalSpillableMap.DiskMapType diskMapType,
+                               boolean isBitCaskDiskMapCompressionEnabled) {
+    this.readerContext = readerContext;
+    this.storage = storage;
+    this.hoodieBaseFileOption = fileSlice.getBaseFile();
+    this.logFiles = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).collect(Collectors.toList());
+    this.props = props;
+    this.start = start;
+    this.length = length;
     this.recordMergeMode = getRecordMergeMode(props);
-    this.recordMerger = readerContext.getRecordMerger(b.tableConfig.getRecordMergerStrategy());
+    this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
     readerContext.setRecordMerger(this.recordMerger);
-    readerContext.setTablePath(b.tablePath);
-    readerContext.setLatestCommitTime(b.latestCommitTime);
-    readerContext.setShouldMergeUseRecordPosition(b.shouldUseRecordPosition);
+    readerContext.setTablePath(tablePath);
+    readerContext.setLatestCommitTime(latestCommitTime);
+    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
-        ? new HoodiePositionBasedSchemaHandler<>(readerContext, b.dataSchema, b.requestedSchema, b.internalSchemaOpt, b.tableConfig)
-        : new HoodieFileGroupReaderSchemaHandler<>(readerContext, b.dataSchema, b.requestedSchema, b.internalSchemaOpt, b.tableConfig));
+        ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
+        : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
-        : b.shouldUseRecordPosition
-        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, b.hoodieTableMetaClient, Option.empty(),
-        Option.empty(), recordMerger, props, b.maxMemorySizeInBytes, b.spillableMapBasePath, b.diskMapType, b.isBitCaskDiskMapCompressionEnabled)
-        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, b.hoodieTableMetaClient, Option.empty(),
-        Option.empty(), recordMerger, props, b.maxMemorySizeInBytes, b.spillableMapBasePath, b.diskMapType, b.isBitCaskDiskMapCompressionEnabled);
+        : shouldUseRecordPosition
+        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
+        Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
+        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
+        Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   /**
@@ -363,7 +380,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       if (internalSchemaOpt == null) {
         internalSchemaOpt = Option.empty();
       }
-      return new HoodieFileGroupReader<>(this);
+      return new HoodieFileGroupReader<>(readerContext, storage, tablePath, latestCommitTime,
+          fileSlice, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          props, tableConfig, start, length, shouldUseRecordPosition, maxMemorySizeInBytes,
+          spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
     }
 
   }
