@@ -51,6 +51,9 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
       configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
           "false", "support reading avro from non-legacy map/list in parquet file");
     }
+    // If old file is written with legacy mode, read with legacy mode, even if now it's non-legacy mode in conf.
+    // Since by changing the property users want to control how files are written, not how they are read.
+    // Later the value of WRITE_OLD_LIST_STRUCTURE will be picked from conf, thus either keeping old mode or writing new mode.
     if (legacyMode) {
       configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
           "true", "support reading avro from legacy map/list in parquet file");
