@@ -32,6 +32,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
+
 public class HoodieFileGroupReaderTestUtils {
   public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
       Option<FileSlice> fileSliceOpt,
@@ -113,25 +115,26 @@ public class HoodieFileGroupReaderTestUtils {
         boolean shouldUseRecordPosition,
         HoodieTableMetaClient metaClient
     ) {
-      return new HoodieFileGroupReader<>(
-          readerContext,
-          storage,
-          basePath,
-          latestCommitTime,
-          fileSlice,
-          schema,
-          schema,
-          Option.empty(),
-          metaClient,
-          props,
-          tableConfig,
-          start,
-          length,
-          shouldUseRecordPosition,
-          1024 * 1024 * 1000,
-          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
-          ExternalSpillableMap.DiskMapType.ROCKS_DB,
-          false);
+
+      return ((HoodieFileGroupReader.Builder<IndexedRecord>) HoodieFileGroupReader.builder())
+          .withReaderContext(readerContext)
+          .withHoodieStorage(storage)
+          .withTablePath(basePath)
+          .withLatestCommitTime(latestCommitTime)
+          .withFileSlice(fileSlice)
+          .withDataSchema(schema)
+          .withRequestedSchema(schema)
+          .withMetaClient(metaClient)
+          .withTypedProperties(props)
+          .withTableConfig(tableConfig)
+          .withStart(start)
+          .withLength(length)
+          .withUseRecordPosition(shouldUseRecordPosition)
+          .withMaxMemorySizeInBytes(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+          .withSpillableMapBasePath(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME)
+          .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
+          .withBitCaskDiskMapCompressionEnabled(false)
+          .build();
     }
   }
 }

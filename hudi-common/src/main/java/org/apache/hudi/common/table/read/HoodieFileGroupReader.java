@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
@@ -82,7 +83,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
+  HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                HoodieStorage storage,
                                String tablePath,
                                String latestCommitTime,
@@ -254,6 +255,137 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   public static RecordMergeMode getRecordMergeMode(Properties props) {
     String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase();
     return RecordMergeMode.valueOf(mergeMode);
+  }
+
+  public static Builder builder() {
+    return new Builder<>();
+  }
+
+  public static class Builder<T> {
+
+    HoodieReaderContext<T> readerContext;
+    HoodieStorage storage;
+    String tablePath;
+    String latestCommitTime;
+    FileSlice fileSlice;
+    Schema dataSchema;
+    Schema requestedSchema;
+    Option<InternalSchema> internalSchemaOpt;
+    HoodieTableMetaClient hoodieTableMetaClient;
+    TypedProperties props;
+    HoodieTableConfig tableConfig;
+    long start;
+    long length;
+    boolean shouldUseRecordPosition = false;
+    long maxMemorySizeInBytes;
+    String spillableMapBasePath;
+    ExternalSpillableMap.DiskMapType diskMapType;
+    boolean isBitCaskDiskMapCompressionEnabled;
+
+    public Builder<T> withReaderContext(HoodieReaderContext<T> readerContext) {
+      this.readerContext = readerContext;
+      return this;
+    }
+
+    public Builder<T> withHoodieStorage(HoodieStorage storage) {
+      this.storage = storage;
+      return this;
+    }
+
+    public Builder<T> withTablePath(String tablePath) {
+      this.tablePath = tablePath;
+      return this;
+    }
+
+    public Builder<T> withLatestCommitTime(String latestCommitTime) {
+      this.latestCommitTime = latestCommitTime;
+      return this;
+    }
+
+    public Builder<T> withFileSlice(FileSlice fileSlice) {
+      this.fileSlice = fileSlice;
+      return this;
+    }
+
+    public Builder<T> withDataSchema(Schema dataSchema) {
+      this.dataSchema = dataSchema;
+      return this;
+    }
+
+    public Builder<T> withRequestedSchema(Schema requestedSchema) {
+      this.requestedSchema = requestedSchema;
+      return this;
+    }
+
+    public Builder<T> withInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
+      this.internalSchemaOpt = internalSchemaOpt;
+      return this;
+    }
+
+    public Builder<T> withMetaClient(HoodieTableMetaClient hoodieTableMetaClient) {
+      this.hoodieTableMetaClient = hoodieTableMetaClient;
+      return this;
+    }
+
+    public Builder<T> withTypedProperties(TypedProperties props) {
+      this.props = props;
+      return this;
+    }
+
+    public Builder<T> withTableConfig(HoodieTableConfig tableConfig) {
+      this.tableConfig = tableConfig;
+      return this;
+    }
+
+    public Builder<T> withStart(long start) {
+      this.start = start;
+      return this;
+    }
+
+    public Builder<T> withLength(long length) {
+      this.length = length;
+      return this;
+    }
+
+    public Builder<T> withUseRecordPosition(boolean shouldUseRecordPosition) {
+      this.shouldUseRecordPosition = shouldUseRecordPosition;
+      return this;
+    }
+
+    public Builder<T> withMaxMemorySizeInBytes(long maxMemorySizeInBytes) {
+      this.maxMemorySizeInBytes = maxMemorySizeInBytes;
+      return this;
+    }
+
+    public Builder<T> withSpillableMapBasePath(String spillableMapBasePath) {
+      this.spillableMapBasePath = spillableMapBasePath;
+      return this;
+    }
+
+    public Builder<T> withDiskMapType(ExternalSpillableMap.DiskMapType diskMapType) {
+      this.diskMapType = diskMapType;
+      return this;
+    }
+
+    public Builder<T> withBitCaskDiskMapCompressionEnabled(boolean isBitCaskDiskMapCompressionEnabled) {
+      this.isBitCaskDiskMapCompressionEnabled = isBitCaskDiskMapCompressionEnabled;
+      return this;
+    }
+
+    public HoodieFileGroupReader<T> build() {
+      ValidationUtils.checkArgument(readerContext != null);
+      ValidationUtils.checkArgument(fileSlice != null);
+      ValidationUtils.checkArgument(dataSchema != null);
+      ValidationUtils.checkArgument(requestedSchema != null);
+      if (internalSchemaOpt == null) {
+        internalSchemaOpt = Option.empty();
+      }
+      return new HoodieFileGroupReader<>(readerContext, storage, tablePath, latestCommitTime,
+          fileSlice, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          props, tableConfig, start, length, shouldUseRecordPosition, maxMemorySizeInBytes,
+          spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+    }
+
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
