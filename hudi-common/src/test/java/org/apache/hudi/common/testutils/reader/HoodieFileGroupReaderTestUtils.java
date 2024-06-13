@@ -32,6 +32,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
+
 public class HoodieFileGroupReaderTestUtils {
   public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
       Option<FileSlice> fileSliceOpt,
@@ -128,7 +130,7 @@ public class HoodieFileGroupReaderTestUtils {
           .withStart(start)
           .withLength(length)
           .withUseRecordPosition(shouldUseRecordPosition)
-          .withMaxMemorySizeInBytes(1024 * 1024 * 1000)
+          .withMaxMemorySizeInBytes(DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
           .withSpillableMapBasePath(basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME)
           .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
           .withBitCaskDiskMapCompressionEnabled(false)

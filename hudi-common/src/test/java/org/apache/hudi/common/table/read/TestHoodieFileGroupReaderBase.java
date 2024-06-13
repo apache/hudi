@@ -292,7 +292,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         .withTableConfig(metaClient.getTableConfig())
         .withStart(0)
         .withLength(fileSlice.getTotalFileSize())
-        .withMaxMemorySizeInBytes(1024 * 1024 * 1000)
+        .withMaxMemorySizeInBytes(HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
         .withSpillableMapBasePath(metaClient.getTempFolderPath())
         .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
         .withBitCaskDiskMapCompressionEnabled(false)
