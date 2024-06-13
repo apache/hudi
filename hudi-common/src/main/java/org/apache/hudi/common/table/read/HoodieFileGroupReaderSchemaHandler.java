@@ -179,6 +179,9 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
     }
     Schema newSchema = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
+    for (Map.Entry<String, Object> prop : dataSchema.getObjectProps().entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
     newSchema.setFields(fields);
     return newSchema;
   }

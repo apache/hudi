@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
-import org.apache.hudi.avro.AvroSchemaUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
@@ -159,14 +159,14 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       rowIndexColumn.add(ROW_INDEX_TEMPORARY_COLUMN_NAME)
       //always remove the row index column from the skeleton because the data file will also have the same column
       val skeletonProjection = projectRecord(skeletonRequiredSchema,
-        AvroSchemaUtils.removeFieldsFromSchema(skeletonRequiredSchema, rowIndexColumn))
+        HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,
-          AvroSchemaUtils.removeFieldsFromSchema(dataRequiredSchema, rowIndexColumn))
+          HoodieAvroUtils.removeFields(dataRequiredSchema, rowIndexColumn))
       }
 
       //row index will always be the last column
