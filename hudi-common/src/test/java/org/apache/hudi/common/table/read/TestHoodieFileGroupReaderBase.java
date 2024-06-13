@@ -291,7 +291,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         Option.empty(),
         metaClient,
         props,
-        metaClient.getTableConfig(),
         0,
         fileSlice.getTotalFileSize(),
         false,
