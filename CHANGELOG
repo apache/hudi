@@ -211,3 +211,10 @@ d79d8c0d4d3 [ENG-9437][HUDI-7713] Enforce ordering of fields during schema recon
 22ba18c1af3 [ENG-10381][MINOR] Add logs whenever fallback to fs listing even with MDT enabled (#750)
 cc1cfd8a6fc [ENG-10231][MINOR] Allow recreation of metrics instance for base path (#748)
 0422c65b40d [AUDIT-813] Upgrade to version release-v1.18.0 (#747)
+
+---[2024-06-13 08:48:56] [release-v1.19.0] Upgrade to version release-v1.19.0---
+1e4fa80ae [ENG-10413][HUDI-7779] Guard archival on savepoint removal until cleaner is able to clean it up (#752)
+c5dc593b3 [ENG-10330][INTERNAL] Fixing clustering to avoid repeated rdd trigger and Adding guards to catch spurious data files with clustering (#753)
+34ae0ffce [ENG-10230][HUDI-7826] Make column nullable when setNullForMissingColumns is true (#758)
+5b69b06e3 [ENG-9200][HUDI-7855] Add ability to configure bulk insert write parallelism (#714)
+330d3eb0b [AUDIT-815]: Upgrade to version release-v1.18.1 (#751)
