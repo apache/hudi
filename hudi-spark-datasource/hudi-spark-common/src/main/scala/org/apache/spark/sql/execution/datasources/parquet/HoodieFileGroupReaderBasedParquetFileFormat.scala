@@ -156,7 +156,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 val reader = new HoodieFileGroupReader[InternalRow](
                   readerContext,
                   new HoodieHadoopStorage(metaClient.getBasePathV2, storageConf),
-                  tableState.tablePath,
                   tableState.latestCommitTimestamp.get,
                   fileSlice,
                   broadcastedDataSchema.value,
