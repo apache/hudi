@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
@@ -113,6 +115,10 @@ public class HoodieFileGroupReaderTestUtils {
         boolean shouldUseRecordPosition,
         HoodieTableMetaClient metaClient
     ) {
+      props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(1024 * 1024 * 1000));
+      props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+      props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
       return new HoodieFileGroupReader<>(
           readerContext,
           storage,
@@ -127,11 +133,7 @@ public class HoodieFileGroupReaderTestUtils {
           tableConfig,
           start,
           length,
-          shouldUseRecordPosition,
-          1024 * 1024 * 1000,
-          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
-          ExternalSpillableMap.DiskMapType.ROCKS_DB,
-          false);
+          shouldUseRecordPosition);
     }
   }
 }
