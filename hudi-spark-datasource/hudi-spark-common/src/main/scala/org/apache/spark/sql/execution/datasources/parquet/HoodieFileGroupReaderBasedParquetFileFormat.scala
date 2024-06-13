@@ -163,7 +163,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   internalSchemaOpt,
                   metaClient,
                   props,
-                  metaClient.getTableConfig,
                   file.start,
                   file.length,
                   shouldUseRecordPosition)
