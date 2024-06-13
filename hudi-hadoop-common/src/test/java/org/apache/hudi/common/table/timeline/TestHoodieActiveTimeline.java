@@ -59,8 +59,12 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -679,6 +683,30 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     String testInstant = "20210101120101";
     assertEquals(HoodieActiveTimeline.parseDateFromInstantTime(testInstant).getTime(),
         HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
+  }
+
+  @Test
+  public void testInstantCompletionTimeBackwardCompatibility() {
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "2");
+    HoodieInstant completeInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(requestedInstant);
+    timeline.createNewInstant(inflightInstant);
+
+    // Note:
+    // 0.x meta file name pattern: ${instant_time}.action[.state]
+    // 1.x meta file name pattern: ${instant_time}_${completion_time}.action[.state].
+    String legacyCompletedFileName = HoodieTimeline.makeCommitFileName(completeInstant.getTimestamp());
+    metaClient.getStorage().createImmutableFileInPath(new StoragePath(metaClient.getMetaPath().toString(), legacyCompletedFileName), Option.empty());
+
+    timeline = timeline.reload();
+    assertThat("Some instants might be missing", timeline.countInstants(), is(3));
+    List<HoodieInstant> instants = timeline.getInstants();
+    assertNull(instants.get(0).getCompletionTime(), "Requested instant does not have completion time");
+    assertNull(instants.get(1).getCompletionTime(), "Inflight instant does not have completion time");
+    assertNotNull(instants.get(2).getCompletionTime(), "Completed instant has modification time as completion time for 0.x release");
   }
 
   /**
