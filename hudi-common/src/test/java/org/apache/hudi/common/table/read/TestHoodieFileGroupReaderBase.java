@@ -283,7 +283,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
-        tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice,
         avroSchema,

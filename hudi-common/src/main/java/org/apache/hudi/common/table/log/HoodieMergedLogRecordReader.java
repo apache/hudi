@@ -324,7 +324,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       ValidationUtils.checkArgument(readerContext != null, "Reader Context is null in Merged Log Record Reader");
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(
-            new StoragePath(readerContext.getTablePath()), new StoragePath(this.logFilePaths.get(0)).getParent());
+            readerContext.getTablePath(), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(

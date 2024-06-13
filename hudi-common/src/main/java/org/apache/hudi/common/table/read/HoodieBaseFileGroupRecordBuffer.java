@@ -74,7 +74,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected HoodieTableMetaClient hoodieTableMetaClient;
 
   public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                         HoodieTableMetaClient hoodieTableMetaClient,
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
                                          HoodieRecordMerger recordMerger,
@@ -95,7 +94,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     }
     this.payloadProps = payloadProps;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
-    this.hoodieTableMetaClient = hoodieTableMetaClient;
+    this.hoodieTableMetaClient = readerContext.getMetaClient();
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator<>(),

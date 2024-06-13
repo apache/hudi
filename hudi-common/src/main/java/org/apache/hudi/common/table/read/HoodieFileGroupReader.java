@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 
@@ -84,7 +83,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
                                HoodieStorage storage,
-                               String tablePath,
                                String latestCommitTime,
                                FileSlice fileSlice,
                                Schema dataSchema,
@@ -110,7 +108,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
     readerContext.setRecordMerger(this.recordMerger);
-    readerContext.setTablePath(tablePath);
+    readerContext.setMetaClient(hoodieTableMetaClient);
     readerContext.setLatestCommitTime(latestCommitTime);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
@@ -122,10 +120,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
         : shouldUseRecordPosition
-        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
-        Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
-        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(),
-        Option.empty(), recordMerger, props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, Option.empty(), Option.empty(), recordMerger,
+        props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
+        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, Option.empty(), Option.empty(), recordMerger,
+        props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
   }
 
   /**
@@ -221,7 +219,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private void scanLogFiles() {
-    String path = readerContext.getTablePath();
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
         .withStorage(storage)
@@ -229,7 +226,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withReverseReader(false)
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withPartition(getRelativePartitionPath(
-            new StoragePath(path), logFiles.get(0).getPath().getParent()))
+            readerContext.getTablePath(), logFiles.get(0).getPath().getParent()))
         .withRecordMerger(recordMerger)
         .withRecordMergeMode(recordMergeMode)
         .withRecordBuffer(recordBuffer)

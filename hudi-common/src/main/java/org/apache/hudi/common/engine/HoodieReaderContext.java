@@ -22,6 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -55,7 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
 public abstract class HoodieReaderContext<T> {
 
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
-  private String tablePath = null;
+  private HoodieTableMetaClient metaClient = null;
   private String latestCommitTime = null;
   private HoodieRecordMerger recordMerger = null;
   private Boolean hasLogFiles = null;
@@ -72,15 +73,16 @@ public abstract class HoodieReaderContext<T> {
     this.schemaHandler = schemaHandler;
   }
 
-  public String getTablePath() {
-    if (tablePath == null) {
-      throw new IllegalStateException("Table path not set in reader context.");
-    }
-    return tablePath;
+  public StoragePath getTablePath() {
+    return metaClient.getBasePathV2();
   }
 
-  public void setTablePath(String tablePath) {
-    this.tablePath = tablePath;
+  public HoodieTableMetaClient getMetaClient() {
+    return metaClient;
+  }
+
+  public void setMetaClient(HoodieTableMetaClient metaClient) {
+    this.metaClient = metaClient;
   }
 
   public String getLatestCommitTime() {

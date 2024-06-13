@@ -133,7 +133,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     boolean bitmaskCompressEnabled = jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
+    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(),
         latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, Option.empty(), metaClient, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
         fileSplit.getLength(), false, maxMemoryForMerge, spillableMapPath, spillMapType, bitmaskCompressEnabled);
