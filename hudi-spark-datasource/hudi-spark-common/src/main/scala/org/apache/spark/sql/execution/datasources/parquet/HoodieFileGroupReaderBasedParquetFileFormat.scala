@@ -153,25 +153,30 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 val storageConf = broadcastedStorageConf.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(storageConf).setBasePath(tableState.tablePath).build
-                val reader = new HoodieFileGroupReader[InternalRow](
-                  readerContext,
-                  new HoodieHadoopStorage(metaClient.getBasePathV2, storageConf),
-                  tableState.tablePath,
-                  tableState.latestCommitTimestamp.get,
-                  fileSlice,
-                  broadcastedDataSchema.value,
-                  broadcastedRequestedSchema.value,
-                  internalSchemaOpt,
-                  metaClient,
-                  metaClient.getTableConfig.getProps,
-                  metaClient.getTableConfig,
-                  file.start,
-                  file.length,
-                  shouldUseRecordPosition,
-                  options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong,
-                  options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath),
-                  DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)),
-                  options.getOrElse(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue().toString).toBoolean)
+                val reader = HoodieFileGroupReader.builder().asInstanceOf[HoodieFileGroupReader.Builder[InternalRow]]
+                  .withReaderContext(readerContext)
+                  .withHoodieStorage(new HoodieHadoopStorage(metaClient.getBasePathV2, storageConf))
+                  .withTablePath(tableState.tablePath)
+                  .withLatestCommitTime(tableState.latestCommitTimestamp.get)
+                  .withFileSlice(fileSlice)
+                  .withDataSchema(broadcastedDataSchema.value)
+                  .withRequestedSchema(broadcastedRequestedSchema.value)
+                  .withInternalSchemaOpt(internalSchemaOpt)
+                  .withMetaClient(metaClient)
+                  .withTypedProperties(metaClient.getTableConfig.getProps)
+                  .withTableConfig(metaClient.getTableConfig)
+                  .withStart(file.start)
+                  .withLength(file.length)
+                  .withUseRecordPosition(shouldUseRecordPosition)
+                  .withMaxMemorySizeInBytes(options.getOrElse(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),
+                    HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue() + "").toLong)
+                  .withSpillableMapBasePath(options.getOrElse(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),
+                    FileIOUtils.getDefaultSpillableMapBasePath))
+                  .withDiskMapType(DiskMapType.valueOf(options.getOrElse(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(),
+                    HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)))
+                  .withBitCaskDiskMapCompressionEnabled(options.getOrElse(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+                    HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue().toString).toBoolean)
+                  .build()
                 reader.initRecordIterators()
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(

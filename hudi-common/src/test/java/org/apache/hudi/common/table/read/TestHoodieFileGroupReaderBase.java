@@ -37,7 +37,6 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -280,25 +279,24 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
-    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
-        getHoodieReaderContext(tablePath, avroSchema, storageConf),
-        metaClient.getStorage(),
-        tablePath,
-        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
-        fileSlice,
-        avroSchema,
-        avroSchema,
-        Option.empty(),
-        metaClient,
-        props,
-        metaClient.getTableConfig(),
-        0,
-        fileSlice.getTotalFileSize(),
-        false,
-        1024 * 1024 * 1000,
-        metaClient.getTempFolderPath(),
-        ExternalSpillableMap.DiskMapType.ROCKS_DB,
-        false);
+    HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.builder()
+        .withReaderContext(getHoodieReaderContext(tablePath, avroSchema, storageConf))
+        .withHoodieStorage(metaClient.getStorage())
+        .withTablePath(tablePath)
+        .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().get().getTimestamp())
+        .withFileSlice(fileSlice)
+        .withDataSchema(avroSchema)
+        .withRequestedSchema(avroSchema)
+        .withMetaClient(metaClient)
+        .withTypedProperties(props)
+        .withTableConfig(metaClient.getTableConfig())
+        .withStart(0)
+        .withLength(fileSlice.getTotalFileSize())
+        .withMaxMemorySizeInBytes(1024 * 1024 * 1000)
+        .withSpillableMapBasePath(metaClient.getTempFolderPath())
+        .withDiskMapType(ExternalSpillableMap.DiskMapType.ROCKS_DB)
+        .withBitCaskDiskMapCompressionEnabled(false)
+        .build();
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {
       actualRecordList.add(fileGroupReader.next());

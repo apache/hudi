@@ -125,18 +125,27 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     Map<String, String[]> hosts = new HashMap<>();
     this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConfCopy, reporter, tableSchema, hosts, metaClient);
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
-    // get some config values
-    long maxMemoryForMerge = jobConf.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
-    String spillableMapPath = jobConf.get(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
-    ExternalSpillableMap.DiskMapType spillMapType = ExternalSpillableMap.DiskMapType.valueOf(jobConf.get(SPILLABLE_DISK_MAP_TYPE.key(),
-        SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
-    boolean bitmaskCompressEnabled = jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
-        DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
-        latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath),
-        tableSchema, requestedSchema, Option.empty(), metaClient, metaClient.getTableConfig().getProps(), metaClient.getTableConfig(), fileSplit.getStart(),
-        fileSplit.getLength(), false, maxMemoryForMerge, spillableMapPath, spillMapType, bitmaskCompressEnabled);
+    this.fileGroupReader = ((HoodieFileGroupReader.Builder<ArrayWritable>) HoodieFileGroupReader.builder())
+        .withReaderContext(readerContext)
+        .withHoodieStorage(metaClient.getStorage())
+        .withTablePath(tableBasePath)
+        .withLatestCommitTime(latestCommitTime)
+        .withFileSlice(getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath))
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(requestedSchema)
+        .withMetaClient(metaClient)
+        .withTypedProperties(metaClient.getTableConfig().getProps())
+        .withTableConfig(metaClient.getTableConfig())
+        .withStart(fileSplit.getStart())
+        .withLength(fileSplit.getLength())
+        .withMaxMemorySizeInBytes(jobConf.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue()))
+        .withSpillableMapBasePath(jobConf.get(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath()))
+        .withDiskMapType(ExternalSpillableMap.DiskMapType.valueOf(jobConf.get(SPILLABLE_DISK_MAP_TYPE.key(),
+            SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT)))
+        .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+            DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
+        .build();
     this.fileGroupReader.initRecordIterators();
     // it expects the partition columns to be at the end
     Schema outputSchema = HoodieAvroUtils.generateProjectionSchema(tableSchema,
