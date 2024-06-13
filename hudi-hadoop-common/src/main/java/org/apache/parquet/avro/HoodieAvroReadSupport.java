@@ -51,6 +51,10 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
       configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
           "false", "support reading avro from non-legacy map/list in parquet file");
     }
+    if (legacyMode) {
+      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
+          "true", "support reading avro from legacy map/list in parquet file");
+    }
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
     MessageType requestedSchema = readContext.getRequestedSchema();
     // support non-legacy map. Convert non-legacy map to legacy map
