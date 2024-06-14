@@ -261,6 +261,26 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     initSparkContext()
   }
 
+  /**
+   * For some reason order of fields is different,
+   * so produces difference like
+   * Difference: Expected [2,p1,WrappedArray(1, 2),2], got [2,WrappedArray(1, 2),2,p1]
+   * Difference: Expected [3,p1,WrappedArray(1, null),2], got [3,WrappedArray(1, null),2,p1]
+   * So using manual comparison by ensuring length is the same, then extracting fields by names and comparing them.
+   * This will not work for nested structs, but it's a simple test.
+   */
+  def compareIndividualRows(first: Row, second: Row): Boolean = {
+    if (first.length != second.length) {
+      false
+    } else {
+      first.schema.fieldNames.forall { field =>
+        val firstIndex = first.fieldIndex(field)
+        val secondIndex = second.fieldIndex(field)
+        first.get(firstIndex) == second.get(secondIndex)
+      }
+    }
+  }
+
   private def compareResults(expectedRecords: Seq[Row], sparkSession: SparkSession, path: String): Unit = {
     implicit object RowOrdering extends Ordering[Row] {
       def compare(a: Row, b: Row): Int = {
@@ -272,7 +292,9 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val expectedSorted = expectedRecords.sorted
     val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().toSeq.sorted
     assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
-    val recordsEqual = readRecords == expectedSorted
+    val recordsEqual = readRecords.zip(expectedSorted).forall {
+      case (first, second) => compareIndividualRows(first, second)
+    }
     val explanationStr = if (!recordsEqual) {
       readRecords.zipWithIndex.map {
         case (row, index) => {
