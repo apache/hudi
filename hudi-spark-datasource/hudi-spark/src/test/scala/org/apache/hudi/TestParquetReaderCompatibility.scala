@@ -18,27 +18,25 @@
 
 package org.apache.hudi
 
-import org.apache.commons.io.FileUtils
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullable, Nullability, Nullable}
 import org.apache.hudi.TestParquetReaderCompatibility.{SparkSetting, TestScenario, ThreeLevel, TwoLevel}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.testutils.HoodieCommonTestHarness
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils
-import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession, SQLContext}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
-import org.apache.hudi.io.storage.HoodieFileReaderFactory
+import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.parquet.schema.OriginalType
-import org.apache.spark.{SparkConf, SparkContext}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.apache.spark.SparkConf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -46,7 +44,7 @@ import java.util.Collections
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
-object TestParquetReaderCompatibility extends HoodieCommonTestHarness {
+object TestParquetReaderCompatibility {
   val listFieldName = "internal_list"
   abstract class SparkSetting {
     def value: String
@@ -136,63 +134,7 @@ object TestParquetReaderCompatibility extends HoodieCommonTestHarness {
  * Ensure after switch from reading file with schema with which file was written to deduced schema(RFC 46)
  * different list levels can interoperate.
  **/
-class TestParquetReaderCompatibility {
-  var spark: SparkSession = _
-  var sqlContext: SQLContext = _
-  var sc: SparkContext = _
-  var tempPath: java.nio.file.Path = _
-  var tempBootStrapPath: java.nio.file.Path = _
-  var hoodieFooTableName = "hoodie_foo_tbl"
-  var tempBasePath: String = _
-
-  case class StringLongTest(uuid: String, ts: Long)
-
-  /**
-   * Setup method running before each test.
-   */
-  @BeforeEach
-  def setUp(): Unit = {
-    tempPath = java.nio.file.Files.createTempDirectory("hoodie_test_path")
-    tempBootStrapPath = java.nio.file.Files.createTempDirectory("hoodie_test_bootstrap")
-    tempBasePath = tempPath.toAbsolutePath.toString
-  }
-
-  /**
-   * Tear down method running after each test.
-   */
-  @AfterEach
-  def tearDown(): Unit = {
-    cleanupSparkContexts()
-    FileUtils.deleteDirectory(tempPath.toFile)
-    FileUtils.deleteDirectory(tempBootStrapPath.toFile)
-  }
-
-  /**
-   * Utility method for cleaning up spark resources.
-   */
-  def cleanupSparkContexts(): Unit = {
-    if (sqlContext != null) {
-      sqlContext.clearCache();
-      sqlContext = null;
-    }
-    if (sc != null) {
-      sc.stop()
-      sc = null
-    }
-    if (spark != null) {
-      spark.close()
-    }
-  }
-
-  /**
-   * Utility method for dropping all hoodie meta related columns.
-   */
-  def dropMetaFields(df: Dataset[Row]): Dataset[Row] = {
-    df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
-      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
-      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
-  }
-
+class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   /*
   * Generate schema with required nullability constraints.
   * The interesting part is that if list is the last element in the schema - different errors will be thrown.
@@ -248,7 +190,8 @@ class TestParquetReaderCompatibility {
   @ParameterizedTest
   @MethodSource(Array("testSource"))
   def testAvroListUpdate(input: TestScenario): Unit = {
-    val path = tempPath + "_avro_list_update"
+    spark.stop()
+    val path = tempBasePath + "_avro_list_update"
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
@@ -314,26 +257,8 @@ class TestParquetReaderCompatibility {
     } finally {
       readSessionWithTargetLevel.close()
     }
-  }
 
-  /**
-   * For some reason order of fields is different,
-   * so produces difference like
-   * Difference: Expected [2,p1,WrappedArray(1, 2),2], got [2,WrappedArray(1, 2),2,p1]
-   * Difference: Expected [3,p1,WrappedArray(1, null),2], got [3,WrappedArray(1, null),2,p1]
-   * So using manual comparison by ensuring length is the same, then extracting fields by names and comparing them.
-   * This will not work for nested structs, but it's a simple test.
-   */
-  def compareIndividualRows(first: Row, second: Row): Boolean = {
-    if (first.length != second.length) {
-      false
-    } else {
-      first.schema.fieldNames.forall { field =>
-        val firstIndex = first.fieldIndex(field)
-        val secondIndex = second.fieldIndex(field)
-        first.get(firstIndex) == second.get(secondIndex)
-      }
-    }
+    initSparkContext()
   }
 
   private def compareResults(expectedRecords: Seq[Row], sparkSession: SparkSession, path: String): Unit = {
@@ -347,9 +272,7 @@ class TestParquetReaderCompatibility {
     val expectedSorted = expectedRecords.sorted
     val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().toSeq.sorted
     assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
-    val recordsEqual = readRecords.zip(expectedSorted).forall {
-      case (first, second) => compareIndividualRows(first, second)
-    }
+    val recordsEqual = readRecords == expectedSorted
     val explanationStr = if (!recordsEqual) {
       readRecords.zipWithIndex.map {
         case (row, index) => {
@@ -370,15 +293,16 @@ class TestParquetReaderCompatibility {
   private def getListLevelsFromPath(spark: SparkSession, path: String): Set[String] = {
     val engineContext = new HoodieSparkEngineContext(spark.sparkContext, spark.sqlContext)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
-    val baseTableMetadata = new HoodieBackedTableMetadata(engineContext, metadataConfig, path, false)
+    val baseTableMetadata = new HoodieBackedTableMetadata(
+      engineContext, HoodieTestUtils.getDefaultStorage, metadataConfig, s"$path", false)
     val fileStatuses = baseTableMetadata.getAllFilesInPartitions(Collections.singletonList(s"$path/$defaultPartition"))
 
-    fileStatuses.asScala.flatMap(_._2).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
+    fileStatuses.asScala.flatMap(_._2.asScala).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
   }
 
-  private def getListType(hadoopConf: Configuration, path: Path): String = {
-    val reader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, hadoopConf, path)
-    val schema = TableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema, hadoopConf)
+  private def getListType(hadoopConf: Configuration, path: StoragePath): String = {
+    val reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, new HadoopStorageConfiguration(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
+    val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema, hadoopConf)
 
     val list = schema.getFields.asScala.find(_.getName == TestParquetReaderCompatibility.listFieldName).get
     val groupType = list.asGroupType()
