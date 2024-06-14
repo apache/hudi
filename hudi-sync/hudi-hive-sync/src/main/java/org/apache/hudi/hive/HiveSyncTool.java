@@ -33,6 +33,7 @@ import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
+import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.parquet.schema.MessageType;
@@ -41,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -319,12 +321,18 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private void recreateAndSyncHiveTable(String tableName, boolean useRealtimeInputFormat, boolean readAsOptimized) {
     LOG.info("recreating and syncing the table {}", tableName);
+    Timer.Context timerContext = metrics.getRecreateAndSyncTimer();
     MessageType schema = syncClient.getStorageSchema(!config.getBoolean(HIVE_SYNC_OMIT_METADATA_FIELDS));
     try {
       createOrReplaceTable(tableName, useRealtimeInputFormat, readAsOptimized, schema);
       syncAllPartitions(tableName);
       syncClient.updateLastCommitTimeSynced(tableName);
+      if (Objects.nonNull(timerContext)) {
+        long durationInMs = metrics.getDurationInMs(timerContext.stop());
+        metrics.updateRecreateAndSyncMetrics(durationInMs);
+      }
     } catch (HoodieHiveSyncException ex) {
+      metrics.emitRecreateAndSyncFailureMetric();
       throw new HoodieHiveSyncException("failed to recreate the table for " + tableName, ex);
     }
   }

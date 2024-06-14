@@ -123,6 +123,7 @@ public class HiveTestUtil {
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
+  public static final String BASE_PATH = "hoodie.base.path";
   public static String basePath;
   public static TypedProperties hiveSyncProps;
   public static HiveTestService hiveTestService;
@@ -167,6 +168,7 @@ public class HiveTestUtil {
       hiveSyncProps.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
       hiveSyncProps.setProperty(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), SlashEncodedDayPartitionValueExtractor.class.getName());
       hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "3");
+      hiveSyncProps.setProperty(BASE_PATH, basePath);
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
