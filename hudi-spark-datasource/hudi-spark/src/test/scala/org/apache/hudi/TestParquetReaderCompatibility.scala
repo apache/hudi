@@ -19,25 +19,24 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullable, Nullability, Nullable}
-import org.apache.hudi.TestParquetReaderCompatibility.{NullabilityEnum, ParquetListTypeEnum, TestScenario}
+import org.apache.hudi.TestParquetReaderCompatibility.{ParquetListTypeEnum, TestScenario}
 import org.apache.hudi.TestParquetReaderCompatibility.ParquetListTypeEnum.{ParquetListType, ThreeLevel, TwoLevel}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.{HoodieTableMetaClient, ParquetTableSchemaResolver}
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.storage.HoodieIOFactory
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
-import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
+import org.apache.hudi.testutils.HoodieClientTestUtils
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
-import org.apache.parquet.schema.{LogicalTypeAnnotation, OriginalType}
-import org.junit.jupiter.api.Test
+import org.apache.parquet.schema.LogicalTypeAnnotation
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
 import scala.collection.mutable
