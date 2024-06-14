@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullable, Nullability, Nullable}
-import org.apache.hudi.TestParquetReaderCompatibility.{SparkSettingCase, TestScenario, ThreeLevelCase, TwoLevelCase}
+import org.apache.hudi.TestParquetReaderCompatibility.{SparkSetting, TestScenario, ThreeLevel, TwoLevel}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -46,13 +46,13 @@ import scala.collection.JavaConverters._
 
 object TestParquetReaderCompatibility {
   val listFieldName = "internal_list"
-  abstract class SparkSettingCase {
+  abstract class SparkSetting {
     def value: String
     def overrideConf(conf: SparkConf): Unit
   }
 
   // Explicitly set 2 level
-  case object TwoLevelCase extends SparkSettingCase {
+  case object TwoLevel extends SparkSetting {
     val value: String = "TwoLevel"
     def overrideConf(conf: SparkConf): Unit = {
       conf.set("spark.hadoop.parquet.avro.write-old-list-structure", true.toString)
@@ -60,7 +60,7 @@ object TestParquetReaderCompatibility {
   }
 
   // Explicitly set 3 level
-  case object ThreeLevelCase extends SparkSettingCase {
+  case object ThreeLevel extends SparkSetting {
     val value: String = "ThreeLevel"
 
     def overrideConf(conf: SparkConf): Unit = {
@@ -69,13 +69,13 @@ object TestParquetReaderCompatibility {
   }
 
   // Set nothing(likely most users do so) - default is 2 level inside Avro code.
-  case object DefaultCase extends SparkSettingCase {
+  case object Default extends SparkSetting {
     def value: String = "TwoLevel"
 
     def overrideConf(conf: SparkConf): Unit = {}
   }
 
-  val cases: Seq[SparkSettingCase] = Seq(TwoLevelCase, ThreeLevelCase, DefaultCase)
+  val cases: Seq[SparkSetting] = Seq(TwoLevel, ThreeLevel, Default)
 
   object NullabilityEnum extends Enumeration {
     type Nullability = Value
@@ -83,7 +83,7 @@ object TestParquetReaderCompatibility {
     val NotNullable: NullabilityEnum.Value = Value("NotNullable")
   }
 
-  case class TestScenario(initialLevel: SparkSettingCase, listNullability: NullabilityEnum.Nullability, targetLevel: SparkSettingCase, itemsNullability: NullabilityEnum.Nullability)
+  case class TestScenario(initialLevel: SparkSetting, listNullability: NullabilityEnum.Nullability, targetLevel: SparkSetting, itemsNullability: NullabilityEnum.Nullability)
 
   /**
    * Here we are generating all possible combinations of settings, including default.
@@ -97,7 +97,7 @@ object TestParquetReaderCompatibility {
     ) yield TestScenario(initialLevel, listNullability, targetLevel, itemsNullability)
     allPossibleCombinations.filter {
       case c => {
-        val notAllowedNulls = Seq(TwoLevelCase, DefaultCase)
+        val notAllowedNulls = Seq(TwoLevel, Default)
         // It's not allowed to have NULLs inside lists for 2 level lists(this matches explicit setting or default).
         !(c.itemsNullability == Nullable && (notAllowedNulls.contains(c.targetLevel) || notAllowedNulls.contains(c.initialLevel)))
       }
@@ -108,14 +108,14 @@ object TestParquetReaderCompatibility {
     Seq(
         // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
         // which are not updated in the incoming batch are set to null.
-        TestScenario(initialLevel = TwoLevelCase, listNullability = Nullable, targetLevel = ThreeLevelCase, itemsNullability = NotNullable),
+        TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
         // This scenario leads to exception mentioned here https://github.com/apache/hudi/pull/11450 - the only difference with silent dataloss
         // is that writer does not allow wrongly-read null to be written into new file, so write fails.
-        TestScenario(initialLevel = TwoLevelCase, listNullability = NotNullable, targetLevel = ThreeLevelCase, itemsNullability = NotNullable),
+        TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
         // This is reverse version of scenario TwoLevel -> ThreeLevel with nullable list value - leads to silent data loss.
-        TestScenario(initialLevel = ThreeLevelCase, listNullability = Nullable, targetLevel = TwoLevelCase, itemsNullability = NotNullable),
+        TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
         // This is reverse version of scenario TwoLevel -> ThreeLevel with not nullable list value - leads to exception.
-        TestScenario(initialLevel = ThreeLevelCase, listNullability = NotNullable, targetLevel = TwoLevelCase, itemsNullability = NotNullable)
+        TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable)
     ).asJava.stream()
   }
   def testSource: java.util.stream.Stream[TestScenario] = if(runAllPossible) {
@@ -174,7 +174,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     res.toMap
   }
 
-  private def createSparkSessionWithListLevel(listType: SparkSettingCase): SparkSession = {
+  private def createSparkSessionWithListLevel(listType: SparkSetting): SparkSession = {
     val conf = new SparkConf()
     listType.overrideConf(conf)
     val spark = SparkSession.builder()
@@ -207,42 +207,56 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val initialRecords = generateRowsWithParameters(listNullability, itemsNullability)
 
     val firstWriteSession = createSparkSessionWithListLevel(initialLevel)
-    HoodieSparkSqlWriter.write(
-      firstWriteSession.sqlContext,
-      SaveMode.Overwrite,
-      options,
-      firstWriteSession.createDataFrame(firstWriteSession.sparkContext.parallelize(initialRecords.values.toSeq), structType)
-    )
-    val firstWriteLevels = getListLevelsFromPath(firstWriteSession, path)
-    assert(firstWriteLevels.size == 1, s"Expected only one level, got $firstWriteLevels")
-    assert(firstWriteLevels.head == initialLevel.value, s"Expected level $initialLevel, got $firstWriteLevels")
-    firstWriteSession.close()
+    try {
+      HoodieSparkSqlWriter.write(
+        firstWriteSession.sqlContext,
+        SaveMode.Overwrite,
+        options,
+        firstWriteSession.createDataFrame(firstWriteSession.sparkContext.parallelize(initialRecords.values.toSeq), structType)
+      )
+
+      val firstWriteLevels = getListLevelsFromPath(firstWriteSession, path)
+      assert(firstWriteLevels.size == 1, s"Expected only one level, got $firstWriteLevels")
+      assert(firstWriteLevels.head == initialLevel.value, s"Expected level $initialLevel, got $firstWriteLevels")
+    } finally {
+      firstWriteSession.close()
+    }
 
     val updateRecords = generateRowsWithParameters(listNullability, itemsNullability, 2L, 1)
     val secondWriteSession = createSparkSessionWithListLevel(targetLevel)
-    HoodieSparkSqlWriter.write(
-      secondWriteSession.sqlContext,
-      SaveMode.Append,
-      options,
-      secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(updateRecords.values.toSeq), structType)
-    )
-    val secondWriteLevels = getListLevelsFromPath(secondWriteSession, path)
-    assert(secondWriteLevels.size == 1, s"Expected only one level, got $secondWriteLevels")
-    assert(secondWriteLevels.head == targetLevel.value, s"Expected level $targetLevel, got $secondWriteLevels")
+    var expectedRecordsWithSchema: Seq[Row] = Seq()
+    try {
+      HoodieSparkSqlWriter.write(
+        secondWriteSession.sqlContext,
+        SaveMode.Append,
+        options,
+        secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(updateRecords.values.toSeq), structType)
+      )
+      val secondWriteLevels = getListLevelsFromPath(secondWriteSession, path)
+      assert(secondWriteLevels.size == 1, s"Expected only one level, got $secondWriteLevels")
+      assert(secondWriteLevels.head == targetLevel.value, s"Expected level $targetLevel, got $secondWriteLevels")
 
-    val expectedRecords = (initialRecords ++ updateRecords).values.toSeq
-    val expectedRecordsWithSchema = dropMetaFields(
-      secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(expectedRecords), structType)
-    ).collect().toSeq
-    secondWriteSession.close()
+      val expectedRecords = (initialRecords ++ updateRecords).values.toSeq
+      expectedRecordsWithSchema = dropMetaFields(
+        secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(expectedRecords), structType)
+      ).collect().toSeq
+    } finally {
+      secondWriteSession.close()
+    }
 
     val readSessionWithInitLevel = createSparkSessionWithListLevel(initialLevel)
-    compareResults(expectedRecordsWithSchema, readSessionWithInitLevel, path)
-    readSessionWithInitLevel.close()
+    try {
+      compareResults(expectedRecordsWithSchema, readSessionWithInitLevel, path)
+    } finally {
+      readSessionWithInitLevel.close()
+    }
 
     val readSessionWithTargetLevel = createSparkSessionWithListLevel(targetLevel)
-    compareResults(expectedRecordsWithSchema, readSessionWithTargetLevel, path)
-    readSessionWithTargetLevel.close()
+    try {
+      compareResults(expectedRecordsWithSchema, readSessionWithTargetLevel, path)
+    } finally {
+      readSessionWithTargetLevel.close()
+    }
 
     initSparkContext()
   }
@@ -296,9 +310,9 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val isThreeLevel = originalType == OriginalType.LIST && !(groupType.getType(0).getName == "array")
 
     if (isThreeLevel) {
-      ThreeLevelCase.value
+      ThreeLevel.value
     } else {
-      TwoLevelCase.value
+      TwoLevel.value
     }
   }
 
