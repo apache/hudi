@@ -46,18 +46,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   @Override
   public ReadContext init(Configuration configuration, Map<String, String> keyValueMetaData, MessageType fileSchema) {
     boolean legacyMode = checkLegacyMode(fileSchema.getFields());
-    // support non-legacy list
-    if (!legacyMode && configuration.get(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE) == null) {
-      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
-          "false", "support reading avro from non-legacy map/list in parquet file");
-    }
-    // If old file is written with legacy mode, read with legacy mode, even if now it's non-legacy mode in conf.
-    // Since by changing the property users want to control how files are written, not how they are read.
-    // Later the value of WRITE_OLD_LIST_STRUCTURE will be picked from conf, thus either keeping old mode or writing new mode.
-    if (legacyMode) {
-      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
-          "true", "support reading avro from legacy map/list in parquet file");
-    }
+    adjustConfToReadWithFileProduceMode(legacyMode, configuration);
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
     MessageType requestedSchema = readContext.getRequestedSchema();
     // support non-legacy map. Convert non-legacy map to legacy map
@@ -67,6 +56,23 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
       requestedSchema = new MessageType(requestedSchema.getName(), convertLegacyMap(requestedSchema.getFields()));
     }
     return new ReadContext(requestedSchema, readContext.getReadSupportMetadata());
+  }
+
+  /**
+   * Here we want set config with which file has been written.
+   * Even though user may have overwritten {@link AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE},
+   * it's only applicable to how to produce new files(here is a read path).
+   * Later the config value {@link AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE} will still be used
+   * to write new file according to the user preferences.
+   **/
+  private void adjustConfToReadWithFileProduceMode(Boolean isLegacyModeWrittenFile, Configuration configuration) {
+    if (isLegacyModeWrittenFile) {
+      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
+          "true", "support reading avro from legacy map/list in parquet file");
+    } else {
+      configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
+          "false", "support reading avro from non-legacy map/list in parquet file");
+    }
   }
 
   /**
