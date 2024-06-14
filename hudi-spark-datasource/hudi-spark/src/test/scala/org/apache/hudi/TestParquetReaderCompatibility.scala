@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
@@ -60,12 +61,7 @@ object TestParquetReaderCompatibility {
     val NotNullable: NullabilityEnum.Value = Value("NotNullable")
   }
 
-  case class TestScenario(
-     initialLevel: ParquetListTypeEnum.ParquetListType,
-     listNullability: NullabilityEnum.Nullability,
-     targetLevel: ParquetListTypeEnum.ParquetListType,
-     itemsNullability: NullabilityEnum.Nullability
-  )
+  case class TestScenario(initialLevel: ParquetListTypeEnum.ParquetListType, listNullability: NullabilityEnum.Nullability, targetLevel: ParquetListTypeEnum.ParquetListType, itemsNullability: NullabilityEnum.Nullability)
 
   // Here scenarios of rewriting 3 level list to 2 level list with NULLs inside are omitted, because
   // Spark allows NULLs inside lists only for 3 level lists.
@@ -86,7 +82,7 @@ object TestParquetReaderCompatibility {
     TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = Nullable),
-    TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = Nullable),
+    TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = Nullable)
   )
 
   def testSource: java.util.stream.Stream[TestScenario] = testScenarios.asJava.stream()
@@ -108,7 +104,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       StructField("key", LongType, nullable = false),
       StructField("partition", StringType, nullable = false),
       StructField(TestParquetReaderCompatibility.listFieldName, ArrayType(LongType, listElementsNullable), listNullable),
-      StructField("ts", LongType, nullable = false),
+      StructField("ts", LongType, nullable = false)
     ))
     schema
   }
@@ -156,7 +152,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-      "path" -> path,
+      "path" -> path
     )
     val initialLevel = input.initialLevel
     val listNullability = input.listNullability
@@ -222,9 +218,9 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   private def getListLevelsFromPath(spark: SparkSession, path: String): Set[ParquetListType] = {
     val engineContext = new HoodieSparkEngineContext(spark.sparkContext, spark.sqlContext)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
-    val baseTableMetada = new HoodieBackedTableMetadata(
+    val baseTableMetadata = new HoodieBackedTableMetadata(
       engineContext, HoodieTestUtils.getDefaultStorage, metadataConfig, s"$path", false)
-    val fileStatuses = baseTableMetada.getAllFilesInPartitions(Collections.singletonList(s"$path/$defaultPartition"))
+    val fileStatuses = baseTableMetadata.getAllFilesInPartitions(Collections.singletonList(s"$path/$defaultPartition"))
     fileStatuses.asScala.flatMap(_._2.asScala).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
   }
 
