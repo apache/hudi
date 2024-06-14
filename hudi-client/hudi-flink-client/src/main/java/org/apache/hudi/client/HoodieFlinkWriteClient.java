@@ -51,7 +51,6 @@ import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.util.WriteStatMerger;
 
 import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,12 +113,12 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable createTable(HoodieWriteConfig config) {
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
   }
 
   @Override
-  protected HoodieTable createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient) {
+  protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context, metaClient);
   }
 
