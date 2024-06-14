@@ -34,7 +34,7 @@ public class TestHoodieHadoopStorage extends TestHoodieStorageBase {
   private static final String CONF_VALUE = "value";
 
   @Override
-  protected HoodieStorage getHoodieStorage(Object fs, Object conf) {
+  protected HoodieStorage getStorage(Object fs, Object conf) {
     return new HoodieHadoopStorage((FileSystem) fs);
   }
 

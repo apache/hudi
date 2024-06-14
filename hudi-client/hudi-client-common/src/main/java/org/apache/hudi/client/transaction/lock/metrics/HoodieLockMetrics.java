@@ -18,14 +18,15 @@
 
 package org.apache.hudi.client.transaction.lock.metrics;
 
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.storage.HoodieStorage;
+
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.SlidingWindowReservoir;
 import com.codahale.metrics.Timer;
-
-import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metrics.Metrics;
 
 import java.util.concurrent.TimeUnit;
 
@@ -49,12 +50,12 @@ public class HoodieLockMetrics {
   private static final Object REGISTRY_LOCK = new Object();
   private Metrics metrics;
 
-  public HoodieLockMetrics(HoodieWriteConfig writeConfig) {
+  public HoodieLockMetrics(HoodieWriteConfig writeConfig, HoodieStorage storage) {
     this.isMetricsEnabled = writeConfig.isLockingMetricsEnabled();
     this.writeConfig = writeConfig;
 
     if (isMetricsEnabled) {
-      metrics = Metrics.getInstance(writeConfig);
+      metrics = Metrics.getInstance(writeConfig.getMetricsConfig(), storage);
       MetricRegistry registry = metrics.getRegistry();
 
       lockAttempts = registry.counter(getMetricsName(LOCK_ACQUIRE_ATTEMPTS_COUNTER_NAME));

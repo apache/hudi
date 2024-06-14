@@ -20,6 +20,8 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedureUtils, ShowCompactionProcedure}
 import org.apache.spark.sql.{Row, SparkSession}
@@ -31,7 +33,7 @@ case class CompactionShowHoodiePathCommand(path: String, limit: Int)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-      .setConf(sparkSession.sessionState.newHadoopConf()).build()
+      .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf)).build()
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")

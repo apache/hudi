@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGene
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
 
@@ -541,8 +542,6 @@ object DataSourceWriteOptions {
 
   val SET_NULL_FOR_MISSING_COLUMNS: ConfigProperty[String] = HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS
 
-  val MAKE_NEW_COLUMNS_NULLABLE: ConfigProperty[java.lang.Boolean] = HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE
-
   val SPARK_SQL_INSERT_INTO_OPERATION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.spark.sql.insert.into.operation")
     .defaultValue(WriteOperationType.INSERT.value())
@@ -1014,7 +1013,7 @@ object DataSourceOptionsHelper {
     var newProp: ConfigProperty[U] = ConfigProperty.key(prop.key())
       .defaultValue(converter(prop.defaultValue()))
       .withDocumentation(prop.doc())
-      .withAlternatives(prop.getAlternatives.asScala: _*)
+      .withAlternatives(prop.getAlternatives.asScala.toSeq: _*)
 
     newProp = toScalaOption(prop.getSinceVersion) match {
       case Some(version) => newProp.sinceVersion(version)

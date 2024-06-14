@@ -54,7 +54,8 @@ public abstract class HoodieFlinkTable<T>
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(context.getHadoopConf().get()).setBasePath(config.getBasePath())
+        HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
@@ -102,7 +103,7 @@ public abstract class HoodieFlinkTable<T>
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
-          context.getHadoopConf().get(), config, failedWritesCleaningPolicy, context,
+          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
           Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();

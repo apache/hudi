@@ -84,6 +84,10 @@ public final class Option<T> implements Serializable {
     return null != val;
   }
 
+  public boolean isEmpty() {
+    return null == val;
+  }
+
   public T get() {
     if (null == val) {
       throw new NoSuchElementException("No value present in Option");

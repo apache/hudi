@@ -23,6 +23,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -104,7 +105,7 @@ public class HoodieTestCommitGenerator {
   }
 
   public static String getBaseFilename(String instantTime, String fileId) {
-    return FSUtils.makeBaseFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId);
+    return FSUtils.makeBaseFileName(instantTime, BASE_FILE_WRITE_TOKEN, fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension());
   }
 
   public static String getLogFilename(String instantTime, String fileId) {

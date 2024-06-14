@@ -24,6 +24,8 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
@@ -41,7 +43,7 @@ object HoodieCLIUtils {
                               conf: Map[String, String],
                               tableName: Option[String]): SparkRDDWriteClient[_] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
-      .setConf(sparkSession.sessionState.newHadoopConf()).build()
+      .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchema(false).toString
 
@@ -54,10 +56,10 @@ object HoodieCLIUtils {
 
     // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      catalogProps ++
+      (catalogProps ++
         metaClient.getTableConfig.getProps.asScala.toMap ++
         sparkSession.sqlContext.getAllConfs.filterKeys(isHoodieConfigKey) ++
-        conf
+        conf).toMap
     )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)

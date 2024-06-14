@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -105,6 +106,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
@@ -115,10 +120,6 @@ import static org.apache.hudi.configuration.FlinkOptions.PATH;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
-import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 
 /**
  * A catalog implementation for Hoodie based on MetaStore.
@@ -506,6 +507,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
+      final String[] pks = flinkConf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
+      StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
 
     if (!catalogTable.isPartitioned()) {
@@ -553,6 +557,11 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
+    if (properties.containsKey(FlinkOptions.INDEX_TYPE.key())
+        && !properties.containsKey(HoodieIndexConfig.INDEX_TYPE.key())) {
+      properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
+    }
+    properties.remove(FlinkOptions.INDEX_TYPE.key());
     hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
 
     if (external) {
@@ -710,11 +719,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           //update hoodie
           StorageDescriptor sd = hiveTable.getSd();
           String location = sd.getLocation();
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location).setConf(hiveConf).build();
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
           HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
-              .initTable(hiveConf, location);
+              .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 
           hiveTable.setTableName(newTableName);
           client.alter_table(
@@ -1001,7 +1011,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
         Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(FlinkOptions.SOURCE_AVRO_SCHEMA,
-                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(hiveConf).build()
+                HoodieTableMetaClient.builder().setBasePath(inferTablePath(tablePath, table)).setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build()
                     .getTableConfig().getTableCreateSchema().get().toString()));
   }
 

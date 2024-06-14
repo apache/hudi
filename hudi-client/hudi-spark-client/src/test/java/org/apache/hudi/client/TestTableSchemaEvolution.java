@@ -163,10 +163,10 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // Create the table
     HoodieTableMetaClient.withPropertyBuilder()
-      .fromMetaClient(metaClient)
-      .setTableType(HoodieTableType.MERGE_ON_READ)
-      .setTimelineLayoutVersion(VERSION_1)
-      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+        .fromMetaClient(metaClient)
+        .setTableType(HoodieTableType.MERGE_ON_READ)
+        .setTimelineLayoutVersion(VERSION_1)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, shouldAllowDroppedColumns);
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -252,9 +252,9 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   public void testCopyOnWriteTable(boolean shouldAllowDroppedColumns) throws Exception {
     // Create the table
     HoodieTableMetaClient.withPropertyBuilder()
-      .fromMetaClient(metaClient)
-      .setTimelineLayoutVersion(VERSION_1)
-      .initTable(metaClient.getHadoopConf(), metaClient.getBasePath());
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_1)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
         .withRollbackUsingMarkers(false)
@@ -309,7 +309,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         (String s, Integer a) -> evolvedRecords, SparkRDDWriteClient::insert, true, numRecords, 3 * numRecords, 6, false);
 
     // new commit
-    HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitTimeline().filterCompletedInstants();
+    HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("006"));
     checkReadRecords("000", 3 * numRecords);
 
@@ -333,7 +333,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private void checkReadRecords(String instantTime, int numExpectedRecords) throws IOException {
     if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitTimeline();
+      HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline();
       assertEquals(numExpectedRecords, HoodieClientTestUtils.countRecordsOptionallySince(jsc, basePath, sqlContext, timeline, Option.of(instantTime)));
     } else {
       // TODO: This code fails to read records under the following conditions:

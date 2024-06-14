@@ -22,7 +22,14 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
@@ -195,6 +202,25 @@ public class TestStoragePath {
         new StoragePath("s3://a/b/c/").makeQualified(defaultUri));
     assertThrows(IllegalStateException.class,
         () -> new StoragePath("a").makeQualified(defaultUri));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "/x/y/1.file#bar",
+      "s3://foo/bar/1%2F2%2F3",
+      "hdfs://host1/a/b/c"
+  })
+  public void testSerializability(String pathStr) throws IOException, ClassNotFoundException {
+    StoragePath path = new StoragePath(pathStr);
+    try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+         ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+      oos.writeObject(path);
+      try (ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+           ObjectInputStream ois = new ObjectInputStream(bais)) {
+        StoragePath deserialized = (StoragePath) ois.readObject();
+        assertEquals(path.toUri(), deserialized.toUri());
+      }
+    }
   }
 
   @Test

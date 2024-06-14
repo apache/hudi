@@ -36,6 +36,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
@@ -62,7 +63,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   private final KafkaConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
-  private final Configuration hadoopConf;
+  private final StorageConfiguration<Configuration> storageConf;
   private final HoodieWriteConfig writeConfig;
   private final String tableBasePath;
   private final String tableName;
@@ -80,8 +81,8 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
     tableBasePath = writeConfig.getBasePath();
     tableName = writeConfig.getTableName();
-    hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
-    context = new HoodieJavaEngineContext(hadoopConf);
+    storageConf = KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
+    context = new HoodieJavaEngineContext(storageConf);
 
     try {
       KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createAvroKeyGeneratorByType(
@@ -101,7 +102,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setPartitionFields(partitionColumns)
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .fromProperties(connectConfigs.getProps())
-          .initTable(hadoopConf, tableBasePath));
+          .initTable(storageConf.newInstance(), tableBasePath));
 
       javaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Exception exception) {
@@ -165,7 +166,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       for (String impl : syncClientToolClasses) {
         // TODO kafka connect config needs to support setting base file format
         String baseFileFormat = connectConfigs.getStringOrDefault(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT);
-        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), hadoopConf, fs, tableBasePath, baseFileFormat);
+        SyncUtilHelpers.runHoodieMetaSync(impl.trim(), connectConfigs.getProps(), storageConf.unwrap(), fs, tableBasePath, baseFileFormat);
       }
     }
   }

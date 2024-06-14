@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -31,7 +32,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -76,7 +76,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
     initSparkContexts("TestRecordFetcher");
     initPath();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
   }
 
   @AfterEach
@@ -87,7 +87,7 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testFetchHandle(boolean populateMetaFields) throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     config = getConfigBuilder()
         .withProperties(getPropertiesForKeyGen())
         .withIndexConfig(HoodieIndexConfig.newBuilder()

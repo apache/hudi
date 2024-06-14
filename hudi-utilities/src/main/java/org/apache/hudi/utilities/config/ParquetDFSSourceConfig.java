@@ -44,6 +44,6 @@ public class ParquetDFSSourceConfig extends HoodieConfig {
       .defaultValue(false)
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.parquet.dfs.merge_schema.enable")
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Merge schema across parquet files within a single write");
 }

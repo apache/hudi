@@ -35,11 +35,10 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
-
-import org.apache.hadoop.fs.Path;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -115,9 +114,9 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
     compactionTimeline.getInstantsAsStream().forEach(instant -> {
       String fileName = instant.getFileName();
-      FileIOUtils.copy(metaClient.getFs(),
-          new Path(metaClient.getMetaPath(), fileName),
-          new Path(metaClient.getMetaAuxiliaryPath(), fileName));
+      FileIOUtils.copy(metaClient.getStorage(),
+          new StoragePath(metaClient.getMetaPath(), fileName),
+          new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName));
     });
   }
 }

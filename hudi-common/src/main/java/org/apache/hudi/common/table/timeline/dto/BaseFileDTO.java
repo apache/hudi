@@ -50,9 +50,12 @@ public class BaseFileDTO {
 
     HoodieBaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new HoodieBaseFile(FileStatusDTO.toFileStatus(dto.fileStatus), dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(
+          FileStatusDTO.toStoragePathInfo(dto.fileStatus), dto.fileId, dto.commitTime,
+          toBaseFile(dto.bootstrapBaseFile));
     } else {
-      baseFile = new HoodieBaseFile(dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
+      baseFile = new HoodieBaseFile(
+          dto.fullPath, dto.fileId, dto.commitTime, toBaseFile(dto.bootstrapBaseFile));
       baseFile.setFileLen(dto.fileLen);
     }
 
@@ -66,7 +69,7 @@ public class BaseFileDTO {
 
     BaseFile baseFile;
     if (null != dto.fileStatus) {
-      baseFile = new BaseFile(FileStatusDTO.toFileStatus(dto.fileStatus));
+      baseFile = new BaseFile(FileStatusDTO.toStoragePathInfo(dto.fileStatus));
     } else {
       baseFile = new BaseFile(dto.fullPath);
       baseFile.setFileLen(dto.fileLen);
@@ -80,7 +83,7 @@ public class BaseFileDTO {
     }
 
     BaseFileDTO dto = new BaseFileDTO();
-    dto.fileStatus = FileStatusDTO.fromFileStatus(baseFile.getFileStatus());
+    dto.fileStatus = FileStatusDTO.fromStoragePathInfo(baseFile.getPathInfo());
     dto.fullPath = baseFile.getPath();
     dto.fileLen = baseFile.getFileLen();
     if (baseFile instanceof HoodieBaseFile) {

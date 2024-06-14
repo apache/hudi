@@ -29,17 +29,18 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.Collections;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.doNothing;
 
 /**
  * Tests {@link HoodieStreamerUtils}.
@@ -73,12 +74,13 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     TypedProperties props = new TypedProperties();
     SchemaProvider schemaProvider = new SimpleSchemaProvider(jsc, schema, props);
     BaseErrorTableWriter errorTableWriter = Mockito.mock(BaseErrorTableWriter.class);
-    SparkException exception = assertThrows(
-        SparkException.class,
-        () -> HoodieStreamerUtils.createHoodieRecords(cfg, props, Option.of(recordRdd),
-                schemaProvider, recordType, false, "000", Option.of(errorTableWriter))
-            .get().collect()
-    );
-    assertTrue(exception.getMessage().contains("Failed to convert illegal record to json"));
+    ArgumentCaptor<JavaRDD<?>> errorEventCaptor = ArgumentCaptor.forClass(JavaRDD.class);
+    doNothing().when(errorTableWriter).addErrorEvents(errorEventCaptor.capture());
+    HoodieStreamerUtils.createHoodieRecords(cfg, props, Option.of(recordRdd),
+                schemaProvider, recordType, false, "000", Option.of(errorTableWriter));
+    List<ErrorEvent<String>> actualErrorEvents = (List<ErrorEvent<String>>) errorEventCaptor.getValue().collect();
+    ErrorEvent<String> expectedErrorEvent = new ErrorEvent<>("{\"timestamp\": 1000, \"_row_key\": \"key1\", \"partition_path\": \"path1\", \"rider\": null, \"driver\": \"driver\"}",
+        ErrorEvent.ErrorReason.RECORD_CREATION);
+    assertEquals(Collections.singletonList(expectedErrorEvent), actualErrorEvents);
   }
 }

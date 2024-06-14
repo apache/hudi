@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+
 import javax.annotation.concurrent.Immutable;
 
 import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
@@ -119,6 +121,12 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(KafkaResetOffsetStrategies.LATEST)
       .markAdvanced()
       .withDocumentation("Kafka consumer strategy for reading data.");
+
+  public static final ConfigProperty<String> KAFKA_PROTO_VALUE_DESERIALIZER_CLASS = ConfigProperty
+      .key(PREFIX + "proto.value.deserializer.class")
+      .defaultValue(ByteArrayDeserializer.class.getName())
+      .sinceVersion("0.15.0")
+      .withDocumentation("Kafka Proto Payload Deserializer Class");
 
   /**
    * Kafka reset offset strategies.

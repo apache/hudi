@@ -27,10 +27,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -776,7 +778,8 @@ public class TestInputFormat {
       TestData.writeData(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
@@ -860,7 +863,8 @@ public class TestInputFormat {
       TestData.writeDataAsBatch(dataset, conf);
     }
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 
@@ -1009,7 +1013,8 @@ public class TestInputFormat {
         HoodieFlinkEngineContext.DEFAULT, FlinkWriteClients.getHoodieClientConfig(conf));
     writeClient.clean();
 
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tempFile.getAbsolutePath(), HadoopConfigurations.getHadoopConf(conf));
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
     List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
 

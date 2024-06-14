@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.avro.Schema;
@@ -63,7 +64,7 @@ public class TestDFSHoodieDatasetInputReader extends UtilitiesTestBase {
   @BeforeEach
   public void setup() throws Exception {
     super.setup();
-    HoodieTestUtils.init(jsc.hadoopConfiguration(), basePath);
+    HoodieTestUtils.init(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), basePath);
   }
 
   @AfterEach

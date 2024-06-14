@@ -19,15 +19,16 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -58,7 +59,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
 
@@ -84,11 +85,11 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
     val metadatas: util.Map[String, String] = if (metadataKey.isEmpty) {
       meta.getExtraMetadata
     } else {
-      meta.getExtraMetadata.filter(r => r._1.equals(metadataKey.get.asInstanceOf[String].trim))
+      meta.getExtraMetadata.asScala.filter(r => r._1.equals(metadataKey.get.asInstanceOf[String].trim)).asJava
     }
 
     val rows = new util.ArrayList[Row]
-    metadatas.foreach(r => rows.add(Row(timestamp, action, r._1, r._2)))
+    metadatas.asScala.foreach(r => rows.add(Row(timestamp, action, r._1, r._2)))
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
@@ -110,7 +111,7 @@ class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBui
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 

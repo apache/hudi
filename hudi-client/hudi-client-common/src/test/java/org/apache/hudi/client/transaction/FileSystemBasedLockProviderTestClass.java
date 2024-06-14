@@ -18,14 +18,15 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -50,7 +51,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   private transient Path lockFile;
   protected LockConfiguration lockConfiguration;
 
-  public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     this.lockConfiguration = lockConfiguration;
     final String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);

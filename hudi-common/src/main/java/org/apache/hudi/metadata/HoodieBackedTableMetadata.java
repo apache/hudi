@@ -49,13 +49,14 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,13 +103,18 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   // Latest file slices in the metadata partitions
   private final Map<String, List<FileSlice>> partitionFileSliceMap = new ConcurrentHashMap<>();
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
-    this(engineContext, metadataConfig, datasetBasePath, false);
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                   HoodieStorage storage,
+                                   HoodieMetadataConfig metadataConfig,
+                                   String datasetBasePath) {
+    this(engineContext, storage, metadataConfig, datasetBasePath, false);
   }
 
-  public HoodieBackedTableMetadata(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig,
+  public HoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                   HoodieStorage storage,
+                                   HoodieMetadataConfig metadataConfig,
                                    String datasetBasePath, boolean reuse) {
-    super(engineContext, metadataConfig, datasetBasePath);
+    super(engineContext, storage, metadataConfig, datasetBasePath);
     this.reuse = reuse;
     this.metadataBasePath = HoodieTableMetadata.getMetadataTableBasePath(dataBasePath.toString());
 
@@ -122,7 +128,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     } else if (this.metadataMetaClient == null) {
       try {
-        this.metadataMetaClient = HoodieTableMetaClient.builder().setConf(getHadoopConf()).setBasePath(metadataBasePath).build();
+        this.metadataMetaClient = HoodieTableMetaClient.builder()
+            .setStorage(storage)
+            .setBasePath(metadataBasePath)
+            .build();
         this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
@@ -372,19 +381,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                                                                                       List<String> sortedKeys,
                                                                                       boolean fullKeys,
                                                                                       String partitionName) throws IOException {
-    ClosableIterator<HoodieRecord<?>> records = fullKeys
+    Map<String, HoodieRecord<HoodieMetadataPayload>> result;
+    try (ClosableIterator<HoodieRecord<?>> records = fullKeys
         ? reader.getRecordsByKeysIterator(sortedKeys)
-        : reader.getRecordsByKeyPrefixIterator(sortedKeys);
-
-    Map<String, HoodieRecord<HoodieMetadataPayload>> result = toStream(records)
-        .map(record -> {
-          GenericRecord data = (GenericRecord) record.getData();
-          return Pair.of(
-              (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
-              composeRecord(data, partitionName));
-        })
-        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-    records.close();
+        : reader.getRecordsByKeyPrefixIterator(sortedKeys)) {
+      result = toStream(records)
+          .map(record -> {
+            GenericRecord data = (GenericRecord) record.getData();
+            return Pair.of(
+                (String) (data).get(HoodieMetadataPayload.KEY_FIELD_NAME),
+                composeRecord(data, partitionName));
+          })
+          .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    }
     return result;
   }
 
@@ -445,9 +454,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     // If the base file is present then create a reader
     Option<HoodieBaseFile> basefile = slice.getBaseFile();
     if (basefile.isPresent()) {
-      String baseFilePath = basefile.get().getPath();
-      baseFileReader = (HoodieSeekingFileReader<?>) HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getHadoopConf(), new Path(baseFilePath));
+      StoragePath baseFilePath = basefile.get().getStoragePath();
+      baseFileReader = (HoodieSeekingFileReader<?>) HoodieIOFactory.getIOFactory(metadataMetaClient.getStorage())
+          .getReaderFactory(HoodieRecordType.AVRO)
+          .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, baseFilePath);
       baseFileOpenMs = timer.endTimer();
       LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
           basefile.get().getCommitTime(), baseFileOpenMs));
@@ -482,7 +492,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieMetadataRecord.getClassSchema());
     HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(metadataConfig.getProps()).build();
     HoodieMetadataLogRecordReader logRecordScanner = HoodieMetadataLogRecordReader.newBuilder()
-        .withFileSystem(metadataMetaClient.getFs())
+        .withStorage(metadataMetaClient.getStorage())
         .withBasePath(metadataBasePath)
         .withLogFilePaths(sortedLogFilePaths)
         .withReaderSchema(schema)
@@ -495,7 +505,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .withLogBlockTimestamps(validInstantTimestamps)
         .enableFullScan(allowFullScan)
         .withPartition(partitionName)
-        .withEnableOptimizedLogBlocksScan(metadataConfig.doEnableOptimizedLogBlocksScan())
+        .withEnableOptimizedLogBlocksScan(metadataConfig.isOptimizedLogBlocksScanEnabled())
         .withTableMetaClient(metadataMetaClient)
         .build();
 
@@ -593,7 +603,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public Option<String> getLatestCompactionTime() {
     if (metadataMetaClient != null) {
-      Option<HoodieInstant> latestCompaction = metadataMetaClient.getActiveTimeline().getCommitTimeline().filterCompletedInstants().lastInstant();
+      Option<HoodieInstant> latestCompaction = metadataMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
       if (latestCompaction.isPresent()) {
         return Option.of(latestCompaction.get().getTimestamp());
       }

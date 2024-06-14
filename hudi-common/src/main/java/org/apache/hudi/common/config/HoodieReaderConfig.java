@@ -31,7 +31,7 @@ import javax.annotation.concurrent.Immutable;
 public class HoodieReaderConfig {
   public static final ConfigProperty<Boolean> USE_NATIVE_HFILE_READER = ConfigProperty
       .key("_hoodie.hfile.use.native.reader")
-      .defaultValue(true)
+      .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("When enabled, the native HFile reader is used to read HFiles.  This is an internal config.");

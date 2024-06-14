@@ -30,6 +30,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +54,7 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
   public void setUp() throws Exception {
     initPath();
     initSparkContexts("TestRDDSimpleBucketPartitioner");
-    initFileSystem();
+    initHoodieStorage();
     initTimelineService();
   }
 
@@ -65,7 +66,7 @@ public class TestRDDSimpleBucketBulkInsertPartitioner extends HoodieSparkClientT
   @ParameterizedTest
   @MethodSource("configParams")
   public void testSimpleBucketPartitioner(String tableType, boolean partitionSort) throws IOException {
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath, HoodieTableType.valueOf(tableType));
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath, HoodieTableType.valueOf(tableType));
     int bucketNum = 10;
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()

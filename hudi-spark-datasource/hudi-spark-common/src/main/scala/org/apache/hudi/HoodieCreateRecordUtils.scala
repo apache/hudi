@@ -18,8 +18,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.DataSourceWriteOptions.{INSERT_DROP_DUPS, PAYLOAD_CLASS_NAME, PRECOMBINE_FIELD}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
@@ -29,6 +27,9 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, SparkKeyGeneratorInterface}
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.TaskContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.rdd.RDD
@@ -38,7 +39,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{DataFrame, HoodieInternalRowUtils}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConversions.mapAsJavaMap
+import scala.collection.JavaConverters._
 
 /** Utility class for converting dataframe into RDD[HoodieRecord]. */
 object HoodieCreateRecordUtils {
@@ -73,7 +74,7 @@ object HoodieCreateRecordUtils {
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
-    val autoGenerateRecordKeys: Boolean = !parameters.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+    val autoGenerateRecordKeys: Boolean = !parameters.asJava.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
 
     var shouldCombine = false
     if (preppedWriteOperation && !preppedSparkSqlWrites && !preppedSparkSqlMergeInto) {// prepped pk less via spark-ds

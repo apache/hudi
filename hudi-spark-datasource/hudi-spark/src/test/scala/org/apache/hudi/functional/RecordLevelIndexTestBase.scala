@@ -17,7 +17,6 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -30,15 +29,19 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
+import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api._
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
@@ -64,7 +67,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initSparkContexts()
-    initFileSystem()
+    initHoodieStorage()
     initTestDataGenerator()
 
     setTableName("hoodie_test")
@@ -121,15 +124,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
-    assertTrue(fs.delete(new Path(metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(
+      metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(fs.delete(new Path(metaClient.getMetaPath, lastInstant.getFileName), false))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
@@ -172,7 +176,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     } else {
       latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
     }
-    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch, 2))
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
     latestBatchDf.write.format("org.apache.hudi")
       .options(hudiOpts)
@@ -188,10 +192,14 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     latestBatchDf
   }
 
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+    calculateMergedDf(latestBatchDf, operation, false)
+  }
+
   /**
    * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
    */
-  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String, globalIndexEnableUpdatePartitions: Boolean): DataFrame = {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
       mergedDfList = mergedDfList :+ latestBatchDf
@@ -214,10 +222,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
         prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
       } else {
         val prevDf = prevDfOpt.get
-        val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
-          && prevDf("partition") === latestBatchDf("partition"), "leftanti")
-        val latestSnapshot = prevDfOld.union(latestBatchDf)
-        mergedDfList = mergedDfList :+ latestSnapshot
+        if (globalIndexEnableUpdatePartitions) {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        } else {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
+            && prevDf("partition") === latestBatchDf("partition"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        }
         sparkSession.emptyDataFrame
       }
     }

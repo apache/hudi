@@ -100,4 +100,11 @@ public interface BulkInsertPartitioner<I> extends Serializable {
     return sortCols.toArray(new String[0]);
   }
 
+  static Object[] prependPartitionPath(String partitionPath, Object[] columnValues) {
+    Object[] prependColumnValues = new Object[columnValues.length + 1];
+    System.arraycopy(columnValues, 0, prependColumnValues, 1, columnValues.length);
+    prependColumnValues[0] = partitionPath;
+    return prependColumnValues;
+  }
+
 }

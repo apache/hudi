@@ -33,10 +33,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -72,7 +72,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private LockInfo lockInfo;
   private String currentOwnerLockInfo;
 
-  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     checkRequiredProps(lockConfiguration);
     this.lockConfiguration = lockConfiguration;
     String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY, null);

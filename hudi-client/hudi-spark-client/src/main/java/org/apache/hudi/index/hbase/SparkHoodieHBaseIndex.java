@@ -551,7 +551,7 @@ public class SparkHoodieHBaseIndex extends HoodieIndex<Object, Object> {
       int maxReqPerSec = getMaxReqPerSec(numRSAlive, maxQpsPerRegionServer, qpsFraction);
       int numTasks = numTasksDuringPut;
       int maxParallelPutsTask = Math.max(1, Math.min(numTasks, maxExecutors));
-      int multiPutBatchSizePerSecPerTask = Math.max(1, (int) Math.ceil(maxReqPerSec / maxParallelPutsTask));
+      int multiPutBatchSizePerSecPerTask = Math.max(1, (int) Math.ceil((double) maxReqPerSec / maxParallelPutsTask));
       LOG.info("HbaseIndexThrottling: qpsFraction :" + qpsFraction);
       LOG.info("HbaseIndexThrottling: numRSAlive :" + numRSAlive);
       LOG.info("HbaseIndexThrottling: maxReqPerSec :" + maxReqPerSec);

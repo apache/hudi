@@ -57,7 +57,7 @@ to `base/` and the image should only be used for development only and not be pus
 The bundle validation on a release candidate is specified in the Github Action job `validate-release-candidate-bundles`
 in `.github/workflows/bot.yml`. By default, this is disabled.
 
-To enable the bundle validation on a particular release candidate, makes the following changes to the job by fipping the
+To enable the bundle validation on a particular release candidate, makes the following changes to the job by flipping the
 flag and adding the release candidate version and staging repo number:
 
 ```shell

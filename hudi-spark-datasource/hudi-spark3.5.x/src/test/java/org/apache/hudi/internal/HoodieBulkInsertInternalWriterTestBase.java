@@ -58,7 +58,7 @@ public class HoodieBulkInsertInternalWriterTestBase extends HoodieSparkClientTes
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
     initTimelineService();

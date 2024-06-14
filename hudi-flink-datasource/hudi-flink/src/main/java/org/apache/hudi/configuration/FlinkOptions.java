@@ -290,7 +290,7 @@ public class FlinkOptions extends HoodieConfig {
           + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
 
   @AdvancedConfig
-  public static final ConfigOption<Boolean> UTC_TIMEZONE = ConfigOptions
+  public static final ConfigOption<Boolean> READ_UTC_TIMEZONE = ConfigOptions
       .key("read.utc-timezone")
       .booleanType()
       .defaultValue(true)
@@ -316,7 +316,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_COMPACT = ConfigOptions
       .key("read.streaming.skip_compaction")
       .booleanType()
-      .defaultValue(false)// default read as batch
+      .defaultValue(true)
       .withDescription("Whether to skip compaction instants and avoid reading compacted base files for streaming read to improve read performance.\n"
           + "This option can be used to avoid reading duplicates when changelog mode is enabled, it is a solution to keep data integrity\n");
 
@@ -325,7 +325,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Boolean> READ_STREAMING_SKIP_CLUSTERING = ConfigOptions
       .key("read.streaming.skip_clustering")
       .booleanType()
-      .defaultValue(false)
+      .defaultValue(true)
       .withDescription("Whether to skip clustering instants to avoid reading base files of clustering operations for streaming read "
           + "to improve read performance.");
 
@@ -481,6 +481,15 @@ public class FlinkOptions extends HoodieConfig {
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
   public static final String PARTITION_FORMAT_DASHED_DAY = "yyyy-MM-dd";
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_UTC_TIMEZONE = ConfigOptions
+        .key("write.utc-timezone")
+        .booleanType()
+        .defaultValue(true)
+        .withDescription("Use UTC timezone or local timezone to the conversion between epoch"
+            + " time and LocalDateTime. Default value is utc timezone for forward compatibility.");
+
   @AdvancedConfig
   public static final ConfigOption<String> PARTITION_FORMAT = ConfigOptions
       .key("write.partition.format")

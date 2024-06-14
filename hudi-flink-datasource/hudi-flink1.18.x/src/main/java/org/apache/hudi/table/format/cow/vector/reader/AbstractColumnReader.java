@@ -192,7 +192,7 @@ public abstract class AbstractColumnReader<V extends WritableColumnVector>
           // Column vector supports lazy decoding of dictionary values so just set the dictionary.
           // We can't do this if rowId != 0 AND the column doesn't have a dictionary (i.e. some
           // non-dictionary encoded values have already been added).
-          vector.setDictionary(new ParquetDictionary(dictionary));
+          vector.setDictionary(new ParquetDictionary(dictionary, descriptor));
         } else {
           readBatchFromDictionaryIds(rowId, num, vector, dictionaryIds);
         }

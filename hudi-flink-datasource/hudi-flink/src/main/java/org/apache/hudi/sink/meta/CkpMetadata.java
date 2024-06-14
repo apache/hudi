@@ -217,7 +217,7 @@ public class CkpMetadata implements Serializable, AutoCloseable {
   }
 
   public static CkpMetadata getInstance(HoodieTableMetaClient metaClient, String uniqueId) {
-    return new CkpMetadata(metaClient.getFs(), metaClient.getBasePath(), uniqueId);
+    return new CkpMetadata((FileSystem) metaClient.getStorage().getFileSystem(), metaClient.getBasePath(), uniqueId);
   }
 
   public static CkpMetadata getInstance(FileSystem fs, String basePath, String uniqueId) {

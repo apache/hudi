@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -31,8 +31,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters.asScalaIteratorConverter
+
+import scala.collection.JavaConverters._
 
 class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -60,18 +60,18 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val verbose = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
 
     val basePath = getBasePath(table)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      config, basePath)
+    val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf),
+      metaClient.getStorage, config, basePath)
 
-    if (!metadataReader.enabled){
+    if (!metadataReader.enabled) {
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }
 
     val fsConfig = HoodieMetadataConfig.newBuilder.enable(false).build
-    val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getHadoopConf),
-      fsConfig, basePath)
+    val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf),
+      metaClient.getStorage, fsConfig, basePath)
 
     val timer = HoodieTimer.start
     val metadataPartitions = metadataReader.getAllPartitionPaths
@@ -91,44 +91,48 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     }
 
     val rows = new util.ArrayList[Row]
-    for (partition <- allPartitions) {
-      val fileStatusMap = new util.HashMap[String, FileStatus]
-      val metadataFileStatusMap = new util.HashMap[String, FileStatus]
-      val metadataStatuses = metadataReader.getAllFilesInPartition(new Path(basePath, partition))
-      util.Arrays.stream(metadataStatuses).iterator().asScala.foreach((entry: FileStatus) => metadataFileStatusMap.put(entry.getPath.getName, entry))
-      val fsStatuses = fsMetaReader.getAllFilesInPartition(new Path(basePath, partition))
-      util.Arrays.stream(fsStatuses).iterator().asScala.foreach((entry: FileStatus) => fileStatusMap.put(entry.getPath.getName, entry))
+    for (partition <- allPartitions.asScala) {
+      val pathInfoMap = new util.HashMap[String, StoragePathInfo]
+      val metadataPathInfoMap = new util.HashMap[String, StoragePathInfo]
+      val metadataPathInfoList = metadataReader.getAllFilesInPartition(new StoragePath(basePath, partition))
+      metadataPathInfoList.asScala.foreach((entry: StoragePathInfo) => metadataPathInfoMap.put(entry.getPath.getName, entry))
+      val pathInfoList = fsMetaReader.getAllFilesInPartition(new StoragePath(basePath, partition))
+      pathInfoList.asScala.foreach((entry: StoragePathInfo) => pathInfoMap.put(entry.getPath.getName, entry))
       val allFiles = new util.HashSet[String]
-      allFiles.addAll(fileStatusMap.keySet)
-      allFiles.addAll(metadataFileStatusMap.keySet)
-      for (file <- allFiles) {
-        val fsFileStatus = fileStatusMap.get(file)
-        val metaFileStatus = metadataFileStatusMap.get(file)
+      allFiles.addAll(pathInfoMap.keySet)
+      allFiles.addAll(metadataPathInfoMap.keySet)
+      for (file <- allFiles.asScala) {
+        val fsFileStatus = pathInfoMap.get(file)
+        val metaFileStatus = metadataPathInfoMap.get(file)
         val doesFsFileExists = fsFileStatus != null
         val doesMetadataFileExists = metaFileStatus != null
-        val fsFileLength = if (doesFsFileExists) fsFileStatus.getLen else 0
-        val metadataFileLength = if (doesMetadataFileExists) metaFileStatus.getLen else 0
+        val fsFileLength = if (doesFsFileExists) fsFileStatus.getLength else 0
+        val metadataFileLength = if (doesMetadataFileExists) metaFileStatus.getLength else 0
         if (verbose) { // if verbose print all files
           rows.add(Row(partition, file, doesFsFileExists, doesMetadataFileExists, fsFileLength, metadataFileLength))
         } else if ((doesFsFileExists != doesMetadataFileExists) || (fsFileLength != metadataFileLength)) { // if non verbose, print only non matching files
           rows.add(Row(partition, file, doesFsFileExists, doesMetadataFileExists, fsFileLength, metadataFileLength))
         }
       }
-      if (metadataStatuses.length != fsStatuses.length) {
-        logError(" FS and metadata files count not matching for " + partition + ". FS files count " + fsStatuses.length + ", metadata base files count " + metadataStatuses.length)
+      if (metadataPathInfoList.size() != pathInfoList.size()) {
+        logError(" FS and metadata files count not matching for " + partition + ". FS files count " + pathInfoList.size() + ", metadata base files count " + metadataPathInfoList.size())
       }
-      for (entry <- fileStatusMap.entrySet) {
-        if (!metadataFileStatusMap.containsKey(entry.getKey)) {
+      for (entry <- pathInfoMap.entrySet.asScala) {
+        if (!metadataPathInfoMap.containsKey(entry.getKey)) {
           logError("FS file not found in metadata " + entry.getKey)
-        } else if (entry.getValue.getLen != metadataFileStatusMap.get(entry.getKey).getLen) {
-          logError(" FS file size mismatch " + entry.getKey + ", size equality " + (entry.getValue.getLen == metadataFileStatusMap.get(entry.getKey).getLen) + ". FS size " + entry.getValue.getLen + ", metadata size " + metadataFileStatusMap.get(entry.getKey).getLen)
+        } else if (entry.getValue.getLength != metadataPathInfoMap.get(entry.getKey).getLength) {
+          logError(" FS file size mismatch " + entry.getKey + ", size equality "
+            + (entry.getValue.getLength == metadataPathInfoMap.get(entry.getKey).getLength) + ". FS size "
+            + entry.getValue.getLength + ", metadata size " + metadataPathInfoMap.get(entry.getKey).getLength)
         }
       }
-      for (entry <- metadataFileStatusMap.entrySet) {
-        if (!fileStatusMap.containsKey(entry.getKey)) {
+      for (entry <- metadataPathInfoMap.entrySet.asScala) {
+        if (!pathInfoMap.containsKey(entry.getKey)) {
           logError("Metadata file not found in FS " + entry.getKey)
-        } else if (entry.getValue.getLen != fileStatusMap.get(entry.getKey).getLen) {
-          logError(" Metadata file size mismatch " + entry.getKey + ", size equality " + (entry.getValue.getLen == fileStatusMap.get(entry.getKey).getLen) + ". Metadata size " + entry.getValue.getLen + ", FS size " + metadataFileStatusMap.get(entry.getKey).getLen)
+        } else if (entry.getValue.getLength != pathInfoMap.get(entry.getKey).getLength) {
+          logError(" Metadata file size mismatch " + entry.getKey + ", size equality "
+            + (entry.getValue.getLength == pathInfoMap.get(entry.getKey).getLength) + ". Metadata size "
+            + entry.getValue.getLength + ", FS size " + metadataPathInfoMap.get(entry.getKey).getLength)
         }
       }
     }

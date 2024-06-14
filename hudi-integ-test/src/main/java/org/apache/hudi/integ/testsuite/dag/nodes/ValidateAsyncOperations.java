@@ -19,11 +19,11 @@
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
@@ -61,7 +61,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
         FileSystem fs = HadoopFSUtils.getFs(basePath, executionContext.getHoodieTestSuiteWriter().getConfiguration());
         
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(executionContext.getHoodieTestSuiteWriter().getCfg().targetBasePath)
-            .setConf(executionContext.getJsc().hadoopConfiguration()).build();
+            .setConf(HadoopFSUtils.getStorageConfWithCopy(executionContext.getJsc().hadoopConfiguration())).build();
         Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
         if (latestCleanInstant.isPresent()) {
           log.warn("Latest clean commit " + latestCleanInstant.get());

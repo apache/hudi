@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM adoptopenjdk/openjdk8:alpine
+FROM --platform=linux/amd64 adoptopenjdk/openjdk8:alpine
 
 RUN apk add --no-cache --upgrade bash curl jq openjdk11 openjdk17 --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
 
@@ -30,6 +30,7 @@ ARG SPARK_VERSION=3.1.3
 ARG SPARK_HADOOP_VERSION=2.7
 ARG CONFLUENT_VERSION=5.5.12
 ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
+ARG SCALA_VERSION=2.12
 
 RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
@@ -51,9 +52,16 @@ RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK
     && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
 ENV FLINK_HOME=$WORKDIR/flink-$FLINK_VERSION
 
-RUN wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
-    && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
-    && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz
+RUN if [ "$SCALA_VERSION" = "2.13" ]; then \
+      wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -P "$WORKDIR" \
+        && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -C $WORKDIR/ \
+        && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz; \
+      mv $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13 $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION; \
+    else \
+      wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
+        && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
+        && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz; \
+    fi
 ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
 
 RUN wget https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -P "$WORKDIR" \

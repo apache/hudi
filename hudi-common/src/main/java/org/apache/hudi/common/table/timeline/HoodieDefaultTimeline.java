@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -30,7 +28,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -64,6 +61,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
   private transient volatile Set<String> instantTimeSet;
+  // for efficient #isPendingClusterInstant queries
+  private transient volatile Set<String> pendingReplaceClusteringInstants;
   // for efficient #isBeforeTimelineStarts check.
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   private String timelineHash;
@@ -319,11 +318,18 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   /**
+   * Get only pure commit and replace commits (inflight and completed) in the active timeline.
+   */
+  public HoodieTimeline getCommitAndReplaceTimeline() {
+    //TODO: Make sure this change does not break existing functionality.
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+  }
+
+  /**
    * Get only pure commits (inflight and completed) in the active timeline.
    */
   public HoodieTimeline getCommitTimeline() {
-    //TODO: Make sure this change does not break existing functionality.
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION));
   }
 
   /**
@@ -499,27 +505,40 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
-  public Option<HoodieInstant> getLastClusterCommit() {
-    return  Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+  public Option<HoodieInstant> getLastClusteringInstant() {
+    return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
         .getReverseOrderedInstants()
-        .filter(i -> {
-          try {
-            HoodieCommitMetadata metadata = TimelineUtils.getCommitMetadata(i, this);
-            return metadata.getOperationType().equals(WriteOperationType.CLUSTER);
-          } catch (IOException e) {
-            LOG.warn("Unable to read commit metadata for " + i + " due to " + e.getMessage());
-            return false;
-          }
-        }).findFirst());
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i))
+        .findFirst());
+  }
+
+  @Override
+  public Option<HoodieInstant> getFirstPendingClusterInstant() {
+    return getLastOrFirstPendingClusterInstant(false);
   }
 
   @Override
   public Option<HoodieInstant> getLastPendingClusterInstant() {
-    return  Option.fromJavaOptional(filterPendingReplaceTimeline()
-        .getReverseOrderedInstants()
-        .filter(i -> ClusteringUtils.isPendingClusteringInstant(this, i)).findFirst());
+    return getLastOrFirstPendingClusterInstant(true);
+  }
+
+  private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
+    HoodieTimeline replaceTimeline = filterPendingReplaceTimeline();
+    Stream<HoodieInstant> replaceStream;
+    if (isLast) {
+      replaceStream = replaceTimeline.getReverseOrderedInstants();
+    } else {
+      replaceStream = replaceTimeline.getInstantsAsStream();
+    }
+    return  Option.fromJavaOptional(replaceStream
+        .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
   }
   
+  @Override
+  public boolean isPendingClusterInstant(String instantTime) {
+    return getOrCreatePendingClusteringInstantSet().contains(instantTime);
+  }
+
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     return details.apply(instant);
@@ -559,6 +578,27 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
       }
     }
     return this.instantTimeSet;
+  }
+
+  private Set<String> getOrCreatePendingClusteringInstantSet() {
+    if (this.pendingReplaceClusteringInstants == null) {
+      synchronized (this) {
+        if (this.pendingReplaceClusteringInstants == null) {
+          List<HoodieInstant> pendingReplaceInstants = getCommitsTimeline().filterPendingReplaceTimeline().getInstants();
+          // Validate that there are no instants with same timestamp
+          pendingReplaceInstants.stream().collect(Collectors.groupingBy(HoodieInstant::getTimestamp)).forEach((timestamp, instants) -> {
+            if (instants.size() > 1) {
+              throw new IllegalStateException("Multiple instants with same timestamp: " + timestamp + " instants: " + instants);
+            }
+          });
+          // Filter replace commits down to those that are due to clustering
+          this.pendingReplaceClusteringInstants = pendingReplaceInstants.stream()
+              .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant))
+              .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+        }
+      }
+    }
+    return this.pendingReplaceClusteringInstants;
   }
 
   /**

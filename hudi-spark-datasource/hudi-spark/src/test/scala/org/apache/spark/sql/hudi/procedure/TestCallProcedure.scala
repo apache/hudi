@@ -196,7 +196,7 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
         s"Argument: instant_time is required")
 
       val instantTime = "101"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createLogFileMarker(tablePath, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
       }
@@ -234,12 +234,12 @@ class TestCallProcedure extends HoodieSparkProcedureTestBase {
         s"Argument: instant_time is required")
 
       var instantTime = "101"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createLogFileMarker(tablePath, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
       }
       instantTime = "102"
-      FileCreateUtils.createMarkerFile(tablePath, "", instantTime, "f0", IOType.APPEND)
+      FileCreateUtils.createLogFileMarker(tablePath, "", instantTime, "f0", IOType.APPEND)
       assertResult(1) {
         FileCreateUtils.getTotalMarkerFileCount(tablePath, "", instantTime, IOType.APPEND)
       }

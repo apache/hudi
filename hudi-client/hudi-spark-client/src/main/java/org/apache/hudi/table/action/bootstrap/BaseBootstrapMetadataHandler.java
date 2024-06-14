@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.bootstrap;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.client.bootstrap.BootstrapWriteStatus;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -29,10 +29,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.HoodieBootstrapHandle;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +53,8 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
   }
 
   public BootstrapWriteStatus runMetadataBootstrap(String srcPartitionPath, String partitionPath, KeyGeneratorInterface keyGenerator) {
-    Path sourceFilePath = FileStatusUtils.toPath(srcFileStatus.getPath());
+    HoodiePath path = srcFileStatus.getPath();
+    StoragePath sourceFilePath = path != null ? new StoragePath(path.getUri()) : null;
     HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle = new HoodieBootstrapHandle(config, HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         table, partitionPath, FSUtils.createNewFileIdPfx(), table.getTaskContextSupplier());
     try {
@@ -70,7 +71,7 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
       throw new HoodieException(e.getMessage(), e);
     }
 
-    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.writeStatuses().get(0);
+    BootstrapWriteStatus writeStatus = (BootstrapWriteStatus) bootstrapHandle.getWriteStatuses().get(0);
     BootstrapFileMapping bootstrapFileMapping = new BootstrapFileMapping(
         config.getBootstrapSourceBasePath(), srcPartitionPath, partitionPath,
         srcFileStatus, writeStatus.getFileId());
@@ -78,8 +79,8 @@ public abstract class BaseBootstrapMetadataHandler implements BootstrapMetadataH
     return writeStatus;
   }
 
-  abstract Schema getAvroSchema(Path sourceFilePath) throws IOException;
+  abstract Schema getAvroSchema(StoragePath sourceFilePath) throws IOException;
 
   abstract void executeBootstrap(HoodieBootstrapHandle<?, ?, ?, ?> bootstrapHandle,
-                                 Path sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception;
+                                 StoragePath sourceFilePath, KeyGeneratorInterface keyGenerator, String partitionPath, Schema avroSchema) throws Exception;
 }

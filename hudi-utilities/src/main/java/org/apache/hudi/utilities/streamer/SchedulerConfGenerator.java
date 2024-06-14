@@ -131,9 +131,9 @@ public class SchedulerConfGenerator {
   private static String generateAndStoreConfig(Integer deltaSyncWeight, Integer compactionWeight,
       Integer deltaSyncMinShare, Integer compactionMinShare, Integer clusteringWeight, Integer clusteringMinShare) throws IOException {
     File tempConfigFile = File.createTempFile(UUID.randomUUID().toString(), ".xml");
-    BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile));
-    bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare, clusteringWeight, clusteringMinShare));
-    bw.close();
+    try (BufferedWriter bw = new BufferedWriter(new FileWriter(tempConfigFile))) {
+      bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare, clusteringWeight, clusteringMinShare));
+    }
     // SPARK-35083 introduces remote scheduler pool files, so the file must include scheme since Spark 3.2
     String path = HoodieSparkUtils.gteqSpark3_2() ? tempConfigFile.toURI().toString() : tempConfigFile.getAbsolutePath();
     LOG.info("Configs written to file " + path);

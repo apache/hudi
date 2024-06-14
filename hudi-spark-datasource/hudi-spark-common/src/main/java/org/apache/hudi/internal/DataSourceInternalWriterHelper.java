@@ -30,10 +30,10 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
@@ -60,7 +60,7 @@ public class DataSourceInternalWriterHelper {
   private Map<String, String> extraMetadata;
 
   public DataSourceInternalWriterHelper(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession sparkSession, Configuration configuration, Map<String, String> extraMetadata) {
+                                        SparkSession sparkSession, StorageConfiguration<?> storageConf, Map<String, String> extraMetadata) {
     this.instantTime = instantTime;
     this.operationType = WriteOperationType.BULK_INSERT;
     this.extraMetadata = extraMetadata;
@@ -69,7 +69,8 @@ public class DataSourceInternalWriterHelper {
     this.writeClient.startCommitWithTime(instantTime);
     this.writeClient.initTable(operationType, Option.of(instantTime));
 
-    this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();
+    this.metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf.newInstance()).setBasePath(writeConfig.getBasePath()).build();
     this.metaClient.validateTableProperties(writeConfig.getProps());
     this.hoodieTable = HoodieSparkTable.create(writeConfig, new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), metaClient);
     this.writeClient.preWrite(instantTime, WriteOperationType.BULK_INSERT, metaClient);

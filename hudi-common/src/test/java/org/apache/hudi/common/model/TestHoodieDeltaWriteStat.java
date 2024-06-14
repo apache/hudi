@@ -23,6 +23,8 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,5 +50,28 @@ public class TestHoodieDeltaWriteStat {
 
     writeStat.setLogFiles(new ArrayList<>());
     assertTrue(writeStat.getLogFiles().isEmpty());
+  }
+
+  @Test
+  void testGetHoodieDeltaWriteStatFromPreviousStat() {
+    HoodieDeltaWriteStat prevStat = createDeltaWriteStat("part", "fileId", "888",
+        "base", Collections.singletonList("log1"));
+    HoodieDeltaWriteStat stat = prevStat.copy();
+    assertEquals(prevStat.getPartitionPath(), stat.getPartitionPath());
+    assertEquals(prevStat.getFileId(), stat.getFileId());
+    assertEquals(prevStat.getPrevCommit(), stat.getPrevCommit());
+    assertEquals(prevStat.getBaseFile(), stat.getBaseFile());
+    assertEquals(1, stat.getLogFiles().size());
+    assertEquals(prevStat.getLogFiles().get(0), stat.getLogFiles().get(0));
+  }
+
+  private HoodieDeltaWriteStat createDeltaWriteStat(String partition, String fileId, String prevCommit, String baseFile, List<String> logFiles) {
+    HoodieDeltaWriteStat writeStat1 = new HoodieDeltaWriteStat();
+    writeStat1.setPartitionPath(partition);
+    writeStat1.setFileId(fileId);
+    writeStat1.setPrevCommit(prevCommit);
+    writeStat1.setBaseFile(baseFile);
+    writeStat1.setLogFiles(logFiles);
+    return writeStat1;
   }
 }

@@ -32,6 +32,7 @@ import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -83,13 +84,13 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     // but can return records for completed commits > the commit we are trying to read (if using
     // readCommit() API)
     return HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(HadoopFSUtils.getFs(split.getPath().toString(), jobConf))
+        .withStorage(HoodieStorageUtils.getStorage(
+            split.getPath().toString(), HadoopFSUtils.getStorageConf(jobConf)))
         .withBasePath(split.getBasePath())
         .withLogFilePaths(split.getDeltaLogPaths())
         .withReaderSchema(getLogScannerReaderSchema())
         .withLatestInstantTime(split.getMaxCommitTime())
         .withMaxMemorySizeInBytes(HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes(jobConf))
-        .withReadBlocksLazily(Boolean.parseBoolean(jobConf.get(HoodieRealtimeConfig.COMPACTION_LAZY_BLOCK_READ_ENABLED_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_LAZY_BLOCK_READ_ENABLED)))
         .withReverseReader(false)
         .withBufferSize(jobConf.getInt(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, HoodieRealtimeConfig.DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE))
         .withSpillableMapBasePath(jobConf.get(HoodieRealtimeConfig.SPILLABLE_MAP_BASE_PATH_PROP, HoodieRealtimeConfig.DEFAULT_SPILLABLE_MAP_BASE_PATH))

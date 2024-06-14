@@ -53,6 +53,9 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -699,6 +702,27 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
+  public void testLoadPartitions() {
+    String partitionPath = "/table2";
+
+    fsView.loadPartitions(Collections.singletonList(partitionPath));
+    verify(primary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
+    verify(secondary, never()).loadPartitions(any());
+
+    resetMocks();
+    doThrow(new RuntimeException()).when(primary).loadPartitions(Collections.singletonList(partitionPath));
+    fsView.loadPartitions(Collections.singletonList(partitionPath));
+    verify(primary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
+    verify(secondary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
+
+    resetMocks();
+    doThrow(new RuntimeException()).when(secondary).loadPartitions(Collections.singletonList(partitionPath));
+    assertThrows(RuntimeException.class, () -> {
+      fsView.loadPartitions(Collections.singletonList(partitionPath));
+    });
+  }
+
+  @Test
   public void testGetPreferredView() {
     assertEquals(primary, fsView.getPreferredView());
   }
@@ -717,7 +741,7 @@ public class TestPriorityBasedFileSystemView {
 
     @Override
     public void append(LogEvent event) {
-      log.add(event);
+      log.add(event.toImmutable());
     }
 
     public List<LogEvent> getLog() {

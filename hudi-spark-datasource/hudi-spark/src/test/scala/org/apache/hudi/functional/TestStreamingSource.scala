@@ -24,7 +24,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_TRANSITION_TIME}
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
 
@@ -60,7 +62,7 @@ class TestStreamingSource extends StreamTest {
         .setRecordKeyFields("id")
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
-        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
@@ -113,7 +115,7 @@ class TestStreamingSource extends StreamTest {
         .setRecordKeyFields("id")
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
-        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
@@ -160,7 +162,7 @@ class TestStreamingSource extends StreamTest {
         .setRecordKeyFields("id")
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
-        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
@@ -193,7 +195,7 @@ class TestStreamingSource extends StreamTest {
         .setRecordKeyFields("id")
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
         .setPreCombineField("ts")
-        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       addData(tablePath, Seq(("2", "a1", "11", "001")))

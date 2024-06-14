@@ -42,17 +42,16 @@ import org.apache.hudi.config.HoodieMemoryConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.SparkHoodieBloomIndexHelper;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import com.codahale.metrics.Counter;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +70,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
-  private Configuration hadoopConf;
   private HoodieTableMetaClient metaClient;
 
   @BeforeEach
@@ -81,9 +79,8 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
     // Create a temp folder as the base path
     initPath();
-    hadoopConf = HoodieTestUtils.getDefaultHadoopConf();
-    fs = HadoopFSUtils.getFs(basePath, hadoopConf);
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.MERGE_ON_READ);
+    storage = HoodieStorageUtils.getStorage(basePath, storageConf);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     initTestDataGenerator();
   }
 
@@ -124,7 +121,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
   @Test
   public void testCompactionOnCopyOnWriteFail() throws Exception {
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(getConfig());) {
       HoodieTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       String compactionInstantTime = HoodieActiveTimeline.createNewInstantTime();

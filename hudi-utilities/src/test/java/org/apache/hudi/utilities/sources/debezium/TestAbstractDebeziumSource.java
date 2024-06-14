@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
@@ -86,12 +87,12 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
 
   private TypedProperties createPropsForJsonSource() {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", testTopicName);
+    props.setProperty("hoodie.streamer.source.kafka.topic", testTopicName);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("auto.offset.reset", "earliest");
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.schemaprovider.registry.url", "localhost");
-    props.setProperty("hoodie.deltastreamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
+    props.setProperty("hoodie.streamer.schemaprovider.registry.url", "localhost");
+    props.setProperty("hoodie.streamer.source.kafka.value.deserializer.class", StringDeserializer.class.getName());
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
 
     return props;
@@ -118,7 +119,7 @@ public abstract class TestAbstractDebeziumSource extends UtilitiesTestBase {
     TypedProperties props = createPropsForJsonSource();
 
     SchemaProvider schemaProvider = new MockSchemaRegistryProvider(props, jsc, this);
-    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, schemaProvider, metrics));
+    SourceFormatAdapter debeziumSource = new SourceFormatAdapter(UtilHelpers.createSource(sourceClass, props, jsc, sparkSession, metrics, new DefaultStreamContext(schemaProvider, Option.empty())));
 
     testUtils.sendMessages(testTopicName, new String[] {generateDebeziumEvent(operation).toString()});
 

@@ -51,6 +51,7 @@ public class DeltaSync extends StreamSync {
   public DeltaSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider,
                    TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
                    Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
-    super(cfg, sparkSession, props, hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
+    super(cfg, sparkSession, props, hoodieSparkContext,
+        fs, conf, onInitializingHoodieWriteClient, new DefaultStreamContext(schemaProvider, Option.empty()));
   }
 }
