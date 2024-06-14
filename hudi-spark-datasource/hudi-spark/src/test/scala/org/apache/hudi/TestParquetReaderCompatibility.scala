@@ -20,8 +20,7 @@ package org.apache.hudi
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullable, Nullability, Nullable}
-import org.apache.hudi.TestParquetReaderCompatibility.{ParquetListTypeEnum, TestScenario}
-import org.apache.hudi.TestParquetReaderCompatibility.ParquetListTypeEnum.{ParquetListType, ThreeLevel, TwoLevel}
+import org.apache.hudi.TestParquetReaderCompatibility.{SparkSettingCase, TestScenario, ThreeLevelCase, TwoLevelCase}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -35,7 +34,9 @@ import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
+import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.parquet.schema.OriginalType
+import org.apache.spark.SparkConf
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -45,15 +46,36 @@ import scala.collection.JavaConverters._
 
 object TestParquetReaderCompatibility {
   val listFieldName = "internal_list"
-  object ParquetListTypeEnum extends Enumeration {
-    type ParquetListType = Value
-    val TwoLevel: ParquetListTypeEnum.Value = Value("TwoLevel")
-    val ThreeLevel: ParquetListTypeEnum.Value = Value("ThreeLevel")
+  abstract class SparkSettingCase {
+    def value: String
+    def overrideConf(conf: SparkConf): Unit
+  }
 
-    def isOldListStructure(listType: ParquetListType): Boolean = {
-      listType == TwoLevel
+  // Explicitly set 2 level
+  case object TwoLevelCase extends SparkSettingCase {
+    val value: String = "TwoLevel"
+    def overrideConf(conf: SparkConf): Unit = {
+      conf.set("spark.hadoop.parquet.avro.write-old-list-structure", true.toString)
     }
   }
+
+  // Explicitly set 3 level
+  case object ThreeLevelCase extends SparkSettingCase {
+    val value: String = "ThreeLevel"
+
+    def overrideConf(conf: SparkConf): Unit = {
+      conf.set("spark.hadoop.parquet.avro.write-old-list-structure", false.toString)
+    }
+  }
+
+  // Set nothing(likely most users do so) - default is 2 level inside Avro code.
+  case object DefaultCase extends SparkSettingCase {
+    def value: String = "TwoLevel"
+
+    def overrideConf(conf: SparkConf): Unit = {}
+  }
+
+  val cases: Seq[SparkSettingCase] = Seq(TwoLevelCase, ThreeLevelCase, DefaultCase)
 
   object NullabilityEnum extends Enumeration {
     type Nullability = Value
@@ -61,31 +83,51 @@ object TestParquetReaderCompatibility {
     val NotNullable: NullabilityEnum.Value = Value("NotNullable")
   }
 
-  case class TestScenario(initialLevel: ParquetListTypeEnum.ParquetListType, listNullability: NullabilityEnum.Nullability, targetLevel: ParquetListTypeEnum.ParquetListType, itemsNullability: NullabilityEnum.Nullability)
+  case class TestScenario(initialLevel: SparkSettingCase, listNullability: NullabilityEnum.Nullability, targetLevel: SparkSettingCase, itemsNullability: NullabilityEnum.Nullability)
 
-  // Here scenarios of rewriting 3 level list to 2 level list with NULLs inside are omitted, because
-  // Spark allows NULLs inside lists only for 3 level lists.
-  // Scenarios with having list value NULL are present since it's allowed in both 2 and 3 levels.
-  val testScenarios: Seq[TestScenario] = Seq(
-    TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
-    TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
-    // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
-    // which are not updated in the incoming batch are set to null.
-    TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
-    // This scenario leads to exception mentioned here https://github.com/apache/hudi/pull/11450 - the only difference with silent dataloss
-    // is that writer does not allow wrongly-read null to be written into new file, so write fails.
-    TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
-    // This is reverse version of scenario TwoLevel -> ThreeLevel with nullable list value - leads to silent data loss.
-    TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
-    // This is reverse version of scenario TwoLevel -> ThreeLevel with not nullable list value - leads to exception.
-    TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
-    TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
-    TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
-    TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = Nullable),
-    TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = Nullable)
-  )
+  /**
+   * Here we are generating all possible combinations of settings, including default.
+   **/
+  def allPossibleCombinations: java.util.stream.Stream[TestScenario] = {
+    val allPossibleCombinations = for (
+      initialLevel <- cases;
+      listNullability <- NullabilityEnum.values.toSeq;
+      targetLevel <- cases;
+      itemsNullability <- NullabilityEnum.values.toSeq
+    ) yield TestScenario(initialLevel, listNullability, targetLevel, itemsNullability)
+    allPossibleCombinations.filter {
+      case c => {
+        val notAllowedNulls = Seq(TwoLevelCase, DefaultCase)
+        // It's not allowed to have NULLs inside lists for 2 level lists(this matches explicit setting or default).
+        !(c.itemsNullability == Nullable && (notAllowedNulls.contains(c.targetLevel) || notAllowedNulls.contains(c.initialLevel)))
+      }
+    }.asJava.stream()
+  }
 
-  def testSource: java.util.stream.Stream[TestScenario] = testScenarios.asJava.stream()
+  def selectedCombinations: java.util.stream.Stream[TestScenario] = {
+    Seq(
+        // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
+        // which are not updated in the incoming batch are set to null.
+        TestScenario(initialLevel = TwoLevelCase, listNullability = Nullable, targetLevel = ThreeLevelCase, itemsNullability = NotNullable),
+        // This scenario leads to exception mentioned here https://github.com/apache/hudi/pull/11450 - the only difference with silent dataloss
+        // is that writer does not allow wrongly-read null to be written into new file, so write fails.
+        TestScenario(initialLevel = TwoLevelCase, listNullability = NotNullable, targetLevel = ThreeLevelCase, itemsNullability = NotNullable),
+        // This is reverse version of scenario TwoLevel -> ThreeLevel with nullable list value - leads to silent data loss.
+        TestScenario(initialLevel = ThreeLevelCase, listNullability = Nullable, targetLevel = TwoLevelCase, itemsNullability = NotNullable),
+        // This is reverse version of scenario TwoLevel -> ThreeLevel with not nullable list value - leads to exception.
+        TestScenario(initialLevel = ThreeLevelCase, listNullability = NotNullable, targetLevel = TwoLevelCase, itemsNullability = NotNullable)
+    ).asJava.stream()
+  }
+  def testSource: java.util.stream.Stream[TestScenario] = if(runAllPossible) {
+    allPossibleCombinations
+  } else {
+    selectedCombinations
+  }
+
+  /**
+   * Change the value to run on highlighted ones.
+   **/
+  def runAllPossible = true
 }
 
 /**
@@ -132,10 +174,12 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     res.toMap
   }
 
-  private def createSparkSessionWithListLevel(listType: ParquetListType): SparkSession = {
+  private def createSparkSessionWithListLevel(listType: SparkSettingCase): SparkSession = {
+    val conf = new SparkConf()
+    listType.overrideConf(conf)
     val spark = SparkSession.builder()
       .config(HoodieClientTestUtils.getSparkConfForTest("hoodie_test"))
-      .config("spark.hadoop.parquet.avro.write-old-list-structure", ParquetListTypeEnum.isOldListStructure(listType).toString)
+      .config(conf)
       .getOrCreate()
     spark
   }
@@ -171,7 +215,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     )
     val firstWriteLevels = getListLevelsFromPath(firstWriteSession, path)
     assert(firstWriteLevels.size == 1, s"Expected only one level, got $firstWriteLevels")
-    assert(firstWriteLevels.head == initialLevel, s"Expected level $initialLevel, got $firstWriteLevels")
+    assert(firstWriteLevels.head == initialLevel.value, s"Expected level $initialLevel, got $firstWriteLevels")
     firstWriteSession.close()
 
     val updateRecords = generateRowsWithParameters(listNullability, itemsNullability, 2L, 1)
@@ -184,7 +228,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     )
     val secondWriteLevels = getListLevelsFromPath(secondWriteSession, path)
     assert(secondWriteLevels.size == 1, s"Expected only one level, got $secondWriteLevels")
-    assert(secondWriteLevels.head == targetLevel, s"Expected level $targetLevel, got $secondWriteLevels")
+    assert(secondWriteLevels.head == targetLevel.value, s"Expected level $targetLevel, got $secondWriteLevels")
 
     val expectedRecords = (initialRecords ++ updateRecords).values.toSeq
     val expectedRecordsWithSchema = dropMetaFields(
@@ -214,10 +258,25 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val expectedSorted = expectedRecords.sorted
     val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().toSeq.sorted
     assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
-    assert(readRecords == expectedSorted, s"Expected $expectedSorted, got $readRecords")
+    val recordsEqual = readRecords == expectedSorted
+    val explanationStr = if (!recordsEqual) {
+      readRecords.zipWithIndex.map {
+        case (row, index) => {
+          val expectedRow = expectedSorted(index)
+          if (row != expectedRow) {
+            s"Difference: Expected $expectedRow, got $row"
+          } else {
+            s"Equals: expected $expectedRow, got $row"
+          }
+        }
+      }.mkString("\n")
+    } else {
+      ""
+    }
+    assert(recordsEqual, explanationStr)
   }
 
-  private def getListLevelsFromPath(spark: SparkSession, path: String): Set[ParquetListType] = {
+  private def getListLevelsFromPath(spark: SparkSession, path: String): Set[String] = {
     val engineContext = new HoodieSparkEngineContext(spark.sparkContext, spark.sqlContext)
     val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val baseTableMetadata = new HoodieBackedTableMetadata(
@@ -227,8 +286,8 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     fileStatuses.asScala.flatMap(_._2.asScala).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
   }
 
-  private def getListType(hadoopConf: Configuration, path: StoragePath): ParquetListType = {
-    val reader = HoodieIOFactory.getIOFactory(HoodieTestUtils.getDefaultStorage).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
+  private def getListType(hadoopConf: Configuration, path: StoragePath): String = {
+    val reader = HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, new HadoopStorageConfiguration(hadoopConf))).getReaderFactory(HoodieRecordType.AVRO).getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path)
     val schema = ParquetTableSchemaResolver.convertAvroSchemaToParquet(reader.getSchema, hadoopConf)
 
     val list = schema.getFields.asScala.find(_.getName == TestParquetReaderCompatibility.listFieldName).get
@@ -237,9 +296,9 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val isThreeLevel = originalType == OriginalType.LIST && !(groupType.getType(0).getName == "array")
 
     if (isThreeLevel) {
-      ThreeLevel
+      ThreeLevelCase.value
     } else {
-      TwoLevel
+      TwoLevelCase.value
     }
   }
 
