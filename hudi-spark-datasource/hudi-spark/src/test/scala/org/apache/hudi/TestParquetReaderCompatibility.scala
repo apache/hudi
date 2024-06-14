@@ -146,6 +146,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
   @ParameterizedTest
   @MethodSource(Array("testSource"))
   def testAvroListUpdate(input: TestScenario): Unit = {
+    spark.stop()
     val path = tempBasePath + "_avro_list_update"
     val options = Map(
       DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
@@ -158,10 +159,10 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val listNullability = input.listNullability
     val targetLevel = input.targetLevel
     val itemsNullability = input.itemsNullability
-    spark.stop()
-    val firstWriteSession = createSparkSessionWithListLevel(initialLevel)
     val structType = getSchemaWithParameters(listNullability, itemsNullability)
     val initialRecords = generateRowsWithParameters(listNullability, itemsNullability)
+
+    val firstWriteSession = createSparkSessionWithListLevel(initialLevel)
     HoodieSparkSqlWriter.write(
       firstWriteSession.sqlContext,
       SaveMode.Overwrite,
@@ -169,7 +170,6 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       firstWriteSession.createDataFrame(firstWriteSession.sparkContext.parallelize(initialRecords.values.toSeq), structType)
     )
     val firstWriteLevels = getListLevelsFromPath(firstWriteSession, path)
-
     assert(firstWriteLevels.size == 1, s"Expected only one level, got $firstWriteLevels")
     assert(firstWriteLevels.head == initialLevel, s"Expected level $initialLevel, got $firstWriteLevels")
     firstWriteSession.close()
@@ -183,7 +183,6 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(updateRecords.values.toSeq), structType)
     )
     val secondWriteLevels = getListLevelsFromPath(secondWriteSession, path)
-
     assert(secondWriteLevels.size == 1, s"Expected only one level, got $secondWriteLevels")
     assert(secondWriteLevels.head == targetLevel, s"Expected level $targetLevel, got $secondWriteLevels")
 
@@ -192,12 +191,15 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(expectedRecords), structType)
     ).collect().toSeq
     secondWriteSession.close()
+
     val readSessionWithInitLevel = createSparkSessionWithListLevel(initialLevel)
     compareResults(expectedRecordsWithSchema, readSessionWithInitLevel, path)
     readSessionWithInitLevel.close()
+
     val readSessionWithTargetLevel = createSparkSessionWithListLevel(targetLevel)
     compareResults(expectedRecordsWithSchema, readSessionWithTargetLevel, path)
     readSessionWithTargetLevel.close()
+
     initSparkContext()
   }
 
