@@ -46,8 +46,8 @@ object TestParquetReaderCompatibility {
   val listFieldName = "internal_list"
   object ParquetListTypeEnum extends Enumeration {
     type ParquetListType = Value
-    val TwoLevel = Value("TwoLevel")
-    val ThreeLevel = Value("ThreeLevel")
+    val TwoLevel: ParquetListTypeEnum.Value = Value("TwoLevel")
+    val ThreeLevel: ParquetListTypeEnum.Value = Value("ThreeLevel")
 
     def isOldListStructure(listType: ParquetListType): Boolean = {
       listType == TwoLevel
@@ -56,8 +56,8 @@ object TestParquetReaderCompatibility {
 
   object NullabilityEnum extends Enumeration {
     type Nullability = Value
-    val Nullable = Value("Nullable")
-    val NotNullable = Value("NotNullable")
+    val Nullable: NullabilityEnum.Value = Value("Nullable")
+    val NotNullable: NullabilityEnum.Value = Value("NotNullable")
   }
 
   case class TestScenario(
@@ -70,7 +70,7 @@ object TestParquetReaderCompatibility {
   // Here scenarios of rewriting 3 level list to 2 level list with NULLs inside are omitted, because
   // Spark allows NULLs inside lists only for 3 level lists.
   // Scenarios with having list value NULL are present since it's allowed in both 2 and 3 levels.
-  val testScenarios = Seq(
+  val testScenarios: Seq[TestScenario] = Seq(
     TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
     // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
@@ -105,10 +105,10 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val listNullable = listNullability == Nullable
     val listElementsNullable = listElementNullability == Nullable
     val schema = StructType(Array(
-      StructField("key", LongType, false),
-      StructField("partition", StringType, false),
+      StructField("key", LongType, nullable = false),
+      StructField("partition", StringType, nullable = false),
       StructField(TestParquetReaderCompatibility.listFieldName, ArrayType(LongType, listElementsNullable), listNullable),
-      StructField("ts", LongType, false),
+      StructField("ts", LongType, nullable = false),
     ))
     schema
   }
@@ -165,8 +165,13 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     spark.stop()
     val firstWriteSession = createSparkSessionWithListLevel(initialLevel)
     val structType = getSchemaWithParameters(listNullability, itemsNullability)
-    val initialRecords = generateRowsWithParameters(listNullability, itemsNullability, 1L, 10)
-    HoodieSparkSqlWriter.write(firstWriteSession.sqlContext, SaveMode.Overwrite, options, firstWriteSession.createDataFrame(firstWriteSession.sparkContext.parallelize(initialRecords.values.toSeq), structType))
+    val initialRecords = generateRowsWithParameters(listNullability, itemsNullability)
+    HoodieSparkSqlWriter.write(
+      firstWriteSession.sqlContext,
+      SaveMode.Overwrite,
+      options,
+      firstWriteSession.createDataFrame(firstWriteSession.sparkContext.parallelize(initialRecords.values.toSeq), structType)
+    )
     val firstWriteLevels = getListLevelsFromPath(firstWriteSession, path)
 
     assert(firstWriteLevels.size == 1, s"Expected only one level, got $firstWriteLevels")
@@ -175,14 +180,21 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
 
     val updateRecords = generateRowsWithParameters(listNullability, itemsNullability, 2L, 1)
     val secondWriteSession = createSparkSessionWithListLevel(targetLevel)
-    HoodieSparkSqlWriter.write(secondWriteSession.sqlContext, SaveMode.Append, options, secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(updateRecords.values.toSeq), structType))
+    HoodieSparkSqlWriter.write(
+      secondWriteSession.sqlContext,
+      SaveMode.Append,
+      options,
+      secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(updateRecords.values.toSeq), structType)
+    )
     val secondWriteLevels = getListLevelsFromPath(secondWriteSession, path)
 
     assert(secondWriteLevels.size == 1, s"Expected only one level, got $secondWriteLevels")
     assert(secondWriteLevels.head == targetLevel, s"Expected level $targetLevel, got $secondWriteLevels")
 
     val expectedRecords = (initialRecords ++ updateRecords).values.toSeq
-    val expectedRecordsWithSchema = dropMetaFields(secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(expectedRecords), structType)).collect().toSeq
+    val expectedRecordsWithSchema = dropMetaFields(
+      secondWriteSession.createDataFrame(secondWriteSession.sparkContext.parallelize(expectedRecords), structType)
+    ).collect().toSeq
     secondWriteSession.close()
     val readSessionWithInitLevel = createSparkSessionWithListLevel(initialLevel)
     compareResults(expectedRecordsWithSchema, readSessionWithInitLevel, path)
@@ -204,15 +216,15 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val expectedSorted = expectedRecords.sorted
     val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().sorted
     assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
-    assert(readRecords.sameElements(expectedSorted), s"Expected ${expectedSorted}, got ${readRecords.mkString("Array(", ", ", ")")}")
+    assert(readRecords.sameElements(expectedSorted), s"Expected $expectedSorted, got ${readRecords.mkString("Array(", ", ", ")")}")
   }
 
   private def getListLevelsFromPath(spark: SparkSession, path: String): Set[ParquetListType] = {
     val engineContext = new HoodieSparkEngineContext(spark.sparkContext, spark.sqlContext)
-    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
     val baseTableMetada = new HoodieBackedTableMetadata(
       engineContext, HoodieTestUtils.getDefaultStorage, metadataConfig, s"$path", false)
-    val fileStatuses = baseTableMetada.getAllFilesInPartitions(Collections.singletonList(s"${path}/${defaultPartition}"))
+    val fileStatuses = baseTableMetada.getAllFilesInPartitions(Collections.singletonList(s"$path/$defaultPartition"))
     fileStatuses.asScala.flatMap(_._2.asScala).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
   }
 
