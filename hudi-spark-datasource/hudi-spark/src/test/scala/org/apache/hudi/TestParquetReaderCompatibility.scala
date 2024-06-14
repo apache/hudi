@@ -35,13 +35,13 @@ import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
 import org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER
-import org.apache.parquet.schema.LogicalTypeAnnotation
+import org.apache.parquet.schema.OriginalType
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.{collectionAsScalaIterableConverter, mapAsScalaMapConverter, seqAsJavaListConverter}
+import scala.collection.JavaConverters._
 
 object TestParquetReaderCompatibility {
   val listFieldName = "internal_list"
@@ -231,7 +231,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val list = schema.getFields.asScala.find(_.getName == TestParquetReaderCompatibility.listFieldName).get
     val groupType = list.asGroupType()
     val originalType = groupType.getOriginalType
-    val isThreeLevel = originalType == LogicalTypeAnnotation.listType().toOriginalType && !(groupType.getType(0).getName == "array")
+    val isThreeLevel = originalType == OriginalType.LIST && !(groupType.getType(0).getName == "array")
 
     if (isThreeLevel) {
       ThreeLevel
