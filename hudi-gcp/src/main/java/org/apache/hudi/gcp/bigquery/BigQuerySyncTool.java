@@ -136,7 +136,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
       manifestFileWriter.writeManifestFile(true);
       // if table does not exist, create it using the manifest file
       // if table exists but is not yet using manifest file or needs to be recreated with the big-lake connection ID, update it to use manifest file
-      if (bqSyncClient.tableNotExistsOrDoesNotMatchSpecification(tableName)) {
+      if (bqSyncClient.tableNotExistsOrDoesNotMatchSpecification(tableName, bqSyncClient.getBasePath())) {
         bqSyncClient.createOrUpdateTableUsingBqManifestFile(
             tableName,
             manifestFileWriter.getManifestSourceUri(true),
