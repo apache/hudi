@@ -158,7 +158,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
-        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePathV2(), fileStatus.getPath().getParent())));
+        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
     return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
         .flatMap(List::stream).collect(Collectors.toList());
   }
@@ -368,7 +368,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
               .map(partition -> Pair.of(
-                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partition)))
+                  partition, FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition)))
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, StoragePath>, List<StoragePathInfo>> pathInfoMap =
@@ -438,7 +438,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private List<StoragePathInfo> getAllFilesInPartition(String relativePartitionPath)
       throws IOException {
-    StoragePath partitionPath = FSUtils.constructAbsolutePath(metaClient.getBasePathV2(),
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(),
         relativePartitionPath);
     long beginLsTs = System.currentTimeMillis();
     List<StoragePathInfo> pathInfoList = listPartition(partitionPath);
@@ -665,7 +665,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .filter(fg -> !isFileGroupReplaced(fg))
           .map(HoodieFileGroup::getPartitionPath)
           .distinct()
-          .map(name -> name.isEmpty() ? metaClient.getBasePathV2() : new StoragePath(metaClient.getBasePathV2(), name))
+          .map(name -> name.isEmpty() ? metaClient.getBasePath() : new StoragePath(metaClient.getBasePath(), name))
           .collect(Collectors.toList());
     } finally {
       readLock.unlock();

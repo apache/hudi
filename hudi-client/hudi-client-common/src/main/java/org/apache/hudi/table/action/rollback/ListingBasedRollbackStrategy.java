@@ -109,7 +109,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
         Supplier<FileStatus[]> filesToDelete = () -> {
           try {
-            return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath(), baseFileExtension,
+            return fetchFilesFromInstant(instantToRollback, partitionPath, metaClient.getBasePath().toString(), baseFileExtension,
                 (FileSystem) metaClient.getStorage().getFileSystem(),
                 commitMetadataOptional, isCommitMetadataCompleted, tableType);
           } catch (IOException e) {

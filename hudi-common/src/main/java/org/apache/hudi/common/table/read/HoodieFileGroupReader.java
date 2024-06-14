@@ -92,7 +92,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                Option<InternalSchema> internalSchemaOpt,
                                HoodieTableMetaClient hoodieTableMetaClient,
                                TypedProperties props,
-                               HoodieTableConfig tableConfig,
                                long start,
                                long length,
                                boolean shouldUseRecordPosition,
@@ -108,6 +107,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.start = start;
     this.length = length;
     this.recordMergeMode = getRecordMergeMode(props);
+    HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
     readerContext.setRecordMerger(this.recordMerger);
     readerContext.setTablePath(tablePath);

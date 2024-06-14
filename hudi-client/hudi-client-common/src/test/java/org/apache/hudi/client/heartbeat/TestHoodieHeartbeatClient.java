@@ -48,7 +48,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testStartHeartbeat() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval,
             numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
@@ -61,7 +61,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testStopHeartbeat() {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
@@ -73,7 +73,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testIsHeartbeatExpired() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
@@ -84,7 +84,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   public void testNumHeartbeatsGenerated() {
     Long heartBeatInterval = 5000L;
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start("100");
     await().atMost(5, SECONDS).until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 1);
@@ -93,7 +93,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testDeleteWrongHeartbeat() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stop(instantTime1);
@@ -104,7 +104,7 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
   @Test
   public void testStopHeartbeatTimers() throws IOException {
     HoodieHeartbeatClient hoodieHeartbeatClient =
-        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath(),
+        new HoodieHeartbeatClient(metaClient.getStorage(), metaClient.getBasePath().toString(),
             heartBeatInterval, numTolerableMisses);
     hoodieHeartbeatClient.start(instantTime1);
     hoodieHeartbeatClient.stopHeartbeatTimers();

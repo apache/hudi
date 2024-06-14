@@ -77,6 +77,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -2803,6 +2804,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPath(String basePath) {
       writeConfig.setValue(BASE_PATH, basePath);
+      return this;
+    }
+
+    public Builder withPath(StoragePath basePath) {
+      writeConfig.setValue(BASE_PATH, basePath.toString());
       return this;
     }
 

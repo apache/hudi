@@ -160,7 +160,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.beginInstantTime = beginInstantTime;
     this.endInstantTime = endInstantTime;
 
-    this.basePath = metaClient.getBasePathV2();
+    this.basePath = metaClient.getBasePath();
 
     this.metaClient = metaClient;
     this.engineContext = engineContext;
@@ -341,7 +341,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isPartitionedTable() {
-    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath);
   }
 
   protected HoodieTimeline getActiveTimeline() {
@@ -480,7 +480,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean shouldReadAsPartitionedTable() {
-    return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath);
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {

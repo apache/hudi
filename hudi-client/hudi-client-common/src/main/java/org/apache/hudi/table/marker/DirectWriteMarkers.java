@@ -72,7 +72,7 @@ public class DirectWriteMarkers extends WriteMarkers {
 
   public DirectWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getStorage(),
-        table.getMetaClient().getBasePath(),
+        table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime),
         instantTime);
   }

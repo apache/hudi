@@ -23,10 +23,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -38,6 +38,7 @@ import org.junit.jupiter.api.AfterAll;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -85,6 +86,16 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     return HoodieTableType.MERGE_ON_READ;
   }
 
+  @Override
+  protected void initMetaClient() throws IOException {
+    Properties metaProps = new Properties();
+    metaProps.setProperty(POPULATE_META_FIELDS.key(), "false");
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), metaProps);
+  }
+
   protected void setUpMockCommits() throws Exception {
     for (String instantTime : instantTimes) {
       testTable.addDeltaCommit(instantTime);
@@ -113,8 +124,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             FILE_ID
         );
 
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    tableConfig.setValue(POPULATE_META_FIELDS, "false");
     HoodieFileGroupReader<IndexedRecord> fileGroupReader =
         HoodieFileGroupReaderTestUtils.createFileGroupReader(
             fileSliceOpt,
@@ -126,7 +135,6 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             Long.MAX_VALUE,
             properties,
             new HoodieHadoopStorage(basePath, storageConf),
-            tableConfig,
             readerContext,
             metaClient
         );

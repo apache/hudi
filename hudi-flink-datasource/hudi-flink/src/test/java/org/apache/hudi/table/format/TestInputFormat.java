@@ -354,7 +354,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .skipCompaction(false)
         .build();
 
@@ -395,7 +395,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(false)
         .build();
@@ -434,7 +434,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipCompaction(true)
         .build();
@@ -499,7 +499,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .skipClustering(true)
         .build();
@@ -587,7 +587,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .build();
 
     // timeline: c1, c2.inflight, c3.inflight, c4
@@ -656,7 +656,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .partitionPruner(PartitionPruners.getInstance("par1", "par2", "par3", "par4"))
         .build();
 
@@ -1154,7 +1154,7 @@ public class TestInputFormat {
     IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
         .rowType(TestConfigurations.ROW_TYPE)
         .conf(conf)
-        .path(FilePathUtils.toFlinkPath(metaClient.getBasePathV2()))
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
         .skipCompaction(skipCompaction)
         .build();
     conf.setString(FlinkOptions.READ_END_COMMIT, newCompletionTime);

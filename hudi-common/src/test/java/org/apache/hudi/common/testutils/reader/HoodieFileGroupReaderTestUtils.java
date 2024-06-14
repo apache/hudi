@@ -22,7 +22,6 @@ package org.apache.hudi.common.testutils.reader;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
@@ -43,7 +42,6 @@ public class HoodieFileGroupReaderTestUtils {
       long length,
       TypedProperties properties,
       HoodieStorage storage,
-      HoodieTableConfig tableConfig,
       HoodieReaderContext<IndexedRecord> readerContext,
       HoodieTableMetaClient metaClient
   ) {
@@ -55,7 +53,6 @@ public class HoodieFileGroupReaderTestUtils {
         .withStart(start)
         .withLength(length)
         .withProperties(properties)
-        .withTableConfig(tableConfig)
         .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
   }
 
@@ -66,7 +63,6 @@ public class HoodieFileGroupReaderTestUtils {
     private TypedProperties props;
     private long start;
     private long length;
-    private HoodieTableConfig tableConfig;
 
     public HoodieFileGroupReaderBuilder withReaderContext(
         HoodieReaderContext<IndexedRecord> context) {
@@ -99,13 +95,6 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReaderBuilder withTableConfig(
-        HoodieTableConfig tableConfig
-    ) {
-      this.tableConfig = tableConfig;
-      return this;
-    }
-
     public HoodieFileGroupReader<IndexedRecord> build(
         String basePath,
         String latestCommitTime,
@@ -124,7 +113,6 @@ public class HoodieFileGroupReaderTestUtils {
           Option.empty(),
           metaClient,
           props,
-          tableConfig,
           start,
           length,
           shouldUseRecordPosition,
