@@ -59,7 +59,6 @@ import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -714,24 +713,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
           final HoodieStorage storage = metaClient.getStorage();
           LOG.info("Deleting invalid data file=" + partitionFilePair);
           // Delete
-          RetryHelper<Void, HoodieIOException> retryHelper = new RetryHelper(5000, 3, 5000, HoodieIOException.class.getName())
-              .tryWith(() -> {
-                try {
-                  StoragePath deletePath = new StoragePath(partitionFilePair.getValue());
-                  boolean success = storage.deleteFile(deletePath);
-                  if (!success) {
-                    if (storage.exists(deletePath)) {
-                      throw new HoodieIOException("Failed to delete invalid data file: " + deletePath);
-                    } else {
-                      LOG.debug("Already delete invalid data file: " + deletePath);
-                    }
-                  }
-                } catch (IOException e) {
-                  throw new HoodieIOException(e.getMessage(), e);
-                }
-                return null;
-              });
-          retryHelper.start();
+          try {
+            storage.deleteFile(new StoragePath(partitionFilePair.getValue()));
+          } catch (IOException e) {
+            throw new HoodieIOException(e.getMessage(), e);
+          }
           return true;
         }, config.getFinalizeWriteParallelism());
   }
