@@ -23,8 +23,8 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -90,6 +90,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
     setTableName("hoodie_test")
     initMetaClient()
+    metaClientReloaded = false
 
     instantTime = new AtomicInteger(1)
 
@@ -103,7 +104,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
-    val lastInsant = String.format("%03d", new Integer(instantTime.incrementAndGet()))
+    val lastInsant = HoodieInstantTimeGenerator.getLastInstantTime
     if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
@@ -139,7 +140,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
-    val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
+    val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
     assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
@@ -150,7 +151,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
-    val lastInstant = getHoodieTable(metaClient, writeConfig).getCompletedCommitsTimeline.lastInstant().get()
+    val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
@@ -207,15 +208,17 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       .save(basePath)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
-    if (validate) {
-      validateDataAndRecordIndices(hudiOpts, deletedDf)
-    }
     if (!metaClientReloaded) {
       // initialization of meta client is required again after writing data so that
       // latest table configs are picked up
       metaClient = HoodieTableMetaClient.reload(metaClient)
       metaClientReloaded = true
     }
+
+    if (validate) {
+      validateDataAndRecordIndices(hudiOpts, deletedDf)
+    }
+
     deletedDf.unpersist()
     latestBatchDf
   }

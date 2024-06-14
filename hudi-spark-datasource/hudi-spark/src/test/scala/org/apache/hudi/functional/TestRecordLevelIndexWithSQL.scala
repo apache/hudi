@@ -43,14 +43,16 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
 
-    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+    val df = doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite,
       validate = false)
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
-      validate = false)
+      validate = false,
+      numUpdates = df.collect().length,
+      onlyUpdates = true)
 
     createTempTable(hudiOpts)
     verifyInQuery(hudiOpts)
@@ -65,7 +67,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
     // when no data filter is applied
     assertEquals(getLatestDataFilesCount(commonOpts), fileIndex.listFiles(Seq.empty, Seq.empty).flatMap(s => s.files).size)
-    assertEquals(6, spark.sql("select * from " + sqlTempTable).count())
+    assertEquals(5, spark.sql("select * from " + sqlTempTable).count())
 
     // non existing entries in EqualTo query
     var dataFilter: Expression = EqualTo(attribute("_row_key"), Literal("xyz"))
@@ -84,7 +86,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
     // not supported OR query
     dataFilter = Or(EqualTo(attribute("_row_key"), Literal(reckey(0))), GreaterThanOrEqual(attribute("timestamp"), Literal(0)))
-    assertEquals(6, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    assertEquals(5, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
     assertTrue(fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size >= 3)
   }
 
@@ -92,7 +94,8 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val reckey = mergedDfList.last.limit(1).collect().map(row => row.getAs("_row_key").toString)
     val dataFilter = EqualTo(attribute("_row_key"), Literal(reckey(0)))
     assertEquals(1, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
-    verifyPruningFileCount(hudiOpts, dataFilter, 1)
+    val numFiles = if (isTableMOR()) 2 else 1
+    verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
   }
 
   def verifyInQuery(hudiOpts: Map[String, String]): Unit = {
@@ -102,10 +105,12 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     var numFiles = if (isTableMOR()) 2 else 1
     verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
 
-    reckey = mergedDfList.last.limit(2).collect().map(row => row.getAs("_row_key").toString)
+    val partitions = Seq("2015/03/16", "2015/03/17")
+    reckey = mergedDfList.last.collect().filter(row => partitions.contains(row.getAs("partition").toString))
+      .map(row => row.getAs("_row_key").toString)
     dataFilter = In(attribute("_row_key"), reckey.map(l => literal(l)).toList)
-    assertEquals(2, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
-    numFiles = if (isTableMOR()) 2 else 2
+    assertEquals(reckey.length, spark.sql("select * from " + sqlTempTable + " where " + dataFilter.sql).count())
+    numFiles = if (isTableMOR()) 4 else 2
     verifyPruningFileCount(hudiOpts, dataFilter, numFiles)
   }
 
@@ -125,7 +130,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
     assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
-    assertEquals(filteredFilesCount, numFiles)
+    assertEquals(numFiles, filteredFilesCount)
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
