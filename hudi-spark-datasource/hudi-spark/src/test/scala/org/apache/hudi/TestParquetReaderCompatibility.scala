@@ -212,9 +212,9 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
       }
     }
     val expectedSorted = expectedRecords.sorted
-    val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().sorted
+    val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().toSeq.sorted
     assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
-    assert(readRecords.sameElements(expectedSorted), s"Expected $expectedSorted, got ${readRecords.mkString("Array(", ", ", ")")}")
+    assert(readRecords == expectedSorted, s"Expected $expectedSorted, got $readRecords")
   }
 
   private def getListLevelsFromPath(spark: SparkSession, path: String): Set[ParquetListType] = {
