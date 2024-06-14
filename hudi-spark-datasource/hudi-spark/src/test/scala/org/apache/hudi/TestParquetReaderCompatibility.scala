@@ -223,6 +223,7 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val baseTableMetadata = new HoodieBackedTableMetadata(
       engineContext, HoodieTestUtils.getDefaultStorage, metadataConfig, s"$path", false)
     val fileStatuses = baseTableMetadata.getAllFilesInPartitions(Collections.singletonList(s"$path/$defaultPartition"))
+
     fileStatuses.asScala.flatMap(_._2.asScala).map(_.getPath).map(path => getListType(spark.sparkContext.hadoopConfiguration, path)).toSet
   }
 
