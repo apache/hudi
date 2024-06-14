@@ -214,7 +214,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     try {
       List<String> fullPartitionPaths = partitionPaths.stream()
           .map(partitionPath ->
-              String.format("%s/%s", hoodieTable.getMetaClient().getBasePathV2(), partitionPath))
+              String.format("%s/%s", hoodieTable.getMetaClient().getBasePath(), partitionPath))
           .collect(Collectors.toList());
 
       List<StoragePathInfo> allFiles =

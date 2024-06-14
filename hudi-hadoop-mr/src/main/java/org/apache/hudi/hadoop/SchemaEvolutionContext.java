@@ -108,7 +108,7 @@ public class SchemaEvolutionContext {
       this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
     } catch (Exception e) {
       internalSchemaOption = Option.empty();
-      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePathV2()), e);
+      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePath()), e);
     }
     LOG.info(String.format("finish init schema evolution for split: %s", split));
   }

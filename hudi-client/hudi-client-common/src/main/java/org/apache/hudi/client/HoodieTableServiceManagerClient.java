@@ -82,7 +82,7 @@ public class HoodieTableServiceManagerClient {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableServiceManagerClient.class);
 
   public HoodieTableServiceManagerClient(HoodieTableMetaClient metaClient, HoodieTableServiceManagerConfig config) {
-    this.basePath = metaClient.getBasePathV2().toString();
+    this.basePath = metaClient.getBasePath().toString();
     this.dbName = metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
     this.uri = config.getTableServiceManagerURIs();
