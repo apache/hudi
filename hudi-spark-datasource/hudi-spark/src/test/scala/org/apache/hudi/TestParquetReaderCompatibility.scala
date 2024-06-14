@@ -67,12 +67,21 @@ object TestParquetReaderCompatibility {
      itemsNullability: NullabilityEnum.Nullability
   )
 
+  // Here scenarios of rewriting 3 level list to 2 level list with NULLs inside are omitted, because
+  // Spark allows NULLs inside lists only for 3 level lists.
+  // Scenarios with having list value NULL are present since it's allowed in both 2 and 3 levels.
   val testScenarios = Seq(
     TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
+    // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
+    // which are not updated in the incoming batch are set to null.
     TestScenario(initialLevel = TwoLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
+    // This scenario leads to exception mentioned here https://github.com/apache/hudi/pull/11450 - the only difference with silent dataloss
+    // is that writer does not allow wrongly-read null to be written into new file, so write fails.
     TestScenario(initialLevel = TwoLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
+    // This is reverse version of scenario TwoLevel -> ThreeLevel with nullable list value - leads to silent data loss.
     TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
+    // This is reverse version of scenario TwoLevel -> ThreeLevel with not nullable list value - leads to exception.
     TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
     TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = ThreeLevel, itemsNullability = NotNullable),
@@ -88,14 +97,18 @@ object TestParquetReaderCompatibility {
  * different list levels can interoperate.
  **/
 class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
+  /*
+  * Generate schema with required nullability constraints.
+  * The interesting part is that if list is the last element in the schema - different errors will be thrown.
+  **/
   private def getSchemaWithParameters(listNullability: Nullability, listElementNullability: Nullability): StructType = {
     val listNullable = listNullability == Nullable
     val listElementsNullable = listElementNullability == Nullable
     val schema = StructType(Array(
       StructField("key", LongType, false),
       StructField("partition", StringType, false),
-      StructField("ts", LongType, false),
       StructField(TestParquetReaderCompatibility.listFieldName, ArrayType(LongType, listElementsNullable), listNullable),
+      StructField("ts", LongType, false),
     ))
     schema
   }
@@ -107,17 +120,17 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
     val res = mutable.Map[Long, Row]()
     var key = 1L
     for (_ <- 1 to dummyCount) {
-      res += key -> Row(key, defaultPartition, combineValue, Seq.empty[Long])
+      res += key -> Row(key, defaultPartition, Seq(100L), combineValue)
       key += 1
     }
-    res += key -> Row(key, defaultPartition, combineValue, Seq(1L, 2L))
+    res += key -> Row(key, defaultPartition, Seq(1L, 2L), combineValue)
     key += 1
     if (listNullable) {
-      res += key -> Row(key, defaultPartition, combineValue, null)
+      res += key -> Row(key, defaultPartition, null, combineValue)
       key += 1
     }
     if (listElementsNullable) {
-      res += key -> Row(key, defaultPartition, combineValue, Seq(1L, null))
+      res += key -> Row(key, defaultPartition, Seq(1L, null), combineValue)
       key += 1
     }
     res.toMap
@@ -188,9 +201,10 @@ class TestParquetReaderCompatibility extends HoodieSparkWriterTestBase {
         firstId.compareTo(secondId)
       }
     }
-    val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect()
-    assert(readRecords.length == expectedRecords.length, s"Expected ${expectedRecords.length} records, got ${readRecords.length}")
-    assert(readRecords.sorted.sameElements(expectedRecords.sorted), s"Expected ${expectedRecords}, got ${readRecords}")
+    val expectedSorted = expectedRecords.sorted
+    val readRecords = dropMetaFields(sparkSession.read.format("hudi").load(path)).collect().sorted
+    assert(readRecords.length == expectedSorted.length, s"Expected ${expectedSorted.length} records, got ${readRecords.length}")
+    assert(readRecords.sameElements(expectedSorted), s"Expected ${expectedSorted}, got ${readRecords.mkString("Array(", ", ", ")")}")
   }
 
   private def getListLevelsFromPath(spark: SparkSession, path: String): Set[ParquetListType] = {
