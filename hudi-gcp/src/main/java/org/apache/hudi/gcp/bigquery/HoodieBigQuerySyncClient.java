@@ -316,12 +316,15 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     // remove trailing slash
     basePathInTableDefinition = org.apache.commons.lang3.StringUtils.stripEnd(basePathInTableDefinition, "/");
     basePath = org.apache.commons.lang3.StringUtils.stripEnd(basePath, "/");
-    boolean isTableBasePathOutdated = !basePathInTableDefinition.equals(basePath);
+    if (!basePathInTableDefinition.equals(basePath)) {
+      // if table base path is outdated
+      return true;
+    }
     if (!StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID))) {
       // If bigLakeConnectionId is present and connectionId is not present in table definition, we need to replace the table.
-      return manifestDoesNotExist || isTableBasePathOutdated || externalTableDefinition.getConnectionId() == null;
+      return manifestDoesNotExist || externalTableDefinition.getConnectionId() == null;
     }
-    return manifestDoesNotExist || isTableBasePathOutdated;
+    return manifestDoesNotExist;
   }
 
   @Override
