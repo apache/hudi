@@ -88,7 +88,7 @@ object TestParquetReaderCompatibility {
   /**
    * Here we are generating all possible combinations of settings, including default.
    **/
-  def allPossibleCombinations: java.util.stream.Stream[TestScenario] = {
+  def allPossibleCombinations: Seq[TestScenario] = {
     val allPossibleCombinations = for (
       initialLevel <- cases;
       listNullability <- NullabilityEnum.values.toSeq;
@@ -101,13 +101,13 @@ object TestParquetReaderCompatibility {
         // It's not allowed to have NULLs inside lists for 2 level lists(this matches explicit setting or default).
         !(c.itemsNullability == Nullable && (notAllowedNulls.contains(c.targetLevel) || notAllowedNulls.contains(c.initialLevel)))
       }
-    }.asJava.stream()
+    }
   }
 
   /**
    * Predefined scenarios which fail/lead to dataloss without the fix.
    **/
-  def selectedCombinations: java.util.stream.Stream[TestScenario] = {
+  def selectedCombinations: Seq[TestScenario] = {
     Seq(
         // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
         // which are not updated in the incoming batch are set to null.
@@ -119,12 +119,15 @@ object TestParquetReaderCompatibility {
         TestScenario(initialLevel = ThreeLevel, listNullability = Nullable, targetLevel = TwoLevel, itemsNullability = NotNullable),
         // This is reverse version of scenario TwoLevel -> ThreeLevel with not nullable list value - leads to exception.
         TestScenario(initialLevel = ThreeLevel, listNullability = NotNullable, targetLevel = TwoLevel, itemsNullability = NotNullable)
-    ).asJava.stream()
+    )
   }
-  def testSource: java.util.stream.Stream[TestScenario] = if(runAllPossible) {
-    allPossibleCombinations
-  } else {
-    selectedCombinations
+  def testSource: java.util.stream.Stream[TestScenario] = {
+    val scenarios = if(runAllPossible) {
+      allPossibleCombinations
+    } else {
+      selectedCombinations
+    }
+    scenarios.asJava.stream()
   }
 
   /**
