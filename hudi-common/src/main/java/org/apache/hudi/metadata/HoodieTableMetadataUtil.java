@@ -316,7 +316,7 @@ public class HoodieTableMetadataUtil {
    * @param context       - instance of {@link HoodieEngineContext}
    * @param partitionPath - Partition path of the partition to delete
    */
-  public static void deleteMetadataPartition(String basePath, HoodieEngineContext context, String partitionPath) {
+  public static void deleteMetadataPartition(StoragePath basePath, HoodieEngineContext context, String partitionPath) {
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath).setConf(context.getStorageConf().newInstance()).build();
     deleteMetadataTablePartition(dataMetaClient, context, partitionPath, false);
@@ -336,6 +336,10 @@ public class HoodieTableMetadataUtil {
     } catch (Exception e) {
       throw new HoodieIOException(String.format("Failed to check metadata partition %s exists.", partitionPath));
     }
+  }
+
+  public static boolean metadataPartitionExists(StoragePath basePath, HoodieEngineContext context, String partitionPath) {
+    return metadataPartitionExists(basePath.toString(), context, partitionPath);
   }
 
   /**
@@ -521,7 +525,7 @@ public class HoodieTableMetadataUtil {
         return Collections.emptyListIterator();
       }
 
-      final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
+      final StoragePath writeFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
       try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(dataMetaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO).getFileReader(hoodieConfig, writeFilePath)) {
         try {
@@ -908,7 +912,7 @@ public class HoodieTableMetadataUtil {
       ByteBuffer bloomFilterBuffer = ByteBuffer.allocate(0);
       if (!isDeleted) {
         final String pathWithPartition = partitionName + "/" + filename;
-        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePathV2(), pathWithPartition);
+        final StoragePath addedFilePath = new StoragePath(dataMetaClient.getBasePath(), pathWithPartition);
         bloomFilterBuffer = readBloomFilter(dataMetaClient.getStorage(), addedFilePath);
 
         // If reading the bloom filter failed then do not add a record for this file
@@ -1217,7 +1221,7 @@ public class HoodieTableMetadataUtil {
                                                                                          List<String> columnsToIndex) {
     try {
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePathV2(), filePath);
+        StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), filePath);
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
@@ -1276,7 +1280,7 @@ public class HoodieTableMetadataUtil {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
       return Option.of(schemaResolver.getTableAvroSchema());
     } catch (Exception e) {
-      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePathV2(), e);
+      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
   }
 
@@ -1481,7 +1485,7 @@ public class HoodieTableMetadataUtil {
    */
   public static String deleteMetadataTable(HoodieTableMetaClient dataMetaClient, HoodieEngineContext context, boolean backup) {
     final StoragePath metadataTablePath =
-        HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2());
+        HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath());
     HoodieStorage storage = dataMetaClient.getStorage();
     dataMetaClient.getTableConfig().clearMetadataPartitions(dataMetaClient);
     try {
@@ -1536,7 +1540,7 @@ public class HoodieTableMetadataUtil {
       return deleteMetadataTable(dataMetaClient, context, backup);
     }
 
-    final StoragePath metadataTablePartitionPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePathV2()), partitionPath);
+    final StoragePath metadataTablePartitionPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(dataMetaClient.getBasePath()), partitionPath);
     HoodieStorage storage = dataMetaClient.getStorage();
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
     try {
@@ -1752,7 +1756,7 @@ public class HoodieTableMetadataUtil {
                                                                      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs,
                                                                      boolean forDelete,
                                                                      int recordIndexMaxParallelism,
-                                                                     String basePath,
+                                                                     StoragePath basePath,
                                                                      StorageConfiguration<?> configuration,
                                                                      String activeModule) {
     if (partitionBaseFilePairs.isEmpty()) {
@@ -1791,7 +1795,7 @@ public class HoodieTableMetadataUtil {
 
     engineContext.setJobStatus(activeModule, "Record Index: reading record keys from " + partitionFileSlicePairs.size() + " file slices");
     final int parallelism = Math.min(partitionFileSlicePairs.size(), recordIndexMaxParallelism);
-    final String basePath = metaClient.getBasePathV2().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
@@ -1815,7 +1819,7 @@ public class HoodieTableMetadataUtil {
             .withBitCaskDiskMapCompressionEnabled(storageConf.getBoolean(
                 DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
             .withRecordMerger(HoodieRecordUtils.createRecordMerger(
-                metaClient.getBasePathV2().toString(),
+                metaClient.getBasePath().toString(),
                 engineType,
                 Collections.emptyList(), // TODO: support different merger classes, which is currently only known to write config
                 metaClient.getTableConfig().getRecordMergerStrategy()))
@@ -1853,12 +1857,12 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(partitionFiles.size(), secondaryIndexMaxParallelism);
-    final String basePath = metaClient.getBasePathV2().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     Schema tableSchema;
     try {
       tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
     }
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFiles.size() + " partitions");
@@ -1890,12 +1894,12 @@ public class HoodieTableMetadataUtil {
       return engineContext.emptyHoodieData();
     }
     final int parallelism = Math.min(partitionFileSlicePairs.size(), secondaryIndexMaxParallelism);
-    final String basePath = metaClient.getBasePathV2().toString();
+    final StoragePath basePath = metaClient.getBasePath();
     Schema tableSchema;
     try {
       tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
     } catch (Exception e) {
-      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePathV2(), e);
+      throw new HoodieException("Failed to get latest schema for " + metaClient.getBasePath(), e);
     }
 
     engineContext.setJobStatus(activeModule, "Secondary Index: reading secondary keys from " + partitionFileSlicePairs.size() + " file slices");
@@ -1921,7 +1925,7 @@ public class HoodieTableMetadataUtil {
                                                                               Schema tableSchema, String partition,
                                                                               Option<StoragePath> dataFilePath,
                                                                               HoodieIndexDefinition indexDefinition) throws Exception {
-    final String basePath = metaClient.getBasePathV2().toString();
+    final String basePath = metaClient.getBasePath().toString();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
 
     HoodieRecordMerger recordMerger = HoodieRecordUtils.createRecordMerger(
@@ -1985,7 +1989,7 @@ public class HoodieTableMetadataUtil {
     };
   }
 
-  private static StoragePath filePath(String basePath, String partition, String filename) {
+  private static StoragePath filePath(StoragePath basePath, String partition, String filename) {
     if (partition.isEmpty()) {
       return new StoragePath(basePath, filename);
     } else {

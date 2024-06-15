@@ -74,7 +74,7 @@ public abstract class HoodieReaderContext<T> {
   }
 
   public StoragePath getTablePath() {
-    return metaClient.getBasePathV2();
+    return metaClient.getBasePath();
   }
 
   public HoodieTableMetaClient getMetaClient() {

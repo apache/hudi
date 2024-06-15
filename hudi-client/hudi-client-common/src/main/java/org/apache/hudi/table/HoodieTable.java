@@ -746,7 +746,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
-      String basePath = getMetaClient().getBasePath();
+      String basePath = getMetaClient().getBasePath().toString();
       WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {

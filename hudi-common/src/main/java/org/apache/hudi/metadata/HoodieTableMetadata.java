@@ -117,6 +117,10 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
+  static boolean isMetadataTable(StoragePath basePath) {
+    return isMetadataTable(basePath.toString());
+  }
+
   static HoodieTableMetadata create(HoodieEngineContext engineContext,
                                     HoodieStorage storage,
                                     HoodieMetadataConfig metadataConfig,
