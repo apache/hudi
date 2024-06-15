@@ -104,6 +104,9 @@ object TestParquetReaderCompatibility {
     }.asJava.stream()
   }
 
+  /**
+   * Predefined scenarios which fail/lead to dataloss without the fix.
+   **/
   def selectedCombinations: java.util.stream.Stream[TestScenario] = {
     Seq(
         // This scenario leads to silent dataloss mentioned here - https://github.com/apache/hudi/pull/11450 - basically all arrays
