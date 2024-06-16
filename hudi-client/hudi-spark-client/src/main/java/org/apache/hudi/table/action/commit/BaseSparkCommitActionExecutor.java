@@ -157,7 +157,10 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
     // Handle records update with clustering
     HoodieData<HoodieRecord<T>> inputRecordsWithClusteringUpdate = clusteringHandleUpdate(inputRecords);
-
+    if (config.getBuildWorkloadParallelism() > 0) {
+      inputRecordsWithClusteringUpdate = inputRecordsWithClusteringUpdate.repartition(config.getBuildWorkloadParallelism());
+    }
+    
     context.setJobStatus(this.getClass().getSimpleName(), "Building workload profile:" + config.getTableName());
     HoodieTimer sourceReadAndIndexTimer = HoodieTimer.start(); // time taken from dedup -> tag location -> building workload profile
     WorkloadProfile workloadProfile =
