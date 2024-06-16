@@ -1429,7 +1429,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public int getBuildWorkloadParallelism() {
-    return getInt(BUILD_WORKLOAD_PARALLELISM_VALUE);
+    return getIntOrDefault(BUILD_WORKLOAD_PARALLELISM_VALUE);
   }
 
   public boolean isTimelineServerBasedInstantStateEnabled() {
