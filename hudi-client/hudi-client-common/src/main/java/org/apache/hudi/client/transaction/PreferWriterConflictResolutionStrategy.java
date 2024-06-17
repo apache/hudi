@@ -104,7 +104,7 @@ public class PreferWriterConflictResolutionStrategy
 
     // Merge and sort the instants and return.
     List<HoodieInstant> instantsToConsider = Stream.concat(completedCommitsStream, inflightIngestionCommitsStream)
-        .sorted(Comparator.comparing(o -> o.getStateTransitionTime()))
+        .sorted(Comparator.comparing(o -> o.getCompletionTime()))
         .collect(Collectors.toList());
     LOG.info(String.format("Instants that may have conflict with %s are %s", currentInstant, instantsToConsider));
     return instantsToConsider.stream();

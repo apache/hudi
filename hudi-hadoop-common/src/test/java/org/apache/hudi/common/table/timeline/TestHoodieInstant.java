@@ -73,7 +73,7 @@ public class TestHoodieInstant extends HoodieCommonTestHarness {
 
       // Make sure StateTransitionTime is set in the timeline
       assertEquals(0,
-          timeline.getInstantsAsStream().filter(s -> s.getStateTransitionTime().isEmpty()).count());
+          timeline.getInstantsAsStream().filter(s -> s.getCompletionTime().isEmpty()).count());
     } finally {
       cleanMetaClient();
     }

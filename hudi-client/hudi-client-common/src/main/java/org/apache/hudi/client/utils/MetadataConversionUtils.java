@@ -56,7 +56,7 @@ public class MetadataConversionUtils {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.CLEAN_ACTION: {
         if (hoodieInstant.isCompleted()) {
@@ -141,7 +141,7 @@ public class MetadataConversionUtils {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.CLEAN_ACTION: {
         archivedMetaWrapper.setActionType(ActionType.clean.name());

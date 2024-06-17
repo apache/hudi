@@ -93,7 +93,7 @@ class TestIncrementalReadByStateTransitionTime extends HoodieSparkClientTestBase
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), "000")
       .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), USE_TRANSITION_TIME.name())
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), firstInstant.getStateTransitionTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key(), firstInstant.getCompletionTime)
       .load(basePath)
       .count()
     Assertions.assertEquals(result2, 100)
