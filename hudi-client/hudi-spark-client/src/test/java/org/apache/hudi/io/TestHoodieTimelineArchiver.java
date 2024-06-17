@@ -1282,8 +1282,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
   }
 
-  @Test
-  public void testArchiveTableWithCleanerEarliestArchivalTime() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testArchiveTableWithCleanerEarliestArchivalTime(boolean cleanIsMissingExtraMetadata) throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 4, 5, 2);
 
     // min archival commits is 4 and max archival commits is 5
@@ -1305,7 +1306,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           // 1 and 2 should be archived.
           commitToNotArchive = "00000010";
         }
-        testTable.doClean(String.format("%08d", i), cleanStats, Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, commitToNotArchive));
+        testTable.doClean(String.format("%08d", i), cleanStats, cleanIsMissingExtraMetadata
+            ? null
+            : Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, commitToNotArchive));
       }
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);
@@ -1314,6 +1317,12 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       if (i <= 6) {
         assertEquals(originalCommits, commitsAfterArchival);
       } else if (i < 15) {
+        if (cleanIsMissingExtraMetadata) {
+          //just want to test that archival still works for legacy tables without extraMetadata field
+          //confirm that archival worked, and we can pass this test
+          assertTrue(commitsAfterArchival.size() < originalCommits.size());
+          return;
+        }
         // clean instants have not been archived yet, only two commits have been archived since
         // EARLIEST_COMMIT_TO_NOT_ARCHIVE is set as 3
         assertEquals(i - 2, commitsAfterArchival.size(), commitsAfterArchival.toString());

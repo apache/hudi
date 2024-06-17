@@ -514,11 +514,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
       if (cleanInstantOpt.isPresent()) {
         HoodieInstant cleanInstant = cleanInstantOpt.get();
-        String cleanerEarliestInstantToNotArchive = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+        Map<String, String> extraMetadata = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
                 ? cleanInstant
                 : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
-            .getExtraMetadata().getOrDefault(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
-        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+            .getExtraMetadata();
+        if (extraMetadata != null) {
+          String cleanerEarliestInstantToNotArchive = extraMetadata.getOrDefault(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
+          earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+        }
       }
     }
     return Option.ofNullable(earliestInstantToNotArchive);
