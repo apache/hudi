@@ -116,7 +116,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
       InternalSchema.getEmptyInternalSchema
     } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient, hoodieTable.getConfig.getInternalSchemaCacheEnable)
+      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
     }
