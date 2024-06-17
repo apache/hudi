@@ -6,6 +6,10 @@ toc: true
 last_modified_at: 2022-12-27T15:59:57-04:00
 ---
 
+### Release 1.0.0-beta2
+* Source Release : [Apache Hudi 1.0.0-beta2 Source Release](TODO: add link) ([asc](TODO: add link), [sha512](TODO: add link))
+* Release Note : ([Release Note for Apache Hudi 1.0.0-beta2](/releases/release-1.0.0-beta2))
+
 ### Release 0.15.0
 * Source Release : [Apache Hudi 0.15.0 Source Release](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz) ([asc](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/0.15.0/hudi-0.15.0.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 0.15.0](/releases/release-0.15.0))
@@ -16,7 +20,7 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 
 ### Release 1.0.0-beta1
 * Source Release : [Apache Hudi 1.0.0-beta1 Source Release](https://www.apache.org/dyn/closer.lua/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta1/hudi-1.0.0-beta1.src.tgz.sha512))
-* Release Note : ([Release Note for Apache Hudi 0.14.0](/releases/release-1.0.0-beta1))
+* Release Note : ([Release Note for Apache Hudi 1.0.0-beta1](/releases/release-1.0.0-beta1))
 
 ### Release 0.12.3
 [Long Term Support](/releases/release-0.12.3#long-term-support): this is the latest stable release
