@@ -71,8 +71,8 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
                                                   Option<String> partitionNameOverrideOpt,
                                                   Option<String[]> partitionPathFieldOpt,
                                                   HoodieRecordMerger recordMerger,
-                                                  TypedProperties payloadProps) {
-    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, payloadProps);
+                                                  TypedProperties props) {
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, props);
   }
 
   @Override

@@ -70,7 +70,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String[]> partitionPathFieldOpt;
   protected final RecordMergeMode recordMergeMode;
   protected final HoodieRecordMerger recordMerger;
-  protected final TypedProperties payloadProps;
+  protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
   protected ClosableIterator<T> baseFileIterator;
   protected Iterator<Pair<Option<T>, Map<String, Object>>> logRecordIterator;
@@ -84,25 +84,25 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
                                          HoodieRecordMerger recordMerger,
-                                         TypedProperties payloadProps) {
+                                         TypedProperties props) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
-    this.recordMergeMode = getRecordMergeMode(payloadProps);
+    this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = recordMerger;
     //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
     if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
       throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
     }
-    this.payloadProps = payloadProps;
+    this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
-    long maxMemorySizeInBytes = payloadProps.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
-    String spillableMapBasePath = payloadProps.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
-    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(payloadProps.getString(SPILLABLE_DISK_MAP_TYPE.key(),
+    long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
+    String spillableMapBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
+    ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(props.getString(SPILLABLE_DISK_MAP_TYPE.key(),
         SPILLABLE_DISK_MAP_TYPE.defaultValue().name()).toUpperCase(Locale.ROOT));
-    boolean isBitCaskDiskMapCompressionEnabled = payloadProps.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
+    boolean isBitCaskDiskMapCompressionEnabled = props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue());
     try {
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
@@ -221,7 +221,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                 existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
             (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
             readerSchema,
-            payloadProps);
+            props);
         if (!combinedRecordAndSchemaOpt.isPresent()) {
           return Option.empty();
         }
@@ -241,12 +241,12 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             return Option.empty();
           case EVENT_TIME_ORDERING:
             Comparable existingOrderingValue = readerContext.getOrderingValue(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema, payloadProps);
+                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema, props);
             if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingValue)) {
               return Option.empty();
             }
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
-                Option.of(record), metadata, readerSchema, payloadProps);
+                Option.of(record), metadata, readerSchema, props);
             if (compareTo(readerContext, incomingOrderingValue, existingOrderingValue) > 0) {
               return Option.of(Pair.of(record, metadata));
             }
@@ -262,7 +262,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                 readerContext.constructHoodieRecord(
                     existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight()),
                 (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-                payloadProps);
+                props);
 
             if (!combinedRecordAndSchemaOpt.isPresent()) {
               return Option.empty();
@@ -305,7 +305,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         default:
           Comparable existingOrderingVal = readerContext.getOrderingValue(
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-              payloadProps);
+              props);
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
@@ -392,10 +392,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.partialMerge(
           readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA),
-          readerSchema, payloadProps);
+          readerSchema, props);
 
       if (mergedRecord.isPresent()
-          && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), payloadProps)) {
+          && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
         if (!mergedRecord.get().getRight().equals(readerSchema)) {
           return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
         }
@@ -408,12 +408,12 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return newer;
         case EVENT_TIME_ORDERING:
           Comparable oldOrderingValue = readerContext.getOrderingValue(
-              older, olderInfoMap, readerSchema, payloadProps);
+              older, olderInfoMap, readerSchema, props);
           if (isDeleteRecordWithNaturalOrder(older, oldOrderingValue)) {
             return newer;
           }
           Comparable newOrderingValue = readerContext.getOrderingValue(
-              newer, newerInfoMap, readerSchema, payloadProps);
+              newer, newerInfoMap, readerSchema, props);
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
@@ -425,10 +425,10 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         default:
           Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
               readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
-              readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), payloadProps);
+              readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
 
           if (mergedRecord.isPresent()
-              && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), payloadProps)) {
+              && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
             if (!mergedRecord.get().getRight().equals(readerSchema)) {
               return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
             }
