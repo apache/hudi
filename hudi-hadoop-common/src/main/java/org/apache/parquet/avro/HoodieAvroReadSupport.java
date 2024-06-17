@@ -65,7 +65,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
    * Later the config value {@link AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE} will still be used
    * to write new file according to the user preferences.
    **/
-  private void adjustConfToReadWithFileProduceMode(Boolean isLegacyModeWrittenFile, Configuration configuration) {
+  private void adjustConfToReadWithFileProduceMode(boolean isLegacyModeWrittenFile, Configuration configuration) {
     if (isLegacyModeWrittenFile) {
       configuration.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE,
           "true", "support reading avro from legacy map/list in parquet file");
