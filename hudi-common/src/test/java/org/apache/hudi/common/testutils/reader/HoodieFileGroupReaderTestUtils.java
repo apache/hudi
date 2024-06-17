@@ -105,7 +105,6 @@ public class HoodieFileGroupReaderTestUtils {
       return new HoodieFileGroupReader<>(
           readerContext,
           storage,
-          basePath,
           latestCommitTime,
           fileSlice,
           schema,
