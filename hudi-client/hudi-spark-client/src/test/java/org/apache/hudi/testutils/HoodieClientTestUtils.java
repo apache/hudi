@@ -100,6 +100,7 @@ public class HoodieClientTestUtils {
         .set("spark.sql.shuffle.partitions", "4")
         .set("spark.default.parallelism", "4");
 
+
     // NOTE: This utility is used in modules where this class might not be present, therefore
     //       to avoid littering output w/ [[ClassNotFoundException]]s we will skip adding it
     //       in case this utility is used in the module not providing it
