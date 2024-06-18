@@ -218,3 +218,6 @@ c5dc593b3 [ENG-10330][INTERNAL] Fixing clustering to avoid repeated rdd trigger 
 34ae0ffce [ENG-10230][HUDI-7826] Make column nullable when setNullForMissingColumns is true (#758)
 5b69b06e3 [ENG-9200][HUDI-7855] Add ability to configure bulk insert write parallelism (#714)
 330d3eb0b [AUDIT-815]: Upgrade to version release-v1.18.1 (#751)
+
+---[2024-06-18 12:04:14] [release-v1.20.0] ---
+
