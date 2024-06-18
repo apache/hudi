@@ -262,6 +262,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         }
       } else if (type == METADATA_TYPE_RECORD_INDEX) {
         GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
+        Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_POSITION);
         recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
@@ -269,7 +270,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
-            Long.parseLong(recordIndexRecord.get(RECORD_INDEX_POSITION).toString()));
+            recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
       } else if (type == METADATA_TYPE_SECONDARY_INDEX) {
         GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
         checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + METADATA_TYPE_SECONDARY_INDEX);
