@@ -225,6 +225,7 @@ public class HoodieIncrSource extends RowSource {
               queryInfo.getStartInstant()))
           .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryInfo.getEndInstant()));
+      source = queryInfo.getPredicateFilter().map(source::filter).orElse(source);
     }
 
     HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
@@ -240,11 +241,12 @@ public class HoodieIncrSource extends RowSource {
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
     // Use sourceProfile for adjusting parallelism.
+    Dataset<Row> sourceWithMetaColumnsDropped = source.drop(colsToDrop);
     final Dataset<Row> src = getLatestSourceProfile().map(sourceProfile -> {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(sourceProfile.getMaxSourceBytes()));
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
-      return coalesceOrRepartition(source.drop(colsToDrop), sourceProfile.getSourcePartitions());
-    }).orElse(source.drop(colsToDrop));
+      return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
+    }).orElse(sourceWithMetaColumnsDropped);
     return Pair.of(Option.of(src), queryInfo.getEndInstant());
   }
 

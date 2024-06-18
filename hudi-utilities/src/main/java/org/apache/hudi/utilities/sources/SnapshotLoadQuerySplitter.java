@@ -23,6 +23,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -49,6 +50,27 @@ public abstract class SnapshotLoadQuerySplitter {
   }
 
   /**
+   * Checkpoint returned for the SnapshotLoadQuerySplitter.
+   */
+  public static class CheckpointWithPredicates {
+    String endInstant;
+    String predicateFilter;
+
+    public CheckpointWithPredicates(String endInstant, String predicateFilter) {
+      this.endInstant = endInstant;
+      this.predicateFilter = predicateFilter;
+    }
+
+    public String getEndInstant() {
+      return endInstant;
+    }
+
+    public String getPredicateFilter() {
+      return predicateFilter;
+    }
+  }
+
+  /**
    * Constructor initializing the properties.
    *
    * @param properties Configuration properties for the splitter.
@@ -68,6 +90,15 @@ public abstract class SnapshotLoadQuerySplitter {
   public abstract Option<String> getNextCheckpoint(Dataset<Row> df, String beginCheckpointStr, Option<SourceProfileSupplier> sourceProfileSupplier);
 
   /**
+   * Abstract method to retrieve the next checkpoint with predicates.
+   *
+   * @param df                 The dataset to process.
+   * @param beginCheckpointStr The starting checkpoint string.
+   * @return The next checkpoint with predicates for partitionPath etc. to optimise snapshot query.
+   */
+  public abstract Option<CheckpointWithPredicates> getNextCheckpointWithPredicates(Dataset<Row> df, String beginCheckpointStr);
+
+  /**
    * Retrieves the next checkpoint based on query information and a SourceProfileSupplier.
    *
    * @param df The dataset to process.
@@ -77,8 +108,8 @@ public abstract class SnapshotLoadQuerySplitter {
    * returning endPoint same as queryInfo.getEndInstant().
    */
   public QueryInfo getNextCheckpoint(Dataset<Row> df, QueryInfo queryInfo, Option<SourceProfileSupplier> sourceProfileSupplier) {
-    return getNextCheckpoint(df, queryInfo.getStartInstant(), sourceProfileSupplier)
-        .map(checkpoint -> queryInfo.withUpdatedEndInstant(checkpoint))
+    return getNextCheckpointWithPredicates(df, queryInfo.getStartInstant())
+        .map(queryInfo::withUpdatedCheckpoint)
         .orElse(queryInfo);
   }
 

@@ -78,7 +78,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);
   }
 
-  private static List<BuiltinKeyGenerator> getPartitionKeyGenerators(List<String> partitionPathFields, TypedProperties config) {
+  public static List<BuiltinKeyGenerator> getPartitionKeyGenerators(List<String> partitionPathFields, TypedProperties config) {
     if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
       return Collections.emptyList();
     } else {

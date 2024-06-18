@@ -18,6 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -33,6 +37,7 @@ public class QueryInfo {
   private final String previousInstant;
   private final String startInstant;
   private final String endInstant;
+  private final String predicateFilter;
   private final String orderColumn;
   private final String keyColumn;
   private final String limitColumn;
@@ -43,10 +48,32 @@ public class QueryInfo {
       String startInstant, String endInstant,
       String orderColumn, String keyColumn,
       String limitColumn) {
+    this(
+        queryType,
+        previousInstant,
+        startInstant,
+        endInstant,
+        StringUtils.EMPTY_STRING,
+        orderColumn,
+        keyColumn,
+        limitColumn
+    );
+  }
+
+  public QueryInfo(
+      String queryType,
+      String previousInstant,
+      String startInstant,
+      String endInstant,
+      String predicateFilter,
+      String orderColumn,
+      String keyColumn,
+      String limitColumn) {
     this.queryType = queryType;
     this.previousInstant = previousInstant;
     this.startInstant = startInstant;
     this.endInstant = endInstant;
+    this.predicateFilter = predicateFilter;
     this.orderColumn = orderColumn;
     this.keyColumn = keyColumn;
     this.limitColumn = limitColumn;
@@ -97,12 +124,32 @@ public class QueryInfo {
     return orderByColumns;
   }
 
+  public Option<String> getPredicateFilter() {
+    if (!StringUtils.isNullOrEmpty(predicateFilter)) {
+      return Option.of(predicateFilter);
+    }
+    return Option.empty();
+  }
+
   public QueryInfo withUpdatedEndInstant(String newEndInstant) {
     return new QueryInfo(
         this.queryType,
         this.previousInstant,
         this.startInstant,
         newEndInstant,
+        this.orderColumn,
+        this.keyColumn,
+        this.limitColumn
+    );
+  }
+
+  public QueryInfo withUpdatedCheckpoint(SnapshotLoadQuerySplitter.CheckpointWithPredicates checkpointWithPredicates) {
+    return new QueryInfo(
+        this.queryType,
+        this.previousInstant,
+        this.startInstant,
+        checkpointWithPredicates.getEndInstant(),
+        checkpointWithPredicates.getPredicateFilter(),
         this.orderColumn,
         this.keyColumn,
         this.limitColumn
