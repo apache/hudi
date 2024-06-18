@@ -542,6 +542,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case CreateDataSourceTableCommand(table, ignoreIfExists)
         if sparkAdapter.isHoodieTable(table) =>
         CreateHoodieTableCommand(table, ignoreIfExists)
+      case ShowCreateTableCommand(tableId)
+        if sparkAdapter.isHoodieTable(tableId, sparkSession) =>
+        ShowHoodieCreateTableCommand(tableId)
       case MatchCreateTableLike(targetTable, sourceTable, fileFormat, provider, properties, ifNotExists)
         if sparkAdapter.isHoodieTable(provider.orNull) =>
         CreateHoodieTableLikeCommand(targetTable, sourceTable, fileFormat, properties, ifNotExists)
