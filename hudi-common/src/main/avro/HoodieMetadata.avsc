@@ -432,7 +432,7 @@
                             "name": "position",
                             "type": "long",
                             "default": null,
-                            "doc": "Represents position of record within a file group for easier access"
+                            "doc": "Represents position of record within a file group for easier access. It will be used for index lookup."
                         }
                     ]
                 }
