@@ -88,7 +88,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition) {
 
-    int inputParallelism = HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).getNumPartitions();
+    int inputParallelism = partitionRecordKeyPairs.deduceNumPartitions();
     int configuredBloomIndexParallelism = config.getBloomIndexParallelism();
 
     // NOTE: Target parallelism could be overridden by the config
