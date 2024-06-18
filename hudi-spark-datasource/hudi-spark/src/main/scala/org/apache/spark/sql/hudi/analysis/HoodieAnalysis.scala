@@ -562,6 +562,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if sparkAdapter.isHoodieTable(tableId, sparkSession) =>
           AlterHoodieTableAddColumnsCommand(tableId, colsToAdd)
+      case s: ShowCreateTableCommand
+        if sparkAdapter.isHoodieTable(s.table, sparkSession) =>
+        ShowHoodieCreateTableCommand(s.table)
       // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       case AlterTableRenameCommand(oldName, newName, isView)
         if !isView && sparkAdapter.isHoodieTable(oldName, sparkSession) =>
