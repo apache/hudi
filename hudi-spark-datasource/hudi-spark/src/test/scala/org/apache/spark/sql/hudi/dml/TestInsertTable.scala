@@ -2584,6 +2584,50 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     })
   }
 
+  test(s"Test INSERT INTO with upsert operation type") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        Seq("mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  price int
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               |)
+               |location '${tmp.getCanonicalPath}/$tableName'
+               |""".stripMargin
+          )
+
+          // Test insert into with upsert operation type
+          spark.sql(
+            s"""
+               | insert into $tableName
+               | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
+               | """.stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
+            Seq(6, "a6", 4000, 30)
+          )
+
+          // Test update
+          spark.sql(s"update $tableName set price = price + 1 where id = 6")
+          checkAnswer(s"select id, name, price, ts from $tableName where price > 3000")(
+            Seq(6, "a6", 4001, 30)
+          )
+        }
+      }
+    }
+  }
+
   test("Test Insert Into with extraMetadata") {
     withTempDir { tmp =>
       val tableName = generateTableName
