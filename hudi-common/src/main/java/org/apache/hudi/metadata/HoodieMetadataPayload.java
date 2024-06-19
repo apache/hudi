@@ -156,7 +156,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String RECORD_INDEX_FIELD_FILEID_ENCODING = "fileIdEncoding";
   public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_UUID = 0;
   public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_RAW_STRING = 1;
-  public static final String RECORD_INDEX_POSITION = "position";
+  public static final String RECORD_INDEX_FIELD_POSITION = "position";
 
   /**
    * FileIndex value saved in record index record when the fileId has no index (old format of base filename)
@@ -262,7 +262,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         }
       } else if (type == METADATA_TYPE_RECORD_INDEX) {
         GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
-        Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_POSITION);
+        Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
         recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
