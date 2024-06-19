@@ -287,9 +287,10 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   /**
    * Checks for the existence of a table that uses the manifest file approach and matches other requirements.
    * @param tableName name of the table
-   * @return Returns true if the table does not exist or if the table does exist but does not use the manifest file. False otherwise.
+   * @param basePath current base path of the table
+   * @return Returns true if the table does not exist or if the table does exist but does not use the manifest file or table base path is outdated. False otherwise.
    */
-  public boolean tableNotExistsOrDoesNotMatchSpecification(String tableName) {
+  public boolean tableNotExistsOrDoesNotMatchSpecification(String tableName, String basePath) {
     TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId);
     if (table == null || !table.exists()) {
@@ -299,6 +300,16 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     boolean manifestDoesNotExist =
         externalTableDefinition.getSourceUris() == null
             || externalTableDefinition.getSourceUris().stream().noneMatch(uri -> uri.contains(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
+    String basePathInTableDefinition = externalTableDefinition.getHivePartitioningOptions() == null ? "" :
+        externalTableDefinition.getHivePartitioningOptions().getSourceUriPrefix();
+    // remove trailing slash
+    basePathInTableDefinition = org.apache.commons.lang3.StringUtils.stripEnd(basePathInTableDefinition, "/");
+    basePath = org.apache.commons.lang3.StringUtils.stripEnd(basePath, "/");
+    if (!basePathInTableDefinition.equals(basePath)) {
+      // if table base path is outdated, we need to replace the table.
+      LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
+      return true;
+    }
     if (!StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID))) {
       // If bigLakeConnectionId is present and connectionId is not present in table definition, we need to replace the table.
       return manifestDoesNotExist || externalTableDefinition.getConnectionId() == null;

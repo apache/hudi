@@ -23,15 +23,20 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
+import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.ExternalTableDefinition;
 import com.google.cloud.bigquery.Field;
+import com.google.cloud.bigquery.HivePartitioningOptions;
 import com.google.cloud.bigquery.Job;
 import com.google.cloud.bigquery.JobInfo;
 import com.google.cloud.bigquery.JobStatus;
 import com.google.cloud.bigquery.QueryJobConfiguration;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
+import com.google.cloud.bigquery.Table;
+import com.google.cloud.bigquery.TableId;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,9 +45,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -124,5 +132,36 @@ public class TestHoodieBigQuerySyncClient {
     assertEquals(configuration.getQuery(),
         String.format("CREATE OR REPLACE EXTERNAL TABLE `%s.%s.%s` ( `field` STRING ) OPTIONS (enable_list_inference=true, uris=[\"%s\"], format=\"PARQUET\", "
             + "file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")", PROJECT_ID, TEST_DATASET, TEST_TABLE, MANIFEST_FILE_URI));
+  }
+
+  @Test
+  void testTableNotExistsOrDoesNotMatchSpecification() {
+    BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    // table does not exist
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+
+    TableId tableId = TableId.of(PROJECT_ID, TEST_DATASET, TEST_TABLE);
+    Table table = mock(Table.class);
+    when(mockBigQuery.getTable(tableId)).thenReturn(table);
+
+    ExternalTableDefinition externalTableDefinition = mock(ExternalTableDefinition.class);
+    when(table.exists()).thenReturn(true);
+    when(table.getDefinition()).thenReturn(externalTableDefinition);
+
+    // manifest does not exist
+    when(externalTableDefinition.getSourceUris()).thenReturn(Collections.emptyList());
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+
+    // manifest exists but base path is outdated
+    when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
+    when(externalTableDefinition.getHivePartitioningOptions()).thenReturn(
+        HivePartitioningOptions.newBuilder().setSourceUriPrefix(basePath + "1").build());
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+
+    // manifest exists, base path is up-to-date
+    when(externalTableDefinition.getHivePartitioningOptions()).thenReturn(
+        HivePartitioningOptions.newBuilder().setSourceUriPrefix(basePath + "/").build());
+    assertFalse(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
   }
 }
