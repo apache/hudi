@@ -689,7 +689,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
-              .setFileName(null)
+              .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
               .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
               .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
@@ -713,7 +713,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
                                                                    HoodieMetadataColumnStats newColumnStats) {
-    checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
     // We're handling 2 cases in here
