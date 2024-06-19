@@ -318,6 +318,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     basePath = org.apache.commons.lang3.StringUtils.stripEnd(basePath, "/");
     if (!basePathInTableDefinition.equals(basePath)) {
       // if table base path is outdated, we need to replace the table.
+      LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
       return true;
     }
     if (!StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID))) {
