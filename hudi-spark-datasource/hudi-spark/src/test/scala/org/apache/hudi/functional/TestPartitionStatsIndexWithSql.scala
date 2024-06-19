@@ -28,6 +28,7 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -140,7 +141,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
            |    hoodie.metadata.index.column.stats.column.list = 'rider'
            |)
            |PARTITIONED BY (state)
-           |location '$tablePath';
+           |location '$tablePath'
          """.stripMargin
       )
 
@@ -165,12 +166,13 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       spark.sql("set hoodie.enable.data.skipping=true")
       checkAnswer(s"select uuid, rider, city, state from $tableName where rider > 'rider-D'")(
         Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
-        Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california"),
+        Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
       )
 
-      verifyFilePruning(Map.apply(
-        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-        HoodieMetadataConfig.ENABLE.key -> "true"),
+      verifyFilePruning(
+        Map(
+          DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
+          HoodieMetadataConfig.ENABLE.key -> "true"),
         GreaterThan(AttributeReference("rider", StringType)(), Literal("rider-D")),
         HoodieTableMetaClient.reload(metaClient))
     }
