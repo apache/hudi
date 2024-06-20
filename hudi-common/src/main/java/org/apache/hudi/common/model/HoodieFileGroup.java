@@ -22,20 +22,28 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 
 /**
  * A set of data/base files + set of log files, that make up an unit for all operations.
  */
 public class HoodieFileGroup implements Serializable {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieFileGroup.class);
 
   public static Comparator<String> getReverseCommitTimeComparator() {
     return Comparator.reverseOrder();
@@ -96,7 +104,26 @@ public class HoodieFileGroup implements Serializable {
     if (!fileSlices.containsKey(dataFile.getCommitTime())) {
       fileSlices.put(dataFile.getCommitTime(), new FileSlice(fileGroupId, dataFile.getCommitTime()));
     }
-    fileSlices.get(dataFile.getCommitTime()).setBaseFile(dataFile);
+    FileSlice fileSlice = fileSlices.get(dataFile.getCommitTime());
+    if (fileSlice.getBaseFile().isPresent()) {
+      // Multiple base files are detected for the same slice, use the timeline to determine the proper one or fail if not possible
+      HoodieBaseFile existingBaseFile = fileSlice.getBaseFile().get();
+      LOG.warn("Duplicate base files detected for file group {}: {} and {}", fileGroupId, existingBaseFile.getPath(), dataFile.getPath());
+      Option<HoodieInstant> completedInstant = Option.fromJavaOptional(timeline.getInstants()
+          .stream()
+          .filter(instant -> instant.getTimestamp().equals(dataFile.getCommitTime()) && instant.isCompleted())
+          .findFirst());
+      if (completedInstant.isPresent()) {
+        Option<String> fileAddedOption = getFileAddedForInstant(completedInstant.get());
+        // If the input dataFile does not match the path, then do not add it to the file slice
+        if (fileAddedOption.map(fileAdded ->  !dataFile.getPath().contains(fileAdded)).orElse(false)) {
+          return;
+        }
+      } else {
+        LOG.error("Multiple base files ({}, {}) detected but no active commit present for instant {}", dataFile.getPath(), existingBaseFile.getPath(), dataFile.getCommitTime());
+      }
+    }
+    fileSlice.setBaseFile(dataFile);
   }
 
   /**
@@ -225,5 +252,38 @@ public class HoodieFileGroup implements Serializable {
 
   public HoodieTimeline getTimeline() {
     return timeline;
+  }
+
+  private Option<String> getFileAddedForInstant(HoodieInstant instant) {
+    List<HoodieWriteStat> writeStats;
+    try {
+      switch (instant.getAction()) {
+        case COMMIT_ACTION:
+        case DELTA_COMMIT_ACTION:
+          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+          writeStats = commitMetadata.getWriteStats(fileGroupId.getPartitionPath());
+          break;
+        case REPLACE_COMMIT_ACTION:
+          HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
+              timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+          writeStats = replaceCommitMetadata.getWriteStats(fileGroupId.getPartitionPath());
+          break;
+        default:
+          return Option.empty();
+      }
+      List<String> paths = writeStats.stream()
+          .filter(stat -> stat.getFileId().equals(fileGroupId.getFileId()))
+          .map(HoodieWriteStat::getPath)
+          .collect(Collectors.toList());
+      if (paths.size() != 1) {
+        LOG.error("Multiple files added for the same file group ({}) in a single commit {}", fileGroupId, instant);
+        return Option.empty();
+      }
+      return Option.of(paths.get(0));
+    } catch (Exception ex) {
+      // Catch all exceptions and fail gracefully by falling back to old code path
+      LOG.error("Failed to get files written for {}", instant, ex);
+      return Option.empty();
+    }
   }
 }
