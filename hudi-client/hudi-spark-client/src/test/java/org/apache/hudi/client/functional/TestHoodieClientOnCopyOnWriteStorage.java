@@ -729,7 +729,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
-    JavaRDD<WriteStatus> statuses = insertBatchRecords(client, "005", 1, 1, 1, SparkRDDWriteClient::upsert).getKey();
+    JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
+        insertBatchRecords(client, "005", 1, 1, 1, SparkRDDWriteClient::upsert).getKey();
     fileGroupIds2.removeAll(fileGroupIds1);
     assertEquals(fileGroupIds2.get(0), statuses.collect().get(0).getFileId());
     List<String> firstInsertFileGroupIds4 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
@@ -1012,7 +1013,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
 
     // trigger another commit. this should rollback latest partial commit.
-    JavaRDD<WriteStatus> statuses = insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
+    JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
+        insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
     client.commit(commitTime1, statuses);
     metaClient.reloadActiveTimeline();
     // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
