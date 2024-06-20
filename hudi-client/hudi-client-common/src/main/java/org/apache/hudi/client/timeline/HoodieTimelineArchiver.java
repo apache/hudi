@@ -273,7 +273,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // Step2: We cannot archive any commits which are later than EarliestCommitToNotArchive.
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
-    Option<String> earliestCommitToNotArchive = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
+    Option<String> earliestCommitToNotArchiveOpt = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
 
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
         .filter(s -> {
@@ -281,8 +281,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             // skip savepoint commits and proceed further
             return !savepointTimestamps.contains(s.getTimestamp());
           } else {
+            Option<String> firstSavepointOpt = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+            Option<String> commitToNotArchiveOpt = earliestCommitToNotArchiveOpt;
+            if (firstSavepointOpt.isPresent() && earliestCommitToNotArchiveOpt.isPresent()
+                && compareTimestamps(firstSavepointOpt.get(), LESSER_THAN, earliestCommitToNotArchiveOpt.get())) {
+              LOG.error("earliestCommitToNotArchive {} is greater than first savepoint {}, using first savepoint as the commitToNotArchive",
+                  earliestCommitToNotArchiveOpt.get(), firstSavepointOpt.get());
+              commitToNotArchiveOpt = firstSavepointOpt;
+            }
             // stop at earliest commit to not archive
-            return !(earliestCommitToNotArchive.isPresent() && compareTimestamps(earliestCommitToNotArchive.get(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
+            return !(commitToNotArchiveOpt.isPresent() && compareTimestamps(commitToNotArchiveOpt.get(), LESSER_THAN_OR_EQUALS, s.getTimestamp()));
           }
         }).filter(s -> earliestInstantToRetain
             .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
@@ -374,11 +382,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
       if (cleanInstantOpt.isPresent()) {
         HoodieInstant cleanInstant = cleanInstantOpt.get();
-        String cleanerEarliestInstantToNotArchive = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
-                ? cleanInstant
-                : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
-            .getExtraMetadata().getOrDefault(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, null);
-        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive);
+        Option<String> cleanerEarliestInstantToNotArchive = Option.ofNullable(CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+                    ? cleanInstant
+                    : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
+                .getExtraMetadata())
+            .map(metadata -> metadata.get(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE));
+        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive.orElse(null));
       }
     }
     return Option.ofNullable(earliestInstantToNotArchive);
