@@ -173,7 +173,7 @@ public class TestHoodieBigQuerySyncClient {
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
     client = new HoodieBigQuerySyncClient(config, mockBigQuery);
     // table does not exist
-    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 
     TableId tableId = TableId.of(PROJECT_ID, TEST_DATASET, TEST_TABLE);
     Table table = mock(Table.class);
@@ -185,17 +185,17 @@ public class TestHoodieBigQuerySyncClient {
 
     // manifest does not exist
     when(externalTableDefinition.getSourceUris()).thenReturn(Collections.emptyList());
-    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 
     // manifest exists but base path is outdated
     when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
     when(externalTableDefinition.getHivePartitioningOptions()).thenReturn(
         HivePartitioningOptions.newBuilder().setSourceUriPrefix(basePath + "1").build());
-    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+    assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 
     // manifest exists, base path is up-to-date
     when(externalTableDefinition.getHivePartitioningOptions()).thenReturn(
         HivePartitioningOptions.newBuilder().setSourceUriPrefix(basePath + "/").build());
-    assertFalse(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, basePath));
+    assertFalse(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
   }
 }

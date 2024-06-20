@@ -78,7 +78,7 @@ public class TestBigQuerySyncTool {
     when(mockBqSyncClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     when(mockBqSyncClient.getBasePath()).thenReturn(TEST_TABLE_BASE_PATH);
     when(mockBqSyncClient.datasetExists()).thenReturn(true);
-    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, TEST_TABLE_BASE_PATH)).thenReturn(true);
+    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE)).thenReturn(true);
     Path manifestPath = new Path("file:///local/path");
     when(mockManifestFileWriter.getManifestSourceUri(true)).thenReturn(manifestPath.toUri().getPath());
     when(mockBqSchemaResolver.getTableSchema(any(), eq(Arrays.asList("datestr", "type")))).thenReturn(schema);
@@ -94,7 +94,7 @@ public class TestBigQuerySyncTool {
     when(mockBqSyncClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     when(mockBqSyncClient.getBasePath()).thenReturn(TEST_TABLE_BASE_PATH);
     when(mockBqSyncClient.datasetExists()).thenReturn(true);
-    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, TEST_TABLE_BASE_PATH)).thenReturn(true);
+    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE)).thenReturn(true);
     Path manifestPath = new Path("file:///local/path");
     when(mockManifestFileWriter.getManifestSourceUri(true)).thenReturn(manifestPath.toUri().getPath());
     when(mockBqSchemaResolver.getTableSchema(any(), eq(Collections.emptyList()))).thenReturn(schema);
@@ -113,7 +113,7 @@ public class TestBigQuerySyncTool {
     when(mockBqSyncClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     when(mockBqSyncClient.getBasePath()).thenReturn(TEST_TABLE_BASE_PATH);
     when(mockBqSyncClient.datasetExists()).thenReturn(true);
-    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, TEST_TABLE_BASE_PATH)).thenReturn(false);
+    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE)).thenReturn(false);
     Path manifestPath = new Path("file:///local/path");
     when(mockManifestFileWriter.getManifestSourceUri(true)).thenReturn(manifestPath.toUri().getPath());
     List<String> partitionFields = Arrays.asList("datestr", "type");
@@ -130,7 +130,7 @@ public class TestBigQuerySyncTool {
     when(mockBqSyncClient.getTableType()).thenReturn(HoodieTableType.COPY_ON_WRITE);
     when(mockBqSyncClient.getBasePath()).thenReturn(TEST_TABLE_BASE_PATH);
     when(mockBqSyncClient.datasetExists()).thenReturn(true);
-    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE, TEST_TABLE_BASE_PATH)).thenReturn(false);
+    when(mockBqSyncClient.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE)).thenReturn(false);
     Path manifestPath = new Path("file:///local/path");
     when(mockManifestFileWriter.getManifestSourceUri(true)).thenReturn(manifestPath.toUri().getPath());
     when(mockBqSchemaResolver.getTableSchema(any(), eq(Collections.emptyList()))).thenReturn(schema);

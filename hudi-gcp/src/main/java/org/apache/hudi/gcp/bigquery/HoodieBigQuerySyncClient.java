@@ -298,10 +298,9 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   /**
    * Checks for the existence of a table that uses the manifest file approach and matches other requirements.
    * @param tableName name of the table
-   * @param basePath current base path of the table
    * @return Returns true if the table does not exist or if the table does exist but does not use the manifest file or table base path is outdated. False otherwise.
    */
-  public boolean tableNotExistsOrDoesNotMatchSpecification(String tableName, String basePath) {
+  public boolean tableNotExistsOrDoesNotMatchSpecification(String tableName) {
     TableId tableId = TableId.of(projectId, datasetName, tableName);
     Table table = bigquery.getTable(tableId);
     if (table == null || !table.exists()) {
@@ -314,8 +313,9 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     String basePathInTableDefinition = externalTableDefinition.getHivePartitioningOptions() == null ? "" :
         externalTableDefinition.getHivePartitioningOptions().getSourceUriPrefix();
     // remove trailing slash
-    basePathInTableDefinition = org.apache.commons.lang3.StringUtils.stripEnd(basePathInTableDefinition, "/");
-    basePath = org.apache.commons.lang3.StringUtils.stripEnd(basePath, "/");
+    basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
+    String basePath = getBasePath();
+    basePath = StringUtils.stripEnd(basePath, "/");
     if (!basePathInTableDefinition.equals(basePath)) {
       // if table base path is outdated, we need to replace the table.
       LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
