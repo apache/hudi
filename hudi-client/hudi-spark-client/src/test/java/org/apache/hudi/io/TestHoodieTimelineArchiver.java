@@ -1170,13 +1170,13 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       } else if (i == 7) {
         if (!enableMetadata) {
           // do archive:
-          // clean: 2,3: after archival -> null
+          // clean: 2,3: after archival -> 3. We do not archive the last clean instant
           // write: 1,4,5,6,7: after archival -> 6, 7
           List<HoodieInstant> expectedActiveInstants = new ArrayList<>(getActiveCommitInstants(Arrays.asList("00000006", "00000007")));
-
+          expectedActiveInstants.addAll(getActiveCommitInstants(Collections.singletonList("00000003"), HoodieTimeline.CLEAN_ACTION));
           List<HoodieInstant> expectedArchiveInstants = new ArrayList<>();
           expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000004", "00000005")));
-          expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003"), HoodieTimeline.CLEAN_ACTION));
+          expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Collections.singletonList("00000002"), HoodieTimeline.CLEAN_ACTION));
 
           verifyArchival(expectedArchiveInstants, expectedActiveInstants, commitsAfterArchival, false);
         } else {
@@ -1188,13 +1188,13 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           assertEquals(originalCommits, commitsAfterArchival);
         } else {
           // when i == 8 compaction in metadata table will be triggered, and then allow archive:
-          // clean: 2,3: after archival -> null
+          // clean: 2,3: after archival -> 3. We do not archive the last clean instant
           // write: 1,4,5,6,7,8: after archival -> 7, 8
           List<HoodieInstant> expectedActiveInstants = new ArrayList<>(getActiveCommitInstants(Arrays.asList("00000007", "00000008")));
-
+          expectedActiveInstants.addAll(getActiveCommitInstants(Collections.singletonList("00000003"), HoodieTimeline.CLEAN_ACTION));
           List<HoodieInstant> expectedArchiveInstants = new ArrayList<>();
           expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000001", "00000004", "00000005", "00000006")));
-          expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Arrays.asList("00000002", "00000003"), HoodieTimeline.CLEAN_ACTION));
+          expectedArchiveInstants.addAll(getAllArchivedCommitInstants(Collections.singletonList("00000002"), HoodieTimeline.CLEAN_ACTION));
 
           verifyArchival(expectedArchiveInstants, expectedActiveInstants, commitsAfterArchival, false);
         }
@@ -1207,7 +1207,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 4, 5, 2);
 
     // min archival commits is 4 and max archival commits is 5
-    // (either clean commits has to be > 5 or commits has to be greater than 5)
+    // (commits have to be greater than 5)
     // and so, after 6th instant, 2 instants will be archived.
     // Instant 1 -> 10 are commits except 6 which is a clean instant.
     // Clean instants have EARLIEST_COMMIT_TO_NOT_ARCHIVE set as 3 till clean instant 14.
@@ -1240,16 +1240,15 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       } else {
         // At 15th clean instant, EARLIEST_COMMIT_TO_NOT_ARCHIVE is set as 10
         // active commits were 3,4,5,7,8,9,10 => After archival only 4 instants would remain 7,8,9,10
-        // clean instants were 6,11,12,13,14,15 => After archival only 4 instants would remain 12,13,14,15
+        // clean instants were 6,11,12,13,14,15 => No clean instants would be archived since clean commits
+        // are archived only till last archived commit i.e. commit 5
         List<HoodieInstant> expectedActiveInstants = new ArrayList<>();
         expectedActiveInstants.addAll(getActiveCommitInstants(Arrays.asList("00000007", "00000008", "00000009", "00000010")));
         expectedActiveInstants.addAll(
-            getActiveCommitInstants(Arrays.asList("00000012", "00000013", "00000014", "00000015"), HoodieTimeline.CLEAN_ACTION));
+            getActiveCommitInstants(Arrays.asList("00000006", "00000011", "00000012", "00000013", "00000014", "00000015"), HoodieTimeline.CLEAN_ACTION));
         List<HoodieInstant> expectedArchivedInstants = new ArrayList<>();
         expectedArchivedInstants.addAll(getAllArchivedCommitInstants(
             Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000005"), HoodieTimeline.COMMIT_ACTION));
-        expectedArchivedInstants.addAll(getAllArchivedCommitInstants(
-            Arrays.asList("00000006", "00000011"), HoodieTimeline.CLEAN_ACTION));
         verifyArchival(expectedArchivedInstants, expectedActiveInstants, commitsAfterArchival, false);
       }
     }
@@ -1336,6 +1335,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       createCommitAndRollbackFile(startInstant + 1 + "", startInstant + "", false, isEmpty || i % 2 == 0);
       expectedArchivedInstants.add(new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, String.format("%02d", startInstant)));
     }
+
+    // Clean and rollback instants are archived only till the last clean instant in the timeline
+    createCleanMetadata(String.format("%02d", startInstant), false, false, isEmpty);
 
     if (enableMetadataTable) {
       // Simulate a compaction commit in metadata table timeline
