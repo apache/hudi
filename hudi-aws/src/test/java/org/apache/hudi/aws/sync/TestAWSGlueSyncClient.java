@@ -156,9 +156,9 @@ class TestAWSGlueSyncClient {
   @Test
   void testMetastoreFieldSchemas() {
     String tableName = "testTable";
-    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
-        Column.builder().name("age").type("int").comment("person's age").build());
-    List<Column> partitionKeys = Arrays.asList(Column.builder().name("city").type("string").comment("person's city").build());
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Arrays.asList(GlueTestUtil.getColumn("city", "string", "person's city"));
     CompletableFuture<GetTableResponse> tableResponse = getTableWithDefaultProps(tableName, columns, partitionKeys);
     // mock aws glue get table call
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
@@ -166,23 +166,33 @@ class TestAWSGlueSyncClient {
     // verify if fields are present
     assertEquals(3, fields.size(), "Glue table schema contain 3 fields");
     assertEquals("name", fields.get(0).getName(), "glue table first column should be name");
+    assertEquals("string", fields.get(0).getType(), "glue table first column type should be string");
+    assertEquals("person's name", fields.get(0).getComment().get(), "glue table first column comment should person's name");
+    assertEquals("age", fields.get(1).getName(), "glue table second column should be age");
     assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
-    assertEquals("person's city", fields.get(2).getComment().get(), "glue table third column comment should be age");
+    assertEquals("person's age", fields.get(1).getComment().get(), "glue table second column comment should person's age");
+    assertEquals("city", fields.get(2).getName(), "glue table third column should be city");
+    assertEquals("string", fields.get(2).getType(), "glue table third column type should be string");
+    assertEquals("person's city", fields.get(2).getComment().get(), "glue table third column comment should be person's city");
   }
 
   @Test
   void testMetastoreFieldSchemas_EmptyPartitions() {
     String tableName = "testTable";
-    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
-        Column.builder().name("age").type("int").comment("person's age").build());
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
     CompletableFuture<GetTableResponse> tableResponse = getTableWithDefaultProps(tableName, columns, Collections.emptyList());
     // mock aws glue get table call
     Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponse);
     List<FieldSchema> fields = awsGlueSyncClient.getMetastoreFieldSchemas(tableName);
     // verify if fields are present
-    assertEquals(2, fields.size(), "Glue table schema contain 2 fields");
+    assertEquals(2, fields.size(), "Glue table schema contain 3 fields");
     assertEquals("name", fields.get(0).getName(), "glue table first column should be name");
+    assertEquals("string", fields.get(0).getType(), "glue table first column type should be string");
+    assertEquals("person's name", fields.get(0).getComment().get(), "glue table first column comment should person's name");
+    assertEquals("age", fields.get(1).getName(), "glue table second column should be age");
     assertEquals("int", fields.get(1).getType(), "glue table second column type should be int");
+    assertEquals("person's age", fields.get(1).getComment().get(), "glue table second column comment should person's age");
   }
 
   @Test
