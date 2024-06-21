@@ -49,7 +49,7 @@ public abstract class HoodieStorage implements Closeable {
   public static final Logger LOG = LoggerFactory.getLogger(HoodieStorage.class);
 
   protected final StorageConfiguration<?> storageConf;
-  protected final StorageStrategy storageStrategy;
+  protected StorageStrategy storageStrategy;
 
   public HoodieStorage(StorageConfiguration<?> storageConf) {
     /* TODO: Remove this constructor, all storage need to use storage strategy.
@@ -446,5 +446,9 @@ public abstract class HoodieStorage implements Closeable {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
+  }
+
+  public void setStorageStrategy(StorageStrategy storageStrategy) {
+    this.storageStrategy = storageStrategy;
   }
 }

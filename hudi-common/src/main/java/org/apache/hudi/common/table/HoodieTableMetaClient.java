@@ -128,7 +128,7 @@ public class HoodieTableMetaClient implements Serializable {
   protected StoragePath metaPath;
 
   private transient HoodieStorage storage;
-  private transient StorageStrategy dataStorageStrategy;
+  private transient StorageStrategy storageStrategy;
   private boolean loadActiveTimelineOnLoad;
   protected StorageConfiguration<?> storageConf;
   private HoodieTableType tableType;
@@ -159,8 +159,9 @@ public class HoodieTableMetaClient implements Serializable {
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
     TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, payloadClassName, recordMergerStrategy);
-    this.dataStorageStrategy = StorageIOUtils.createStorageStrategy(tableConfig.getStorageStrategy(),
+    this.storageStrategy = StorageIOUtils.createStorageStrategy(tableConfig.getStorageStrategy(),
         basePath, tableConfig.getTableName(), tableConfig.getStoragePrefix());
+    this.storage.setStorageStrategy(storageStrategy);
     this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
@@ -425,14 +426,14 @@ public class HoodieTableMetaClient implements Serializable {
     return storageConf;
   }
 
-  public StorageStrategy getDataStorageStrategy() {
-    return dataStorageStrategy != null
-        ? dataStorageStrategy
+  public StorageStrategy getStorageStrategy() {
+    return storageStrategy != null
+        ? storageStrategy
         : new DefaultStorageStrategy(basePath.toString());
   }
 
-  public void setDataStorageStrategy(StorageStrategy storageStrategy) {
-    this.dataStorageStrategy = storageStrategy;
+  public void setStorageStrategy(StorageStrategy storageStrategy) {
+    this.storageStrategy = storageStrategy;
   }
 
   /**

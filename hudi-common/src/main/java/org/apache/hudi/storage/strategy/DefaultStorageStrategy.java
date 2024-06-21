@@ -37,6 +37,11 @@ public class DefaultStorageStrategy implements StorageStrategy {
     this.storagePrefix = basePath;
   }
 
+  public DefaultStorageStrategy() {
+    // test only
+    // can't use @VisibleForTesting for scala test classes like ColumnStatsIndexHelper
+  }
+
   @Override
   public StoragePath getStorageLocation(String partitionPath, String fileId) {
     return new StoragePath(String.format("%s/%s", storagePrefix, partitionPath));

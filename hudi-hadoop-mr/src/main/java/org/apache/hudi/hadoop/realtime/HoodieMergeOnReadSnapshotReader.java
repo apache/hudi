@@ -111,7 +111,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
     HoodieTimer timer = new HoodieTimer().startTimer();
     this.logRecordScanner = getMergedLogRecordScanner();
     LOG.debug("Time taken to scan log records: {}", timer.endTimer());
-    this.baseFileReader = getBaseFileReader(new Path(baseFilePath), jobConf, metaClient.getDataStorageStrategy());
+    this.baseFileReader = getBaseFileReader(new Path(baseFilePath), jobConf, metaClient.getStorageStrategy());
     this.logRecordsByKey = logRecordScanner.getRecords();
     Set<String> logRecordKeys = new HashSet<>(this.logRecordsByKey.keySet());
     this.mergedRecordsByKey = new ExternalSpillableMap<>(

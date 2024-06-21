@@ -19,9 +19,17 @@
 
 package org.apache.hudi.storage;
 
+import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
+
+import java.io.IOException;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.util.StorageIOUtils;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
@@ -43,5 +51,41 @@ public class HoodieStorageUtils {
     } catch (Exception e) {
       throw new HoodieException("Unable to create " + storageClass, e);
     }
+  }
+
+  public static HoodieStorage getStorage(StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    return getStorage(DEFAULT_URI, conf, storageStrategy);
+  }
+
+  public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    return getStorage(new StoragePath(basePath), conf, storageStrategy);
+  }
+
+  public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
+    String storageClass = conf.getString(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key())
+        .orElse(HoodieStorageConfig.HOODIE_STORAGE_CLASS.defaultValue());
+    try {
+      return (HoodieStorage) ReflectionUtils.loadClass(
+          storageClass, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf, storageStrategy);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to create " + storageClass, e);
+    }
+  }
+
+  public static StorageStrategy getStorageStrategy(HoodieStorage storage, String basePath) {
+    TypedProperties props;
+    try {
+      props = fetchConfigs(storage, new StoragePath(basePath,
+              HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE, HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP,
+          HoodieTableConfig.MAX_READ_RETRIES, HoodieTableConfig.READ_RETRY_DELAY_MSEC);
+    } catch (IOException ioe) {
+      throw new HoodieException("Failed to fetch table config");
+    }
+
+   return StorageIOUtils.createStorageStrategy(
+       props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key(), HoodieStorageConfig.STORAGE_STRATEGY_CLASS.defaultValue()),
+       basePath,
+       props.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY),
+       props.getString(HoodieStorageConfig.STORAGE_PREFIX.key()));
   }
 }

@@ -34,6 +34,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.util.AvroSchemaConverter;
 
 import org.apache.flink.configuration.Configuration;
@@ -112,7 +113,7 @@ public class InternalSchemaManager implements Serializable {
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(fileName));
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
-        new HoodieHadoopStorage(tablePath, getHadoopConf()),
+        new HoodieHadoopStorage(tablePath, getHadoopConf(), new DefaultStorageStrategy(tablePath)),
         validCommits);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();

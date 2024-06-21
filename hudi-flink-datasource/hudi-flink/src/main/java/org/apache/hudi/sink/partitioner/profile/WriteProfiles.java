@@ -32,6 +32,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.core.fs.Path;
@@ -97,6 +98,7 @@ public class WriteProfiles {
    * @return the file status array
    */
   public static List<StoragePathInfo> getFilesFromMetadata(
+      StorageStrategy storageStrategy,
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
@@ -116,18 +118,19 @@ public class WriteProfiles {
    */
   @Nullable
   public static List<StoragePathInfo> getFilesFromMetadata(
+      StorageStrategy storageStrategy,
       Path basePath,
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType,
       boolean ignoreMissingFiles) {
-    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), HadoopFSUtils.getStorageConf(hadoopConf));
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath.toString(), HadoopFSUtils.getStorageConf(hadoopConf), storageStrategy);
     Map<String, StoragePathInfo> uniqueIdToInfoMap = new HashMap<>();
     // If a file has been touched multiple times in the given commits, the return value should keep the one
     // from the latest commit, so here we traverse in reverse order
     for (int i = metadataList.size() - 1; i >= 0; i--) {
       for (Map.Entry<String, StoragePathInfo> entry : getFilesToRead(hadoopConf, metadataList.get(i),
-          basePath.toString(), tableType).entrySet()) {
+          basePath.toString(), tableType, storageStrategy).entrySet()) {
         if (StreamerUtil.isValidFile(entry.getValue())
             && !uniqueIdToInfoMap.containsKey(entry.getKey())) {
           if (StreamerUtil.fileExists(storage, entry.getValue().getPath())) {
@@ -145,13 +148,14 @@ public class WriteProfiles {
       Configuration hadoopConf,
       HoodieCommitMetadata metadata,
       String basePath,
-      HoodieTableType tableType
+      HoodieTableType tableType,
+      StorageStrategy storageStrategy
   ) {
     switch (tableType) {
       case COPY_ON_WRITE:
         return metadata.getFileIdToInfo(basePath);
       case MERGE_ON_READ:
-        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf), basePath);
+        return metadata.getFullPathToInfo(new HoodieHadoopStorage(basePath, hadoopConf, storageStrategy), basePath);
       default:
         throw new AssertionError();
     }
