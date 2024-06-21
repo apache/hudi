@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -51,6 +52,7 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -67,7 +69,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -78,17 +79,21 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1706,4 +1711,87 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, ?> initializeWriteClient();
+
+  /**
+   * A class which represents a directory and the files and directories inside it.
+   * <p>
+   * A {@code PartitionFileInfo} object saves the name of the partition and various properties requires of each file
+   * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
+   * a very large number of files are present in the dataset being initialized.
+   */
+  static class DirectoryInfo implements Serializable {
+    // Relative path of the directory (relative to the base directory)
+    private final String relativePath;
+    // Map of filenames within this partition to their respective sizes
+    private final HashMap<String, Long> filenameToSizeMap;
+    // List of directories within this partition
+    private final List<StoragePath> subDirectories = new ArrayList<>();
+    // Is this a hoodie partition
+    private boolean isHoodiePartition = false;
+
+    public DirectoryInfo(String relativePath, FileStatus[] fileStatus, String maxInstantTime) {
+      this.relativePath = relativePath;
+
+      // Pre-allocate with the maximum length possible
+      filenameToSizeMap = new HashMap<>(fileStatus.length);
+
+      // FileId to commit map. Used for ensuring we don't have two files with the same filegroup and commit time.
+      HashMap<String, Set<String>> seenGroupCommitPairs = new HashMap<>();
+
+      // Presence of partition meta file implies this is a HUDI partition
+      isHoodiePartition = Arrays.stream(fileStatus).anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
+      for (FileStatus status : fileStatus) {
+        StoragePath path = new StoragePath(status.getPath().toUri());
+        if (status.isDirectory()) {
+          // Ignore .hoodie directory as there cannot be any partitions inside it
+          if (!status.getPath().getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
+            this.subDirectories.add(new StoragePath(status.getPath().toUri()));
+          }
+        } else if (isHoodiePartition && FSUtils.isDataFile(path)) {
+          // Regular HUDI data file (base file or log file)
+          String dataFileCommitTime = FSUtils.getCommitTime(status.getPath().getName());
+
+          // Sanity check: ensure that we don't have base files with duplicate file groups and commit times.
+          if (FSUtils.isBaseFile(path)) {
+            String fileGroup = FSUtils.getFileId(status.getPath().getName());
+            if (seenGroupCommitPairs.containsKey(fileGroup)) {
+              if (seenGroupCommitPairs.get(fileGroup).contains(dataFileCommitTime)) {
+                LOG.error("Two base files with the same fileGroup {} and commitTime {} exist. This should not happen!", fileGroup, dataFileCommitTime);
+                throw new HoodieIOException("Duplicate base file detected (same fileGroup and commitTime)");
+              }
+            } else {
+              seenGroupCommitPairs.put(fileGroup, new HashSet<>());
+            }
+            seenGroupCommitPairs.get(fileGroup).add(dataFileCommitTime);
+          }
+
+          // Limit the file listings to files which were created before the maxInstant time.
+          if (InstantComparison.compareTimestamps(dataFileCommitTime, InstantComparison.LESSER_THAN_OR_EQUALS, maxInstantTime)) {
+            filenameToSizeMap.put(status.getPath().getName(), status.getLen());
+          }
+        }
+      }
+    }
+
+    String getRelativePath() {
+      return relativePath;
+    }
+
+    int getTotalFiles() {
+      return filenameToSizeMap.size();
+    }
+
+    boolean isHoodiePartition() {
+      return isHoodiePartition;
+    }
+
+    List<StoragePath> getSubDirectories() {
+      return subDirectories;
+    }
+
+    // Returns a map of filenames mapped to their lengths
+    Map<String, Long> getFileNameToSizeMap() {
+      return filenameToSizeMap;
+    }
+  }
 }
