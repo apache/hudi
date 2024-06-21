@@ -17,12 +17,12 @@
 # limitations under the License.
 #
 
-VERSION=0.14.1
+VERSION=0.15.0
 
 JARS=(
 "$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.12/$VERSION/hudi-utilities-bundle_2.12-$VERSION.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-spark3.2-bundle_2.12/$VERSION/hudi-spark3.2-bundle_2.12-$VERSION.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.17-bundle/$VERSION/hudi-flink1.17-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-spark3.5-bundle_2.12/$VERSION/hudi-spark3.5-bundle_2.12-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.18-bundle/$VERSION/hudi-flink1.18-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION/hudi-kafka-connect-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION/hudi-datahub-sync-bundle-$VERSION.jar"
 "$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION/hudi-gcp-bundle-$VERSION.jar"
@@ -35,7 +35,7 @@ JARS=(
 printf -v CLASSPATH ':%s' "${JARS[@]}"
 echo "CLASSPATH=$CLASSPATH"
 
-java -cp target/hudi-utils-0.14.1-jar-with-dependencies.jar$CLASSPATH \
+java -cp target/hudi-utils-0.15.0-jar-with-dependencies.jar$CLASSPATH \
 org.apache.hudi.utils.HoodieConfigDocGenerator
 
 cp /tmp/configurations.md ../website/docs/configurations.md
