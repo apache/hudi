@@ -31,9 +31,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -43,7 +43,6 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -154,7 +153,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
-        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), new DefaultStorageStrategy()),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
@@ -212,7 +211,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
-        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), hoodieStorage().getStorageStrategy),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"))
     val columnRangeMetadata = colRangeMetadataList.get(0)
 

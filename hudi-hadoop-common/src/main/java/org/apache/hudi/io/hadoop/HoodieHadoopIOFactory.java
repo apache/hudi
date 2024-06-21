@@ -100,7 +100,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
 
   @Override
   public HoodieStorage getStorage(StoragePath storagePath) {
-    return storage.newInstance(storagePath, storage.getConf());
+    return storage.newInstance(storagePath, storage.getConf(), storage.getStorageStrategy());
   }
 
   @Override
@@ -111,7 +111,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   long initialRetryIntervalMs,
                                   String retryExceptions,
                                   ConsistencyGuard consistencyGuard) {
-    return new HoodieHadoopStorage(path, storage.getConf(), enableRetry, maxRetryIntervalMs,
+    return new HoodieHadoopStorage(path, storage.getConf(), storage.getStorageStrategy(),enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
   }
 }

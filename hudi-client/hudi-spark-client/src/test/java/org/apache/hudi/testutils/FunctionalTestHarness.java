@@ -33,6 +33,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.testutils.providers.DFSProvider;
 import org.apache.hudi.testutils.providers.HoodieMetaClientProvider;
 import org.apache.hudi.testutils.providers.HoodieWriteClientProvider;
@@ -178,7 +179,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
   public static synchronized void cleanUpAfterAll() throws IOException {
     StoragePath workDir = new StoragePath("/tmp");
     HoodieStorage storage = new HoodieHadoopStorage(
-        workDir, HadoopFSUtils.getStorageConf(hdfsTestService.getHadoopConf()));
+        workDir, HadoopFSUtils.getStorageConf(hdfsTestService.getHadoopConf()), new DefaultStorageStrategy());
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(workDir);
     for (StoragePathInfo f : pathInfoList) {
       if (f.isDirectory()) {

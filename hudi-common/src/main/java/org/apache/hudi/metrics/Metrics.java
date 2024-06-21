@@ -98,7 +98,8 @@ public class Metrics {
   private List<MetricsReporter> addAdditionalMetricsExporters(HoodieMetricsConfig metricConfig) {
     List<MetricsReporter> reporterList = new ArrayList<>();
     List<String> propPathList = StringUtils.split(metricConfig.getMetricReporterFileBasedConfigs(), ",");
-    try (HoodieStorage newStorage = storage.newInstance(new StoragePath(propPathList.get(0)), storage.getConf())) {
+    try (HoodieStorage newStorage = storage.newInstance(new StoragePath(propPathList.get(0)), storage.getConf(),
+        storage.getStorageStrategy())) {
       for (String propPath : propPathList) {
         HoodieMetricsConfig secondarySourceConfig = HoodieMetricsConfig.newBuilder().fromInputStream(
             newStorage.open(new StoragePath(propPath))).withPath(metricConfig.getBasePath()).build();

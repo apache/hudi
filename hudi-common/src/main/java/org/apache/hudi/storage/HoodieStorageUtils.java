@@ -22,6 +22,7 @@ package org.apache.hudi.storage;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 
 import java.io.IOException;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -82,10 +83,14 @@ public class HoodieStorageUtils {
       throw new HoodieException("Failed to fetch table config");
     }
 
-   return StorageIOUtils.createStorageStrategy(
-       props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key(), HoodieStorageConfig.STORAGE_STRATEGY_CLASS.defaultValue()),
-       basePath,
-       props.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY),
-       props.getString(HoodieStorageConfig.STORAGE_PREFIX.key()));
+   return getStorageStrategy(props);
+  }
+
+  public static StorageStrategy getStorageStrategy(TypedProperties props) {
+    return StorageIOUtils.createStorageStrategy(
+        props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key(), HoodieStorageConfig.STORAGE_STRATEGY_CLASS.defaultValue()),
+        props.getString(HoodieCommonConfig.BASE_PATH.key()),
+        props.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY),
+        props.getString(HoodieStorageConfig.STORAGE_PREFIX.key()));
   }
 }

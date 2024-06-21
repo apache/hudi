@@ -72,6 +72,11 @@ public abstract class HoodieStorage implements Closeable {
   public abstract HoodieStorage newInstance(StoragePath path,
                                             StorageConfiguration<?> storageConf);
 
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract HoodieStorage newInstance(StoragePath path,
+                                            StorageConfiguration<?> storageConf,
+                                            StorageStrategy storageStrategy);
+
   /**
    * @return the scheme of the storage.
    */
@@ -450,5 +455,9 @@ public abstract class HoodieStorage implements Closeable {
 
   public void setStorageStrategy(StorageStrategy storageStrategy) {
     this.storageStrategy = storageStrategy;
+  }
+
+  public StorageStrategy getStorageStrategy() {
+    return this.storageStrategy;
   }
 }

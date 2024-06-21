@@ -36,6 +36,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -92,8 +93,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private final Object sharedLock = new Object();
 
-  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, Option<Schema> schemaOpt) throws IOException {
-    this(path, new HoodieHadoopStorage(path, storageConf), storageConf, schemaOpt, Option.empty());
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StorageStrategy storageStrategy, StoragePath path, Option<Schema> schemaOpt) throws IOException {
+    this(path, new HoodieHadoopStorage(path, storageConf, storageStrategy), storageConf, schemaOpt, Option.empty());
   }
 
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, HoodieStorage storage,

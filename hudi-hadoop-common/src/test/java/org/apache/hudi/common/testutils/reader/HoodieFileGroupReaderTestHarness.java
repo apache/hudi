@@ -118,7 +118,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             0L,
             Long.MAX_VALUE,
             properties,
-            new HoodieHadoopStorage(basePath, storageConf),
+            new HoodieHadoopStorage(basePath, storageConf, metaClient.getStorageStrategy()),
             tableConfig,
             readerContext
         );
