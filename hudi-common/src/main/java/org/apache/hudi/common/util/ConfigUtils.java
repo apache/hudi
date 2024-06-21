@@ -412,7 +412,7 @@ public class ConfigUtils {
   }
 
   /**
-   * Gets the boolean value for a {@link ConfigProperty} config from properties. The key and
+   * Gets the boolean value for a {@link ConfigProperty} config from properties. The key and 
    * alternative keys are used to fetch the config. The default value of {@link ConfigProperty}
    * config, if exists, is returned if the config is not found in the properties.
    *
