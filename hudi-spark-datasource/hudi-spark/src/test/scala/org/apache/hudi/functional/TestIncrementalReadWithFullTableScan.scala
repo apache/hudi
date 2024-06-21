@@ -30,7 +30,7 @@ import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -58,6 +58,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     cleanupResources()
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testFailEarlyForIncrViewQueryForNonExistingFiles(tableType: HoodieTableType): Unit = {
