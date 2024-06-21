@@ -87,6 +87,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -1572,6 +1573,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // Pre-allocate with the maximum length possible
       filenameToSizeMap = new HashMap<>(fileStatus.length);
 
+      // FileId to commit map. Used for ensuring we don't have two files with the same filegroup and commit time.
+      HashMap<String, Set<String>> seenGroupCommitPairs = new HashMap<>();
+
       // Presence of partition meta file implies this is a HUDI partition
       isHoodiePartition = Arrays.stream(fileStatus).anyMatch(status -> status.getPath().getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX));
       for (FileStatus status : fileStatus) {
@@ -1583,6 +1587,21 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         } else if (isHoodiePartition && FSUtils.isDataFile(status.getPath())) {
           // Regular HUDI data file (base file or log file)
           String dataFileCommitTime = FSUtils.getCommitTime(status.getPath().getName());
+
+          // Sanity check: ensure that we don't have base files with duplicate file groups and commit times.
+          if (FSUtils.isBaseFile(status.getPath())) {
+            String fileGroup = FSUtils.getFileId(status.getPath().getName());
+            if (seenGroupCommitPairs.containsKey(fileGroup)) {
+              if (seenGroupCommitPairs.get(fileGroup).contains(dataFileCommitTime)) {
+                LOG.error("Two base files with the same fileGroup {} and commitTime {} exist. This should not happen!", fileGroup, dataFileCommitTime);
+                throw new HoodieIOException("Duplicate base file detected (same fileGroup and commitTime)");
+              }
+            } else {
+              seenGroupCommitPairs.put(fileGroup, new HashSet<>());
+            }
+            seenGroupCommitPairs.get(fileGroup).add(dataFileCommitTime);
+          }
+
           // Limit the file listings to files which were created before the maxInstant time.
           if (HoodieTimeline.compareTimestamps(dataFileCommitTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, maxInstantTime)) {
             filenameToSizeMap.put(status.getPath().getName(), status.getLen());
