@@ -149,7 +149,7 @@ public class MergeOnReadInputFormat
    */
   private boolean closed = true;
 
-  private final InternalSchemaManager internalSchemaManager;
+  protected final InternalSchemaManager internalSchemaManager;
 
   protected MergeOnReadInputFormat(
       Configuration conf,
@@ -205,7 +205,7 @@ public class MergeOnReadInputFormat
       }
     } else if (!split.getBasePath().isPresent()) {
       // log files only
-      if (OptionsResolver.emitChangelog(conf)) {
+      if (OptionsResolver.emitDeletes(conf)) {
         return new LogFileOnlyIterator(getUnMergedLogFileIterator(split));
       } else {
         return new LogFileOnlyIterator(getLogFileIterator(split));
@@ -312,7 +312,7 @@ public class MergeOnReadInputFormat
     try {
       return getBaseFileIterator(path, IntStream.range(0, this.tableState.getRowType().getFieldCount()).toArray());
     } catch (IOException e) {
-      throw new HoodieException("Get reader error for path: " + path);
+      throw new HoodieException("Get reader error for path: " + path, e);
     }
   }
 
@@ -441,13 +441,8 @@ public class MergeOnReadInputFormat
       @Override
       public boolean hasNext() {
         while (recordsIterator.hasNext()) {
-          Option<IndexedRecord> curAvroRecord = null;
           final HoodieAvroRecord<?> hoodieRecord = (HoodieAvroRecord) recordsIterator.next();
-          try {
-            curAvroRecord = hoodieRecord.getData().getInsertValue(tableSchema);
-          } catch (IOException e) {
-            throw new HoodieException("Get avro insert value error for key: " + hoodieRecord.getRecordKey(), e);
-          }
+          Option<IndexedRecord> curAvroRecord = getInsertVal(hoodieRecord, tableSchema);
           if (curAvroRecord.isPresent()) {
             final IndexedRecord avroRecord = curAvroRecord.get();
             GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
@@ -473,6 +468,14 @@ public class MergeOnReadInputFormat
         records.close();
       }
     };
+  }
+
+  protected static Option<IndexedRecord> getInsertVal(HoodieAvroRecord<?> hoodieRecord, Schema tableSchema) {
+    try {
+      return hoodieRecord.getData().getInsertValue(tableSchema);
+    } catch (IOException e) {
+      throw new HoodieException("Get avro insert value error for key: " + hoodieRecord.getRecordKey(), e);
+    }
   }
 
   protected ClosableIterator<RowData> getFullLogFileIterator(MergeOnReadInputSplit split) {
