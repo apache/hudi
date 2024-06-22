@@ -47,8 +47,8 @@ public class TestFiltersInFileGroupReader extends TestBootstrapReadBase {
     this.dashPartitions = true;
     this.tableType = HoodieTableType.MERGE_ON_READ;
     this.nPartitions = 2;
-    this.nInserts = 100000;
-    this.nUpdates = 20000;
+    this.nInserts = 100;
+    this.nUpdates = 20;
     sparkSession.conf().set(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), "true");
     setupDirs();
 

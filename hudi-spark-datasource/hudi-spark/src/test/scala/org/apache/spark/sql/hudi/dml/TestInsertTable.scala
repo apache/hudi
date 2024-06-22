@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
@@ -69,6 +68,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              partitioned by (`day`,`hour`)
              location '${tablePath}'
              """.stripMargin)
+
+      spark.sql("set spark.sql.shuffle.partitions = 11")
 
       spark.sql(
         s"""
@@ -2583,6 +2584,58 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(2, false)
       )
     })
+  }
+
+  test("Test Insert Into with extraMetadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  dt string,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (primaryKey = 'id')
+           | partitioned by (dt)
+           | location '$tablePath'
+       """.stripMargin)
+
+      spark.sql("set hoodie.datasource.write.commitmeta.key.prefix=commit_extra_meta_")
+
+      spark.sql("set commit_extra_meta_a=valA")
+      spark.sql("set commit_extra_meta_b=valB")
+      spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, '2024-06-14')")
+
+      assertResult("valA") {
+        getLastCommitMetadata(spark, tablePath).getExtraMetadata.get("commit_extra_meta_a")
+      }
+      assertResult("valB") {
+        getLastCommitMetadata(spark, tablePath).getExtraMetadata.get("commit_extra_meta_b")
+      }
+      checkAnswer(s"select id, name, price, dt from $tableName")(
+        Seq(1, "a1", 10.0, "2024-06-14")
+      )
+
+      spark.sql("set commit_extra_meta_a=new_valA")
+      spark.sql("set commit_extra_meta_b=new_valB")
+      spark.sql(s"insert into $tableName values (2, 'a2', 20, 2000, '2024-06-14')")
+
+      assertResult("new_valA") {
+        getLastCommitMetadata(spark, tablePath).getExtraMetadata.get("commit_extra_meta_a")
+      }
+      assertResult("new_valB") {
+        getLastCommitMetadata(spark, tablePath).getExtraMetadata.get("commit_extra_meta_b")
+      }
+      checkAnswer(s"select id, name, price, dt from $tableName")(
+        Seq(1, "a1", 10.0, "2024-06-14"),
+        Seq(2, "a2", 20.0, "2024-06-14")
+      )
+    }
   }
 
   def ingestAndValidateDataDupPolicy(tableType: String, tableName: String, tmp: File,

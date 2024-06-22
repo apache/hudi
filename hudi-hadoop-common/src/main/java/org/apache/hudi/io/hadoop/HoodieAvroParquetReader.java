@@ -166,7 +166,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
-    Configuration hadoopConf = storage.getConf().unwrapAs(Configuration.class);
+    Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     if (!requestedSchema.isPresent()) {
       AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
       AvroReadSupport.setRequestedProjection(hadoopConf, schema);

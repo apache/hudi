@@ -50,7 +50,7 @@ public class HoodieDeleteHelper<T, R> extends
     BaseDeleteHelper<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private HoodieDeleteHelper() {
-    super(HoodieData::getNumPartitions);
+    super(HoodieData::deduceNumPartitions);
   }
 
   private static class DeleteHelperHolder {
