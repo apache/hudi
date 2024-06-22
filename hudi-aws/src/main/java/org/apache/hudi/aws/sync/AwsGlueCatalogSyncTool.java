@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
 
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
@@ -50,6 +51,11 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
   @Override
   protected void initSyncClient(HiveSyncConfig hiveSyncConfig) {
     syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig);
+  }
+
+  @Override
+  protected boolean shouldRecreateAndSyncTable() {
+    return config.getBooleanOrDefault(RECREATE_GLUE_TABLE_ON_ERROR);
   }
 
   public static void main(String[] args) {

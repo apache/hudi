@@ -103,6 +103,7 @@ case class HoodieFileIndex(spark: SparkSession,
   @transient private lazy val indicesSupport: List[SparkBaseIndexSupport] = List(
     new RecordLevelIndexSupport(spark, metadataConfig, metaClient),
     new BucketIndexSupport(spark, metadataConfig, metaClient),
+    new SecondaryIndexSupport(spark, metadataConfig, metaClient),
     new PartitionStatsIndexSupport(spark, schema, metadataConfig, metaClient),
     new FunctionalIndexSupport(spark, metadataConfig, metaClient),
     new BloomFiltersIndexSupport(spark, metadataConfig, metaClient),
@@ -410,6 +411,9 @@ case class HoodieFileIndex(spark: SparkSession,
 
   private def isBloomFiltersIndexEnabled: Boolean = indicesSupport.exists(idx =>
     idx.getIndexName == BloomFiltersIndexSupport.INDEX_NAME && idx.isIndexAvailable)
+
+  private def isSecondaryIndexEnabled: Boolean = indicesSupport.exists(idx =>
+    idx.getIndexName == SecondaryIndexSupport.INDEX_NAME && idx.isIndexAvailable)
 
   private def isIndexEnabled: Boolean = indicesSupport.exists(idx => idx.isIndexAvailable)
 

@@ -269,6 +269,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
 
   public void deleteCompletedRollback(HoodieInstant instant) {
     ValidationUtils.checkArgument(instant.isCompleted());
+    ValidationUtils.checkArgument(Objects.equals(instant.getAction(), HoodieTimeline.ROLLBACK_ACTION));
     deleteInstantFile(instant);
   }
 

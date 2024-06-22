@@ -97,7 +97,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.isIndexingCommit;
  */
 public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieClient implements RunsTableService {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieWriteClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieTableServiceClient.class);
 
   protected transient Timer.Context compactionTimer;
   protected transient Timer.Context clusteringTimer;
@@ -914,7 +914,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   private List<String> getFailedIndexingCommitsToRollbackForMetadataTable(HoodieTableMetaClient metaClient) {
-    if (!isMetadataTable(metaClient.getBasePathV2().toString())) {
+    if (!isMetadataTable(metaClient.getBasePath())) {
       return Collections.emptyList();
     }
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()

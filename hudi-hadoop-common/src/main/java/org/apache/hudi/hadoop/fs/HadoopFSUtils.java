@@ -61,6 +61,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
+
 /**
  * Utility functions related to accessing the file storage on Hadoop.
  */
@@ -377,11 +379,22 @@ public class HadoopFSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(1);
+  }
+
+  /**
+   * Get the second part of the file name in the log file. That will be the delta commit time.
+   */
+  public static String getDeltaCommitTimeFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
+    }
+    return matcher.group(2);
   }
 
   /**

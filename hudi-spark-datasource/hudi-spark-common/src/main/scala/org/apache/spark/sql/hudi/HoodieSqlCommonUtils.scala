@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
@@ -226,8 +227,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    *
    * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
    */
-  def isHoodieConfigKey(key: String): Boolean =
-    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
+  private def isHoodieConfigKey(key: String, commitMetadataKeyPrefix: String): Boolean =
+    key.startsWith("hoodie.") || key.startsWith(commitMetadataKeyPrefix) ||
+      key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
+
+  def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filterKeys(isHoodieConfigKey(_,
+      opts.getOrElse(COMMIT_METADATA_KEYPREFIX.key, COMMIT_METADATA_KEYPREFIX.defaultValue()))).toMap
 
   /**
    * Checks whether Spark is using Hive as Session's Catalog

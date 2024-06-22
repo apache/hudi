@@ -111,7 +111,7 @@ public class ConsistentBucketIndexUtils {
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     Path metadataPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition);
-    Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePathV2().toString(), partition);
+    Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath().toString(), partition);
     try {
       Predicate<FileStatus> hashingMetaCommitFilePredicate = fileStatus -> {
         String filename = fileStatus.getPath().getName();
@@ -268,7 +268,7 @@ public class ConsistentBucketIndexUtils {
    * @return true if hashing metadata file is latest else false
    */
   private static boolean recommitMetadataFile(HoodieTable table, FileStatus metaFile, String partition) {
-    Path partitionPath = new Path(FSUtils.constructAbsolutePath(table.getMetaClient().getBasePathV2(), partition).toUri());
+    Path partitionPath = new Path(FSUtils.constructAbsolutePath(table.getMetaClient().getBasePath(), partition).toUri());
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
     if (table.getPendingCommitTimeline().containsInstant(timestamp)) {
       return false;

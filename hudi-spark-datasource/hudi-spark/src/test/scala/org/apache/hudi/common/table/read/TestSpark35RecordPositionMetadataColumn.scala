@@ -19,26 +19,24 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils}
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.util.CloseableInternalRowIterator
-
-import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkUtils, SparkFileFormatInternalRowReaderContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFileGroupReaderBasedParquetFileFormat, ParquetFileFormat}
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
-import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestHarness {
   private val PARQUET_FORMAT = "parquet"
-  private val ROW_INDEX_COLUMN = "_tmp_metadata_row_index"
   private val SPARK_MERGER = "org.apache.hudi.HoodieSparkRecordMerger"
 
   @BeforeEach
@@ -78,11 +76,21 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
         StructField("ts", StringType, nullable = false)
       )
     )
-    val requiredSchema = HoodieFileGroupReaderBasedParquetFileFormat
-      .getAppliedRequiredSchema(
-        dataSchema,
-        shouldUseRecordPosition = true,
-        ROW_INDEX_COLUMN)
+
+    // Prepare the file and Parquet file reader.
+    _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
+
+    val hadoopConf = new Configuration(spark().sparkContext.hadoopConfiguration)
+    val props = Map("spark.sql.parquet.enableVectorizedReader" -> "false")
+    _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
+    val reader = sparkAdapter.createParquetFileReader(vectorized = false, _spark.sessionState.conf, props, hadoopConf)
+
+    val metaClient = getHoodieMetaClient(HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
+    val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
+    assertFalse(allBaseFiles.isEmpty)
+
+    val requiredSchema = SparkFileFormatInternalRowReaderContext.getAppliedRequiredSchema(dataSchema,
+        new SparkFileFormatInternalRowReaderContext(reader, "userid", Seq.empty, Seq.empty).supportsParquetRowIndex)
 
     // Confirm if the schema is as expected.
     if (HoodieSparkUtils.gteqSpark3_5) {
@@ -91,21 +99,6 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
         "StructField(_tmp_metadata_row_index,LongType,false)",
         requiredSchema.fields(3).toString)
     }
-
-    // Prepare the file and Parquet file reader.
-    _spark.conf.set("spark.sql.parquet.enableVectorizedReader", "false")
-    val metaClient = getHoodieMetaClient(
-      HadoopFSUtils.getStorageConfWithCopy(_spark.sparkContext.hadoopConfiguration), basePath)
-    val fileReader = new ParquetFileFormat().buildReaderWithPartitionValues(
-      _spark,
-      dataSchema,
-      StructType(Nil),
-      requiredSchema,
-      Nil,
-      Map.empty,
-      new Configuration(spark().sparkContext.hadoopConfiguration))
-    val allBaseFiles = HoodieTestTable.of(metaClient).listAllBaseFiles
-    assertFalse(allBaseFiles.isEmpty)
 
     // Make sure we can read all the positions out from base file.
     // Here we don't add filters since enabling filter push-down
@@ -117,7 +110,8 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
           allBaseFiles.get(0).getPath,
           0,
           allBaseFiles.get(0).getLength)
-      val iterator = new CloseableInternalRowIterator(fileReader.apply(fileInfo))
+      val iterator = new CloseableInternalRowIterator(reader.read(fileInfo, requiredSchema,
+        StructType(Seq.empty), Seq.empty, new HadoopStorageConfiguration(hadoopConf)))
       var rowIndices: Set[Long] = Set()
       while (iterator.hasNext) {
         val row = iterator.next()

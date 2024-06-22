@@ -29,7 +29,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlCon
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
 
 import org.apache.avro.Schema
-import org.apache.calcite.runtime.SqlFunctions.abs
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -40,6 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, 
 import org.junit.jupiter.api.{Disabled, Tag, Test}
 
 import scala.collection.JavaConverters._
+import scala.math.abs
 
 @Tag("functional")
 class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging {

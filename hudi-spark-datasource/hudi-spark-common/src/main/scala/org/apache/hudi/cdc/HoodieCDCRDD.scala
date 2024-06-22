@@ -119,7 +119,7 @@ class HoodieCDCRDD(
 
     private lazy val conf = confBroadcast.value.value
 
-    private lazy val basePath = metaClient.getBasePathV2
+    private lazy val basePath = metaClient.getBasePath
 
     private lazy val tableConfig = metaClient.getTableConfig
 

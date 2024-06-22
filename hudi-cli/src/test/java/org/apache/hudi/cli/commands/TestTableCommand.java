@@ -138,7 +138,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     // Test meta
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(archivePath, client.getArchivePath());
-    assertEquals(tablePath, client.getBasePath());
+    assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.COPY_ON_WRITE, client.getTableType());
     assertEquals(new Integer(1), client.getTimelineLayoutVersion().getVersion());
@@ -163,7 +163,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(metaPath + StoragePath.SEPARATOR + "archive", client.getArchivePath());
-    assertEquals(tablePath, client.getBasePath());
+    assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
   }

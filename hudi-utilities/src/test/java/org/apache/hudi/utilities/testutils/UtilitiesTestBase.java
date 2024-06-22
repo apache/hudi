@@ -141,6 +141,12 @@ public class UtilitiesTestBase {
 
   public static void initTestServices(boolean needsHdfs, boolean needsHive, boolean needsZookeeper) throws Exception {
     hadoopConf = HoodieTestUtils.getDefaultStorageConf().unwrap();
+
+    if (needsZookeeper) {
+      zookeeperTestService = new ZookeeperTestService(hadoopConf);
+      zookeeperTestService.start();
+    }
+
     if (needsHdfs) {
       hdfsTestService = new HdfsTestService(hadoopConf);
       dfsCluster = hdfsTestService.start(true);
@@ -160,11 +166,6 @@ public class UtilitiesTestBase {
       clearHiveDb(basePath + "/dummy" + System.currentTimeMillis());
     }
 
-    if (needsZookeeper) {
-      zookeeperTestService = new ZookeeperTestService(hadoopConf);
-      zookeeperTestService.start();
-    }
-
     jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4]", sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = new SQLContext(jsc);
@@ -175,24 +176,27 @@ public class UtilitiesTestBase {
   public static void cleanUpUtilitiesTestServices() {
     List<String> failedReleases = new ArrayList<>();
     try {
-      if (fs != null) {
-        fs.delete(new Path(basePath), true);
-        fs.close();
-        fs = null;
-      }
-    } catch (IOException ie) {
-      ie.printStackTrace();
-      failedReleases.add("FileSystem");
-    }
-
-    try {
-      if (hdfsTestService != null) {
-        hdfsTestService.stop();
-        hdfsTestService = null;
+      if (sparkSession != null) {
+        sparkSession.close();
+        sparkSession = null;
       }
     } catch (Exception e) {
       e.printStackTrace();
-      failedReleases.add("HdfsTestService");
+      failedReleases.add("SparkSession");
+    }
+
+    if (context != null) {
+      context = null;
+    }
+
+    try {
+      if (jsc != null) {
+        jsc.stop();
+        jsc = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("JSC");
     }
 
     try {
@@ -216,6 +220,27 @@ public class UtilitiesTestBase {
     }
 
     try {
+      if (fs != null) {
+        fs.delete(new Path(basePath), true);
+        fs.close();
+        fs = null;
+      }
+    } catch (IOException ie) {
+      ie.printStackTrace();
+      failedReleases.add("FileSystem");
+    }
+
+    try {
+      if (hdfsTestService != null) {
+        hdfsTestService.stop();
+        hdfsTestService = null;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      failedReleases.add("HdfsTestService");
+    }
+
+    try {
       if (zookeeperTestService != null) {
         zookeeperTestService.stop();
         zookeeperTestService = null;
@@ -223,30 +248,6 @@ public class UtilitiesTestBase {
     } catch (Exception e) {
       e.printStackTrace();
       failedReleases.add("ZooKeeperTestService");
-    }
-
-    try {
-      if (jsc != null) {
-        jsc.stop();
-        jsc = null;
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      failedReleases.add("JSC");
-    }
-
-    try {
-      if (sparkSession != null) {
-        sparkSession.close();
-        sparkSession = null;
-      }
-    } catch (Exception e) {
-      e.printStackTrace();
-      failedReleases.add("SparkSession");
-    }
-
-    if (context != null) {
-      context = null;
     }
 
     if (!failedReleases.isEmpty()) {

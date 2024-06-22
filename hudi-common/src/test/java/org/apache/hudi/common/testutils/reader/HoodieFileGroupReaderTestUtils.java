@@ -19,10 +19,11 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
@@ -43,8 +44,8 @@ public class HoodieFileGroupReaderTestUtils {
       long length,
       TypedProperties properties,
       HoodieStorage storage,
-      HoodieTableConfig tableConfig,
-      HoodieReaderContext<IndexedRecord> readerContext
+      HoodieReaderContext<IndexedRecord> readerContext,
+      HoodieTableMetaClient metaClient
   ) {
     assert (fileSliceOpt.isPresent());
     return new HoodieFileGroupReaderBuilder()
@@ -54,8 +55,7 @@ public class HoodieFileGroupReaderTestUtils {
         .withStart(start)
         .withLength(length)
         .withProperties(properties)
-        .withTableConfig(tableConfig)
-        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition);
+        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
   }
 
   public static class HoodieFileGroupReaderBuilder {
@@ -65,7 +65,6 @@ public class HoodieFileGroupReaderTestUtils {
     private TypedProperties props;
     private long start;
     private long length;
-    private HoodieTableConfig tableConfig;
 
     public HoodieFileGroupReaderBuilder withReaderContext(
         HoodieReaderContext<IndexedRecord> context) {
@@ -98,19 +97,17 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReaderBuilder withTableConfig(
-        HoodieTableConfig tableConfig
-    ) {
-      this.tableConfig = tableConfig;
-      return this;
-    }
-
     public HoodieFileGroupReader<IndexedRecord> build(
         String basePath,
         String latestCommitTime,
         Schema schema,
-        boolean shouldUseRecordPosition
+        boolean shouldUseRecordPosition,
+        HoodieTableMetaClient metaClient
     ) {
+      props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(1024 * 1024 * 1000));
+      props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+      props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
       return new HoodieFileGroupReader<>(
           readerContext,
           storage,
@@ -119,15 +116,12 @@ public class HoodieFileGroupReaderTestUtils {
           fileSlice,
           schema,
           schema,
+          Option.empty(),
+          metaClient,
           props,
-          tableConfig,
           start,
           length,
-          shouldUseRecordPosition,
-          1024 * 1024 * 1000,
-          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
-          ExternalSpillableMap.DiskMapType.ROCKS_DB,
-          false);
+          shouldUseRecordPosition);
     }
   }
 }

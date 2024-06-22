@@ -1795,7 +1795,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieJavaEngineContext(storageConf);
-    HoodieWriteConfig config = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig config = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     // Write 1 (Bulk insert)
@@ -1869,7 +1869,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     tableType = HoodieTableType.COPY_ON_WRITE;
     init(tableType);
     context = new HoodieJavaEngineContext(storageConf);
-    HoodieWriteConfig initialConfig = getSmallInsertWriteConfig(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
+    HoodieWriteConfig initialConfig = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
@@ -2509,23 +2509,6 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private void doWriteInsertAndUpsert(HoodieTestTable testTable) throws Exception {
     doWriteInsertAndUpsert(testTable, "0000001", "0000002", false);
-  }
-
-  private HoodieWriteConfig getSmallInsertWriteConfig(int insertSplitSize, String schemaStr, long smallFileSize, boolean mergeAllowDuplicateInserts) {
-    HoodieWriteConfig.Builder builder = getConfigBuilder(schemaStr, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER);
-    return builder.withCompactionConfig(
-            HoodieCompactionConfig.newBuilder()
-                .compactionSmallFileSize(smallFileSize)
-                // Set rollback to LAZY so no inflights are deleted
-                .insertSplitSize(insertSplitSize).build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withStorageConfig(
-            HoodieStorageConfig.newBuilder()
-                .hfileMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200))
-                .parquetMaxFileSize(dataGen.getEstimatedFileSizeInBytes(200)).build())
-        .withMergeAllowDuplicateOnInserts(mergeAllowDuplicateInserts)
-        .build();
   }
 
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,

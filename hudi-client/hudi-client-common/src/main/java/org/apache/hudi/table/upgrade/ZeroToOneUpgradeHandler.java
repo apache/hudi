@@ -132,7 +132,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
    * @return the marker file name thus curated.
    */
   private static String getFileNameForMarkerFromLogFile(String logFilePath, HoodieTable<?, ?, ?, ?> table) {
-    StoragePath logPath = new StoragePath(table.getMetaClient().getBasePathV2(), logFilePath);
+    StoragePath logPath = new StoragePath(table.getMetaClient().getBasePath(), logFilePath);
     String fileId = FSUtils.getFileIdFromLogPath(logPath);
     String deltaInstant = FSUtils.getDeltaCommitTimeFromLogPath(logPath);
     String writeToken = FSUtils.getWriteTokenFromLogPath(logPath);
