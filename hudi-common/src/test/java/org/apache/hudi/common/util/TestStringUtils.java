@@ -120,4 +120,14 @@ public class TestStringUtils {
     assertEquals("http://use...ons/latest", StringUtils.truncate("http://username:password@myregistry.com:5000/versions/latest", 10, 10));
     assertEquals("http://abc.com", StringUtils.truncate("http://abc.com", 10, 10));
   }
+
+  @Test
+  public void testStripEnd() {
+    assertNull(StringUtils.stripEnd(null, "ab"));
+    assertEquals("", StringUtils.stripEnd("", "ab"));
+    assertEquals("abc", StringUtils.stripEnd("abc", null));
+    assertEquals("abc", StringUtils.stripEnd("abc  ", null));
+    assertEquals("abc", StringUtils.stripEnd("abc", ""));
+    assertEquals("abc", StringUtils.stripEnd("abcabab", "ab"));
+  }
 }

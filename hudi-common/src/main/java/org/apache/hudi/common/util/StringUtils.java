@@ -34,6 +34,7 @@ public class StringUtils {
 
   public static final char[] HEX_CHAR = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
   public static final String EMPTY_STRING = "";
+  public static final int INDEX_NOT_FOUND = -1;
 
   /**
    * <p>
@@ -182,5 +183,30 @@ public class StringUtils {
     String tail = str.substring(str.length() - tailLength);
 
     return head + "..." + tail;
+  }
+
+  /**
+   * Strips given characters from end of the string and returns the result
+   * @param str - string to be stripped
+   * @param stripChars - characters to strip
+   */
+  public static String stripEnd(final String str, final String stripChars) {
+    int end;
+    if (str == null || (end = str.length()) == 0) {
+      return str;
+    }
+
+    if (stripChars == null) {
+      while (end != 0 && Character.isWhitespace(str.charAt(end - 1))) {
+        end--;
+      }
+    } else if (stripChars.isEmpty()) {
+      return str;
+    } else {
+      while (end != 0 && stripChars.indexOf(str.charAt(end - 1)) != INDEX_NOT_FOUND) {
+        end--;
+      }
+    }
+    return str.substring(0, end);
   }
 }
