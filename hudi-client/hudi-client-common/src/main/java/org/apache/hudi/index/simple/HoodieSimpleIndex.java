@@ -107,16 +107,16 @@ public class HoodieSimpleIndex
           .getString(HoodieIndexConfig.SIMPLE_INDEX_INPUT_STORAGE_LEVEL_VALUE));
     }
 
-    int inputParallelism = inputRecords.getNumPartitions();
+    int deduceNumParallelism = inputRecords.deduceNumPartitions();
     int configuredSimpleIndexParallelism = config.getSimpleIndexParallelism();
     // NOTE: Target parallelism could be overridden by the config
-    int targetParallelism =
-        configuredSimpleIndexParallelism > 0 ? configuredSimpleIndexParallelism : inputParallelism;
+    int fetchParallelism =
+        configuredSimpleIndexParallelism > 0 ? configuredSimpleIndexParallelism : deduceNumParallelism;
     HoodiePairData<HoodieKey, HoodieRecord<R>> keyedInputRecords =
         inputRecords.mapToPair(record -> new ImmutablePair<>(record.getKey(), record));
     HoodiePairData<HoodieKey, HoodieRecordLocation> existingLocationsOnTable =
         fetchRecordLocationsForAffectedPartitions(keyedInputRecords.keys(), context, hoodieTable,
-            targetParallelism);
+            fetchParallelism);
 
     HoodieData<HoodieRecord<R>> taggedRecords =
         keyedInputRecords.leftOuterJoin(existingLocationsOnTable).map(entry -> {
@@ -144,7 +144,7 @@ public class HoodieSimpleIndex
       HoodieData<HoodieKey> hoodieKeys, HoodieEngineContext context, HoodieTable hoodieTable,
       int parallelism) {
     List<String> affectedPartitionPathList =
-        hoodieKeys.map(HoodieKey::getPartitionPath).distinct().collectAsList();
+        hoodieKeys.map(HoodieKey::getPartitionPath).distinct(hoodieKeys.deduceNumPartitions()).collectAsList();
     List<Pair<String, HoodieBaseFile>> latestBaseFiles =
         getLatestBaseFilesForAllPartitions(affectedPartitionPathList, context, hoodieTable);
     return fetchRecordLocations(context, hoodieTable, parallelism, latestBaseFiles);

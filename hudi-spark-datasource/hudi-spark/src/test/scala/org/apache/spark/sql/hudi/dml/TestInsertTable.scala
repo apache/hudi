@@ -69,6 +69,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
              location '${tablePath}'
              """.stripMargin)
 
+      spark.sql("set spark.sql.shuffle.partitions = 11")
+
       spark.sql(
         s"""
            |insert into ${targetTable}

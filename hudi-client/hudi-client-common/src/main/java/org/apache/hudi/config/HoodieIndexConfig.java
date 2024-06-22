@@ -168,7 +168,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
-      .defaultValue("100")
+      .defaultValue("0")
       .markAdvanced()
       .withDocumentation("Only applies if index type is GLOBAL_SIMPLE. "
           + "This limits the parallelism of fetching records from the base files of all table "
