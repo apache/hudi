@@ -465,7 +465,7 @@ public class ITTestHoodieDataSource {
     Configuration conf = Configuration.fromMap(options1);
     HoodieTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
     assertTrue(timeline.filterCompletedInstants()
-                    .getInstants().anyMatch(instant -> instant.getAction().equals("clean")),
+            .getInstants().stream().anyMatch(instant -> instant.getAction().equals("clean")),
             "some commits should be cleaned");
   }
 
