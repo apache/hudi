@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.util.JavaConversions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 
 import org.apache.spark.sql.streaming.StreamTest
@@ -258,7 +259,8 @@ class TestStreamingSource extends StreamTest {
         StopStream
       )
       assertTrue(metaClient.reloadActiveTimeline
-        .filter(e => e.isCompleted && HoodieTimeline.COMMIT_ACTION.equals(e.getAction))
+        .filter(JavaConversions.getPredicate(
+          e => e.isCompleted && HoodieTimeline.COMMIT_ACTION.equals(e.getAction)))
         .countInstants() > 0)
     }
   }
