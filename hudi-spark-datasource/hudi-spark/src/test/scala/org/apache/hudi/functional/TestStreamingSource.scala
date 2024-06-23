@@ -231,7 +231,7 @@ class TestStreamingSource extends StreamTest {
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
-        .initTable(spark.sessionState.newHadoopConf(), tablePath)
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
       val df = spark.readStream
         .format("org.apache.hudi")
