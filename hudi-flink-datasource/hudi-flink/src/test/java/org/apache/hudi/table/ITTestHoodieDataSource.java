@@ -448,6 +448,28 @@ public class ITTestHoodieDataSource {
   }
 
   @Test
+  void testBatchWriteWithCleaning() {
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+            .option(FlinkOptions.CLEAN_RETAIN_COMMITS, 1)
+            .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+    execInsertSql(batchTableEnv, insertInto);
+    execInsertSql(batchTableEnv, insertInto);
+    execInsertSql(batchTableEnv, insertInto);
+    Configuration defaultConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Map<String, String> options1 = new HashMap<>(defaultConf.toMap());
+    options1.put(FlinkOptions.TABLE_NAME.key(), "t1");
+    Configuration conf = Configuration.fromMap(options1);
+    HoodieTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
+    assertTrue(timeline.filterCompletedInstants()
+            .getInstants().stream().anyMatch(instant -> instant.getAction().equals("clean")),
+            "some commits should be cleaned");
+  }
+
+  @Test
   void testStreamReadWithDeletes() throws Exception {
     // create filesystem table named source
 
