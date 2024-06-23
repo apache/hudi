@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceReadOptions.START_OFFSET
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_TRANSITION_TIME}
 import org.apache.hudi.config.HoodieCompactionConfig
@@ -30,6 +31,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
+import org.junit.jupiter.api.Assertions.assertTrue
 
 class TestStreamingSource extends StreamTest {
 
@@ -227,18 +229,20 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source with compaction") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
-      HoodieTableMetaClient.withPropertyBuilder()
+      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
+        .setRecordKeyFields("id")
+        .setPreCombineField("ts")
         .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
-      addData(tablePath, Seq(("1", "a1", "10", "000")))
       addData(tablePath,
         Seq(("1", "a2", "12", "000"),
           ("2", "a3", "12", "000")))
@@ -253,6 +257,9 @@ class TestStreamingSource extends StreamTest {
           Row("3", "a6", "12", "000")), lastOnly = true, isSorted = false),
         StopStream
       )
+      assertTrue(metaClient.reloadActiveTimeline
+        .filter(e => e.isCompleted && HoodieTimeline.COMMIT_ACTION.equals(e.getAction))
+        .countInstants() > 0)
     }
   }
 
