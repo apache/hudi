@@ -778,14 +778,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
-    Map<String, String> schema = getMetastoreSchema(tableName);
-    return schema.entrySet().stream()
-          .map(f -> new FieldSchema(f.getKey(), f.getValue()))
-          .collect(Collectors.toList());
-  }
-
-  @Override
   public boolean tableExists(String tableName) {
     GetTableRequest request = GetTableRequest.builder()
         .databaseName(databaseName)
@@ -903,6 +895,23 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       }
       throw new HoodieGlueSyncException("Failed to delete table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  @Override
+  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      List<FieldSchema> partitionFields = getFieldSchemas(table.partitionKeys());
+      List<FieldSchema> columnsFields = getFieldSchemas(table.storageDescriptor().columns());
+      columnsFields.addAll(partitionFields);
+      return columnsFields;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get field schemas from metastore for table : " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private List<FieldSchema> getFieldSchemas(List<Column> columns) {
+    return columns.stream().map(column -> new FieldSchema(column.name(), column.type(), column.comment())).collect(Collectors.toList());
   }
 
   @Override
