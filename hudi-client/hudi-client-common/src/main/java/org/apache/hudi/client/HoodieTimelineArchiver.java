@@ -174,9 +174,9 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter();
-        LOG.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving and deleting instants {}", instantsToArchive);
         archive(context, instantsToArchive);
-        LOG.info("Deleting archived instants " + instantsToArchive);
+        LOG.debug("Deleting archived instants");
         success = deleteArchivedInstants(instantsToArchive, context);
       } else {
         LOG.info("No Instants to archive");
@@ -385,7 +385,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             if (!ignoreFailed) {
               throw new HoodieIOException("Failed to delete : " + file, e);
             } else {
-              LOG.warn("Ignore failed deleting : " + file);
+              LOG.warn("Ignore failed deleting: {}", file);
               return true;
             }
           }
@@ -548,7 +548,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");
           instants = Stream.empty();
         } else {
-          LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
+          LOG.info("Limiting archiving of instants to latest compaction on metadata table at {}", latestCompactionTime.get());
           instants = instants.filter(instant -> compareTimestamps(instant.getTimestamp(), LESSER_THAN,
               latestCompactionTime.get()));
         }
@@ -599,8 +599,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private boolean deleteArchivedInstants(List<HoodieInstant> archivedInstants, HoodieEngineContext context) throws IOException {
-    LOG.info("Deleting instants " + archivedInstants);
-
     List<HoodieInstant> pendingInstants = new ArrayList<>();
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
@@ -638,7 +636,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // Remove older meta-data from auxiliary path too
       Option<HoodieInstant> latestCommitted = Option.fromJavaOptional(archivedInstants.stream().filter(i -> i.isCompleted() && (i.getAction().equals(HoodieTimeline.COMMIT_ACTION)
           || (i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)))).max(Comparator.comparing(HoodieInstant::getTimestamp)));
-      LOG.info("Latest Committed Instant=" + latestCommitted);
+      LOG.info("Latest Committed Instant={}", latestCommitted);
       if (latestCommitted.isPresent()) {
         return deleteAllInstantsOlderOrEqualsInAuxMetaFolder(latestCommitted.get());
       }
@@ -672,7 +670,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
        * in this case we should not break when aux folder is not found.
        * GCS information: (https://cloud.google.com/storage/docs/gsutil/addlhelp/HowSubdirectoriesWork)
        */
-      LOG.warn("Aux path not found. Skipping: " + metaClient.getMetaAuxiliaryPath());
+      LOG.warn("Aux path not found. Skipping: {}", metaClient.getMetaAuxiliaryPath());
       return true;
     }
 
@@ -681,11 +679,11 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
             LESSER_THAN_OR_EQUALS, thresholdInstant.getTimestamp())).collect(Collectors.toList());
 
     for (HoodieInstant deleteInstant : instantsToBeDeleted) {
-      LOG.info("Deleting instant " + deleteInstant + " in auxiliary meta path " + metaClient.getMetaAuxiliaryPath());
+      LOG.info("Deleting instant {} in auxiliary meta path {}", deleteInstant, metaClient.getMetaAuxiliaryPath());
       Path metaFile = new Path(metaClient.getMetaAuxiliaryPath(), deleteInstant.getFileName());
       if (metaClient.getFs().exists(metaFile)) {
         success &= metaClient.getFs().delete(metaFile, false);
-        LOG.info("Deleted instant file in auxiliary meta path : " + metaFile);
+        LOG.info("Deleted instant file in auxiliary meta path : {}", metaFile);
       }
     }
     return success;
@@ -694,7 +692,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   public void archive(HoodieEngineContext context, List<HoodieInstant> instants) throws HoodieCommitException {
     try {
       Schema wrapperSchema = HoodieArchivedMetaEntry.getClassSchema();
-      LOG.info("Wrapper schema " + wrapperSchema.toString());
+      LOG.debug("Wrapper schema {}", wrapperSchema);
       List<IndexedRecord> records = new ArrayList<>();
       for (HoodieInstant hoodieInstant : instants) {
         try {
@@ -719,7 +717,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, HoodieInstant instant) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instant.getTimestamp());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + instant);
+      LOG.info("Cleaned up left over marker directory for instant: {}", instant);
     }
   }
 

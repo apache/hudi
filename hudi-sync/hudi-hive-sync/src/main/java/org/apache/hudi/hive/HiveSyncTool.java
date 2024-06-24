@@ -385,7 +385,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
         config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
         config.getBooleanOrDefault(HIVE_SUPPORT_TIMESTAMP_TYPE));
     if (schemaDiff.isEmpty()) {
-      LOG.info("No Schema difference for {}\nMessageType: {}", tableName, schema);
+      LOG.info("No Schema difference for {}", tableName);
     } else {
       LOG.info("Schema difference found for {}. Updated schema: {}", tableName, schema);
       syncClient.updateTableSchema(tableName, schema);

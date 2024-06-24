@@ -244,23 +244,23 @@ public class FileSystemViewManager {
     final SerializableConfiguration conf = context.getHadoopConf();
     switch (config.getStorageType()) {
       case EMBEDDED_KV_STORE:
-        LOG.info("Creating embedded rocks-db based Table View");
+        LOG.debug("Creating embedded rocks-db based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConf) -> createRocksDBBasedFileSystemView(conf, viewConf, metaClient));
       case SPILLABLE_DISK:
-        LOG.info("Creating Spillable Disk based Table View");
+        LOG.debug("Creating Spillable Disk based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConf) -> createSpillableMapBasedFileSystemView(conf, viewConf, metaClient, commonConfig));
       case MEMORY:
-        LOG.info("Creating in-memory based Table View");
+        LOG.debug("Creating in-memory based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConfig) -> createInMemoryFileSystemView(metadataConfig, viewConfig, metaClient, metadataCreator));
       case REMOTE_ONLY:
-        LOG.info("Creating remote only table view");
+        LOG.debug("Creating remote only table view");
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> createRemoteFileSystemView(conf,
             viewConfig, metaClient));
       case REMOTE_FIRST:
-        LOG.info("Creating remote first table view");
+        LOG.debug("Creating remote first table view");
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(conf, viewConfig, metaClient);
