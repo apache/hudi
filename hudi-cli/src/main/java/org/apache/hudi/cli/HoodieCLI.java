@@ -34,6 +34,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 /**
  * This class is responsible to load table metadata and hoodie related configs.
@@ -92,7 +93,7 @@ public class HoodieCLI {
     if (storage == null || force) {
       storage = (tableMetadata != null)
           ? tableMetadata.getStorage()
-          : new HoodieHadoopStorage(FileSystem.get(conf.unwrap()));
+          : new HoodieHadoopStorage(FileSystem.get(conf.unwrap()), new DefaultStorageStrategy(basePath));
     }
   }
 

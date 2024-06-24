@@ -77,6 +77,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -302,7 +303,7 @@ public class StreamSync implements Serializable, Closeable {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
-    this.storage = new HoodieHadoopStorage(fs);
+    this.storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy(cfg.targetBasePath));
     this.onInitializingHoodieWriteClient = onInitializingHoodieWriteClient;
     this.props = props;
     this.userProvidedSchemaProvider = streamContext.getSchemaProvider();

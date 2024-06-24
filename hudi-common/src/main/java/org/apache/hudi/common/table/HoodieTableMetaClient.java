@@ -416,6 +416,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   public void setHoodieStorage(HoodieStorage storage) {
     this.storage = storage;
+    if (storage.getStorageStrategy() != null) setStorageStrategy(storageStrategy);
   }
 
   public HoodieStorage getRawHoodieStorage() {

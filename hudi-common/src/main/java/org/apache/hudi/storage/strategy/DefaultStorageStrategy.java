@@ -38,7 +38,7 @@ public class DefaultStorageStrategy implements StorageStrategy {
   }
 
   public DefaultStorageStrategy() {
-    // test only
+    // AVOID USING THIS CONSTRUCTOR IF POSSIBLE
     // can't use @VisibleForTesting for scala test classes like ColumnStatsIndexHelper
   }
 

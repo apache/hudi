@@ -45,6 +45,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -104,7 +105,7 @@ public class HoodieSnapshotCopier implements Serializable {
         latestCommitTimestamp));
 
     List<String> partitions = FSUtils.getAllPartitionPaths(
-        context, new HoodieHadoopStorage(fs), baseDir, useFileListingFromMetadata);
+        context, new HoodieHadoopStorage(fs, new DefaultStorageStrategy(baseDir)), baseDir, useFileListingFromMetadata);
     if (partitions.size() > 0) {
       LOG.info(String.format("The job needs to copy %d partitions.", partitions.size()));
 

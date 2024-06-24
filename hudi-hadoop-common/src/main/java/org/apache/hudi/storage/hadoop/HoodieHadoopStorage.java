@@ -106,14 +106,9 @@ public class HoodieHadoopStorage extends HoodieStorage {
     this.fs = new HoodieWrapperFileSystem(fileSystem, consistencyGuard);
   }
 
-  public HoodieHadoopStorage(FileSystem fs) {
-    super(new HadoopStorageConfiguration(fs.getConf()));
+  public HoodieHadoopStorage(FileSystem fs, StorageStrategy storageStrategy) {
+    super(new HadoopStorageConfiguration(fs.getConf()), storageStrategy);
     this.fs = fs;
-  }
-
-  @Override
-  public HoodieStorage newInstance(StoragePath path, StorageConfiguration<?> storageConf) {
-    return new HoodieHadoopStorage(path, storageConf);
   }
 
   @Override
@@ -264,7 +259,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
   @Override
   public HoodieStorage getRawStorage() {
     if (fs instanceof HoodieWrapperFileSystem) {
-      return new HoodieHadoopStorage(((HoodieWrapperFileSystem) fs).getFileSystem());
+      return new HoodieHadoopStorage(((HoodieWrapperFileSystem) fs).getFileSystem(), this.storageStrategy);
     } else {
       return this;
     }

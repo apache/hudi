@@ -33,6 +33,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +71,7 @@ public class LockManager implements Serializable, AutoCloseable {
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
-    metrics = new HoodieLockMetrics(writeConfig, new HoodieHadoopStorage(fs));
+    metrics = new HoodieLockMetrics(writeConfig, new HoodieHadoopStorage(fs, new DefaultStorageStrategy(writeConfig.getBasePath())));
     lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,
         Arrays.asList(HoodieLockException.class, InterruptedException.class), "acquire lock");
   }

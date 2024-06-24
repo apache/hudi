@@ -111,7 +111,7 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   long initialRetryIntervalMs,
                                   String retryExceptions,
                                   ConsistencyGuard consistencyGuard) {
-    return new HoodieHadoopStorage(path, storage.getConf(), storage.getStorageStrategy(),enableRetry, maxRetryIntervalMs,
+    return new HoodieHadoopStorage(path, storage.getConf(), storage.getStorageStrategy(), enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
   }
 }

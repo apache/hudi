@@ -66,12 +66,9 @@ public abstract class HoodieStorage implements Closeable {
   /**
    * @param path        path to instantiate the storage.
    * @param storageConf new storage configuration.
+   * @param storageStrategy new storage strategy
    * @return new {@link HoodieStorage} instance with the configuration.
    */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract HoodieStorage newInstance(StoragePath path,
-                                            StorageConfiguration<?> storageConf);
-
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract HoodieStorage newInstance(StoragePath path,
                                             StorageConfiguration<?> storageConf,

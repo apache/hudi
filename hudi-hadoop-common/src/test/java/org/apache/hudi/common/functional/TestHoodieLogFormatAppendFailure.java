@@ -41,6 +41,7 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -102,7 +103,7 @@ public class TestHoodieLogFormatAppendFailure {
     // Use some fs like LocalFileSystem, that does not support appends
     String uuid = UUID.randomUUID().toString();
     StoragePath localPartitionPath = new StoragePath("/tmp/");
-    HoodieStorage storage = new HoodieHadoopStorage(cluster.getFileSystem());
+    HoodieStorage storage = new HoodieHadoopStorage(cluster.getFileSystem(), new DefaultStorageStrategy());
     StoragePath testPath = new StoragePath(localPartitionPath, uuid);
     storage.createDirectory(testPath);
 

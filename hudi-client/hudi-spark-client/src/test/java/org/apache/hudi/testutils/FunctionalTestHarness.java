@@ -152,7 +152,7 @@ public class FunctionalTestHarness implements SparkProvider, DFSProvider, Hoodie
 
       hdfsTestService = new HdfsTestService();
       dfsCluster = hdfsTestService.start(true);
-      storage = new HoodieHadoopStorage(dfsCluster.getFileSystem());
+      storage = new HoodieHadoopStorage(dfsCluster.getFileSystem(), new DefaultStorageStrategy());
       storage.createDirectory(new StoragePath("/tmp"));
 
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {

@@ -22,6 +22,7 @@ package org.apache.hudi.storage.hadoop;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.TestHoodieStorageBase;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -35,7 +36,7 @@ public class TestHoodieHadoopStorage extends TestHoodieStorageBase {
 
   @Override
   protected HoodieStorage getStorage(Object fs, Object conf) {
-    return new HoodieHadoopStorage((FileSystem) fs);
+    return new HoodieHadoopStorage((FileSystem) fs, new DefaultStorageStrategy(getTempDir()));
   }
 
   @Override
