@@ -5,46 +5,58 @@ toc: true
 last_modified_at: 2020-09-01T15:59:57-04:00
 ---
 
-### Active Team
+### Hudi Team
 
-| Image                                                        | Name                                                         | Role            | Apache ID    |
-| ------------------------------------------------------------ | ------------------------------------------------------------ | --------------- | ------------ |
-| <img src={"https://avatars.githubusercontent.com/alexeykudinkin"} className="profile-pic" alt="alexeykudinkin" align="middle" /> | [Alexey Kudinkin](https://github.com/alexeykudinkin)           | Committer | akudinkin       |
-| <img src={"https://avatars.githubusercontent.com/alunarbeach"} className="profile-pic" alt="alunarbeach" align="middle" /> | [Anbu Cheeralan](https://github.com/alunarbeach)             | PMC, Committer | anchee       |
-| <img src={"https://avatars.githubusercontent.com/bhasudha"} className="profile-pic" alt="bhasudha" align="middle" /> | [Bhavani Sudha](https://github.com/bhasudha)                 | PMC, Committer | bhavanisudha |
-| <img src={"https://avatars.githubusercontent.com/bvaradar"} className="profile-pic" alt="bvaradar" align="middle" /> | [Balaji Varadarajan](https://github.com/bvaradar)            | PMC, Committer | vbalaji      |
-| <img src={"https://avatars.githubusercontent.com/danny0405"} className="profile-pic" alt="danny0405" align="middle" /> | [Danny Chan](https://github.com/danny0405)                      | PMC, Committer       | danny0405        |
-| <img src={"https://avatars.githubusercontent.com/yihua"} className="profile-pic" alt="yihua" align="middle" /> | [Ethan Guo](https://github.com/yihua)                      | PMC, Committer    | yihua        |
-| <img src={"https://avatars.githubusercontent.com/XuQianJin-Stars"} className="profile-pic" alt="XuQianJin-Stars" align="middle" /> | [Forward Xu](https://github.com/XuQianJin-Stars)                      | Committer       | forwardxu        |
-| <img src={"https://avatars.githubusercontent.com/garyli1019"} className="profile-pic" alt="garyli1019" align="middle" /> | [Gary Li](https://github.com/garyli1019)                      | PMC, Committer       | garyli        |
-| <img src={"https://avatars.githubusercontent.com/boneanxs"} className="profile-pic" alt="boneanxs" align="middle" /> | [Hui An](https://github.com/boneanxs)                      | Committer       | rexan     |
-| <img src={"https://avatars.githubusercontent.com/jonvex"} className="profile-pic" alt="jonvex" align="middle" /> | [Jonathan Vexler](https://github.com/jonvex)                   | Committer       | jonvex           |
-| <img src={"https://avatars.githubusercontent.com/beyond1920"} className="profile-pic" alt="beyond1920" align="middle" /> | [Jing Zhang](https://github.com/beyond1920)            | Committer       | beyond1920       |
-| <img src={"https://avatars.githubusercontent.com/lresende"} className="profile-pic" alt="lresende" align="middle" /> | [Luciano Resende](https://github.com/lresende)               | PMC, Committer | lresende     |
-| <img src={"https://avatars.githubusercontent.com/lamberken"} className="profile-pic" alt="lamberken" className="profile-pic" align="middle" /> | [lamberken](https://github.com/lamberken)               | Committer | lamberken     |
-| <img src={"https://avatars.githubusercontent.com/n3nash"} className="profile-pic" alt="n3nash" align="middle" /> | [Nishith Agarwal](https://github.com/n3nash)                 | PMC, Committer | nagarwal     |
-| <img src={"https://avatars.githubusercontent.com/prasannarajaperumal"} className="profile-pic" alt="prasannarajaperumal" align="middle" /> | [Prasanna Rajaperumal](https://github.com/prasannarajaperumal) | PMC, Committer | prasanna     |
-| <img src={"https://avatars.githubusercontent.com/prashantwason"} className="profile-pic" alt="prashantwason" /> | [Prashant Wason](https://github.com/prashantwason)                       | PMC, Committer    | pwason     |
-| <img src={"https://avatars.githubusercontent.com/pratyakshsharma"} className="profile-pic" alt="pratyakshsharma" align="middle" /> | [Pratyaksh Sharma](https://github.com/pratyakshsharma)                      | Committer       | pratyakshsharma        |
-| <img src={"https://avatars.githubusercontent.com/stream2000"} className="profile-pic" alt="stream2000" align="middle" /> | [Qijun Fu](https://github.com/stream2000)                      | Committer       | stream2000        |
-| <img src={"https://avatars.githubusercontent.com/xushiyan"} className="profile-pic" alt="xushiyan" align="middle" /> | [Raymond Xu](https://github.com/xushiyan)                      | PMC, Committer       | xushiyan        |
-| <img src={"https://avatars.githubusercontent.com/leesf"} className="profile-pic" alt="leesf" align="middle" /> | [Shaofeng Li](https://github.com/leesf)                      | PMC, Committer       | leesf        |
-| <img src={"https://avatars.githubusercontent.com/nsivabalan"} className="profile-pic" alt="nsivabalan" align="middle" /> | [Sivabalan Narayanan](https://github.com/nsivabalan)         | PMC, Committer | sivabalan      |
-| <img src={"https://avatars.githubusercontent.com/codope"} className="profile-pic" alt="codope" /> | [Sagar Sumit](https://github.com/codope)                       | PMC, Committer     | codope     |
-| <img src={"https://avatars.githubusercontent.com/satishkotha"} className="profile-pic" alt="satishkotha" /> | [Satish Kotha](https://github.com/satishkotha)                       | Committer       | satishkotha     |
-| <img src={"https://avatars.githubusercontent.com/smarthi"} className="profile-pic" alt="smarthi" align="middle" /> | [Suneel Marthi](https://github.com/smarthi)                  | PMC, Committer | smarthi      |
-| <img src={"https://avatars.githubusercontent.com/xiarixiaoyao"} className="profile-pic" alt="xiarixiaoyao" align="middle" /> | [Tao Meng](https://github.com/xiarixiaoyao)                      | Committer       | mengtao        |
-| <img src={"https://avatars.githubusercontent.com/tweise"} className="profile-pic" alt="tweise" align="middle" /> | [Thomas Weise](https://github.com/tweise)                    | PMC, Committer | thw          |
-| <img src={"https://avatars.githubusercontent.com/umehrot2"} className="profile-pic" alt="umehrot2" align="middle" /> | [Udit Mehrotra](https://github.com/umehrot2)                      | PMC, Committer       | uditme        |
-| <img src={"https://avatars.githubusercontent.com/vinothchandar"} className="profile-pic" alt="vinothchandar" align="middle" /> | [Vinoth Chandar](https://github.com/vinothchandar)           | PMC, Committer | vinoth       |
-| <img src={"https://avatars.githubusercontent.com/vingov"} className="profile-pic" alt="vingov" align="middle" /> | [Vinoth Govindarajan](https://github.com/vingov)               | Committer | vino          |
-| <img src={"https://avatars.githubusercontent.com/yanghua"} className="profile-pic" alt="yanghua" /> | [vinoyang](https://github.com/yanghua)                       | PMC, Committer       | vinoyang     |
-| <img src={"https://avatars.githubusercontent.com/voonhous"} alt="voonhous" className="profile-pic" align="middle" /> | [Voon Hous](https://github.com/voonhous)               | Committer | vhs|
-| <img src={"https://avatars.githubusercontent.com/lw309637554"} alt="liway" className="profile-pic" align="middle" /> | [Wei Li](https://github.com/lw309637554)               | Committer | liway|
-| <img src={"https://avatars.githubusercontent.com/zhedoubushishi"} className="profile-pic" alt="zhedoubushishi" /> | [Wenning Ding](https://github.com/zhedoubushishi)                       | Committer       | wenningd     |
-| <img src={"https://avatars.githubusercontent.com/wangxianghu"} alt="wangxianghu" className="profile-pic" align="middle" /> | [Xianghu Wang](https://github.com/wangxianghu)               | Committer | wangxianghu|
-| <img src={"https://avatars.githubusercontent.com/YannByron"} className="profile-pic" alt="Yann Byron" align="middle" /> | [Yann Byron](https://github.com/YannByron)                     | Committer       | biyan           |
-| <img src={"https://avatars.githubusercontent.com/zhangyue19921010"} className="profile-pic" alt="zhangyue19921010" align="middle" /> | [Yue Zhang](https://github.com/zhangyue19921010)                      | Committer | zhangyue19921010           |
-| <img src={"https://avatars.githubusercontent.com/yuzhaojing"} className="profile-pic" alt="yuzhaojing" align="middle" /> | [Zhaojing Yu](https://github.com/yuzhaojing)                      | Committer       | yuzhaojing        |
-| <img src={"https://avatars.githubusercontent.com/pengzhiwei2018"} className="profile-pic" alt="pengzhiwei2018" align="middle" /> | [Zhiwei Peng](https://github.com/pengzhiwei2018)                      | Committer       | zhiwei        |
+Here is the list of PMC and Committers who have contributed to the project. For the most uptodate list refer to [Apache's website](https://people.apache.org/committers-by-project.html#hudi). 
 
+### PMC 
+
+| Name                        | Github Username     | Apache ID                                                             |
+|-----------------------------|---------------------|-----------------------------------------------------------------------|
+| Anbu Cheeralan              | alunarbeach         | [anchee](https://people.apache.org/committer-index.html#anchee)       |
+| Bhavani Sudha Saktheeswaran | bhasudha            | [bhavanisudha](https://people.apache.org/committer-index.html#)       |
+| Balaji Varadarajan          | bvaradar            | [vbalaji](https://people.apache.org/committer-index.html#vbalaji)     |
+| Danny Chan                  | danny0405           | [danny0405](https://people.apache.org/committer-index.html#danny0405) |
+| Ethan Guo                   | yihua               | [yihua](https://people.apache.org/committer-index.html#yihua)         |
+| Gary Li                     | garyli1019          | [garyli](https://people.apache.org/committer-index.html#garyli)       |
+| Luciano Resende             | lresende            | [lresende](https://people.apache.org/committer-index.html#lresende)   |
+| Nishith Agarwal             | n3nash              | [nagarwal](https://people.apache.org/committer-index.html#nagarwal)   |
+| Prasanna Rajaperumal        | prasannarajaperumal | [prasanna](https://people.apache.org/committer-index.html#prasanna)   |
+| Prashant Wason              | prashantwason       | [pwason](https://people.apache.org/committer-index.html#pwason)       |
+| Raymond Xu                  | xushiyan            | [xushiyan](https://people.apache.org/committer-index.html#xushiyan)   |
+| Shaofeng Li                 | leesf               | [leesf](https://people.apache.org/committer-index.html#leesf)         |
+| Sivabalan Narayanan         | nsivabalan          | [sivabalan](https://people.apache.org/committer-index.html#sivabalan) |
+| Sagar Sumit                 | codope              | [codope](https://people.apache.org/committer-index.html#codope)       |
+| Suneel Marthi               | smarthi             | [smarthi](https://people.apache.org/committer-index.html#smarthi)     |
+| Thomas Weise                | tweise              | [thw](https://people.apache.org/committer-index.html#thw)             |
+| Udit Mehrotra               | umehrot2            | [uditme](https://people.apache.org/committer-index.html#uditme)       |
+| Vinoth Chandar              | vinothchandar       | [vinoth](https://people.apache.org/committer-index.html#vinoth)       |
+| vinoyang                    | yanghua             | [vinoyang](https://people.apache.org/committer-index.html#vinoyang)   |
+
+
+### Committers
+
+| Name                 | Github Username  | Apache ID                                                                           |
+|----------------------|------------------|-------------------------------------------------------------------------------------|
+| Alexey Kudinkin      | alexeykudinkin   | [akudinkin](https://people.apache.org/committer-index.html#akudinkin)               |
+| Forward Xu           | XuQianJin-Stars  | [forwardxu](https://people.apache.org/committer-index.html#forwardxu)               |
+| Hui An               | boneanxs         | [rexan](https://people.apache.org/committer-index.html#rexan)                       |
+| Jonathan Vexler      | jonvex           | [jonvex](https://people.apache.org/committer-index.html#jonvex)                     |
+| Jing Zhang           | beyond1920       | [beyond1920](https://people.apache.org/committer-index.html#beyond1920)             |
+| lamberken            | lamberken        | [lamberken](https://people.apache.org/committer-index.html#lamberken)               |
+| Pratyaksh Sharma     | pratyakshsharma  | [pratyakshsharma](https://people.apache.org/committer-index.html#pratyakshsharma)   |
+| Qijun Fu             | stream2000       | [stream2000](https://people.apache.org/committer-index.html#stream2000)             |
+| Satish Kotha         | satishkotha      | [satishkotha](https://people.apache.org/committer-index.html#satishkotha)           |
+| Tao Meng             | xiarixiaoyao     | [mengtao](https://people.apache.org/committer-index.html#mengtao)                   |
+| Vinoth Govindarajan  | vingov           | [vino](https://people.apache.org/committer-index.html#vino)                         |
+| Voon Hous            | voonhous         | [vhs](https://people.apache.org/committer-index.html#vhs)                           |
+| Wei Li               | lw309637554      | [liway](https://people.apache.org/committer-index.html#liway)                       |
+| Wenning Ding         | zhedoubushishi   | [wenningd](https://people.apache.org/committer-index.html#wenningd)                 |
+| Xianghu Wang         | wangxianghu      | [wangxianghu](https://people.apache.org/committer-index.html#wangxianghu)           |
+| Yann Byron           | YannByron        | [biyan](https://people.apache.org/committer-index.html#biyan)                       |
+| Yue Zhang            | zhangyue19921010 | [zhangyue19921010](https://people.apache.org/committer-index.html#zhangyue19921010) |
+| Zhaojing Yu          | yuzhaojing       | [yuzhaojing](https://people.apache.org/committer-index.html#yuzhaojing)             |
+| Zhiwei Peng          | pengzhiwei2018   | [zhiwei](https://people.apache.org/committer-index.html#zhiwei)                     |
+
+### Contributors
+[All contributors](https://github.com/apache/hudi/graphs/contributors)
