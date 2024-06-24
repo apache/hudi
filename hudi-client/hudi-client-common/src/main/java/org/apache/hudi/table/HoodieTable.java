@@ -123,7 +123,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
@@ -1110,5 +1110,11 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } else {
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    this.viewManager.close();
+    this.metadata.close();
   }
 }

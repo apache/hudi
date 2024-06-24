@@ -118,11 +118,15 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<HoodieRecord<T>> filterExists(JavaRDD<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context);
-    Timer.Context indexTimer = metrics.getIndexCtx();
-    JavaRDD<HoodieRecord<T>> recordsWithLocation = HoodieJavaRDD.getJavaRDD(
-        getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table));
-    metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
-    return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
+    try {
+      Timer.Context indexTimer = metrics.getIndexCtx();
+      JavaRDD<HoodieRecord<T>> recordsWithLocation = HoodieJavaRDD.getJavaRDD(
+          getIndex().tagLocation(HoodieJavaRDD.of(hoodieRecords), context, table));
+      metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+      return recordsWithLocation.filter(v1 -> !v1.isCurrentLocationKnown());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -130,54 +134,76 @@ public class SparkRDDWriteClient<T> extends
    */
   @Override
   public void bootstrap(Option<Map<String, String>> extraMetadata) {
-    initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS)).bootstrap(context, extraMetadata);
+    HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
+        initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
+    try {
+      table.bootstrap(context, extraMetadata);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> upsert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsert(context, instantTime, HoodieJavaRDD.of(records));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    if (result.getSourceReadAndIndexDurationMs().isPresent()) {
-      metrics.updateSourceReadAndIndexMetrics(HoodieMetrics.DURATION_STR, result.getSourceReadAndIndexDurationMs().get());
+    try {
+      table.validateUpsertSchema();
+      preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsert(context, instantTime, HoodieJavaRDD.of(records));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      if (result.getSourceReadAndIndexDurationMs().isPresent()) {
+        metrics.updateSourceReadAndIndexMetrics(HoodieMetrics.DURATION_STR, result.getSourceReadAndIndexDurationMs().get());
+      }
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
     }
-    return postWrite(resultRDD, instantTime, table);
   }
 
   @Override
   public JavaRDD<WriteStatus> upsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      table.validateUpsertSchema();
+      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.upsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> insert(JavaRDD<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insert(context, instantTime, HoodieJavaRDD.of(records));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insert(context, instantTime, HoodieJavaRDD.of(records));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> insertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.INSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT_PREPPED, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -189,11 +215,15 @@ public class SparkRDDWriteClient<T> extends
    */
   public HoodieWriteResult insertOverwrite(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertOverwrite(context, instantTime, HoodieJavaRDD.of(records));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertOverwrite(context, instantTime, HoodieJavaRDD.of(records));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -205,11 +235,15 @@ public class SparkRDDWriteClient<T> extends
    */
   public HoodieWriteResult insertOverwriteTable(JavaRDD<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertOverwriteTable(context, instantTime, HoodieJavaRDD.of(records));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.insertOverwriteTable(context, instantTime, HoodieJavaRDD.of(records));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
@@ -221,56 +255,80 @@ public class SparkRDDWriteClient<T> extends
   public JavaRDD<WriteStatus> bulkInsert(JavaRDD<HoodieRecord<T>> records, String instantTime, Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context, instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.BULK_INSERT, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsert(context, instantTime, HoodieJavaRDD.of(records), userDefinedBulkInsertPartitioner);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> bulkInsertPreppedRecords(JavaRDD<HoodieRecord<T>> preppedRecords, String instantTime, Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.bulkInsertPrepped(context, instantTime, HoodieJavaRDD.of(preppedRecords), bulkInsertPartitioner);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> delete(JavaRDD<HoodieKey> keys, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context, instantTime, HoodieJavaRDD.of(keys));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.delete(context, instantTime, HoodieJavaRDD.of(keys));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public JavaRDD<WriteStatus> deletePrepped(JavaRDD<HoodieRecord<T>> preppedRecord, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context,instantTime, HoodieJavaRDD.of(preppedRecord));
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return postWrite(resultRDD, instantTime, table);
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePrepped(context, instantTime, HoodieJavaRDD.of(preppedRecord));
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return postWrite(resultRDD, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   public HoodieWriteResult deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   public HoodieWriteResult managePartitionTTL(String instantTime) {
     HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> table = initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
-    HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.managePartitionTTL(context, instantTime);
-    HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
-    return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+      HoodieWriteMetadata<HoodieData<WriteStatus>> result = table.managePartitionTTL(context, instantTime);
+      HoodieWriteMetadata<JavaRDD<WriteStatus>> resultRDD = result.clone(HoodieJavaRDD.getJavaRDD(result.getWriteStatuses()));
+      return new HoodieWriteResult(postWrite(resultRDD, instantTime, table), result.getPartitionToReplaceFileIds());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
