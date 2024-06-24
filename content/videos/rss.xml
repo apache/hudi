@@ -4,9 +4,75 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Sat, 18 May 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Fri, 21 Jun 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</link>
+            <guid>/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</guid>
+            <pubDate>Fri, 21 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Ingest XML files with AWS Glue into Hudi Datalakes | Step by Step guide]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/18/learn-how-to-ingest-xml-files-with-aws-glue-into-hudi-datalakes</link>
+            <guid>/2024/06/18/learn-how-to-ingest-xml-files-with-aws-glue-into-hudi-datalakes</guid>
+            <pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi with Spark SQL for Beginners | Insert| Updates | Delete | incremental Query | Stored procedures]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/16/hudi-with-spark-sql-for-beginners-insert-updates-delete-incremental-query-stored-procedures</link>
+            <guid>/2024/06/16/hudi-with-spark-sql-for-beginners-insert-updates-delete-incremental-query-stored-procedures</guid>
+            <pubDate>Sun, 16 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[How we Utilized Hudi's Time Travel Query to Investigate Bid and Spend | Going Back in Time with Hudi]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</link>
+            <guid>/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</guid>
+            <pubDate>Sat, 15 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Cleaning Process | hoodie.keep.min.commits and hoodie.keep.max.commits Explained]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</link>
+            <guid>/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</guid>
+            <pubDate>Wed, 12 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Multiple Spark Writers to Hudi tables | Hands on Labs]]></title>
+            <link>https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables</link>
+            <guid>/2024/06/05/multiple-spark-writers-to-hudi-tables</guid>
+            <pubDate>Wed, 05 Jun 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Learn How to Ingest data from pulsar Topic into Hudi with DeltaStreamer | Hands on Labs]]></title>
+            <link>https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</link>
+            <guid>/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</guid>
+            <pubDate>Sat, 25 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Build Hudi Date Dimension in Minutes with Spark SQL Minio and Query with Trino]]></title>
+            <link>https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</link>
+            <guid>/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</guid>
+            <pubDate>Thu, 23 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Demo Video : Hudi Delta Streamer Implementing Slowly Changing Dimension and Query that using Trino]]></title>
+            <link>https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</link>
+            <guid>/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</guid>
+            <pubDate>Wed, 22 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Hudi Streamer implementing Slowly Changing Dimension Type 2 and Query Real Time Trino | Hands on]]></title>
+            <link>https://hudi.apache.org/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</link>
+            <guid>/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</guid>
+            <pubDate>Wed, 22 May 2024 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[DeltaStreamer with incremental ETL and Broadcast Joins for Faster ETL]]></title>
+            <link>https://hudi.apache.org/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</link>
+            <guid>/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</guid>
+            <pubDate>Mon, 20 May 2024 00:00:00 GMT</pubDate>
+        </item>
         <item>
             <title><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
             <link>https://hudi.apache.org/videos/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</link>

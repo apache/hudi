@@ -2,11 +2,110 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2024-05-18T00:00:00.000Z</updated>
+    <updated>2024-06-21T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[4 Different Ways to fetch Apache Hudi Commit time in Python and PySpark]]></title>
+        <id>/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark</id>
+        <link href="https://hudi.apache.org/videos/2024/06/21/Four-Different-Ways-to-fetch-Apache-Hudi-Commit-time-in-Python-and-PySpark"/>
+        <updated>2024-06-21T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Ingest XML files with AWS Glue into Hudi Datalakes | Step by Step guide]]></title>
+        <id>/2024/06/18/learn-how-to-ingest-xml-files-with-aws-glue-into-hudi-datalakes</id>
+        <link href="https://hudi.apache.org/videos/2024/06/18/learn-how-to-ingest-xml-files-with-aws-glue-into-hudi-datalakes"/>
+        <updated>2024-06-18T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi with Spark SQL for Beginners | Insert| Updates | Delete | incremental Query | Stored procedures]]></title>
+        <id>/2024/06/16/hudi-with-spark-sql-for-beginners-insert-updates-delete-incremental-query-stored-procedures</id>
+        <link href="https://hudi.apache.org/videos/2024/06/16/hudi-with-spark-sql-for-beginners-insert-updates-delete-incremental-query-stored-procedures"/>
+        <updated>2024-06-16T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How we Utilized Hudi's Time Travel Query to Investigate Bid and Spend | Going Back in Time with Hudi]]></title>
+        <id>/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</id>
+        <link href="https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend"/>
+        <updated>2024-06-15T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi Cleaning Process | hoodie.keep.min.commits and hoodie.keep.max.commits Explained]]></title>
+        <id>/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained</id>
+        <link href="https://hudi.apache.org/videos/2024/06/12/hudi-cleaning-process-hoodie.keep.min.commits-and-hoodie.keep.max.commits-explained"/>
+        <updated>2024-06-12T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Multiple Spark Writers to Hudi tables | Hands on Labs]]></title>
+        <id>/2024/06/05/multiple-spark-writers-to-hudi-tables</id>
+        <link href="https://hudi.apache.org/videos/2024/06/05/multiple-spark-writers-to-hudi-tables"/>
+        <updated>2024-06-05T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn How to Ingest data from pulsar Topic into Hudi with DeltaStreamer | Hands on Labs]]></title>
+        <id>/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer</id>
+        <link href="https://hudi.apache.org/videos/2024/05/25/learn-how-to-ingest-data-from-pulsar-topic-into-hudi-with-deltastreamer"/>
+        <updated>2024-05-25T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Build Hudi Date Dimension in Minutes with Spark SQL Minio and Query with Trino]]></title>
+        <id>/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino</id>
+        <link href="https://hudi.apache.org/videos/2024/05/23/build-hudi-date-dimension-in-minutes-with-spark-sql-minio-and-query-with-trino"/>
+        <updated>2024-05-23T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Demo Video : Hudi Delta Streamer Implementing Slowly Changing Dimension and Query that using Trino]]></title>
+        <id>/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino</id>
+        <link href="https://hudi.apache.org/videos/2024/05/22/hudi-delta-streamer-implementing-slowly-changing-dimension-and-query-that-using-trino"/>
+        <updated>2024-05-22T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Hudi Streamer implementing Slowly Changing Dimension Type 2 and Query Real Time Trino | Hands on]]></title>
+        <id>/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino</id>
+        <link href="https://hudi.apache.org/videos/2024/05/22/hudi-streamer-implementing-slowly-changing-dimension-type-2-and-query-real-time-trino"/>
+        <updated>2024-05-22T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[DeltaStreamer with incremental ETL and Broadcast Joins for Faster ETL]]></title>
+        <id>/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl</id>
+        <link href="https://hudi.apache.org/videos/2024/05/20/deltastreamer-with-incremental-etl-and-broadcast-joins-for-faster-etl"/>
+        <updated>2024-05-20T00:00:00.000Z</updated>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Learn How to use Cloudwatch metrics with Hudi AWS Glue Jobs]]></title>
         <id>/2024/05/18/Learn-How-to-use-Cloudwatch-metrics-with-Hudi-AWS-Glue-Jobs</id>
