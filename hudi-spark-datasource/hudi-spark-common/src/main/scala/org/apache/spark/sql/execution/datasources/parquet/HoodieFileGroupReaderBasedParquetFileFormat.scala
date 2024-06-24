@@ -134,7 +134,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val broadcastedStorageConf = spark.sparkContext.broadcast(augmentedStorageConf)
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
-    val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options)
+    val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     (file: PartitionedFile) => {
       file.partitionValues match {

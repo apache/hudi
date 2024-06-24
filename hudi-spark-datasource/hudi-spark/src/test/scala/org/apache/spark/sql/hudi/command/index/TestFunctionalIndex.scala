@@ -41,6 +41,10 @@ import org.scalatest.Ignore
 @Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
+  override protected def beforeAll(): Unit = {
+    initQueryIndexConf()
+  }
+
   test("Test Functional Index With Hive Sync Non Partitioned Table") {
     // There is a big difference between Java class loader architecture of versions 1.8 and 17.
     // Hive 2.3.7 is compiled with Java 1.8, and the class loader used there throws error when Hive APIs are run on Java 17.

@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StringType}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{BeforeAll, Tag}
 
 import scala.collection.JavaConverters._
 
@@ -41,6 +41,11 @@ import scala.collection.JavaConverters._
 class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   val sqlTempTable = "hudi_tbl"
+
+  @BeforeAll
+  def init(): Unit = {
+    initQueryIndexConf()
+  }
 
   test("Test partition stats index following insert, merge into, update and delete") {
     Seq("cow", "mor").foreach { tableType =>
