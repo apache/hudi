@@ -137,6 +137,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
+  private HoodieTableFileSystemView tableFileSystemView;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -326,7 +327,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    if (tableFileSystemView == null) {
+      tableFileSystemView = new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    }
+    return tableFileSystemView;
   }
 
   /**
@@ -1114,7 +1118,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoClose
 
   @Override
   public void close() throws Exception {
+    if (tableFileSystemView != null) {
+      this.tableFileSystemView.close();
+      this.tableFileSystemView = null;
+    }
     this.viewManager.close();
+    this.viewManager = null;
     this.metadata.close();
   }
 }
