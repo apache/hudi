@@ -131,3 +131,5 @@ Data Summit Connect, May, 2021
 58. ["Panel Discussion on Growing a Healthy Open Source Community"](https://osacon.io/sessions/2023/panel-discussion-on-growing-a-healthy-open-source-community/) - By Nadine Farah, Ali LeClerc, Evan Rusackas. OSA CON, December 2023
 
 59. ["Unveil the Magic Without Hoodini: Transform Your Machine Learning Pipelines with Apache Hudi"](https://www.youtube.com/watch?v=pUZHotLdkjU) - By Nadine Farah. AI.dev, December 2023
+
+60. ["Enhancing Trino's Query Performance and Data Management with Hudi: Innovations and Future"](https://trino.io/blog/2024/04/15/trino-fest-2024-approaches.html#hudi) - By Ethan Guo.  Trino Fest, June 2024. [Video](https://youtu.be/JMzS2BbeK0E?si=t25pqd55bmdmVlXL). [Slides](https://trino.io/assets/blog/trino-fest-2024/onehouse.pdf)
