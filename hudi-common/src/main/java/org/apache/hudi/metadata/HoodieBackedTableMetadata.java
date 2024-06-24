@@ -695,6 +695,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   public void close() {
     closePartitionReaders();
     partitionFileSliceMap.clear();
+    if (this.metadataFileSystemView != null) {
+      this.metadataFileSystemView.close();
+    }
   }
 
   /**
