@@ -157,7 +157,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //delete commit from timeline
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
-    File commit = new File(metaClient.getBasePathV2().toString().substring(5) + "/.hoodie/" + filename);
+    File commit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + filename);
     assertTrue(commit.delete());
     metaClient.reloadActiveTimeline();
 
@@ -182,7 +182,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
       copyIn(tableType, "002");
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getRollbackLogFiles().forEach((n, k) -> recreateMarkerFile(cfg, "003", partition, n)));
       rollbackMetadata.getPartitionMetadata().forEach((partition, metadata) -> metadata.getLogFilesFromFailedCommit().forEach((n, k) -> recreateMarkerFile(cfg, "002", partition, n)));
-      commit = new File(metaClient.getBasePathV2().toString().substring(5) + "/.hoodie/" + lastInstant.getFileName());
+      commit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + lastInstant.getFileName());
       assertTrue(commit.delete());
       metaClient.reloadActiveTimeline();
     }
@@ -237,7 +237,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
     //delete commit from timeline
     metaClient = HoodieTableMetaClient.reload(metaClient);
     String filename = metaClient.getActiveTimeline().lastInstant().get().getFileName();
-    File deltacommit = new File(metaClient.getBasePathV2().toString().substring(5) + "/.hoodie/" + filename);
+    File deltacommit = new File(metaClient.getBasePath().toString().substring(5) + "/.hoodie/" + filename);
     assertTrue(deltacommit.delete());
     metaClient.reloadActiveTimeline();
 

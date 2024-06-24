@@ -417,7 +417,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
         metrics.ifPresent(m -> m.setMetric(metricKey, 1));
         String errMsg = String.format("Bootstrap on %s partition failed for %s",
-            partitionType.getPartitionPath(), metadataMetaClient.getBasePathV2());
+            partitionType.getPartitionPath(), metadataMetaClient.getBasePath());
         LOG.error(errMsg, e);
         throw new HoodieMetadataException(errMsg, e);
       }
@@ -517,7 +517,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           partitionBaseFilePairs,
           false,
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-          dataWriteConfig.getBasePath(),
+          dataMetaClient.getBasePath(),
           storageConf,
           this.getClass().getSimpleName());
     } else {
@@ -666,7 +666,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    StoragePath storageBasePath = dataMetaClient.getBasePathV2();
+    StoragePath storageBasePath = dataMetaClient.getBasePath();
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -1486,7 +1486,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-        dataWriteConfig.getBasePath(),
+        dataMetaClient.getBasePath(),
         storageConf,
         this.getClass().getSimpleName());
   }

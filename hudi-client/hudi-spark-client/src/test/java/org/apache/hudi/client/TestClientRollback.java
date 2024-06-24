@@ -193,7 +193,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFileName = table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" +  inst.getFileName();
+        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/" + inst.getFileName();
 
         //delete restore commit file
         assertTrue((new File(restoreFileName)).delete());
@@ -746,7 +746,7 @@ public class TestClientRollback extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       if (isRollbackPlanCorrupted) {
         // Add a corrupted requested rollback plan
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath(), rollbackInstantTime, new byte[] {0, 1, 2});
+        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
       } else {
         // Add a valid requested rollback plan to roll back commitTime3
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
@@ -758,7 +758,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .collect(Collectors.toList());
         rollbackPlan.setRollbackRequests(rollbackRequestList);
         rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION));
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath(), rollbackInstantTime, rollbackPlan);
+        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
       }
 
       // Rollback commit3

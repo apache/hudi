@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.sink.meta.CkpMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.util.FlinkTables;
@@ -141,7 +142,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
    * Load the index records before {@link #processElement}.
    */
   protected void preLoadIndexRecords() throws Exception {
-    String basePath = hoodieTable.getMetaClient().getBasePath();
+    StoragePath basePath = hoodieTable.getMetaClient().getBasePath();
     int taskID = getRuntimeContext().getIndexOfThisSubtask();
     LOG.info("Start loading records in table {} into the index state, taskId = {}", basePath, taskID);
     for (String partitionPath : FSUtils.getAllPartitionPaths(

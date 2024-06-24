@@ -357,10 +357,10 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
    * @param instant Clean instant
    */
   private void addCleanInstant(HoodieTimeline timeline, HoodieInstant instant) throws IOException {
-    LOG.info("Syncing cleaner instant (" + instant + ")");
+    LOG.info("Syncing cleaner instant ({})", instant);
     HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, instant);
     cleanMetadata.getPartitionMetadata().entrySet().stream().forEach(entry -> {
-      final String basePath = metaClient.getBasePath();
+      final StoragePath basePath = metaClient.getBasePath();
       final String partitionPath = entry.getValue().getPartitionPath();
       List<String> fullPathList = entry.getValue().getSuccessDeleteFiles()
           .stream().map(fileName -> new StoragePath(FSUtils
@@ -368,7 +368,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           .collect(Collectors.toList());
       removeFileSlicesForPartition(timeline, instant, entry.getKey(), fullPathList);
     });
-    LOG.info("Done Syncing cleaner instant (" + instant + ")");
+    LOG.info("Done Syncing cleaner instant ({})", instant);
   }
 
   private void removeFileSlicesForPartition(HoodieTimeline timeline, HoodieInstant instant, String partition,

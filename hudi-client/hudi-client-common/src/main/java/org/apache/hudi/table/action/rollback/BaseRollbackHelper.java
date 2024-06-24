@@ -166,7 +166,7 @@ public class BaseRollbackHelper implements Serializable {
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
           writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2().toString(), partitionPath))
+              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
               .withFileId(fileId)
               .overBaseCommit(latestBaseInstant)
               .withStorage(metaClient.getStorage())
@@ -204,7 +204,7 @@ public class BaseRollbackHelper implements Serializable {
 
         // With listing based rollback, sometimes we only get the fileID of interest(so that we can add rollback command block) w/o the actual file name.
         // So, we want to ignore such invalid files from this list before we add it to the rollback stats.
-        String partitionFullPath = FSUtils.constructAbsolutePath(metaClient.getBasePathV2().toString(), rollbackRequest.getPartitionPath()).toString();
+        String partitionFullPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()).toString();
         Map<String, Long> validLogBlocksToDelete = new HashMap<>();
         rollbackRequest.getLogBlocksToBeDeleted().entrySet().stream().forEach((kv) -> {
           String logFileFullPath = kv.getKey();
@@ -269,7 +269,7 @@ public class BaseRollbackHelper implements Serializable {
       return originalRollbackStats;
     }
 
-    final String basePathStr = metaClient.getBasePathV2().toString();
+    final String basePathStr = metaClient.getBasePath().toString();
     List<String> logFiles = new ArrayList<>(logPaths);
     // populate partitionPath -> List<log file name>
     HoodiePairData<String, List<String>> partitionPathToLogFilesHoodieData = populatePartitionToLogFilesHoodieData(context, basePathStr, logFiles);
@@ -354,7 +354,7 @@ public class BaseRollbackHelper implements Serializable {
    */
   protected List<HoodieRollbackStat> deleteFiles(HoodieTableMetaClient metaClient, List<String> filesToBeDeleted, boolean doDelete) throws IOException {
     return filesToBeDeleted.stream().map(fileToDelete -> {
-      String basePath = metaClient.getBasePathV2().toString();
+      String basePath = metaClient.getBasePath().toString();
       try {
         Path fullDeletePath = new Path(fileToDelete);
         String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());

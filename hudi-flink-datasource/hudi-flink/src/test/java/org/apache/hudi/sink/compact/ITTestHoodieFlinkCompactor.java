@@ -426,7 +426,7 @@ public class ITTestHoodieFlinkCompactor {
     FSUtils.getAllPartitionPaths(HoodieFlinkEngineContext.DEFAULT, metaClient.getStorage(), metaClient.getBasePath(), false, false).forEach(
         partition -> {
           try {
-            storage.listDirectEntries(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partition))
+            storage.listDirectEntries(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition))
                 .stream()
                 .filter(f -> FSUtils.isBaseFile(f.getPath()))
                 .forEach(f -> {

@@ -133,7 +133,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
 
     int mergeSize = (int) (maxFileSize * BUCKET_MERGE_THRESHOLD.defaultValue());
-    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
+    int[] fsSize = {0, maxFileSize, mergeSize / 2, mergeSize / 2 + 10, mergeSize / 2, maxFileSize, mergeSize / 4, mergeSize / 4};
     List<FileSlice> fileSlices = IntStream.range(0, metadata.getNodes().size()).mapToObj(
         i -> createFileSliceWithSize(metadata.getNodes().get(i).getFileIdPrefix(), fsSize[i] / 2, fsSize[i] / 2)
     ).collect(Collectors.toList());
