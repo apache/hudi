@@ -4,9 +4,81 @@
         <title>Apache Hudi: User-Facing Analytics</title>
         <link>https://hudi.apache.org/cn/blog</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 24 Apr 2024 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Tue, 18 Jun 2024 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[How to use Apache Hudi with Databricks]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/06/18/how-to-use-apache-hudi-with-databricks</link>
+            <guid>/2024/06/18/how-to-use-apache-hudi-with-databricks</guid>
+            <pubDate>Tue, 18 Jun 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi: A Deep Dive with Python Code Examples]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples</link>
+            <guid>/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples</guid>
+            <pubDate>Fri, 07 Jun 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://blog.harshdaiya.com/apache-hudi-a-deep-dive-with-python-code-examples">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi vs. Delta Lake: Choosing the Right Tool for Your Data Lake on AWS]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws</link>
+            <guid>/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws</guid>
+            <pubDate>Mon, 27 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/@siladityaghosh/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws-8b97c66a5a12">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Use AWS Data Exchange to seamlessly share Apache Hudi datasets]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets</link>
+            <guid>/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets</guid>
+            <pubDate>Wed, 22 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi on AWS Glue]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/19/apache-hudi-on-aws-glue</link>
+            <guid>/2024/05/19/apache-hudi-on-aws-glue</guid>
+            <pubDate>Sun, 19 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://dev.to/sagarlakshmipathy/apache-hudi-on-aws-glue-450l">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Building Analytical Apps on the Lakehouse using Apache Hudi, Daft & Streamlit]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit</link>
+            <guid>/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit</guid>
+            <pubDate>Fri, 10 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://medium.com/apache-hudi-blogs/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit-3224766fe58a">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Learn how to read Hudi data with AWS Glue Ray using Daft (No Spark)]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark</link>
+            <guid>/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark</guid>
+            <pubDate>Tue, 07 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark-soumil-shah-kycbe/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[How to Query Apache Hudi Tables with Python Using Daft: A Spark-Free Approach]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free</link>
+            <guid>/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free</guid>
+            <pubDate>Thu, 02 May 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://www.linkedin.com/pulse/how-query-apache-hudi-tables-python-using-daft-spark-free-soumil-shah-hpdwf/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
+        <item>
+            <title><![CDATA[Apache Hudi vs Apache Iceberg: A Comprehensive Comparison]]></title>
+            <link>https://hudi.apache.org/cn/blog/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison</link>
+            <guid>/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison</guid>
+            <pubDate>Thu, 25 Apr 2024 00:00:00 GMT</pubDate>
+            <description><![CDATA[Redirecting... please wait!!]]></description>
+            <content:encoded><![CDATA[<div url="https://risingwave.com/blog/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison/">Redirecting... please wait!! </div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Understanding Apache Hudi's Consistency Model Part 1]]></title>
             <link>https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-1</link>

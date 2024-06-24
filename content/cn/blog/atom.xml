@@ -2,11 +2,110 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/cn/blog</id>
     <title>Apache Hudi: User-Facing Analytics</title>
-    <updated>2024-04-24T00:00:00.000Z</updated>
+    <updated>2024-06-18T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/cn/blog"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/cn/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[How to use Apache Hudi with Databricks]]></title>
+        <id>/2024/06/18/how-to-use-apache-hudi-with-databricks</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/06/18/how-to-use-apache-hudi-with-databricks"/>
+        <updated>2024-06-18T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sagar Lakshmipathy</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi: A Deep Dive with Python Code Examples]]></title>
+        <id>/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples"/>
+        <updated>2024-06-07T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://blog.harshdaiya.com/apache-hudi-a-deep-dive-with-python-code-examples">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Harsh Daiya</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi vs. Delta Lake: Choosing the Right Tool for Your Data Lake on AWS]]></title>
+        <id>/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws"/>
+        <updated>2024-05-27T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/@siladityaghosh/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws-8b97c66a5a12">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Siladitya Ghosh</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Use AWS Data Exchange to seamlessly share Apache Hudi datasets]]></title>
+        <id>/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets"/>
+        <updated>2024-05-22T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Saurabh Bhutyani, Ankith Ede, and Chandra Krishnan</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi on AWS Glue]]></title>
+        <id>/2024/05/19/apache-hudi-on-aws-glue</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/19/apache-hudi-on-aws-glue"/>
+        <updated>2024-05-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://dev.to/sagarlakshmipathy/apache-hudi-on-aws-glue-450l">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Sagar Lakshmipathy</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Building Analytical Apps on the Lakehouse using Apache Hudi, Daft & Streamlit]]></title>
+        <id>/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit"/>
+        <updated>2024-05-10T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://medium.com/apache-hudi-blogs/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit-3224766fe58a">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Dipankar Mazumdar</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Learn how to read Hudi data with AWS Glue Ray using Daft (No Spark)]]></title>
+        <id>/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark"/>
+        <updated>2024-05-07T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark-soumil-shah-kycbe/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[How to Query Apache Hudi Tables with Python Using Daft: A Spark-Free Approach]]></title>
+        <id>/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free"/>
+        <updated>2024-05-02T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://www.linkedin.com/pulse/how-query-apache-hudi-tables-python-using-daft-spark-free-soumil-shah-hpdwf/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>Soumil Shah</name>
+        </author>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Apache Hudi vs Apache Iceberg: A Comprehensive Comparison]]></title>
+        <id>/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison</id>
+        <link href="https://hudi.apache.org/cn/blog/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison"/>
+        <updated>2024-04-25T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Redirecting... please wait!!]]></summary>
+        <content type="html"><![CDATA[<div url="https://risingwave.com/blog/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison/">Redirecting... please wait!! </div>]]></content>
+        <author>
+            <name>RisingWave marketing team</name>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Understanding Apache Hudi's Consistency Model Part 1]]></title>
         <id>/2024/04/24/understanding-apache-hudi-consistency-model-part-1</id>

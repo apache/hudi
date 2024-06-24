@@ -5,6 +5,105 @@
     "description": "Apache Hudi Blog",
     "items": [
         {
+            "id": "/2024/06/18/how-to-use-apache-hudi-with-databricks",
+            "content_html": "<div url=\"https://www.onehouse.ai/blog/how-to-use-apache-hudi-with-databricks\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/06/18/how-to-use-apache-hudi-with-databricks",
+            "title": "How to use Apache Hudi with Databricks",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-06-18T00:00:00.000Z",
+            "author": {
+                "name": "Sagar Lakshmipathy"
+            }
+        },
+        {
+            "id": "/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples",
+            "content_html": "<div url=\"https://blog.harshdaiya.com/apache-hudi-a-deep-dive-with-python-code-examples\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/06/07/apache-hudi-a-deep-dive-with-python-code-examples",
+            "title": "Apache Hudi: A Deep Dive with Python Code Examples",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-06-07T00:00:00.000Z",
+            "author": {
+                "name": "Harsh Daiya"
+            }
+        },
+        {
+            "id": "/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws",
+            "content_html": "<div url=\"https://medium.com/@siladityaghosh/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws-8b97c66a5a12\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/27/apache-hudi-vs-delta-lake-choosing-the-right-tool-for-your-data-lake-on-aws",
+            "title": "Apache Hudi vs. Delta Lake: Choosing the Right Tool for Your Data Lake on AWS",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-27T00:00:00.000Z",
+            "author": {
+                "name": "Siladitya Ghosh"
+            }
+        },
+        {
+            "id": "/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets",
+            "content_html": "<div url=\"https://aws.amazon.com/blogs/big-data/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/22/use-aws-data-exchange-to-seamlessly-share-apache-hudi-datasets",
+            "title": "Use AWS Data Exchange to seamlessly share Apache Hudi datasets",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-22T00:00:00.000Z",
+            "author": {
+                "name": "Saurabh Bhutyani, Ankith Ede, and Chandra Krishnan"
+            }
+        },
+        {
+            "id": "/2024/05/19/apache-hudi-on-aws-glue",
+            "content_html": "<div url=\"https://dev.to/sagarlakshmipathy/apache-hudi-on-aws-glue-450l\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/19/apache-hudi-on-aws-glue",
+            "title": "Apache Hudi on AWS Glue",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-19T00:00:00.000Z",
+            "author": {
+                "name": "Sagar Lakshmipathy"
+            }
+        },
+        {
+            "id": "/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit",
+            "content_html": "<div url=\"https://medium.com/apache-hudi-blogs/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit-3224766fe58a\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/10/building-analytical-apps-on-the-lakehouse-using-apache-hudi-daft-streamlit",
+            "title": "Building Analytical Apps on the Lakehouse using Apache Hudi, Daft & Streamlit",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-10T00:00:00.000Z",
+            "author": {
+                "name": "Dipankar Mazumdar"
+            }
+        },
+        {
+            "id": "/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark-soumil-shah-kycbe/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/07/learn-how-read-hudi-data-aws-glue-ray-using-daft-spark",
+            "title": "Learn how to read Hudi data with AWS Glue Ray using Daft (No Spark)",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-07T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free",
+            "content_html": "<div url=\"https://www.linkedin.com/pulse/how-query-apache-hudi-tables-python-using-daft-spark-free-soumil-shah-hpdwf/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/05/02/how-query-apache-hudi-tables-python-using-daft-spark-free",
+            "title": "How to Query Apache Hudi Tables with Python Using Daft: A Spark-Free Approach",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-05-02T00:00:00.000Z",
+            "author": {
+                "name": "Soumil Shah"
+            }
+        },
+        {
+            "id": "/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison",
+            "content_html": "<div url=\"https://risingwave.com/blog/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison/\">Redirecting... please wait!! </div>",
+            "url": "https://hudi.apache.org/cn/blog/2024/04/25/apache-hudi-vs-apache-iceberg-a-comprehensive-comparison",
+            "title": "Apache Hudi vs Apache Iceberg: A Comprehensive Comparison",
+            "summary": "Redirecting... please wait!!",
+            "date_modified": "2024-04-25T00:00:00.000Z",
+            "author": {
+                "name": "RisingWave marketing team"
+            }
+        },
+        {
             "id": "/2024/04/24/understanding-apache-hudi-consistency-model-part-1",
             "content_html": "<div url=\"https://jack-vanlightly.com/analyses/2024/4/24/understanding-apache-hudi-consistency-model-part-1\">Redirecting... please wait!! </div>",
             "url": "https://hudi.apache.org/cn/blog/2024/04/24/understanding-apache-hudi-consistency-model-part-1",
