@@ -279,7 +279,7 @@ public class HoodieFlinkClusteringJob {
             CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
       }
 
-      HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(
+      HoodieInstant inflightInstant = HoodieTimeline.getClusterCommitInflightInstant(
           clusteringInstant.getTimestamp());
       if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
@@ -308,7 +308,7 @@ public class HoodieFlinkClusteringJob {
         return;
       }
 
-      HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant.getTimestamp());
+      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstant.getTimestamp());
 
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 
@@ -318,7 +318,7 @@ public class HoodieFlinkClusteringJob {
           : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+      table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);

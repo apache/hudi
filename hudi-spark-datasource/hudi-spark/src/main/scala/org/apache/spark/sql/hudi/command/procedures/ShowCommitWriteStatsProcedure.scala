@@ -84,6 +84,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
     val instants: util.List[HoodieInstant] = util.Arrays.asList(
       new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+      new HoodieInstant(false, HoodieTimeline.CLUSTER_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
     val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
@@ -92,7 +93,8 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
 
   private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
-      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+      // TODO: #CLUSTER_REPLACE - move this check to a separate function
+      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION || hoodieInstant.get.getAction == HoodieTimeline.CLUSTER_ACTION) {
         Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieReplaceCommitMetadata]))
       } else {

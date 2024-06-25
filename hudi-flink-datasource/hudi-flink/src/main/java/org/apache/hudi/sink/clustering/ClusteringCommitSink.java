@@ -128,7 +128,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
         Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
-            this.writeClient.getHoodieTable().getMetaClient(), HoodieTimeline.getReplaceCommitInflightInstant(instant));
+            this.writeClient.getHoodieTable().getMetaClient(), HoodieTimeline.getClusterCommitInflightInstant(instant));
         return clusteringPlanOption.get().getRight();
       } catch (Exception e) {
         throw new HoodieException(e);
@@ -191,7 +191,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
           Option.empty(),
           WriteOperationType.CLUSTER,
           this.writeClient.getConfig().getSchema(),
-          HoodieTimeline.REPLACE_COMMIT_ACTION);
+          HoodieTimeline.CLUSTER_ACTION);
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));
     }
     // commit the clustering

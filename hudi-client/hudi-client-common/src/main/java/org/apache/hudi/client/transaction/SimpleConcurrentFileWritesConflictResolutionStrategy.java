@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
@@ -65,7 +66,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
-        .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
+        // TODO: #CLUSTER_REPLACE - Check if we need check only for cluster action. Ideally REPLACE_COMMIT_ACTION should also be checked
+        .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, CLUSTER_ACTION, COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
         .getInstantsAsStream();

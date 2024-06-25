@@ -41,7 +41,8 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
     if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)
-        && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+        && !instantToRollback.getAction().equals(HoodieTimeline.CLUSTER_ACTION)) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
     table.getMetaClient().reloadActiveTimeline();

@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -57,7 +58,9 @@ public class AverageRecordSizeUtils {
         try {
           HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-          if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
+          if (instant.getAction().equals(COMMIT_ACTION) || instant.getAction().equals(REPLACE_COMMIT_ACTION)
+              || instant.getAction().equals(CLUSTER_ACTION)) {
+            // TODO: #CLUSTER_REPLACE - Check if we need check only for replace action here and do not need cluster
             long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
             long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
             if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {

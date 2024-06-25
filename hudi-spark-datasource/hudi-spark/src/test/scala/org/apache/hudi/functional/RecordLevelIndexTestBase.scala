@@ -117,7 +117,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
       .lastInstant().get()
     if (getLatestCompactionInstant() != getLatestMetaClient(false).getActiveTimeline.lastInstant()
-      && lastInstant.getAction != ActionType.replacecommit.name()
+      && lastInstant.getAction != ActionType.cluster.name()
       && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }
@@ -175,7 +175,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getLatestClusteringInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
-    getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceTimeline.lastInstant()
+    getLatestMetaClient(false).getActiveTimeline.getCompletedReplaceOrClusterTimeline.lastInstant()
   }
 
   protected def doWriteAndValidateDataAndRecordIndex(hudiOpts: Map[String, String],

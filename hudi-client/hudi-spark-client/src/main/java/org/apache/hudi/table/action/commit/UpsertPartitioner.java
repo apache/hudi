@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -171,7 +172,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
     long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
+        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION))
+        // TODO: #CLUSTER_REPLACE - Check if we need check only for replace action here and do not need cluster
         .filterCompletedInstants(), config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 

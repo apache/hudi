@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
@@ -160,6 +161,7 @@ public class TimelineUtils {
             throw new HoodieIOException("Failed to get partitions written at " + s, e);
           }
         case REPLACE_COMMIT_ACTION:
+        case CLUSTER_ACTION:
           try {
             HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(
                 timeline.getInstantDetails(s).get(), HoodieReplaceCommitMetadata.class);
@@ -259,7 +261,7 @@ public class TimelineUtils {
         return WriteOperationType.CLUSTER.equals(replaceMetadata.getOperationType());
       }
 
-      return false;
+      return instant.getAction().equals(CLUSTER_ACTION);
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read instant information: " + instant + " for " + metaClient.getBasePath(), e);
     }
@@ -317,7 +319,7 @@ public class TimelineUtils {
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
     byte[] data = timeline.getInstantDetails(instant).get();
-    if (instant.getAction().equals(REPLACE_COMMIT_ACTION)) {
+    if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTER_ACTION)) {
       return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
     } else {
       return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
@@ -346,7 +348,7 @@ public class TimelineUtils {
     Option<HoodieInstant> earliestCommit = shouldArchiveBeyondSavepoint
         ? dataTableActiveTimeline.getTimelineOfActions(
             CollectionUtils.createSet(
-                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, SAVEPOINT_ACTION))
+                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION, SAVEPOINT_ACTION))
         .getFirstNonSavepointCommit()
         : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
     // This is for all instants which are in-flight
@@ -375,9 +377,7 @@ public class TimelineUtils {
   public static void validateTimestampAsOf(HoodieTableMetaClient metaClient, String timestampAsOf) {
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant ->
-            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
-                || !ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant))
         .firstInstant();
 
     if (firstIncompleteCommit.isPresent()) {
@@ -428,9 +428,7 @@ public class TimelineUtils {
 
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant ->
-            !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
-                || !ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant))
         .firstInstant();
 
     boolean noHollowCommit = firstIncompleteCommit

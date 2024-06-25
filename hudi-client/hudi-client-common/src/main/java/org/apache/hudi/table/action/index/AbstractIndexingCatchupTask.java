@@ -106,6 +106,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.DELTA_COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
+            case HoodieTimeline.CLUSTER_ACTION:
               updateIndexForWriteAction(instant);
               break;
             case CLEAN_ACTION:

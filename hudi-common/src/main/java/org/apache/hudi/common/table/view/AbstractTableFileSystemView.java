@@ -248,7 +248,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private void resetFileGroupsReplaced(HoodieTimeline timeline) {
     HoodieTimer hoodieTimer = HoodieTimer.start();
     // for each REPLACE instant, get map of (partitionPath -> deleteFileGroup)
-    HoodieTimeline replacedTimeline = timeline.getCompletedReplaceTimeline();
+    HoodieTimeline replacedTimeline = timeline.getCompletedReplaceOrClusterTimeline();
     Stream<Map.Entry<HoodieFileGroupId, HoodieInstant>> resultStream = replacedTimeline.getInstantsAsStream().flatMap(instant -> {
       try {
         HoodieReplaceCommitMetadata replaceMetadata = HoodieReplaceCommitMetadata.fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),

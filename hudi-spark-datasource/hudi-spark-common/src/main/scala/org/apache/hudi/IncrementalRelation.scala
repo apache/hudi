@@ -155,8 +155,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
       var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
       // create Replaced file group
-      val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
+      val replacedOrClusterTimeline = commitsTimelineToReturn.getCompletedReplaceOrClusterTimeline
+      val replacedFile = replacedOrClusterTimeline.getInstants.asScala.flatMap { instant =>
         val replaceMetadata = HoodieReplaceCommitMetadata.
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
         replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>

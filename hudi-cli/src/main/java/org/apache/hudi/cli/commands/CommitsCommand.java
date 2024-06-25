@@ -408,6 +408,7 @@ public class CommitsCommand {
     List<HoodieInstant> instants = Arrays.asList(
         new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
         new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+        new HoodieInstant(false, HoodieTimeline.CLUSTER_ACTION, instantTime),
         new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime));
 
     return Option.fromJavaOptional(instants.stream().filter(timeline::containsInstant).findAny());

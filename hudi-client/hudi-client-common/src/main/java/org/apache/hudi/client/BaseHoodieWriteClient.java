@@ -928,8 +928,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       this.heartbeatClient.start(instantTime);
     }
 
-    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-      metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
+    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION) || actionType.equals(HoodieTimeline.CLUSTER_ACTION)) {
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
       metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
@@ -1013,6 +1013,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstantTime) {
+    // TODO: #CLUSTER_REPLACE - Check if we need to replace here. This will lead to config value change for hoodie.table.service.manager.actions
     if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
@@ -1303,7 +1304,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       Option<HoodieInstant> lastInstant =
           activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
-                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
+                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION)
+                  || s.getAction().equals(HoodieTimeline.CLUSTER_ACTION))
               .lastInstant();
       if (lastInstant.isPresent()) {
         HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(

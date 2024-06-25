@@ -56,6 +56,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -209,7 +210,8 @@ public class MarkerHandler extends Handler {
           // instead of starting the conflict detector for every request
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
-            Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
+            // TODO: #CLUSTER_REPLACE - Check if we need check only for replace action here and do not need cluster
+            Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION);
             Set<HoodieInstant> completedCommits = new HashSet<>(
                 viewManager.getFileSystemView(basePath)
                     .getTimeline()

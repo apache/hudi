@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
@@ -54,8 +55,7 @@ public class PreferWriterConflictResolutionStrategy
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
-    if ((REPLACE_COMMIT_ACTION.equals(currentInstant.getAction())
-        && ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant))
+    if (ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant)
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {
       return getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant);
     } else {
@@ -71,7 +71,7 @@ public class PreferWriterConflictResolutionStrategy
     // We need to check for write conflicts since they may have mutated the same files
     // that are being newly created by the current write.
     List<HoodieInstant> completedCommitsInstants = activeTimeline
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
+        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
         .filterCompletedInstants()
         .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
         .getInstantsOrderedByCompletionTime()
@@ -90,7 +90,7 @@ public class PreferWriterConflictResolutionStrategy
     // Fetch list of completed commits.
     Stream<HoodieInstant> completedCommitsStream =
         activeTimeline
-            .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
+            .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION, COMPACTION_ACTION, DELTA_COMMIT_ACTION))
             .filterCompletedInstants()
             .findInstantsModifiedAfterByCompletionTime(currentInstant.getTimestamp())
             .getInstantsAsStream();

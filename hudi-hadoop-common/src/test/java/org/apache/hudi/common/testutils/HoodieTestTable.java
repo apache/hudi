@@ -105,7 +105,7 @@ import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
@@ -1011,7 +1011,7 @@ public class HoodieTestTable {
     }
     HoodieReplaceCommitMetadata replaceMetadata =
         (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
-            REPLACE_COMMIT_ACTION);
+            CLUSTER_ACTION);
     addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
     return replaceMetadata;
   }
@@ -1197,6 +1197,7 @@ public class HoodieTestTable {
   private Option<HoodieCommitMetadata> getCommitMeta(HoodieInstant hoodieInstant) throws IOException {
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case CLUSTER_ACTION:
         HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
             .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata);

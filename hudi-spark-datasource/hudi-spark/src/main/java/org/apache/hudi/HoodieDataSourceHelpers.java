@@ -103,7 +103,8 @@ public class HoodieDataSourceHelpers {
       return metaClient.getActiveTimeline().getTimelineOfActions(
           CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
               HoodieActiveTimeline.DELTA_COMMIT_ACTION,
-              HoodieActiveTimeline.REPLACE_COMMIT_ACTION)).filterCompletedInstants();
+              HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
+              HoodieTimeline.CLUSTER_ACTION)).filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }
@@ -118,7 +119,8 @@ public class HoodieDataSourceHelpers {
       return metaClient.getActiveTimeline().getTimelineOfActions(
           CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
               HoodieActiveTimeline.DELTA_COMMIT_ACTION,
-              HoodieActiveTimeline.REPLACE_COMMIT_ACTION)).filterCompletedInstants();
+              HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
+              HoodieTimeline.CLUSTER_ACTION)).filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }
@@ -130,9 +132,14 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    HoodieInstant hoodieInstant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
+    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(instantTime)
+            && (instant.getAction().equals(HoodieTimeline.CLUSTER_ACTION) || instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)))
+        .firstInstant();
+    Option<HoodieInstant> requestedClusteringInstant = hoodieInstant.map(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+        ? HoodieTimeline.getReplaceCommitRequestedInstant(instant.getTimestamp())
+        : HoodieTimeline.getClusterCommitRequestedInstant(instant.getTimestamp()));
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan =
-        ClusteringUtils.getClusteringPlan(metaClient, hoodieInstant);
+        requestedClusteringInstant.flatMap(instant -> ClusteringUtils.getClusteringPlan(metaClient, instant));
     if (clusteringPlan.isPresent()) {
       return Option.of(clusteringPlan.get().getValue());
     } else {

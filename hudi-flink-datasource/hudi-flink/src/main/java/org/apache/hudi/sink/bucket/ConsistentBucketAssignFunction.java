@@ -135,7 +135,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
 
   @Override
   public void snapshotState(FunctionSnapshotContext functionSnapshotContext) throws Exception {
-    HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().findInstantsAfter(lastRefreshInstant);
+    HoodieTimeline timeline = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceOrClusterTimeline().findInstantsAfter(lastRefreshInstant);
     if (!timeline.empty()) {
       for (HoodieInstant instant : timeline.getInstants()) {
         HoodieReplaceCommitMetadata commitMetadata = HoodieReplaceCommitMetadata.fromBytes(

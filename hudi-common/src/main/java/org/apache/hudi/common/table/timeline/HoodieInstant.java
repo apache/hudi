@@ -245,6 +245,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedReplaceFileName(timestamp);
       }
+    } else if (HoodieTimeline.CLUSTER_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightClusterFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedClusterFileName(timestamp);
+      }
     } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       if (isInflight()) {
         return HoodieTimeline.makeInflightIndexFileName(timestamp);
@@ -281,6 +287,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
         return HoodieTimeline.makeRestoreFileName(timestampWithCompletionTime);
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return HoodieTimeline.makeReplaceFileName(timestampWithCompletionTime);
+      case HoodieTimeline.CLUSTER_ACTION:
+        return HoodieTimeline.makeClusterFileName(timestampWithCompletionTime);
       case HoodieTimeline.INDEXING_ACTION:
         return HoodieTimeline.makeIndexCommitFileName(timestampWithCompletionTime);
       case HoodieTimeline.SCHEMA_COMMIT_ACTION:
