@@ -130,7 +130,6 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
            |    uuid STRING,
            |    rider STRING,
            |    driver STRING,
-           |    fare DOUBLE,
            |    city STRING,
            |    state STRING
            |) using hudi
@@ -145,13 +144,12 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
          """.stripMargin
       )
 
-      //spark.sql("set hoodie.parquet.small.file.limit=0")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco','california')")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-B','driver-L',93.50,'new york city','new york')")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P',34.15,'houston','texas')")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-D','driver-M',34.15,'princeton','new jersey')")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'austin','texas')")
-      spark.sql(s"INSERT INTO $tableName VALUES (1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-F','driver-M',27.70,'sunnyvale','california')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695159649,'334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K','san_francisco','california')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'7a84095f-737f-40bc-b62f-6b69664712d2','rider-B','driver-L','new york city','new york')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P','houston','texas')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695516137,'3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-D','driver-M','princeton','new jersey')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O','austin','texas')")
+      spark.sql(s"INSERT INTO $tableName VALUES (1695091554,'e96c4396-3fad-413a-a942-4cb36106d721','rider-F','driver-M','sunnyvale','california')")
 
       // Validate partition_stats index exists
       val metaClient = HoodieTableMetaClient.builder()
