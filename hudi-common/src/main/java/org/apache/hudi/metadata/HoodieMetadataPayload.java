@@ -68,6 +68,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
+import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -686,10 +687,11 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
+      String fileName = nonEmpty(columnRangeMetadata.getFilePath()) ? new StoragePath(columnRangeMetadata.getFilePath()).getName() : null;
 
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
-              .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
+              .setFileName(fileName)
               .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
               .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
