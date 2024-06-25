@@ -77,7 +77,7 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
       Timestamp.from(Instant.parse("2022-10-01T23:59:59.00Z")), Row(Decimal.apply(123, 3, 2)))
 
     val unsafeRow: UnsafeRow = toUnsafeRow(row, rowSchema)
-    val hoodieInternalRow = new HoodieInternalRow(new Array[UTF8String](5), unsafeRow, false)
+    val hoodieInternalRow = SparkAdapterSupport.sparkAdapter.createInternalRow(new Array[UTF8String](5), unsafeRow, false)
 
     Seq(
       (unsafeRow, rowSchema, 89),

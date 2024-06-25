@@ -66,6 +66,7 @@ import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -90,8 +91,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateExpectedPartitionNumRecords;
-import static org.apache.hudi.execution.bulkinsert.TestBulkInsertInternalPartitioner.generateTestRecordsForBulkInsert;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -573,6 +572,26 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     partitionMetadata.readFromFS();
     assertTrue(partitionMetadata.getPartitionDepth() == 3);
     assertTrue(partitionMetadata.readPartitionCreatedCommitTime().get().equals(instantTime));
+  }
+
+  // methods below were copied from [[TestBulkInsertInternalPartitioner]]
+  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    // RDD partition 1
+    List<HoodieRecord> records1 = dataGenerator.generateInserts("0", 100);
+    // RDD partition 2
+    List<HoodieRecord> records2 = dataGenerator.generateInserts("0", 150);
+    return jsc.parallelize(records1, 1).union(jsc.parallelize(records2, 1));
+  }
+
+  public static JavaRDD<HoodieRecord> generateTestRecordsForBulkInsert(JavaSparkContext jsc, int count) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    List<HoodieRecord> records = dataGenerator.generateInserts("0", count);
+    return jsc.parallelize(records, 1);
+  }
+
+  public static Map<String, Long> generateExpectedPartitionNumRecords(JavaRDD<HoodieRecord> records) {
+    return records.map(record -> record.getPartitionPath()).countByValue();
   }
 
 }

@@ -32,18 +32,18 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Expression, Literal}
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types._
 
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -283,7 +283,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     }
   }
 
-  // Find the origin column from schema by column name, throw an AnalysisException if the column
+  // Find the origin column from schema by column name, throw an HoodieAnalysisException if the column
   // reference is invalid.
   def findColumnByName(schema: StructType, name: String, resolver: Resolver):Option[StructField] = {
     schema.fields.collectFirst {
@@ -312,13 +312,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
                                  resolver: Resolver): Map[String, T] = {
     val normalizedPartSpec = partitionSpec.toSeq.map { case (key, value) =>
       val normalizedKey = partColNames.find(resolver(_, key)).getOrElse {
-        throw new AnalysisException(s"$key is not a valid partition column in table $tblName.")
+        throw new HoodieAnalysisException(s"$key is not a valid partition column in table $tblName.")
       }
       normalizedKey -> value
     }
 
     if (normalizedPartSpec.size < partColNames.size) {
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         "All partition columns need to be specified for Hoodie's partition")
     }
 
@@ -327,7 +327,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       val duplicateColumns = lowerPartColNames.groupBy(identity).collect {
         case (x, ys) if ys.length > 1 => s"`$x`"
       }
-      throw new AnalysisException(
+      throw new HoodieAnalysisException(
         s"Found duplicate column(s) in the partition schema: ${duplicateColumns.mkString(", ")}")
     }
 

@@ -55,13 +55,17 @@ public abstract class HoodieBloomFilterWriteSupport<T extends Comparable<T>> {
   public void addKey(T recordKey) {
     bloomFilter.add(getUTF8Bytes(recordKey));
 
-    if (minRecordKey == null || minRecordKey.compareTo(recordKey) > 0) {
+    if (minRecordKey == null || compareRecordKey(minRecordKey, recordKey) > 0) {
       minRecordKey = dereference(recordKey);
     }
 
-    if (maxRecordKey == null || maxRecordKey.compareTo(recordKey) < 0) {
+    if (maxRecordKey == null || compareRecordKey(maxRecordKey, recordKey) < 0) {
       maxRecordKey = dereference(recordKey);
     }
+  }
+
+  protected int compareRecordKey(T a, T b) {
+    return a.compareTo(b);
   }
 
   public Map<String, String> finalizeMetadata() {
