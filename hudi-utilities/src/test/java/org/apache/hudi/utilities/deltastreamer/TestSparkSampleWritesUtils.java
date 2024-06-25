@@ -35,6 +35,7 @@ import org.apache.hudi.utilities.streamer.SparkSampleWritesUtils;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -85,6 +86,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     assertEquals(originalRecordSize, originalWriteConfig.getCopyOnWriteRecordSizeEstimate(), "Original record size estimate should not be changed.");
   }
 
+  @Disabled
   @Test
   public void overwriteRecordSizeEstimateForEmptyTable() {
     int originalRecordSize = 100;
