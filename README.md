@@ -118,7 +118,7 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 
 For example,
 ```
-# Build against Spark 3.2.x
+# Build against Spark 3.5.x
 mvn clean package -DskipTests
 
 # Build against Spark 3.4.x
