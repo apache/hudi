@@ -23,6 +23,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.SelfDescribingInputFormatInterface;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
@@ -45,7 +46,8 @@ import java.io.IOException;
  * either {@link HoodieCopyOnWriteTableInputFormat} or {@link HoodieMergeOnReadTableInputFormat} to be supplied
  * to which it delegates all of its necessary methods.
  */
-public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat implements Configurable {
+public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat
+    implements Configurable, SelfDescribingInputFormatInterface {
 
   private final HoodieTableInputFormat inputFormatDelegate;
 
@@ -75,13 +77,13 @@ public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFor
 
   @Override
   protected final FileSplit makeSplit(Path file, long start, long length,
-                                String[] hosts) {
+                                      String[] hosts) {
     return inputFormatDelegate.makeSplit(file, start, length, hosts);
   }
 
   @Override
   protected final FileSplit makeSplit(Path file, long start, long length,
-                                String[] hosts, String[] inMemoryHosts) {
+                                      String[] hosts, String[] inMemoryHosts) {
     return inputFormatDelegate.makeSplit(file, start, length, hosts, inMemoryHosts);
   }
 
