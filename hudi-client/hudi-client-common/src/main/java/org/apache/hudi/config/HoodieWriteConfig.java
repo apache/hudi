@@ -1782,7 +1782,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean shouldClusteringSingleGroup() {
-    return isClusteringSortEnabled() || isSingleGroupClusteringEnabled();
+    return isSingleGroupClusteringEnabled();
   }
 
   public String getClusteringSortColumns() {
