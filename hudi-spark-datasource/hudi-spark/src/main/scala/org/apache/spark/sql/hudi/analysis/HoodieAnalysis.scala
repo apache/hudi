@@ -33,8 +33,9 @@ import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 
 import java.util
 
@@ -397,7 +398,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 
   private[sql] def failAnalysis(msg: String): Nothing = {
-    throw new AnalysisException(msg)
+    throw new HoodieAnalysisException(msg)
   }
 }
 
@@ -510,7 +511,7 @@ case class ResolveImplementations() extends Rule[LogicalPlan] {
       if (builder != null) {
         Option(builder.build)
       } else {
-        throw new AnalysisException(s"procedure: ${name.last} is not exists")
+        throw new HoodieAnalysisException(s"procedure: ${name.last} is not exists")
       }
     } else {
       None

@@ -39,7 +39,7 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
 
   override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
     plan match {
-      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _, _) =>
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _, _, _) =>
         Some((targetTable, sourceTable, mergeCondition))
       case _ => None
     }

@@ -34,6 +34,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util.Locale
+import scala.jdk.CollectionConverters._
 
 class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends HoodieExtendedParserInterface with Logging {
@@ -110,7 +111,14 @@ class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInt
         throw e.withCommand(command)
       case e: AnalysisException =>
         val position = Origin(e.line, e.startPosition)
-        throw new ParseException(Option(command), e.message, position, position)
+        throw new ParseException(
+          command = Option(command),
+          start = position,
+          stop = position,
+          errorClass = e.getErrorClass,
+          messageParameters = e.getMessageParameters.asScala.toMap,
+          queryContext = e.getQueryContext
+        )
     }
   }
 

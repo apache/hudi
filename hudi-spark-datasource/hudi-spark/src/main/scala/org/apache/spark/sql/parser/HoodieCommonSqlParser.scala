@@ -32,6 +32,8 @@ import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
+import scala.jdk.CollectionConverters._
+
 class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   extends ParserInterface with Logging with SparkAdapterSupport {
 
@@ -109,7 +111,13 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
         throw e.withCommand(command)
       case e: AnalysisException =>
         val position = Origin(e.line, e.startPosition)
-        throw new ParseException(Option(command), e.message, position, position)
+        throw new ParseException(
+          Option(command),
+          position,
+          position,
+          e.getErrorClass,
+          e.getMessageParameters.asScala.toMap
+        )
     }
   }
 }
