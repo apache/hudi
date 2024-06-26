@@ -48,13 +48,13 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
   protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
-    return writeConfig.getCompactionStrategy().generateCompactionPlan(writeConfig, operations,
+    return compactionStrategy.generateCompactionPlan(writeConfig, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
   }
 
   @Override
   protected List<String> filterPartitionPathsByStrategy(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
-    return writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitionPaths);
+    return compactionStrategy.filterPartitionPaths(writeConfig, partitionPaths);
   }
 
   @Override

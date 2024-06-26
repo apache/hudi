@@ -68,9 +68,9 @@ public class ReflectionUtils {
   /**
    * Creates an instance of the given class. Use this version when dealing with interface types as constructor args.
    */
-  public static Object loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
+  public static <T> T loadClass(String clazz, Class<?>[] constructorArgTypes, Object... constructorArgs) {
     try {
-      return getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
+      return (T) getClass(clazz).getConstructor(constructorArgTypes).newInstance(constructorArgs);
     } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
       throw new HoodieException("Unable to instantiate class " + clazz, e);
     }
