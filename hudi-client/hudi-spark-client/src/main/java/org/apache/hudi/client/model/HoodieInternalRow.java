@@ -29,6 +29,7 @@ import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
+import org.apache.spark.unsafe.types.VariantVal;
 
 /**
  * Hudi internal implementation of the {@link InternalRow} allowing to extend arbitrary
@@ -208,6 +209,12 @@ public class HoodieInternalRow extends InternalRow {
   public CalendarInterval getInterval(int ordinal) {
     ruleOutMetaFieldsAccess(ordinal, CalendarInterval.class);
     return sourceRow.getInterval(rebaseOrdinal(ordinal));
+  }
+
+  @Override
+  public VariantVal getVariant(int ordinal) {
+    ruleOutMetaFieldsAccess(ordinal, CalendarInterval.class);
+    return sourceRow.getVariant(rebaseOrdinal(ordinal));
   }
 
   @Override

@@ -305,7 +305,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // there is a bug on Spark3 that will prevent Array[Map/Struct] schema evolved tables form being read
     // bug fix: https://github.com/apache/spark/commit/32a393395ee43b573ae75afba591b587ca51879b
     // bug fix is only available Spark >= v3.1.3
-    if (HoodieSparkUtils.isSpark2 || (HoodieSparkUtils.isSpark3 && HoodieSparkUtils.gteqSpark3_1_3)) {
+    if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.gteqSpark3_1_3) {
       val tempRecordPath = basePath + "/record_tbl/"
       val arrayStructData = Seq(
         Row(1, 100, List(Row("Java", "XX", 120), Row("Scala", "XA", 300)), "aaa")
@@ -579,7 +579,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // there is a bug on Spark3 that will prevent Array[Map/Struct] schema evolved tables form being read
     // bug fix: https://github.com/apache/spark/commit/32a393395ee43b573ae75afba591b587ca51879b
     // bug fix is only available Spark >= v3.1.3
-    if (HoodieSparkUtils.isSpark2 || (HoodieSparkUtils.isSpark3 && HoodieSparkUtils.gteqSpark3_1_3)) {
+    if (HoodieSparkUtils.isSpark2 || HoodieSparkUtils.gteqSpark3_1_3) {
       val tempRecordPath = basePath + "/record_tbl/"
       val arrayMapData = Seq(
         Row(1, 100,

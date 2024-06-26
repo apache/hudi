@@ -23,21 +23,23 @@ import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.types.StructType
 
-import java.sql.ResultSet
+import java.sql.{Connection, ResultSet}
 
 /**
  * Util functions for JDBC source and tables in Spark.
  */
-object SparkJdbcUtils {
+object SparkJdbcUtils extends SparkAdapterSupport {
   /**
    * Takes a [[ResultSet]] and returns its Catalyst schema.
    *
+   * @param conn           [[Connection]] instance.
    * @param resultSet      [[ResultSet]] instance.
    * @param dialect        [[JdbcDialect]] instance.
    * @param alwaysNullable If true, all the columns are nullable.
    * @return A [[StructType]] giving the Catalyst schema.
    */
-  def getSchema(resultSet: ResultSet,
+  def getSchema(conn: Connection,
+                resultSet: ResultSet,
                 dialect: JdbcDialect,
                 alwaysNullable: Boolean): StructType = {
     // NOTE: Since Spark 3.4.0, the function signature of [[JdbcUtils.getSchema]] is changed
@@ -59,6 +61,14 @@ object SparkJdbcUtils {
     //      dialect: JdbcDialect,
     //      alwaysNullable: Boolean = false,
     //      isTimestampNTZ: Boolean = false): StructType
-    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
+    //
+    // Since Spark 4.0.0 (five arguments):
+    // def getSchema(
+    //      conn: Connection,
+    //      resultSet: ResultSet,
+    //      dialect: JdbcDialect,
+    //      alwaysNullable: Boolean = false,
+    //      isTimestampNTZ: Boolean = false): StructType
+    sparkAdapter.getSchema(conn, resultSet, dialect, alwaysNullable)
   }
 }

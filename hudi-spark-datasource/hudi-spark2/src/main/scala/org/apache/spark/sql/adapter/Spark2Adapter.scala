@@ -34,11 +34,13 @@ import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat, Spark24ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -46,6 +48,7 @@ import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
+import java.sql.{Connection, ResultSet}
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
@@ -230,5 +233,13 @@ class Spark2Adapter extends SparkAdapter {
                                                  queryExecution: QueryExecution,
                                                  name: Option[String])(body: => T): T = {
     SQLExecution.withNewExecutionId(sparkSession, queryExecution)(body)
+  }
+
+  override def getSchema(conn: Connection,
+                         resultSet: ResultSet,
+                         dialect: JdbcDialect,
+                         alwaysNullable: Boolean = false,
+                         isTimestampNTZ: Boolean = false): StructType = {
+    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
   }
 }

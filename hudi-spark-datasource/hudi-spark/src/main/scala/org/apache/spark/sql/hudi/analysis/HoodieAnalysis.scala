@@ -79,7 +79,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
       }
     } else {
       rules += adaptIngestionTargetLogicalRelations
-      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_0)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
+      else if (HoodieSparkUtils.isSpark3_5)
         "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
       else if (HoodieSparkUtils.isSpark3_4)
         "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
@@ -104,9 +106,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
     }
 
-    if (HoodieSparkUtils.isSpark3) {
-      val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_5) {
+    if (HoodieSparkUtils.isSpark3 || HoodieSparkUtils.isSpark4) {
+      val resolveAlterTableCommandsClass = {
+        if (HoodieSparkUtils.gteqSpark4_0) {
+          "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
+        } else if (HoodieSparkUtils.gteqSpark3_5) {
           "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
@@ -121,6 +125,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         } else {
           throw new IllegalStateException("Unsupported Spark version")
         }
+      }
 
       val resolveAlterTableCommands: RuleBuilder =
         session => instantiateKlass(resolveAlterTableCommandsClass, session)
@@ -162,7 +167,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     if (HoodieSparkUtils.gteqSpark3_0) {
       val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_5) {
+        if (HoodieSparkUtils.gteqSpark4_0) {
+          "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
+        } else if (HoodieSparkUtils.gteqSpark3_5) {
           "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"

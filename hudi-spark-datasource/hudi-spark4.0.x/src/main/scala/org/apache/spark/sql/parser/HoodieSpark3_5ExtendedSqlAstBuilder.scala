@@ -1778,7 +1778,7 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case HoodieSqlBaseParser.TRY_CAST =>
         Cast(expression(ctx.expression), dataType, evalMode = EvalMode.TRY)
     }
-    cast.setTagValue(Cast.USER_SPECIFIED_CAST, true)
+    cast.setTagValue(Cast.USER_SPECIFIED_CAST, ())
     cast
   }
 

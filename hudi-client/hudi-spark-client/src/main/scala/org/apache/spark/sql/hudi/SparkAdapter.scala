@@ -38,12 +38,14 @@ import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
+import java.sql.{Connection, ResultSet}
 import java.util.{Locale, TimeZone}
 
 /**
@@ -65,7 +67,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Inject table-valued functions to SparkSessionExtensions
    */
-  def injectTableFunctions(extensions : SparkSessionExtensions): Unit = {}
+  def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
@@ -136,7 +138,7 @@ trait SparkAdapter extends Serializable {
    * Combine [[PartitionedFile]] to [[FilePartition]] according to `maxSplitBytes`.
    */
   def getFilePartitions(sparkSession: SparkSession, partitionedFiles: Seq[PartitionedFile],
-      maxSplitBytes: Long): Seq[FilePartition]
+                        maxSplitBytes: Long): Seq[FilePartition]
 
   /**
    * Checks whether [[LogicalPlan]] refers to Hudi table, and if it's the case extracts
@@ -239,4 +241,10 @@ trait SparkAdapter extends Serializable {
   def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
                                         queryExecution: QueryExecution,
                                         name: Option[String] = None)(body: => T): T
+
+  def getSchema(conn: Connection,
+                resultSet: ResultSet,
+                dialect: JdbcDialect,
+                alwaysNullable: Boolean = false,
+                isTimestampNTZ: Boolean = false): StructType
 }

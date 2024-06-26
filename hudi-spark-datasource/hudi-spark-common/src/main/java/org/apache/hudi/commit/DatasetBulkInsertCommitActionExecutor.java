@@ -65,7 +65,8 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
     Map<String, String> customOpts = new HashMap<>(1);
     if (HoodieSparkUtils.isSpark2()) {
       targetFormat = "org.apache.hudi.internal";
-    } else if (HoodieSparkUtils.isSpark3()) {
+      // TODO: change to spark4.internal
+    } else if (HoodieSparkUtils.isSpark3() || HoodieSparkUtils.isSpark4()) {
       targetFormat = "org.apache.hudi.spark3.internal";
       customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
     } else {
