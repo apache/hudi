@@ -34,6 +34,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
+import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -124,5 +125,9 @@ public class GlueTestUtil {
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
+  }
+
+  public static Column getColumn(String name, String type, String comment) {
+    return Column.builder().name(name).type(type).comment(comment).build();
   }
 }

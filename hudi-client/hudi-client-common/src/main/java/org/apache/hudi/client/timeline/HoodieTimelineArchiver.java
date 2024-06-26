@@ -112,14 +112,14 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
       if (!instantsToArchive.isEmpty()) {
-        LOG.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving and deleting instants {}", instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
           if (this.config.isFailOnTimelineArchivingEnabled()) {
             throw new HoodieException(e);
           }
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
-        LOG.info("Deleting archived instants " + instantsToArchive);
+        LOG.debug("Deleting archived instants");
         deleteArchivedInstants(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
@@ -221,7 +221,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");
           return Collections.emptyList();
         } else {
-          LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
+          LOG.info("Limiting archiving of instants to latest compaction on metadata table at {}", latestCompactionTime.get());
           earliestInstantToRetainCandidates.add(
               completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
@@ -324,8 +324,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private boolean deleteArchivedInstants(List<ActiveAction> activeActions, HoodieEngineContext context) {
-    LOG.info("Deleting instants " + activeActions);
-
     List<HoodieInstant> pendingInstants = new ArrayList<>();
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
@@ -365,7 +363,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + activeAction);
+      LOG.info("Cleaned up left over marker directory for instant: {}", activeAction);
     }
   }
 }
