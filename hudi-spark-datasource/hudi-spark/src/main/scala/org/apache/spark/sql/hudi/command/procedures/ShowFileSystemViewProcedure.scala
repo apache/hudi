@@ -29,9 +29,9 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.{ArrayList => JArrayList, List => JList}
 import java.util.function.{Function, Supplier}
 import java.util.stream.{Collectors, Stream => JStream}
+import java.util.{ArrayList => JArrayList, List => JList}
 
 import scala.collection.JavaConverters._
 

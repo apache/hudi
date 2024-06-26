@@ -27,8 +27,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.time.ZonedDateTime
 import java.util
-import java.util.{Collections, Date}
 import java.util.function.Supplier
+import java.util.{Collections, Date}
 
 import scala.collection.JavaConverters._
 

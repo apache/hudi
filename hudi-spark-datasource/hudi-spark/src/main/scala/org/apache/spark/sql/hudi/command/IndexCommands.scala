@@ -27,11 +27,11 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.secondary.SecondaryIndexManager
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.{QualifiedTableName, TableIdentifier}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
+import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
 

@@ -18,9 +18,9 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, TimelineMetadataUtils}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.Row

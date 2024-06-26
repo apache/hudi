@@ -18,6 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.util.FileIOUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestSqlStatement extends HoodieSparkSqlTestBase {

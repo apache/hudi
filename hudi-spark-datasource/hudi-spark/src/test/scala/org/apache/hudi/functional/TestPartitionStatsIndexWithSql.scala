@@ -22,6 +22,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Tag
 
