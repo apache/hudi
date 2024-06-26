@@ -35,67 +35,65 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
 
   @Test
   def testSecondaryIndexWithFilters(): Unit = {
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
-        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
-        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    var hudiOpts = commonOpts
+    hudiOpts = hudiOpts + (
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
 
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  ts bigint,
-           |  record_key_col string,
-           |  not_record_key_col string,
-           |  partition_key_col string
-           |) using hudi
-           | options (
-           |  primaryKey ='record_key_col',
-           |  hoodie.metadata.enable = 'true',
-           |  hoodie.metadata.record.index.enable = 'true',
-           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  hoodie.enable.data.skipping = 'true'
-           | )
-           | partitioned by(partition_key_col)
-           | location '$basePath'
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  ts bigint,
+         |  record_key_col string,
+         |  not_record_key_col string,
+         |  partition_key_col string
+         |) using hudi
+         | options (
+         |  primaryKey ='record_key_col',
+         |  hoodie.metadata.enable = 'true',
+         |  hoodie.metadata.record.index.enable = 'true',
+         |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+         |  hoodie.enable.data.skipping = 'true'
+         | )
+         | partitioned by(partition_key_col)
+         | location '$basePath'
        """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
-      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
-      spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
-      // create secondary index
-      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
-      // validate index created successfully
-      metaClient = HoodieTableMetaClient.builder()
-        .setBasePath(basePath)
-        .setConf(HoodieTestUtils.getDefaultStorageConf)
-        .build()
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
-      // validate data skipping
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
-      // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
-      )
+    spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+    spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+    spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
+    // create secondary index
+    spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+    // validate index created successfully
+    metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+    // validate data skipping
+    verifyQueryPredicate(hudiOpts, "not_record_key_col")
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+      Seq("abc", "row1"),
+      Seq("cde", "row2"),
+      Seq("def", "row3")
+    )
 
-      // create another secondary index on non-string column
-      spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
-      // validate index created successfully
-      metaClient = HoodieTableMetaClient.reload(metaClient)
-      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
-      // validate data skipping
-      verifyQueryPredicate(hudiOpts, "ts")
-      // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("1", "row1"),
-        Seq("2", "row2"),
-        Seq("3", "row3"),
-        Seq("abc", "row1"),
-        Seq("cde", "row2"),
-        Seq("def", "row3")
-      )
-    }
+    // create another secondary index on non-string column
+    spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")
+    // validate index created successfully
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_ts"))
+    // validate data skipping
+    verifyQueryPredicate(hudiOpts, "ts")
+    // validate the secondary index records themselves
+    checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+      Seq("1", "row1"),
+      Seq("2", "row2"),
+      Seq("3", "row3"),
+      Seq("abc", "row1"),
+      Seq("cde", "row2"),
+      Seq("def", "row3")
+    )
   }
 
   private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {

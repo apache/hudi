@@ -42,11 +42,7 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
     checkArg(call, 3, true, DataTypes.BooleanType)
     checkArg(call, 4, 1.0D, DataTypes.DoubleType)
 
-    if (HoodieSparkUtils.isSpark2) {
-      checkArg(call, 5, 9.0e1, DataTypes.createDecimalType(2, 0))
-    } else {
-      checkArg(call, 5, 9.0e1, DataTypes.DoubleType)
-    }
+    checkArg(call, 5, 9.0e1, DataTypes.DoubleType)
 
     checkArg(call, 6, new BigDecimal("900e-1"), DataTypes.createDecimalType(3, 1))
   }
@@ -82,11 +78,7 @@ class TestCallCommandParser extends HoodieSparkSqlTestBase {
   }
 
   test("Test Call Parse Error") {
-    if (HoodieSparkUtils.gteqSpark3_3) {
-      checkParseExceptionContain("CALL cat.system radish kebab")("Syntax error at or near 'CALL'")
-    } else {
-      checkParseExceptionContain("CALL cat.system radish kebab")("mismatched input 'CALL' expecting")
-    }
+    checkParseExceptionContain("CALL cat.system radish kebab")("Syntax error at or near 'CALL'")
   }
 
   test("Test Call Produce with semicolon") {

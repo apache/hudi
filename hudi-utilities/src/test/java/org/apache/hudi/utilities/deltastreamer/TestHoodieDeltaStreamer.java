@@ -22,7 +22,6 @@ package org.apache.hudi.utilities.deltastreamer;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkRecordMerger;
-import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
@@ -2228,20 +2227,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
-    // NOTE: Hudi doesn't support Orc in Spark < 3.0
-    //       Please check HUDI-4496 for more details
-    if (HoodieSparkUtils$.MODULE$.gteqSpark3_0()) {
-      testORCDFSSource(false, null);
-    }
+    testORCDFSSource(false, null);
   }
 
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
-    // NOTE: Hudi doesn't support Orc in Spark < 3.0
-    //       Please check HUDI-4496 for more details
-    if (HoodieSparkUtils$.MODULE$.gteqSpark3_0()) {
-      testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
-    }
+    testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
   private void prepareCsvDFSSource(

@@ -18,12 +18,11 @@
 
 package org.apache.hudi.cli;
 
+import org.jline.utils.AttributedString;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.shell.jline.PromptProvider;
 import org.springframework.stereotype.Component;
-
-import org.jline.utils.AttributedString;
 
 /**
  * This class deals with displaying prompt on CLI based on the state.

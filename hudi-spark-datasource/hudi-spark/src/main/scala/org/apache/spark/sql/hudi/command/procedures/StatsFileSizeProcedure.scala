@@ -17,11 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.storage.StoragePath
-
-import com.codahale.metrics.{Histogram, Snapshot, UniformReservoir}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.command.procedures.StatsFileSizeProcedure.MAX_FILES
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}

@@ -49,7 +49,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

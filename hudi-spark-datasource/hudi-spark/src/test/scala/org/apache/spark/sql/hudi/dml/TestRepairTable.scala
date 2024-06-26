@@ -133,64 +133,62 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test msck repair partitioned table [add/drop/sync] partitions") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      Seq("true", "false").foreach { hiveStylePartitionEnable =>
-        withTempDir { tmp =>
-          val tableName = generateTableName
-          val basePath = s"${tmp.getCanonicalPath}/$tableName"
-          spark.sql(
-            s"""
-               | create table $tableName (
-               |  id int,
-               |  name string,
-               |  ts long,
-               |  dt string
-               | ) using hudi
-               | partitioned by (dt)
-               | location '$basePath'
-               | tblproperties (
-               |  primaryKey = 'id',
-               |  preCombineField = 'ts',
-               |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
-               | )
+    Seq("true", "false").foreach { hiveStylePartitionEnable =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long,
+             |  dt string
+             | ) using hudi
+             | partitioned by (dt)
+             | location '$basePath'
+             | tblproperties (
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.datasource.write.hive_style_partitioning = '$hiveStylePartitionEnable'
+             | )
         """.stripMargin)
-          val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
+        val table = spark.sessionState.sqlParser.parseTableIdentifier(tableName)
 
-          // test msck repair table add partitions
-          import spark.implicits._
-          val df1 = Seq((1, "a1", 1000L, "2022-10-06")).toDF("id", "name", "ts", "dt")
-          df1.write.format("hudi")
-            .option(TBL_NAME.key(), tableName)
-            .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
-            .option(PARTITIONPATH_FIELD.key, "dt")
-            .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
-            .mode(SaveMode.Append)
-            .save(basePath)
+        // test msck repair table add partitions
+        import spark.implicits._
+        val df1 = Seq((1, "a1", 1000L, "2022-10-06")).toDF("id", "name", "ts", "dt")
+        df1.write.format("hudi")
+          .option(TBL_NAME.key(), tableName)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "dt")
+          .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
+          .mode(SaveMode.Append)
+          .save(basePath)
 
-          assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
-          spark.sql(s"msck repair table $tableName add partitions")
-          assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
+        assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
+        spark.sql(s"msck repair table $tableName add partitions")
+        assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
 
-          // test msck repair table drop partitions
-          val df2 = Seq((2, "a2", 1001L, "2022-10-07")).toDF("id", "name", "ts", "dt")
-          df2.write.format("hudi")
-            .option(TBL_NAME.key(), tableName)
-            .option(RECORDKEY_FIELD.key, "id")
-            .option(PRECOMBINE_FIELD.key, "ts")
-            .option(PARTITIONPATH_FIELD.key, "dt")
-            .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
-            .mode(SaveMode.Overwrite)
-            .save(basePath)
+        // test msck repair table drop partitions
+        val df2 = Seq((2, "a2", 1001L, "2022-10-07")).toDF("id", "name", "ts", "dt")
+        df2.write.format("hudi")
+          .option(TBL_NAME.key(), tableName)
+          .option(RECORDKEY_FIELD.key, "id")
+          .option(PRECOMBINE_FIELD.key, "ts")
+          .option(PARTITIONPATH_FIELD.key, "dt")
+          .option(HIVE_STYLE_PARTITIONING_ENABLE.key, hiveStylePartitionEnable)
+          .mode(SaveMode.Overwrite)
+          .save(basePath)
 
-          assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
-          spark.sql(s"msck repair table $tableName drop partitions")
-          assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
+        assertResult(Seq("dt=2022-10-06"))(spark.sessionState.catalog.listPartitionNames(table))
+        spark.sql(s"msck repair table $tableName drop partitions")
+        assertResult(Seq())(spark.sessionState.catalog.listPartitionNames(table))
 
-          // test msck repair table sync partitions
-          spark.sql(s"msck repair table $tableName sync partitions")
-          assertResult(Seq("dt=2022-10-07"))(spark.sessionState.catalog.listPartitionNames(table))
-        }
+        // test msck repair table sync partitions
+        spark.sql(s"msck repair table $tableName sync partitions")
+        assertResult(Seq("dt=2022-10-07"))(spark.sessionState.catalog.listPartitionNames(table))
       }
     }
   }

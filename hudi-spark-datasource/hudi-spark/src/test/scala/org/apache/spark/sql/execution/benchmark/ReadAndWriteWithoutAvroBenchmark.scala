@@ -55,10 +55,8 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      sparkConf.set("spark.sql.catalog.spark_catalog",
-        "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
-    }
+    sparkConf.set("spark.sql.catalog.spark_catalog",
+      "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     sparkConf
   }
 

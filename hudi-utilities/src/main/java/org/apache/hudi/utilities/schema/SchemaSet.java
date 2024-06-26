@@ -18,11 +18,11 @@
 
 package org.apache.hudi.utilities.schema;
 
-import java.io.Serializable;
-import java.util.HashSet;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaNormalization;
 
+import java.io.Serializable;
+import java.util.HashSet;
 import java.util.Set;
 
 /**

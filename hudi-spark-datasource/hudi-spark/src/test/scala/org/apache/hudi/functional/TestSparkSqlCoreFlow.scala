@@ -19,6 +19,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE_READ_OPTIMIZED_OPT_VAL, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.HoodieDataSourceHelpers.{hasNewCommits, latestCommit, listCommitsSince}
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -30,8 +31,6 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-
 import org.apache.spark.sql
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}
@@ -143,14 +142,8 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     assertEquals(commitInstantTime3, countsPerCommit(0).get(0).toString)
 
 
-    val timeTravelDf = if (HoodieSparkUtils.gteqSpark3_2_1) {
-      spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
-    } else {
-      //HUDI-5265
-      spark.read.format("org.apache.hudi")
-        .option("as.of.instant", commitInstantTime2)
-        .load(tableBasePath).cache()
-    }
+    val timeTravelDf = spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
+
     assertEquals(100, timeTravelDf.count())
     compareEntireInputDfWithHudiDf(snapshotDf2, timeTravelDf)
     timeTravelDf.unpersist(true)

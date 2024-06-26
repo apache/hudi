@@ -19,7 +19,6 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
@@ -189,11 +188,6 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
   }
 
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode, BootstrapMode modeForRegexMatch) throws Exception {
-    // NOTE: Hudi doesn't support Orc in Spark < 3.0
-    //       Please check HUDI-4496 for more details
-    if (!HoodieSparkUtils.gteqSpark3_0()) {
-      return;
-    }
     String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()
         : NonpartitionedKeyGenerator.class.getCanonicalName();
 

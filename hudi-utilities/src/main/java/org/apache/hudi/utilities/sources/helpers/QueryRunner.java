@@ -25,8 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
-
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
+
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;

@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.async.AsyncCompactService;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -135,7 +134,7 @@ public class SchedulerConfGenerator {
       bw.write(generateConfig(deltaSyncWeight, compactionWeight, deltaSyncMinShare, compactionMinShare, clusteringWeight, clusteringMinShare));
     }
     // SPARK-35083 introduces remote scheduler pool files, so the file must include scheme since Spark 3.2
-    String path = HoodieSparkUtils.gteqSpark3_2() ? tempConfigFile.toURI().toString() : tempConfigFile.getAbsolutePath();
+    String path = tempConfigFile.toURI().toString();
     LOG.info("Configs written to file " + path);
     return path;
   }

@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -28,7 +27,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Properties
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBuilder with Logging {

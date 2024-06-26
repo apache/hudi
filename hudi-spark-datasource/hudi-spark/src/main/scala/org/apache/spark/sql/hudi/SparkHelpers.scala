@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.avro.HoodieAvroWriteSupport
 import org.apache.hudi.client.SparkTaskContextSupplier
 import org.apache.hudi.common.bloom.{BloomFilter, BloomFilterFactory}
@@ -27,16 +30,11 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.io.hadoop.HoodieAvroParquetWriter
 import org.apache.hudi.io.storage.{HoodieIOFactory, HoodieParquetConfig}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
-
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.FileSystem
 import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import java.util.Properties
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable._
 

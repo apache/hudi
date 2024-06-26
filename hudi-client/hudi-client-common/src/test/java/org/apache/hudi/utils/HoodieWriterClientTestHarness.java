@@ -18,9 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -86,6 +83,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;

@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOpt
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
 import org.apache.spark.sql.Row

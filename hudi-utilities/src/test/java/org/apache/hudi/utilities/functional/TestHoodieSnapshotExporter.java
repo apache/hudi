@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -227,12 +226,6 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     @ParameterizedTest
     @ValueSource(strings = {"json", "parquet", "orc"})
     public void testExportAsNonHudi(String format) throws IOException {
-      // NOTE: Hudi doesn't support Orc in Spark < 3.0
-      //       Please check HUDI-4496 for more details
-      if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_0()) {
-        return;
-      }
-
       HoodieSnapshotExporter.Config cfg = new Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;
