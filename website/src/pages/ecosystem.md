@@ -1,6 +1,11 @@
-Ecosystem Support
+---
+title: Ecosystem
+---
 
-While Apache Hudi works seamlessly with various application frameworks, SQL query engines, and data warehouses, some systems might only offer read capabilities. In such cases, you can leverage another tool like Apache Spark to write data to Hudi tables and then use the read-compatible system for querying.
+# Ecosystem Support
+
+While Apache Hudi works seamlessly with various application frameworks, SQL query engines, and data warehouses, some systems might only offer read capabilities. 
+In such cases, you can leverage another tool like Apache Spark or Apache Flink to write data to Hudi tables and then use the read-compatible system for querying.
 
 | Project / Product | Apache Hudi (as of June 2024)                                                                                            | Comments    |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- |
