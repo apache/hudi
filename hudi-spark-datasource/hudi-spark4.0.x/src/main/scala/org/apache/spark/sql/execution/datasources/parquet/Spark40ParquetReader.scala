@@ -36,7 +36,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
-class Spark35ParquetReader(enableVectorizedReader: Boolean,
+class Spark40ParquetReader(enableVectorizedReader: Boolean,
                            datetimeRebaseModeInRead: String,
                            int96RebaseModeInRead: String,
                            enableParquetFilterPushDown: Boolean,
@@ -226,7 +226,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
   }
 }
 
-object Spark35ParquetReader extends SparkParquetReaderBuilder {
+object Spark40ParquetReader extends SparkParquetReaderBuilder {
   /**
    * Get parquet file reader
    *
@@ -264,7 +264,7 @@ object Spark35ParquetReader extends SparkParquetReaderBuilder {
         .equals("true")
 
     val parquetOptions = new ParquetOptions(options, sqlConf)
-    new Spark35ParquetReader(
+    new Spark40ParquetReader(
       enableVectorizedReader = vectorized,
       datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead,
       int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead,

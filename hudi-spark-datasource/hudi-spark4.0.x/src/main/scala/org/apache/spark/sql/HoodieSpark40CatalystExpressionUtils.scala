@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeRefer
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.types.{DataType, StructType}
 
-object HoodieSpark35CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper {
+object HoodieSpark40CatalystExpressionUtils extends HoodieSpark3CatalystExpressionUtils with PredicateHelper {
 
   override def getEncoder(schema: StructType): ExpressionEncoder[Row] = {
     ExpressionEncoder.apply(schema).resolveAndBind()

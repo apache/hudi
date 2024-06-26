@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, PartitionedFile}
 import org.apache.spark.sql.types.StructType
 
-class Spark35HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
+class Spark40HoodieFileScanRDD(@transient private val sparkSession: SparkSession,
                                read: PartitionedFile => Iterator[InternalRow],
                                @transient filePartitions: Seq[FilePartition],
                                readDataSchema: StructType,

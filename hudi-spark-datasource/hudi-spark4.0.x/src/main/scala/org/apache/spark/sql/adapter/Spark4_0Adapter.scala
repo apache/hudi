@@ -19,7 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.Spark35HoodieFileScanRDD
+import org.apache.hudi.Spark40HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -33,12 +33,12 @@ import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark35ParquetReader, Spark35LegacyHoodieParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40ParquetReader, Spark40LegacyHoodieParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_5ExtendedSqlParser}
+import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
@@ -76,27 +76,27 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark35CatalogUtils
+  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark40CatalogUtils
 
-  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark35CatalystExpressionUtils
+  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark40CatalystExpressionUtils
 
-  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark35CatalystPlanUtils
+  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark40CatalystPlanUtils
 
-  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark35SchemaUtils
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark40SchemaUtils
 
-  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark35PartitionedFileUtils
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark40PartitionedFileUtils
 
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
-    new HoodieSpark3_5AvroSerializer(rootCatalystType, rootAvroType, nullable)
+    new HoodieSpark4_0AvroSerializer(rootCatalystType, rootAvroType, nullable)
 
   override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark3_5AvroDeserializer(rootAvroType, rootCatalystType)
+    new HoodieSpark4_0AvroDeserializer(rootAvroType, rootCatalystType)
 
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
-    new HoodieSpark3_5ExtendedSqlParser(spark, delegate)
+    new HoodieSpark4_0ExtendedSqlParser(spark, delegate)
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues))
+    Some(new Spark40LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,
@@ -104,7 +104,7 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
                                        filePartitions: Seq[FilePartition],
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
-    new Spark35HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
+    new Spark40HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
   }
 
   override def extractDeleteCondition(deleteFromTable: Command): Expression = {
@@ -148,7 +148,7 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkParquetReader = {
-    Spark35ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+    Spark40ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
   override def getSchema(conn: Connection,

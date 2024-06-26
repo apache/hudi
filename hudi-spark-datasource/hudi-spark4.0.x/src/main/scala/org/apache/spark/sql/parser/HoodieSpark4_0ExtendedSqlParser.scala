@@ -36,11 +36,11 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import java.util.Locale
 import scala.jdk.CollectionConverters._
 
-class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
+class HoodieSpark4_0ExtendedSqlParser(session: SparkSession, delegate: ParserInterface)
   extends HoodieExtendedParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
-  private lazy val builder = new HoodieSpark3_5ExtendedSqlAstBuilder(conf, delegate)
+  private lazy val builder = new HoodieSpark4_0ExtendedSqlAstBuilder(conf, delegate)
   private val substitutor = new VariableSubstitution
 
   override def parsePlan(sqlText: String): LogicalPlan = {
