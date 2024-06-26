@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark30LegacyHoodieParquetFileFormat, Spark30ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
@@ -40,6 +41,8 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.ColumnarUtils
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+
+import java.sql.{Connection, ResultSet}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.0.x
@@ -135,5 +138,13 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
                                              options: Map[String, String],
                                              hadoopConf: Configuration): SparkParquetReader = {
     Spark30ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def getSchema(conn: Connection,
+                         resultSet: ResultSet,
+                         dialect: JdbcDialect,
+                         alwaysNullable: Boolean = false,
+                         isTimestampNTZ: Boolean = false): StructType = {
+    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
   }
 }

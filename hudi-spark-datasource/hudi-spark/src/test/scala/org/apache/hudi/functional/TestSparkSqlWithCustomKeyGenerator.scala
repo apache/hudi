@@ -214,7 +214,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                |""".stripMargin)
           validatePartitions(tableName, Seq(droppedPartition), expectedPartitions)
 
-          if (HoodieSparkUtils.isSpark3) {
+          if (HoodieSparkUtils.gteqSpark3_0) {
             // Test INSERT OVERWRITE, only supported in Spark 3.x
             spark.sql(
               s"""

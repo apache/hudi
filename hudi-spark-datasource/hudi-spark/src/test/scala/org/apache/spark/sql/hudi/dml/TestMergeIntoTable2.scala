@@ -364,7 +364,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
            | when not matched and flag = '1' then insert *
            |""".stripMargin
 
-      if (HoodieSparkUtils.isSpark3) {
+      if (HoodieSparkUtils.gteqSpark3_0) {
         checkExceptionContain(mergeSql)("Columns aliases are not allowed in MERGE")
       } else {
         spark.sql(mergeSql)
