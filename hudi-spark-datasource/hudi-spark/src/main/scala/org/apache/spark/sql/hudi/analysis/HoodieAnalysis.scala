@@ -62,16 +62,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val dataSourceV2ToV1Fallback: RuleBuilder =
       session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-    val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-    val spark32PlusResolveReferences: RuleBuilder =
-      session => instantiateKlass(spark32PlusResolveReferencesClass, session)
+    val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+    val spark3ResolveReferences: RuleBuilder =
+      session => instantiateKlass(spark3ResolveReferencesClass, session)
 
     // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
     //
     // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
     // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-    rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
+    rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
 
     if (HoodieSparkUtils.isSpark3) {
       val resolveAlterTableCommandsClass =
@@ -107,13 +107,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_2) {
-      val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
-      val spark3PostHocResolution: RuleBuilder =
-        session => instantiateKlass(spark3PostHocResolutionClass, session)
+    val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3PostAnalysisRule"
+    val spark3PostHocResolution: RuleBuilder =
+      session => instantiateKlass(spark3PostHocResolutionClass, session)
 
-      rules += spark3PostHocResolution
-    }
+    rules += spark3PostHocResolution
 
     rules.toSeq
   }
@@ -129,16 +127,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
           "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
         } else if (HoodieSparkUtils.gteqSpark3_4) {
           "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_3) {
-          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_2) {
-          "org.apache.spark.sql.execution.datasources.Spark32NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_1) {
-          // spark 3.1
-          "org.apache.spark.sql.execution.datasources.Spark31NestedSchemaPruning"
         } else {
-          // spark 3.0
-          "org.apache.spark.sql.execution.datasources.Spark30NestedSchemaPruning"
+          // spark 3.3
+          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
         }
 
       val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]

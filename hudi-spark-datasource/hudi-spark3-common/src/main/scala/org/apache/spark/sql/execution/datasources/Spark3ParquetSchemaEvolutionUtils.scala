@@ -45,10 +45,10 @@ import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType
 import java.time.ZoneId
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                                 filePath: Path,
-                                                 requiredSchema: StructType,
-                                                 partitionSchema: StructType) extends SparkAdapterSupport{
+class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                        filePath: Path,
+                                        requiredSchema: StructType,
+                                        partitionSchema: StructType) extends SparkAdapterSupport{
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
 
