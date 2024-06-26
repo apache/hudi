@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
+import org.apache.avro.Schema
 import org.apache.hudi.avro.model.{HoodieCleanMetadata, HoodieCleanPartitionMetadata}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieCommitMetadata}
 import org.apache.hudi.common.table.timeline.HoodieInstant
@@ -25,12 +26,12 @@ import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
-import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
+
 import scala.collection.JavaConverters._
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
@@ -38,8 +39,15 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
   private def ensureLastCommitIncludesProperSchema(path: String, expectedSchema: Seq[String] = schemaFields): Unit = {
     val metaClient = createMetaClient(spark, path)
-    val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata().get()
-    val fields = schema.getAllColsFullName.asScala
+    // A bit weird way to extract schema, but there is no way to get it exactly as is, since once `includeMetadataFields`
+    // is used - it will use custom logic to forcefully add/remove fields.
+    // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
+    // which may lead to false positives in test scenarios.
+    val lastInstant = metaClient.getActiveTimeline.lastInstant().get()
+    val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
+    val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
+    val schema = new Schema.Parser().parse(schemaStr)
+    val fields = schema.getFields.asScala.map(_.name())
     assert(expectedSchema == fields, s"Commit metadata should include no meta fields, received $fields")
   }
 
