@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.CollectionUtils.createImmutableList
 import org.apache.spark.sql.catalyst.expressions.Literal
 import org.apache.spark.sql.catalyst.plans.logical.{CallCommand, NamedArgument, PositionalArgument}

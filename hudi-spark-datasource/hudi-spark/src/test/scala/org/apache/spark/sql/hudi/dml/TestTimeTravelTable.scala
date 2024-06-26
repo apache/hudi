@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {

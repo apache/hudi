@@ -22,7 +22,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.{SchemaTestUtil, PreCombineTestUtils}
+import org.apache.hudi.common.testutils.{PreCombineTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig

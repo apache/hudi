@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
@@ -27,8 +28,6 @@ import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains

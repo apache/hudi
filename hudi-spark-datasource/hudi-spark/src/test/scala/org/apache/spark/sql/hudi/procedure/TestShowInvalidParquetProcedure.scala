@@ -17,10 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 class TestShowInvalidParquetProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_invalid_parquet Procedure") {

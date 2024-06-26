@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.hudi.command.index
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option

@@ -18,7 +18,6 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
