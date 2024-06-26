@@ -20,6 +20,7 @@ package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.sync.common.model.FieldSchema;
 
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -37,11 +38,13 @@ import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
 public class SparkDataSourceTableUtils {
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.
-   * @param schema  The schema to write to the table.
+   *
+   * @param schema      The schema to write to the table.
+   * @param fieldSchemaForComments
    * @return A new parameters added the spark's table properties.
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
-                                                            int schemaLengthThreshold, MessageType schema) {
+                                                            int schemaLengthThreshold, MessageType schema, List<FieldSchema> fieldSchemaForComments) {
     // Convert the schema and partition info used by spark sql to hive table properties.
     // The following code refers to the spark code in
     // https://github.com/apache/spark/blob/master/sql/hive/src/main/scala/org/apache/spark/sql/hive/HiveExternalCatalog.scala
@@ -78,7 +81,7 @@ public class SparkDataSourceTableUtils {
       sparkProperties.put("spark.sql.create.version", sparkVersion);
     }
     // Split the schema string to multi-parts according the schemaLengthThreshold size.
-    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType);
+    String schemaString = Parquet2SparkSchemaUtils.convertToSparkSchemaJson(reOrderedType, fieldSchemaForComments);
     int numSchemaPart = (schemaString.length() + schemaLengthThreshold - 1) / schemaLengthThreshold;
     sparkProperties.put("spark.sql.sources.schema.numParts", String.valueOf(numSchemaPart));
     // Add each part of schema string to sparkProperties

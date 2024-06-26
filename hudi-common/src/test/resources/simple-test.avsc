@@ -22,6 +22,6 @@
  "fields": [
      {"name": "name", "type": "string"},
      {"name": "favorite_number",  "type": "int"},
-     {"name": "favorite_color", "type": "string"}
+     {"name": "favorite_color", "type": "string", "doc": "a quoted\"comment"}
  ]
 }

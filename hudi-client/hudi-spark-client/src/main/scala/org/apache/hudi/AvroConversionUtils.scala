@@ -160,7 +160,7 @@ object AvroConversionUtils {
     try {
       val schemaConverters = sparkAdapter.getAvroSchemaConverters
       schemaConverters.toSqlType(avroSchema) match {
-        case (dataType, _) => dataType.asInstanceOf[StructType]
+        case (dataType, _, _) => dataType.asInstanceOf[StructType]
       }
     } catch {
       case e: Exception => throw new HoodieSchemaException("Failed to convert avro schema to struct type: " + avroSchema, e)
