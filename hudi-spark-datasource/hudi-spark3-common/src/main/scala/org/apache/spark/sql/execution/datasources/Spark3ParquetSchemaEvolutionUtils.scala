@@ -31,7 +31,6 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
@@ -39,10 +38,11 @@ import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils.pruneInternalSchema
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport, Spark3HoodieVectorizedParquetRecordReader, VectorizedParquetRecordReader}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 
+import java.time.ZoneId
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
@@ -181,6 +181,35 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
         } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+    }
+  }
+
+  def buildVectorizedReader(convertTz: ZoneId,
+                            datetimeRebaseMode: String,
+                            datetimeRebaseTz: String,
+                            int96RebaseMode: String,
+                            int96RebaseTz: String,
+                            useOffHeap: Boolean,
+                            capacity: Int): VectorizedParquetRecordReader = {
+    if (shouldUseInternalSchema) {
+      new Spark3HoodieVectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity,
+        typeChangeInfos)
+    } else {
+      new VectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity)
     }
   }
 }

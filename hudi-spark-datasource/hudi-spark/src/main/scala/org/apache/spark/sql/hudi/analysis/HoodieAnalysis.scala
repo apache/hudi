@@ -50,57 +50,28 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       For more details please check out the scala-doc of the rule
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
-    if (!HoodieSparkUtils.gteqSpark3_2) {
-      //Add or correct resolution of MergeInto
-      // the way we load the class via reflection is diff across spark2 and spark3 and hence had to split it out.
-      if (HoodieSparkUtils.isSpark2) {
-        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
-        val sparkResolveReferences: RuleBuilder =
-          session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-        // TODO elaborate on the ordering
-        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
-      } else if (HoodieSparkUtils.isSpark3_0) {
-        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark30Analysis$ResolveReferences"
-        val sparkResolveReferences: RuleBuilder = {
-          session => instantiateKlass(resolveReferencesClass, session)
-        }
-        // TODO elaborate on the ordering
-        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
-      } else if (HoodieSparkUtils.isSpark3_1) {
-        val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark31Analysis$ResolveReferences"
-        val sparkResolveReferences: RuleBuilder =
-          session => instantiateKlass(resolveReferencesClass, session)
-        // TODO elaborate on the ordering
-        rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
-      } else {
-        throw new IllegalStateException("Impossible to be here")
-      }
-    } else {
-      rules += adaptIngestionTargetLogicalRelations
-      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-      else if (HoodieSparkUtils.isSpark3_4)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-      else if (HoodieSparkUtils.isSpark3_3)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
-      else {
-        // Spark 3.2.x
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark32DataSourceV2ToV1Fallback"
-      }
-      val dataSourceV2ToV1Fallback: RuleBuilder =
-        session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
-
-      val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
-      val spark32PlusResolveReferences: RuleBuilder =
-        session => instantiateKlass(spark32PlusResolveReferencesClass, session)
-
-      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
-      //
-      // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
-      // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
-      // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
+    rules += adaptIngestionTargetLogicalRelations
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
+    else if (HoodieSparkUtils.isSpark3_4)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
+    else {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
+
+    val dataSourceV2ToV1Fallback: RuleBuilder =
+      session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
+
+    val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+    val spark32PlusResolveReferences: RuleBuilder =
+      session => instantiateKlass(spark32PlusResolveReferencesClass, session)
+
+    // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+    //
+    // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
+    // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
+    // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
+    rules ++= Seq(dataSourceV2ToV1Fallback, spark32PlusResolveReferences)
 
     if (HoodieSparkUtils.isSpark3) {
       val resolveAlterTableCommandsClass =
@@ -110,12 +81,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
           "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
         } else if (HoodieSparkUtils.gteqSpark3_3) {
           "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
-        } else if (HoodieSparkUtils.gteqSpark3_2) {
-          "org.apache.spark.sql.hudi.Spark32ResolveHudiAlterTableCommand"
-        } else if (HoodieSparkUtils.gteqSpark3_1) {
-          "org.apache.spark.sql.hudi.Spark31ResolveHudiAlterTableCommand"
-        } else if (HoodieSparkUtils.gteqSpark3_0) {
-          "org.apache.spark.sql.hudi.Spark30ResolveHudiAlterTableCommand"
         } else {
           throw new IllegalStateException("Unsupported Spark version")
         }
