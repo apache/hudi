@@ -75,13 +75,14 @@ public class HoodieMetaSyncMetrics {
     return metricsConfig.isMetricsOn() ? metrics.getRegistry().timer(name) : null;
   }
 
-  public void emitRecreateAndSyncFailureMetric() {
+  public void incrementRecreateAndSyncFailureCounter() {
     recreateAndSyncFailureCounter = getCounter(recreateAndSyncFailureCounter, recreateAndSyncFailureCounterName);
     recreateAndSyncFailureCounter.inc();
   }
 
-  public void updateRecreateAndSyncMetrics(long durationInMs) {
+  public void updateRecreateAndSyncDurationInMs(long durationInNs) {
     if (metricsConfig.isMetricsOn()) {
+      long durationInMs = getDurationInMs(durationInNs);
       LOG.info("Sending recreate and sync metrics {}", durationInMs);
       metrics.registerGauge(getMetricsName("meta_sync", "recreate_table.duration"), durationInMs);
     }
@@ -90,7 +91,7 @@ public class HoodieMetaSyncMetrics {
   /**
    * By default, the timer context returns duration with nano seconds. Convert it to millisecond.
    */
-  public long getDurationInMs(long ctxDuration) {
+  private long getDurationInMs(long ctxDuration) {
     return ctxDuration / 1000000;
   }
 

@@ -44,7 +44,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 public class TestHoodieMetaSyncMetrics {
 
-
   @Mock
   HoodieSyncConfig syncConfig;
   @Mock
@@ -76,30 +75,30 @@ public class TestHoodieMetaSyncMetrics {
   }
 
   @Test
-  void testUpdateRecreateAndSyncMetrics() throws InterruptedException {
+  void testUpdateRecreateAndSyncDurationInMs() throws InterruptedException {
     Timer.Context timerCtx = hoodieSyncMetrics.getRecreateAndSyncTimer();
     Thread.sleep(5);
-    long durationInMs = hoodieSyncMetrics.getDurationInMs(timerCtx.stop());
-    hoodieSyncMetrics.updateRecreateAndSyncMetrics(durationInMs);
+    long durationInNs = timerCtx.stop();
+    hoodieSyncMetrics.updateRecreateAndSyncDurationInMs(durationInNs);
     String metricName = hoodieSyncMetrics.getMetricsName("meta_sync.recreate_table", "duration");
     long timeIsMs = (Long) metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(timeIsMs > 0, "recreate_table duration metric value should be > 0");
   }
 
   @Test
-  void testEmitRecreateAndSyncFailureMetric() {
-    hoodieSyncMetrics.emitRecreateAndSyncFailureMetric();
+  void testIncrementRecreateAndSyncFailureCounter() {
+    hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
     String metricsName = hoodieSyncMetrics.getMetricsName("counter", "meta_sync.recreate_table.failure");
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
   }
 
   @Test
-  void testEmitRecreateAndSyncFailureMetric_WithoutMetricsNamePrefix() {
+  void testIncrementRecreateAndSyncFailureCounter_WithoutMetricsNamePrefix() {
     when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn("");
     hoodieSyncMetrics = new HoodieMetaSyncMetrics(syncConfig, "TestHiveSyncTool");
     metrics = hoodieSyncMetrics.getMetrics();
-    hoodieSyncMetrics.emitRecreateAndSyncFailureMetric();
+    hoodieSyncMetrics.incrementRecreateAndSyncFailureCounter();
     String metricsName = hoodieSyncMetrics.getMetricsName("counter", "meta_sync.recreate_table.failure");
     long count = metrics.getRegistry().getCounters().get(metricsName).getCount();
     assertEquals(1, count, "recreate_table failure counter value should be 1");
