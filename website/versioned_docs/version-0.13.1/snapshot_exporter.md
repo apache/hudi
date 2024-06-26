@@ -5,12 +5,12 @@ toc: true
 ---
 
 ## Introduction
-HoodieSnapshotExporter allows you to copy data from one location to another for backups or other purposes. 
-You can write data as Hudi, Json, Orc, or Parquet file formats. In addition to copying data, you can also repartition data 
+HoodieSnapshotExporter allows you to copy data from one location to another for backups or other purposes.
+You can write data as Hudi, Json, Orc, or Parquet file formats. In addition to copying data, you can also repartition data
 with a provided field or implement custom repartitioning by extending a class shown in detail below.
 
 ## Arguments
-HoodieSnapshotExporter accepts a reference to a source path and a destination path. The utility will issue a 
+HoodieSnapshotExporter accepts a reference to a source path and a destination path. The utility will issue a
 query, perform any repartitioning if required and will write the data as Hudi, parquet, or json format.
 
 |Argument|Description|Required|Note|
@@ -20,6 +20,7 @@ query, perform any repartitioning if required and will write the data as Hudi, p
 |--output-format|Output format for the exported dataset; accept these values: json,parquet,hudi|required||
 |--output-partition-field|A field to be used by Spark repartitioning|optional|Ignored when "Hudi" or when --output-partitioner is specified.The output dataset's default partition field will inherent from the source Hudi dataset.|
 |--output-partitioner|A class to facilitate custom repartitioning|optional|Ignored when using output-format "Hudi"|
+|--parallelism|Parallelism for file listing|optional||
 
 ## Examples
 
@@ -63,7 +64,7 @@ spark-submit \
   --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.13.1.jar" \
   --deploy-mode "client" \
   --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
-      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.1.jar \  
+      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.13.1.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
   --output-format "json" \
@@ -77,7 +78,7 @@ The output directory will look like this
 ```
 
 ### Custom Re-partitioning
-`--output-partitioner` parameter takes in a fully-qualified name of a class that implements `HoodieSnapshotExporter.Partitioner`. 
+`--output-partitioner` parameter takes in a fully-qualified name of a class that implements `HoodieSnapshotExporter.Partitioner`.
 This parameter takes higher precedence than `--output-partition-field`, which will be ignored if this is provided.
 
 An example implementation is shown below:
@@ -88,7 +89,7 @@ package com.foo.bar;
 public class MyPartitioner implements HoodieSnapshotExporter.Partitioner {
 
   private static final String PARTITION_NAME = "date";
- 
+
   @Override
   public DataFrameWriter<Row> partition(Dataset<Row> source) {
     // use the current hoodie partition path as the output partition
