@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Optio
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
@@ -33,6 +32,15 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
+  val schemaFields = Set("id", "name", "ts", "dt")
+
+  private def ensureDataCanBeReadInIncrementalQuery(path: String): Unit = {
+    val metaClient = createMetaClient(spark, path)
+    spark.read.format("hudi").options(Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> metaClient.getActiveTimeline.getCommitsTimeline.firstInstant().get().getTimestamp,
+    )).load(path).show(false)
+  }
 
   test("Drop non-partitioned table") {
     val tableName = generateTableName
@@ -133,11 +141,13 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
         val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
@@ -201,8 +211,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (dt='2021/10/01')")
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021/10/02")""")
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         val partitionPath = if (urlencode) {
           PartitionPathEncodeUtils.escapePathName("2021/10/01")
@@ -257,6 +269,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
     // drop 2021-10-01 partition
     spark.sql(s"alter table $tableName drop partition (dt='2021-10-01')")
+    ensureDataCanBeReadInIncrementalQuery(getTableStoragePath(tableName))
 
     // trigger clean so that partition deletion kicks in.
     spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
@@ -321,11 +334,13 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"set ${HoodieCleanConfig.CLEANER_POLICY.key}=${HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name()}")
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
         val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
@@ -398,12 +413,14 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         // drop 2021-10-01 partition
         spark.sql(s"alter table $tableName drop partition (year='2021', month='10', day='01')")
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         spark.sql(s"""insert into $tableName values (2, "l4", "v1", "2021", "10", "02")""")
 
         // trigger clean so that partition deletion kicks in.
         spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)")
           .collect()
+        ensureDataCanBeReadInIncrementalQuery(tablePath)
 
         val cleanMetadata: HoodieCleanMetadata = getLastCleanMetadata(spark, tablePath)
         val cleanPartitionMeta = new java.util.ArrayList(cleanMetadata.getPartitionMetadata.values()).toArray()
@@ -471,6 +488,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           Seq(2, "a2", 10.0, 1000, "02"),
           Seq(3, "a3", 10.0, 1000, "03")
         )
+        ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
 
         // check schema
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
@@ -521,10 +539,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_clustering('$tableName')")(
         Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
       )
+      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
     }
   }
 
@@ -568,10 +588,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_compaction('$tableName')")(
         Seq(firstScheduleInstant, 5, HoodieInstant.State.REQUESTED.name())
       )
+      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
     }
   }
 
@@ -616,6 +638,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
+      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
     }
   }
 
@@ -647,6 +670,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           Seq("partition_date_col=2023-09-01")
         )
         spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-*')")
+        ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
         // show partitions will still return all partitions for tests, use select distinct as a stop-gap
         checkAnswer(s"select distinct partition_date_col from $tableName")(
           Seq("2023-09-01")

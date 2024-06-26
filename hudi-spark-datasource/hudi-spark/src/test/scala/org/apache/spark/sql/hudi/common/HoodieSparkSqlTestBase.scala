@@ -81,6 +81,10 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  protected def getTableStoragePath(tableName: String): String = {
+    new File(sparkWareHouse, tableName).getCanonicalPath
+  }
+
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {
