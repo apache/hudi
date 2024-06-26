@@ -510,7 +510,9 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       mergeCondition,
       matchedActions.toSeq,
       notMatchedActions.toSeq,
-      Seq.empty)
+      Seq.empty,
+      false
+    )
   }
 
   /**
@@ -3312,7 +3314,7 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         val schema = StructType(columns ++ partCols)
         CreateTable(
           UnresolvedIdentifier(table),
-          schema, partitioning, tableSpec, ignoreIfExists = ifNotExists)
+          schema.map(ColumnDefinition.fromV1Column(_, delegate)), partitioning, tableSpec, ignoreIfExists = ifNotExists)
     }
   }
 
