@@ -38,7 +38,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     val metaClient = createMetaClient(spark, path)
     spark.read.format("hudi").options(Map(
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> metaClient.getActiveTimeline.getCommitsTimeline.firstInstant().get().getTimestamp,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> metaClient.getActiveTimeline.getCommitsTimeline.firstInstant().get().getTimestamp
     )).load(path).show(1)
   }
 
