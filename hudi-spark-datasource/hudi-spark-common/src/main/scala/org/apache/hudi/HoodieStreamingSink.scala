@@ -33,7 +33,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode

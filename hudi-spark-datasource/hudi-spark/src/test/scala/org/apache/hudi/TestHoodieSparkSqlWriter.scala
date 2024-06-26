@@ -47,6 +47,7 @@ import org.scalatest.Matchers.{be, convertToAnyShouldWrapper, intercept}
 
 import java.time.Instant
 import java.util.{Collections, Date, UUID}
+
 import scala.collection.JavaConverters._
 
 /**

@@ -24,6 +24,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 object HoodieProcedureUtils {

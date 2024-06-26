@@ -48,6 +48,7 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
+
 import scala.collection.JavaConverters._
 
 /**

@@ -35,6 +35,7 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName
 import org.apache.spark.sql.{DataFrame, SQLContext}
 
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable._
 

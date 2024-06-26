@@ -43,9 +43,11 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.Utils.isTesting
 import org.apache.spark.util.random.RandomSampler
 
+import javax.xml.bind.DatatypeConverter
+
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import javax.xml.bind.DatatypeConverter
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 

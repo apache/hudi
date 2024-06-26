@@ -26,6 +26,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCommitExtraMetadataProcedure() extends BaseProcedure with ProcedureBuilder {

@@ -25,7 +25,6 @@ import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession

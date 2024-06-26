@@ -26,6 +26,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.util.{Failure, Success, Try}
 
 class DeleteMarkerProcedure extends BaseProcedure with ProcedureBuilder with Logging {

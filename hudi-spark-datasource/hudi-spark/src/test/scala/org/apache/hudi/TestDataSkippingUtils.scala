@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.sql.Timestamp
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.HashSet
 

@@ -31,6 +31,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {

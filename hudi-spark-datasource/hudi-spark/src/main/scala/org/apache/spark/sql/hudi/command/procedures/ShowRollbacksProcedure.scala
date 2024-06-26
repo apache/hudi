@@ -22,7 +22,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, TimelineMetadataUtils}
 import org.apache.hudi.exception.HoodieException
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 

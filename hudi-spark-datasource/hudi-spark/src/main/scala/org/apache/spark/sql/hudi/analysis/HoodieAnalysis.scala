@@ -36,6 +36,7 @@ import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
+
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis extends SparkAdapterSupport {

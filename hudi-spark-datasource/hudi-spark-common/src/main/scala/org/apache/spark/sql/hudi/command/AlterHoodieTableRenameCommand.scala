@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.execution.command.{AlterTableRenameCommand, AlterTableSetPropertiesCommand}

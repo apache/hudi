@@ -37,6 +37,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

@@ -32,6 +32,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.Objects
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuilder {

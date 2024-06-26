@@ -17,17 +17,16 @@
 
 package org.apache.spark.execution.datasources
 
-import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.storage.StoragePath
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.storage.StoragePath
 import org.apache.spark.HoodieHadoopFSUtils
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, Expression}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.types.StructType
 

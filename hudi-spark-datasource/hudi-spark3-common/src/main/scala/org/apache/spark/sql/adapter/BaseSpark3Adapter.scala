@@ -17,20 +17,19 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.avro.Schema
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
-
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
-import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType

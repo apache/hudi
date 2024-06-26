@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.api.java.JavaSparkContext
 
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 
 class TestTTLProcedure extends HoodieSparkProcedureTestBase with SparkDatasetMixin {

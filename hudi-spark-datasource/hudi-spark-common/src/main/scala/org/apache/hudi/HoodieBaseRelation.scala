@@ -17,6 +17,11 @@
 
 package org.apache.hudi
 
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapred.JobConf
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
@@ -48,12 +53,6 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
-
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
-import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD

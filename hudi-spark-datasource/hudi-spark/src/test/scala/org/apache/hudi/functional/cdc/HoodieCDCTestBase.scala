@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNu
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util.function.Predicate
+
 import scala.collection.JavaConverters._
 
 abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {

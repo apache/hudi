@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.spark3.internal.ReflectUtil
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.unescapePathName
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
@@ -35,7 +34,6 @@ import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scala.util.control.NonFatal

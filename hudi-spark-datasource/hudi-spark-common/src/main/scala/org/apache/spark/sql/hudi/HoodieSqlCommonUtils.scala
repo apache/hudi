@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
@@ -29,9 +31,6 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
-
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.Resolver

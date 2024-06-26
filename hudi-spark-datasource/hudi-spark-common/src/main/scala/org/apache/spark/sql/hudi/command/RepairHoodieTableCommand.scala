@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.HoodieStorageUtils
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog._

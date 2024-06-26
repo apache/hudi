@@ -55,6 +55,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, Va
 
 import java.util.Properties
 import java.util.function.Consumer
+
 import scala.collection.JavaConverters._
 import scala.util.Random
 

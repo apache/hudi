@@ -21,7 +21,6 @@ import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.{HoodieException, HoodieSavepointException}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}

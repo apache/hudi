@@ -33,6 +33,7 @@ import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
+
 import scala.collection.JavaConverters._
 
 /**

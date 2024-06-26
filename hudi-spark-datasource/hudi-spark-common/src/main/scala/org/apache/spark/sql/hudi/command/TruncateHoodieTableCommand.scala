@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}

@@ -24,6 +24,7 @@ import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.BaseDefaultSource;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
+
 import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;

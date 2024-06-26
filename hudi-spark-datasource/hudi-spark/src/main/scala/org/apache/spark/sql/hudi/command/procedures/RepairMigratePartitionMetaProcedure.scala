@@ -32,6 +32,7 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
+
 import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {

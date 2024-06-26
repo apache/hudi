@@ -30,6 +30,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ValidateMetadataTableFilesProcedure() extends BaseProcedure with ProcedureBuilder with Logging {

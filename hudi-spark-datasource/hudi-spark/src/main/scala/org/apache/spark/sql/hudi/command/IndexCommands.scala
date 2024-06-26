@@ -33,6 +33,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
+
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,

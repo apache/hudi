@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -42,6 +41,7 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

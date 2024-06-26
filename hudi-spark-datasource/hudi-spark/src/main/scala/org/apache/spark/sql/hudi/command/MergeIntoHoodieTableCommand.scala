@@ -49,6 +49,7 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
+
 import scala.collection.JavaConverters._
 
 /**

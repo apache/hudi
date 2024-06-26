@@ -34,6 +34,7 @@ import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class RunClusteringProcedure extends BaseProcedure

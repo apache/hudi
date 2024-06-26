@@ -42,6 +42,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 
 @Tag("functional")

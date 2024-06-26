@@ -31,6 +31,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 

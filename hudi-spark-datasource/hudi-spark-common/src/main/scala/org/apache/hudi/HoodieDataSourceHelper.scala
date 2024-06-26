@@ -18,12 +18,11 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.storage.StoragePathInfo
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.storage.StoragePathInfo
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
