@@ -65,7 +65,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
     this.context = context;
-    this.basePath = table.getMetaClient().getBasePathV2().toString();
+    this.basePath = table.getMetaClient().getBasePath().toString();
     this.config = config;
     this.instantTime = instantTime;
   }

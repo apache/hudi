@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -190,17 +191,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Returns base path of the table
    */
-  public StoragePath getBasePathV2() {
-    return basePath;
-  }
-
-  /**
-   * @return Base path
-   * @deprecated please use {@link #getBasePathV2()}
-   */
-  @Deprecated
-  public String getBasePath() {
-    return basePath.toString(); // this invocation is cached
+  public StoragePath getBasePath() {
+    return basePath; // this invocation is cached
   }
 
   /**
@@ -293,6 +285,10 @@ public class HoodieTableMetaClient implements Serializable {
 
   public TimelineLayoutVersion getTimelineLayoutVersion() {
     return timelineLayoutVersion;
+  }
+
+  public Boolean isMetadataTable() {
+    return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
 
   public HoodieStorage getStorage() {
@@ -461,11 +457,27 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, String basePath,
                                                                 Properties props) throws IOException {
+    return initTableAndGetMetaClient(storageConf, new StoragePath(basePath), props);
+  }
+
+  public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, StoragePath basePath,
+                                                                Properties props) throws IOException {
+    initTableMetaClient(storageConf, basePath, props);
+    // We should not use fs.getConf as this might be different from the original configuration
+    // used to create the fs in unit tests
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
+            .setMetaserverConfig(props)
+            .build();
+    LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
+    return metaClient;
+  }
+
+  private static void initTableMetaClient(StorageConfiguration<?> storageConf, StoragePath basePath,
+                                          Properties props) throws IOException {
     LOG.info("Initializing " + basePath + " as hoodie table " + basePath);
-    StoragePath basePathDir = new StoragePath(basePath);
     final HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
-    if (!storage.exists(basePathDir)) {
-      storage.createDirectory(basePathDir);
+    if (!storage.exists(basePath)) {
+      storage.createDirectory(basePath);
     }
     StoragePath metaPathDir = new StoragePath(basePath, METAFOLDER_NAME);
     if (!storage.exists(metaPathDir)) {
@@ -500,15 +512,9 @@ public class HoodieTableMetaClient implements Serializable {
 
     initializeBootstrapDirsIfNotExists(basePath, storage);
     HoodieTableConfig.create(storage, metaPathDir, props);
-    // We should not use fs.getConf as this might be different from the original configuration
-    // used to create the fs in unit tests
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
-        .setMetaserverConfig(props).build();
-    LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
-    return metaClient;
   }
 
-  public static void initializeBootstrapDirsIfNotExists(String basePath, HoodieStorage storage) throws IOException {
+  public static void initializeBootstrapDirsIfNotExists(StoragePath basePath, HoodieStorage storage) throws IOException {
 
     // Create bootstrap index by partition folder if it does not exist
     final StoragePath bootstrap_index_folder_by_partition =
@@ -670,7 +676,7 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
-    initializeBootstrapDirsIfNotExists(basePath.toString(), getStorage());
+    initializeBootstrapDirsIfNotExists(basePath, getStorage());
   }
 
   private static HoodieTableMetaClient newMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
@@ -718,6 +724,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public Builder setBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    public Builder setBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 
@@ -1196,6 +1207,10 @@ public class HoodieTableMetaClient implements Serializable {
      */
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
         throws IOException {
+      return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    }
+
+    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, StoragePath basePath) throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
     }
 

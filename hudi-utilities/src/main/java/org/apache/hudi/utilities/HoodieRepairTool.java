@@ -348,7 +348,7 @@ public class HoodieRepairTool {
     // Buckets the files based on instant time
     // instant time -> relative paths of base and log files to base path
     Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
-        metaClient.getBasePath(), allFilesInPartitions);
+        metaClient.getBasePath().toString(), allFilesInPartitions);
     List<String> instantTimesToRepair = instantToFilesMap.keySet().stream()
         .filter(instant -> (!startingInstantOption.isPresent()
             || instant.compareTo(startingInstantOption.get()) >= 0)

@@ -160,7 +160,7 @@ public class CompactionTestUtils {
       String compactionInstantTime, int numFileIds, boolean createDataFile, boolean deltaCommitsAfterCompactionRequests) {
     List<HoodieCompactionOperation> ops = IntStream.range(0, numFileIds).boxed().map(idx -> {
       try {
-        final String basePath = metaClient.getBasePath();
+        final String basePath = metaClient.getBasePath().toString();
         final String partition = DEFAULT_PARTITION_PATHS[0];
         final String fileId = UUID.randomUUID().toString();
         if (createDataFile) {

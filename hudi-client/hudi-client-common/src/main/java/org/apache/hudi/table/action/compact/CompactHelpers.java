@@ -104,14 +104,14 @@ public class CompactHelpers<T, I, K, O> {
   }
 
   public Option<InstantRange> getInstantRange(HoodieTableMetaClient metaClient) {
-    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePathV2().toString())
+    return HoodieTableMetadata.isMetadataTable(metaClient.getBasePath().toString())
         ? Option.of(getMetadataLogReaderInstantRange(metaClient)) : Option.empty();
   }
 
   private InstantRange getMetadataLogReaderInstantRange(HoodieTableMetaClient metadataMetaClient) {
     HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
         .setConf(metadataMetaClient.getStorageConf().newInstance())
-        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePathV2().toString()))
+        .setBasePath(HoodieTableMetadata.getDatasetBasePath(metadataMetaClient.getBasePath().toString()))
         .build();
     Set<String> validInstants = HoodieTableMetadataUtil.getValidInstantTimestamps(dataMetaClient, metadataMetaClient);
     return InstantRange.builder()

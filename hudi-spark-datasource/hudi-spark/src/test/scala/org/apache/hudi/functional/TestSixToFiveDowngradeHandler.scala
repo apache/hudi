@@ -115,7 +115,7 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
     var numFileSlicesWithLogFiles = 0L
     val fsView = getTableFileSystemView(opts)
     getAllPartititonPaths(fsView).asScala.flatMap { partitionPath =>
-      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, partitionPath)
+      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, partitionPath)
       fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, getLatestMetaClient(false)
         .getActiveTimeline.lastInstant().get().getTimestamp).iterator().asScala.toSeq
     }.foreach(

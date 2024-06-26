@@ -80,7 +80,7 @@ public class InternalSchemaManager implements Serializable {
         .getInstantsAsStream()
         .map(HoodieInstant::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePathV2().toString());
+    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString());
   }
 
   public InternalSchemaManager(Configuration conf, InternalSchema querySchema, String validCommits, String tablePath) {

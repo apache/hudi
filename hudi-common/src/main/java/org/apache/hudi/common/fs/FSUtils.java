@@ -247,6 +247,21 @@ public class FSUtils {
     }
   }
 
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
+                                                  HoodieStorage storage,
+                                                  StoragePath basePath,
+                                                  boolean useFileListingFromMetadata,
+                                                  boolean assumeDatePartitioning) {
+    return getAllPartitionPaths(engineContext, storage, basePath.toString(), useFileListingFromMetadata, assumeDatePartitioning);
+  }
+
+  public static List<String> getAllPartitionPaths(HoodieEngineContext engineContext,
+                                                  HoodieStorage storage,
+                                                  HoodieMetadataConfig metadataConfig,
+                                                  StoragePath basePath) {
+    return getAllPartitionPaths(engineContext, storage, metadataConfig, basePath.toString());
+  }
+
   public static Map<String, List<StoragePathInfo>> getFilesInPartitions(HoodieEngineContext engineContext,
                                                                         HoodieStorage storage,
                                                                         HoodieMetadataConfig metadataConfig,

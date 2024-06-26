@@ -95,7 +95,7 @@ public class HoodieLogFileCommand {
         new HashMap<>();
     int numCorruptBlocks = 0;
     int dummyInstantTimeCount = 0;
-    String basePath = HoodieCLI.getTableMetaClient().getBasePathV2().toString();
+    String basePath = HoodieCLI.basePath;
 
     for (String logFilePath : logFilePaths) {
       StoragePath path = new StoragePath(logFilePath);

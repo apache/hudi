@@ -460,7 +460,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     HoodieJavaWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -625,7 +625,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     HoodieTableMetaClient.withPropertyBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath().toString());
 
     HoodieJavaWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -1146,15 +1146,15 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
           .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(),
               HoodieCommitMetadata.class);
-      String basePath = table.getMetaClient().getBasePath();
+      StoragePath basePath = table.getMetaClient().getBasePath();
       Collection<String> commitPathNames =
-          commitMetadata.getFileIdAndFullPaths(new StoragePath(basePath)).values();
+          commitMetadata.getFileIdAndFullPaths(basePath).values();
 
       // Read from commit file
       try (InputStream inputStream = storage.open(testTable.getCommitFilePath(instantTime))) {
         String everything = FileIOUtils.readAsUTFString(inputStream);
         HoodieCommitMetadata metadata = HoodieCommitMetadata.fromJsonString(everything, HoodieCommitMetadata.class);
-        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new StoragePath(basePath));
+        HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
         // Compare values in both to make sure they are equal.
         for (String pathName : paths.values()) {
           assertTrue(commitPathNames.contains(pathName));

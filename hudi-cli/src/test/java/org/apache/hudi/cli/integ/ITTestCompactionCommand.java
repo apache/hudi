@@ -250,7 +250,7 @@ public class ITTestCompactionCommand extends HoodieCLIIntegrationTestBase {
         numEntriesPerInstant, numEntriesPerInstant, numEntriesPerInstant);
 
     metaClient.reloadActiveTimeline();
-    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath());
+    CompactionAdminClient client = new CompactionAdminClient(new HoodieSparkEngineContext(jsc), metaClient.getBasePath().toString());
     List<Pair<HoodieLogFile, HoodieLogFile>> renameFiles =
         client.getRenamingActionsForUnschedulingCompactionPlan(metaClient, compactionInstant, 1, Option.empty(), false);
 

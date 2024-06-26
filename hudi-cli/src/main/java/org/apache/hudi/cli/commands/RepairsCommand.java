@@ -94,8 +94,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), master, sparkMemory,
-        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.getTableMetaClient().getBasePath(),
-        String.valueOf(dryRun), dedupeType);
+        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.basePath, String.valueOf(dryRun), dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -120,8 +119,8 @@ public class RepairsCommand {
     String latestCommit =
         client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
     List<String> partitionPaths =
-        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, client.getBasePath());
-    StoragePath basePath = client.getBasePathV2();
+        FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, HoodieCLI.basePath);
+    StoragePath basePath = client.getBasePath();
     String[][] rows = new String[partitionPaths.size()][];
 
     int ind = 0;
@@ -227,7 +226,7 @@ public class RepairsCommand {
     HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HoodieCLI.conf);
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(engineContext, client.getStorage(), client.getBasePath(), false, false);
-    StoragePath basePath = client.getBasePathV2();
+    StoragePath basePath = client.getBasePath();
 
     String[][] rows = new String[partitionPaths.size()][];
     int ind = 0;
@@ -298,7 +297,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION.toString(), master, sparkMemory,
-        HoodieCLI.getTableMetaClient().getBasePathV2().toString());
+        HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -326,7 +325,7 @@ public class RepairsCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
-        HoodieCLI.getTableMetaClient().getBasePathV2().toString(), oldPartition, newPartition);
+        HoodieCLI.basePath, oldPartition, newPartition);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

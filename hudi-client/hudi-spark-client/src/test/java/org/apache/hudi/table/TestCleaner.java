@@ -1021,7 +1021,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         HoodieTimeline.makeInflightCleanerFileName(commitTime));
     for (String f : cleanerFileNames) {
       StoragePath commitFile = new StoragePath(Paths
-          .get(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
+          .get(metaClient.getBasePath().toString(), HoodieTableMetaClient.METAFOLDER_NAME, f).toString());
       try (OutputStream os = metaClient.getStorage().create(commitFile, true)) {
         // Write empty clean metadata
         os.write(new byte[0]);

@@ -73,7 +73,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private static final TypeReference<Set<String>> SET_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
 
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
-    this(table.getMetaClient().getBasePath(),
+    this(table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
         table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
         table.getConfig().getViewStorageConfig().getRemoteViewServerPort(),
