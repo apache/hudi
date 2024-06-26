@@ -655,7 +655,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           Seq("partition_date_col=2023-08-02"),
           Seq("partition_date_col=2023-09-01")
         )
-        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-01')")
+        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-*')")
         // Since incremental query utilizes a bit different schema read scenario, if `replacecommit` is written with
         // META fields, read fails because of duplicated META columns.
         ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
