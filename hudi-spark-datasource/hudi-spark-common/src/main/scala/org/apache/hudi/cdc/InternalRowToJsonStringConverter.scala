@@ -18,10 +18,11 @@
 
 package org.apache.hudi.cdc
 
+import org.apache.hudi.HoodieTableSchema
+
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import org.apache.hudi.HoodieTableSchema
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String

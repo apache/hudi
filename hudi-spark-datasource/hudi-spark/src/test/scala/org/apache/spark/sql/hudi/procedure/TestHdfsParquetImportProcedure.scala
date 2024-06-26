@@ -17,8 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.avro.generic.GenericRecord
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -26,6 +24,9 @@ import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
+import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.avro.AvroParquetWriter
 import org.apache.parquet.hadoop.ParquetWriter
 import org.apache.spark.api.java.JavaSparkContext

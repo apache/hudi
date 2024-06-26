@@ -18,13 +18,14 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkUtils
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
-import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, RowFactory, SaveMode, SparkSession}
 
 import scala.util.Random
 

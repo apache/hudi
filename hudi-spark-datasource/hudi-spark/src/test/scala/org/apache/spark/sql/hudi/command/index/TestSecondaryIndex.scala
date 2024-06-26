@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.command.index
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {

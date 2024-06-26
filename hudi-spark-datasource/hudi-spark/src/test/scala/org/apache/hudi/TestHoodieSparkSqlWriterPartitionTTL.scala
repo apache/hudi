@@ -30,6 +30,7 @@ import org.apache.hudi.config.{HoodieTTLConfig, HoodieWriteConfig}
 import org.apache.hudi.table.HoodieTable
 import org.apache.hudi.table.action.ttl.strategy.KeepByTimeStrategy
 import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Test
 

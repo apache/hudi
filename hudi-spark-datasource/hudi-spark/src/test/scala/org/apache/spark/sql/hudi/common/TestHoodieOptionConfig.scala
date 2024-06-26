@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.assertTrue

@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.hudi.dml
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.SessionCatalog
