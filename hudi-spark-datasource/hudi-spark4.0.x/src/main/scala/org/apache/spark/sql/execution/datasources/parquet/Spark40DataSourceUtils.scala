@@ -21,7 +21,7 @@ import org.apache.spark.sql.SPARK_VERSION_METADATA_KEY
 import org.apache.spark.sql.internal.{SQLConf, LegacyBehaviorPolicy}
 import org.apache.spark.util.Utils
 
-object Spark35DataSourceUtils {
+object Spark40DataSourceUtils {
 
   /**
    * NOTE: This method was copied from [[Spark32PlusDataSourceUtils]], and is required to maintain runtime

@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.expressions.{Cast, JoinedRow}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.WholeStageCodegenExec
-import org.apache.spark.sql.execution.datasources.parquet.Spark35LegacyHoodieParquetFileFormat._
+import org.apache.spark.sql.execution.datasources.parquet.Spark40LegacyHoodieParquetFileFormat._
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, PartitionedFile, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
@@ -63,7 +63,7 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
  *   <li>Schema on-read</li>
  * </ol>
  */
-class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
+class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -204,7 +204,7 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         } else {
           // Spark 3.2.0
           val datetimeRebaseMode =
-            Spark35DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark40DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           createParquetFilters(
             parquetSchema,
             pushDownDate,
@@ -311,9 +311,9 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           } else {
             // Spark 3.2.0
             val datetimeRebaseMode =
-              Spark35DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+              Spark40DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
             val int96RebaseMode =
-              Spark35DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+              Spark40DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             createVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseMode.toString,
@@ -373,9 +373,9 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
             int96RebaseSpec)
         } else {
           val datetimeRebaseMode =
-            Spark35DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+            Spark40DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
           val int96RebaseMode =
-            Spark35DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
+            Spark40DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           createParquetReadSupport(
             convertTz,
             /* enableVectorizedReader = */ false,
@@ -436,7 +436,7 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
   }
 }
 
-object Spark35LegacyHoodieParquetFileFormat {
+object Spark40LegacyHoodieParquetFileFormat {
 
   /**
    * NOTE: This method is specific to Spark 3.2.0
