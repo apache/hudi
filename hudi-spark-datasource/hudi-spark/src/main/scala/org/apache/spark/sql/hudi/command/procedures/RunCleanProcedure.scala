@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.config.HoodieCleanConfig
 import org.apache.spark.internal.Logging

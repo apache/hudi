@@ -24,12 +24,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -111,9 +111,9 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABL
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 
 /**

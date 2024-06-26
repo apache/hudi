@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -33,7 +32,6 @@ import java.io.IOException
 import java.util
 import java.util.Properties
 import java.util.function.{Consumer, Supplier}
-
 import scala.collection.JavaConverters._
 
 class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBuilder with Logging {

@@ -32,7 +32,6 @@ import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType

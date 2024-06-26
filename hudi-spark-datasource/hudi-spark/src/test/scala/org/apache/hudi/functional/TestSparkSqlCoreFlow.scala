@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
-
 import org.apache.spark.sql
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.{Dataset, Row}

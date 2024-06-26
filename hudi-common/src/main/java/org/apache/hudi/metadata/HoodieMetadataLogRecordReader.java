@@ -28,9 +28,9 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.storage.StoragePath;
 
 import javax.annotation.concurrent.ThreadSafe;
 

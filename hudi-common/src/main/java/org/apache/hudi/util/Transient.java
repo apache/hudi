@@ -22,6 +22,7 @@ import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.function.ThrowingConsumer;
 
 import javax.annotation.concurrent.ThreadSafe;
+
 import java.io.Serializable;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;

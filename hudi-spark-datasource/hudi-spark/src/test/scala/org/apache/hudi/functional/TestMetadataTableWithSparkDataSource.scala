@@ -33,7 +33,6 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -43,7 +42,6 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 
 @Tag("functional")

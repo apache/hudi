@@ -22,7 +22,6 @@ package org.apache.hudi
 import org.apache.hudi.SparkFilterHelper.convertFilter
 import org.apache.hudi.expression.{Expression, NameReference, Predicates, Literal => HLiteral}
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
-
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.functions._

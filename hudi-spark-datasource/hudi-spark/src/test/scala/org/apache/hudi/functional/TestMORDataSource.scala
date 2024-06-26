@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -36,8 +37,6 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -49,7 +48,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 /**

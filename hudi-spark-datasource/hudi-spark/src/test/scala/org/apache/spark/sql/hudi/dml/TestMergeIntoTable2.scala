@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.dml
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 

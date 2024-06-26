@@ -30,7 +30,6 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.parser.{ParserInterface, ParserUtils}
 import org.apache.spark.sql.catalyst.plans.logical._
 
-import java.util.Locale
 import scala.collection.JavaConverters._
 
 class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface)

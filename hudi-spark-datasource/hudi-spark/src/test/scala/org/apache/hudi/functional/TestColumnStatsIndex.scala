@@ -18,6 +18,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -30,9 +32,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}

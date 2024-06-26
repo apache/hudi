@@ -17,22 +17,20 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
-
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
+import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{Buffer, HashMap, HashSet, ListBuffer}
 

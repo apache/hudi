@@ -26,12 +26,12 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.utils.BucketIndexUtil;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.util.Collector;
-import org.apache.hudi.sink.utils.BucketIndexUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
