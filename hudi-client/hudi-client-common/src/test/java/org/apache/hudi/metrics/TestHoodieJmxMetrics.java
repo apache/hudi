@@ -23,7 +23,6 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,7 +90,7 @@ public class TestHoodieJmxMetrics {
     when(metricsConfig.getJmxHost()).thenReturn("localhost");
     when(metricsConfig.getJmxPort()).thenReturn(ports);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
 
     clearInvocations(metricsConfig);
@@ -100,7 +99,7 @@ public class TestHoodieJmxMetrics {
     when(metricsConfig.getJmxPort()).thenReturn(ports);
     when(metricsConfig.getBasePath()).thenReturn("s3://test2" + UUID.randomUUID());
 
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     Metrics metrics2 = hoodieMetrics.getMetrics();
 
     metrics.registerGauge("jmx_metric3", 123L);
@@ -120,7 +119,7 @@ public class TestHoodieJmxMetrics {
     when(metricsConfig.getJmxHost()).thenReturn("localhost");
     when(metricsConfig.getJmxPort()).thenReturn(ports);
     when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-    hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
 
     clearInvocations(metricsConfig);
@@ -130,7 +129,7 @@ public class TestHoodieJmxMetrics {
     when(metricsConfig.getBasePath()).thenReturn("s3://test2" + UUID.randomUUID());
 
     assertThrows(HoodieException.class, () -> {
-      hoodieMetrics = new HoodieMetrics(writeConfig, storageConf);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     });
   }
 }
