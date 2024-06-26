@@ -21,7 +21,7 @@ package org.apache.spark.sql
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue, getNestedRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, assertThrows}
 import org.junit.jupiter.api.Test
 
 class TestHoodieUnsafeRowUtils {
@@ -91,9 +91,9 @@ class TestHoodieUnsafeRowUtils {
 
     val rowInvalidNullable = InternalRow(null, InternalRow(123, 456L))
 
-    assertThrows(classOf[IllegalArgumentException]) { () =>
+    assertThrows(classOf[IllegalArgumentException], () =>
       getNestedInternalRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo").get)
-    }
+    )
   }
 
   @Test
@@ -141,25 +141,9 @@ class TestHoodieUnsafeRowUtils {
 
     val rowInvalidNullable = Row(null, Row(123, 456L))
 
-    assertThrows(classOf[IllegalArgumentException]) { () =>
+    assertThrows(classOf[IllegalArgumentException], () =>
       getNestedRowValue(rowInvalidNullable, composeNestedFieldPath(schema, "foo").get)
-    }
-  }
-
-  // TODO rebase on ScalaAssertionSupport
-  private def assertThrows[T <: Throwable](expectedExceptionClass: Class[T])(f: () => Unit): T = {
-    try {
-      f.apply()
-    } catch {
-      case t: Throwable if expectedExceptionClass.isAssignableFrom(t.getClass) =>
-        // scalastyle:off return
-        return t.asInstanceOf[T]
-        // scalastyle:on return
-      case ot @ _ =>
-        fail(s"Expected exception of class $expectedExceptionClass, but ${ot.getClass} has been thrown")
-    }
-
-    fail(s"Expected exception of class $expectedExceptionClass, but nothing has been thrown")
+    )
   }
 
 }
