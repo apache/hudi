@@ -20,6 +20,7 @@ package org.apache.spark.sql
 
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.index.bucket.BucketIdentifier
+
 import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 

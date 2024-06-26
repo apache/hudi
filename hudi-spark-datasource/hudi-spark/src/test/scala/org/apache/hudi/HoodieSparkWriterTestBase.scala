@@ -23,8 +23,8 @@ import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.spark.SparkContext
+import org.apache.spark.sql.{Dataset, Row, SparkSession, SQLContext}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.{Dataset, Row, SQLContext, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import scala.collection.JavaConverters

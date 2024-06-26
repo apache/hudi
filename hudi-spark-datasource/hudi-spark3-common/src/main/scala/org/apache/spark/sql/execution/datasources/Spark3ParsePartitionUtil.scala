@@ -31,8 +31,8 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.lang.{Double => JDouble, Long => JLong}
 import java.math.{BigDecimal => JBigDecimal}
 import java.time.ZoneId
-import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try

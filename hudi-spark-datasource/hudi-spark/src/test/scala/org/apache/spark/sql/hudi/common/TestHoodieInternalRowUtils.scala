@@ -18,8 +18,8 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.avro.generic.GenericData
 import org.apache.avro.{LogicalTypes, Schema}
+import org.apache.avro.generic.GenericData
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
@@ -29,10 +29,10 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{HoodieInternalRowUtils, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Matchers}
 

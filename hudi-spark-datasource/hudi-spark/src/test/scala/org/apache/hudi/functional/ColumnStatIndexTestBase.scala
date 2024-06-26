@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
@@ -26,12 +27,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.provider.Arguments
 
 import java.math.BigInteger

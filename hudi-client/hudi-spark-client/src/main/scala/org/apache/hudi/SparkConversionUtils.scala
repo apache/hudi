@@ -19,10 +19,11 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieRecord
+
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrameUtil, Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrameUtil, Dataset, Row, SparkSession}
 
 object SparkConversionUtils {
 

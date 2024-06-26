@@ -34,10 +34,10 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
-import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.apache.spark.sql.functions.{col, not}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors

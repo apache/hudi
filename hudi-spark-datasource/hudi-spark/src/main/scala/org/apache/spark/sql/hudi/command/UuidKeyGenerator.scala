@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 
 import java.util.UUID

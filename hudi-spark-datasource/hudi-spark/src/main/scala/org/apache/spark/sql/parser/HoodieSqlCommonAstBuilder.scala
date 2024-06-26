@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql.parser
 
-import org.antlr.v4.runtime.ParserRuleContext
-import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonBaseVisitor
 import org.apache.hudi.spark.sql.parser.HoodieSqlCommonParser._
+
+import org.antlr.v4.runtime.ParserRuleContext
+import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier

@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
 import org.apache.spark.sql.internal.SQLConf

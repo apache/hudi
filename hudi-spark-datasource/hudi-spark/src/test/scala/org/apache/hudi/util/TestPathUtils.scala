@@ -20,6 +20,7 @@ package org.apache.hudi.util
 
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir

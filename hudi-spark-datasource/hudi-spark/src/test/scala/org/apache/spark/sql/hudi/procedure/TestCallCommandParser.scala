@@ -25,6 +25,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{DataType, DataTypes}
 
 import java.math.BigDecimal
+
 import scala.collection.JavaConverters
 
 class TestCallCommandParser extends HoodieSparkSqlTestBase {

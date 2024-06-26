@@ -27,7 +27,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 
 class RecordLevelIndexSupport (spark: SparkSession,
                                metadataConfig: HoodieMetadataConfig,

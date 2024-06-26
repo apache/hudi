@@ -17,9 +17,6 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
-import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
@@ -27,10 +24,15 @@ import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils, ValidationUtils, Option => HOption}
+import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
+
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
@@ -38,11 +40,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructType}
-import org.apache.spark.{SparkConf, SparkEnv}
 
 import java.nio.ByteBuffer
-import java.util.function.{Function, Supplier}
 import java.util.{Base64, Objects, Properties}
+import java.util.function.{Function, Supplier}
 
 import scala.collection.JavaConverters._
 

@@ -36,6 +36,7 @@ import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {

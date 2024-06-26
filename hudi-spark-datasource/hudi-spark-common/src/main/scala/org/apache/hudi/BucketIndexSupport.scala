@@ -36,7 +36,7 @@ import org.apache.spark.sql.types.{DoubleType, FloatType}
 import org.apache.spark.util.collection.BitSet
 import org.slf4j.LoggerFactory
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.{mutable, JavaConverters}
 
 class BucketIndexSupport(spark: SparkSession,
                          metadataConfig: HoodieMetadataConfig,

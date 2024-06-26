@@ -18,17 +18,18 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema.Type
-import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{JsonProperties, Schema}
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.internal.schema.HoodieSchemaException
+
+import org.apache.avro.{JsonProperties, Schema}
+import org.apache.avro.Schema.Type
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
-import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 
