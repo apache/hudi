@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 public class HoodieMetaSyncMetrics {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMetaSyncMetrics.class);
+  // Metrics are shut down by the shutdown hook added in the Metrics class
   private Metrics metrics;
   private HoodieMetricsConfig metricsConfig;
   private transient HoodieStorage storage;
