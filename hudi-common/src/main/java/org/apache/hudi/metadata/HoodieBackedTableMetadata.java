@@ -134,6 +134,11 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       }
     } else if (this.metadataMetaClient == null) {
       try {
+        // Initialize data table meta client timeline. The data table timeline is not initialized by
+        // default whereas metadataMetaClient timeline is initialized while creating metadataFileSystemView.
+        // We initialize timeline for dataMetaClient to ensure that while creating log record scanner
+        // dataMetaClient timeline is in sync with metadataMetaClient timeline.
+        this.dataMetaClient.getActiveTimeline();
         this.metadataMetaClient = HoodieTableMetaClient.builder()
             .setStorage(storage)
             .setBasePath(metadataBasePath)
