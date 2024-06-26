@@ -539,12 +539,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_clustering('$tableName')")(
         Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
       )
-      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
+      ensureDataCanBeReadInIncrementalQuery(basePath)
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
+      ensureDataCanBeReadInIncrementalQuery(basePath)
     }
   }
 
@@ -588,12 +588,12 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_compaction('$tableName')")(
         Seq(firstScheduleInstant, 5, HoodieInstant.State.REQUESTED.name())
       )
-      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
+      ensureDataCanBeReadInIncrementalQuery(basePath)
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
+      ensureDataCanBeReadInIncrementalQuery(basePath)
     }
   }
 
@@ -638,7 +638,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
+      ensureDataCanBeReadInIncrementalQuery(basePath)
     }
   }
 
