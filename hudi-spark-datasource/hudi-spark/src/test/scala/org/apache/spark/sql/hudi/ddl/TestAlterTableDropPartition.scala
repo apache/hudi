@@ -25,8 +25,7 @@ import org.apache.hudi.common.util.{PartitionPathEncodeUtils, StringUtils, Optio
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.keygen.{ComplexKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
-
+import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCleanMetadata
@@ -34,6 +33,15 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 
 class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
+
+  private def ensureDataCanBeReadInIncrementalQuery(path: String): Unit = {
+    val metaClient = createMetaClient(spark, path)
+    spark.read.format("hudi").options(Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.BEGIN_INSTANTTIME.key -> metaClient.getActiveTimeline.getCommitsTimeline.firstInstant().get().getTimestamp,
+    )).load(path).show(1)
+  }
+
 
   test("Drop non-partitioned table") {
     val tableName = generateTableName
@@ -647,7 +655,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
           Seq("partition_date_col=2023-08-02"),
           Seq("partition_date_col=2023-09-01")
         )
-        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-*')")
+        spark.sql(s"alter table $tableName drop partition(partition_date_col='2023-08-01')")
+        // Since incremental query utilizes a bit different schema read scenario, if `replacecommit` is written with
+        // META fields, read fails because of duplicated META columns.
+        ensureDataCanBeReadInIncrementalQuery(s"${tmp.getCanonicalPath}/$tableName")
         // show partitions will still return all partitions for tests, use select distinct as a stop-gap
         checkAnswer(s"select distinct partition_date_col from $tableName")(
           Seq("2023-09-01")
