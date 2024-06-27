@@ -48,6 +48,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
     val fields = schema.getFields.asScala.map(_.name())
+
     assert(expectedSchema == fields, s"Commit metadata should include no meta fields, received $fields")
   }
 
