@@ -411,8 +411,7 @@ class HoodieSparkSqlWriterInternal {
             val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
             val tableMetaClient = HoodieTableMetaClient.builder
               .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
-              .setBasePath(basePath.toString)
-              .build()
+              .setBasePath(basePath.toString).build()
             // Get list of partitions to delete
             val partitionsToDelete = if (parameters.contains(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key())) {
               val partitionColsToDelete = parameters(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key()).split(",")
@@ -423,10 +422,11 @@ class HoodieSparkSqlWriterInternal {
               genericRecords.map(gr => keyGenerator.getKey(gr).getPartitionPath).toJavaRDD().distinct().collect()
             }
 
+            // Issue the delete.
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false).toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
               schemaStr, path, tblName,
-              (parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
+                (parameters - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key).asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = client.createNewInstantTime()

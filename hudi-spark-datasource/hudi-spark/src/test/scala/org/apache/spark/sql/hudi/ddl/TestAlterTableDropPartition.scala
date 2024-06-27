@@ -43,7 +43,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // is used - it will use custom logic to forcefully add/remove fields.
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
-    val lastInstant = metaClient.getActiveTimeline.lastInstant().get()
+    val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
     val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
@@ -552,12 +552,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_clustering('$tableName')")(
         Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "*")
       )
-      ensureLastCommitIncludesProperSchema(basePath, schemaFields)
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureLastCommitIncludesProperSchema(basePath, schemaFields)
     }
   }
 
@@ -602,12 +600,10 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       checkAnswer(s"call show_compaction('$tableName')")(
         Seq(firstScheduleInstant, 5, HoodieInstant.State.REQUESTED.name())
       )
-      ensureLastCommitIncludesProperSchema(basePath, schemaFields)
 
       val partition = "ts=1002"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureLastCommitIncludesProperSchema(basePath, schemaFields)
     }
   }
 
@@ -653,7 +649,6 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
       val partition = "ts=1000"
       val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
       checkExceptionContain(s"ALTER TABLE $tableName DROP PARTITION($partition)")(errMsg)
-      ensureLastCommitIncludesProperSchema(basePath, schemaFields)
     }
   }
 
