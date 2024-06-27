@@ -26,8 +26,8 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expre
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
-import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
 import org.apache.spark.sql.execution.{ExtendedMode, SimpleMode}
+import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCommand}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
