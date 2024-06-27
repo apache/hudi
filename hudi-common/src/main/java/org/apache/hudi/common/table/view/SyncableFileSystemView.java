@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
  * update operations.
  */
 public interface SyncableFileSystemView
-    extends TableFileSystemView, BaseFileOnlyView, SliceView {
+    extends TableFileSystemView, BaseFileOnlyView, SliceView, AutoCloseable {
 
 
 

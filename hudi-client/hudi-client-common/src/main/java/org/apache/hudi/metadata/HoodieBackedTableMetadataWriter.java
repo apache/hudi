@@ -1081,9 +1081,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private HoodieData<HoodieRecord> getFunctionalIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    HoodieTableFileSystemView fsView = null;
-    try {
-      fsView = HoodieTableMetadataUtil.getFileSystemView(dataMetaClient);
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(dataMetaClient)) {
       HoodieTableFileSystemView finalFsView = fsView;
       commitMetadata.getPartitionToWriteStats().forEach((dataPartition, value) -> {
         List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.ofNullable(finalFsView), dataPartition);
@@ -1099,8 +1097,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       int parallelism = Math.min(partitionFileSlicePairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
       Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
       return getFunctionalIndexRecords(partitionFileSlicePairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf);
-    } finally {
-      fsView.close();
     }
   }
 
@@ -1418,9 +1414,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
 
-    HoodieTableFileSystemView fsView = null;
-    try {
-      fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient);
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient)) {
       for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(entry.getKey(), dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
         HoodieData<HoodieRecord> records = entry.getValue();
@@ -1448,8 +1442,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
       }
       return allPartitionRecords;
-    } finally {
-      fsView.close();
     }
   }
 
