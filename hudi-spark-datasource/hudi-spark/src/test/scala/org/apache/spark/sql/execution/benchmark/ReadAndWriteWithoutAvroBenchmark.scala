@@ -18,13 +18,12 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
-import org.apache.hudi.config.HoodieCompactionConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 import org.apache.spark.sql.functions._

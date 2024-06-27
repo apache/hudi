@@ -21,7 +21,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodiePartitionMetadata
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, HoodieCatalogTable}

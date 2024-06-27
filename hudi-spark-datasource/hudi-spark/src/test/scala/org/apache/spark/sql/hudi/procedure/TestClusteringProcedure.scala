@@ -26,15 +26,17 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField, StructType}
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.util
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class TestClusteringProcedure extends HoodieSparkProcedureTestBase {

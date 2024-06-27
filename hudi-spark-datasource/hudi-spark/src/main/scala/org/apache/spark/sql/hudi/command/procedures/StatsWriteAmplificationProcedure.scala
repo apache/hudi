@@ -24,6 +24,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.text.DecimalFormat
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuilder {

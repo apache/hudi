@@ -19,6 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.functional.TestSparkSqlWithTimestampKeyGenerator._
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.slf4j.LoggerFactory
 

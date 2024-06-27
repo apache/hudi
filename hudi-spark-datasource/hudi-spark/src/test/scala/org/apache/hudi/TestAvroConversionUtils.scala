@@ -18,14 +18,15 @@
 
 package org.apache.hudi
 
-import java.nio.ByteBuffer
-import java.util.Objects
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, DataTypes, MapType, StringType, StructField, StructType}
 import org.scalatest.{FunSuite, Matchers}
+
+import java.nio.ByteBuffer
+import java.util.Objects
 
 class TestAvroConversionUtils extends FunSuite with Matchers {
 

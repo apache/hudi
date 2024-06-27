@@ -42,8 +42,8 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
-
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.ForeachFunction;
 import org.apache.spark.sql.Column;

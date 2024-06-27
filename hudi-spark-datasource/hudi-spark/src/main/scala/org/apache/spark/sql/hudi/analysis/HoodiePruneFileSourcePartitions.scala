@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}

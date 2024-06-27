@@ -18,8 +18,8 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 

@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieRecord
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
