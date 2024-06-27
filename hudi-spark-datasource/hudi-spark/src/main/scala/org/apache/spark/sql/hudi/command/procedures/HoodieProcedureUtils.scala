@@ -21,9 +21,11 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 object HoodieProcedureUtils {

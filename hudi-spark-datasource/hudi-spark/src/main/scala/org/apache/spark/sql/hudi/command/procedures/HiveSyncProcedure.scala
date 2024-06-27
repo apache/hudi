@@ -17,11 +17,12 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.sync.common.HoodieSyncConfig
+
+import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig

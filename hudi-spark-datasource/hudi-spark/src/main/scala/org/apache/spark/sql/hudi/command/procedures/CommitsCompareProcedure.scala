@@ -19,10 +19,12 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {

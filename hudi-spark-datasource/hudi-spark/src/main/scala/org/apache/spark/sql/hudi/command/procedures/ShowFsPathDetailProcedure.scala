@@ -17,8 +17,9 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.{ContentSummary, FileStatus, Path}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.fs.{ContentSummary, FileStatus, Path}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
