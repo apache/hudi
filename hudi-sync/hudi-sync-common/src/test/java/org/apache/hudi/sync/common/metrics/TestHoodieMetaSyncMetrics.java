@@ -80,7 +80,7 @@ public class TestHoodieMetaSyncMetrics {
     Thread.sleep(5);
     long durationInNs = timerCtx.stop();
     hoodieSyncMetrics.updateRecreateAndSyncDurationInMs(durationInNs);
-    String metricName = hoodieSyncMetrics.getMetricsName("meta_sync.recreate_table", "duration");
+    String metricName = hoodieSyncMetrics.getMetricsName("meta_sync", "recreate_table_duration_ms");
     long timeIsMs = (Long) metrics.getRegistry().getGauges().get(metricName).getValue();
     assertTrue(timeIsMs > 0, "recreate_table duration metric value should be > 0");
   }
