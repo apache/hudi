@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime

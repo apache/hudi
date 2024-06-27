@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase

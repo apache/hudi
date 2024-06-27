@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.sql._
 import org.apache.spark.util.AccumulatorV2
 import org.junit.jupiter.api.Assertions.assertEquals

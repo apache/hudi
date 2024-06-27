@@ -18,7 +18,6 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.TestParquetReaderCompatibility.NullabilityEnum.{NotNullable, Nullability, Nullable}
 import org.apache.hudi.TestParquetReaderCompatibility.{SparkSetting, TestScenario, ThreeLevel, TwoLevel}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -33,6 +32,8 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.hudi.testutils.HoodieClientTestUtils
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.OriginalType
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.{ArrayType, LongType, StringType, StructField, StructType}
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Collections
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

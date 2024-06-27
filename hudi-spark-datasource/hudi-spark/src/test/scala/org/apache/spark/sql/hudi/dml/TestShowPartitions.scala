@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestShowPartitions extends HoodieSparkSqlTestBase {

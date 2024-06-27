@@ -17,9 +17,6 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -30,12 +27,17 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
+
 import scala.collection.JavaConverters._
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {

@@ -17,8 +17,6 @@
 
 package org.apache.hudi.functional.cdc
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -34,11 +32,15 @@ import org.apache.hudi.common.testutils.RawTripTestPayload
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util.function.Predicate
+
 import scala.collection.JavaConverters._
 
 abstract class HoodieCDCTestBase extends HoodieSparkClientTestBase {

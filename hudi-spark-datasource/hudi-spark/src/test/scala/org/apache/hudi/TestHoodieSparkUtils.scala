@@ -18,10 +18,11 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.Assertions._

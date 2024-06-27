@@ -29,6 +29,7 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
@@ -40,6 +41,7 @@ import org.junit.jupiter.params.provider.EnumSource
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
+
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 

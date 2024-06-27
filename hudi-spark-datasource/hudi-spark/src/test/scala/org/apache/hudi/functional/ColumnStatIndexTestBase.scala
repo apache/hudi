@@ -27,6 +27,7 @@ import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.Arguments
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
+
 import scala.collection.JavaConverters._
 import scala.util.Random
 
