@@ -83,7 +83,7 @@ public class HoodieMetaSyncMetrics {
     if (metricsConfig.isMetricsOn()) {
       long durationInMs = getDurationInMs(durationInNs);
       LOG.info("Sending recreate and sync metrics {}", durationInMs);
-      metrics.registerGauge(getMetricsName("meta_sync", "recreate_table.duration"), durationInMs);
+      metrics.registerGauge(getMetricsName("meta_sync", "recreate_table_duration_ms"), durationInMs);
     }
   }
 
