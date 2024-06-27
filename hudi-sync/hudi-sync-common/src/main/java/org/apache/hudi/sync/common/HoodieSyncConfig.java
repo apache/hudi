@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
@@ -197,6 +198,7 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "lost.");
 
   private Configuration hadoopConf;
+  private HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
     this(props, ConfigUtils.createHadoopConf(props));
@@ -211,6 +213,7 @@ public class HoodieSyncConfig extends HoodieConfig {
         .collect(Collectors.joining("\n")));
     setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
+    this.metricsConfig = HoodieMetricsConfig.newBuilder().fromProperties(props).build();
   }
 
   public void setHadoopConf(Configuration hadoopConf) {
@@ -219,6 +222,10 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public Configuration getHadoopConf() {
     return hadoopConf;
+  }
+
+  public HoodieMetricsConfig getMetricsConfig() {
+    return metricsConfig;
   }
 
   public FileSystem getHadoopFileSystem() {

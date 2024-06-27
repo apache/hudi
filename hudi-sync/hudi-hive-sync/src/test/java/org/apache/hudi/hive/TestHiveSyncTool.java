@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -41,6 +42,7 @@ import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -97,6 +99,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_SERDE_PROPERTIES;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
+import static org.apache.hudi.hive.testutils.HiveTestUtil.BASE_PATH;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.basePath;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.ddlExecutor;
 import static org.apache.hudi.hive.testutils.HiveTestUtil.getHiveConf;
@@ -824,6 +827,9 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
     hiveSyncProps.setProperty(RECREATE_HIVE_TABLE_ON_ERROR.key(), "true");
+    hiveSyncProps.setProperty(HoodieMetricsConfig.TURN_METRICS_ON.key(), "true");
+    hiveSyncProps.setProperty(BASE_PATH, basePath);
+    hiveSyncProps.setProperty(HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key(), MetricsReporterType.INMEMORY.name());
 
     String commitTime1 = "100";
     HiveTestUtil.createCOWTable(commitTime1, 5, true);
