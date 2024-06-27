@@ -42,8 +42,8 @@ public class HoodieMetaSyncMetrics {
 
   private final String syncToolName;
 
-  private String recreateAndSyncFailureCounterName;
-  private String recreateAndSyncTimerName;
+  private static String recreateAndSyncFailureCounterName;
+  private static String recreateAndSyncTimerName;
 
   private Timer recreateAndSyncTimer;
   private Counter recreateAndSyncFailureCounter;
@@ -54,8 +54,8 @@ public class HoodieMetaSyncMetrics {
     if (metricsConfig.isMetricsOn()) {
       this.storage = HoodieStorageUtils.getStorage(config.getBasePath(), HadoopFSUtils.getStorageConf(config.getHadoopConf()));
       metrics = Metrics.getInstance(metricsConfig, storage);
-      this.recreateAndSyncTimerName = getMetricsName("timer", "meta_sync.recreate_table");
-      this.recreateAndSyncFailureCounterName = getMetricsName("counter", "meta_sync.recreate_table.failure");
+      recreateAndSyncTimerName = getMetricsName("timer", "meta_sync.recreate_table");
+      recreateAndSyncFailureCounterName = getMetricsName("counter", "meta_sync.recreate_table.failure");
     }
   }
 
