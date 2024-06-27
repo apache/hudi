@@ -20,10 +20,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.FileSlice
+
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{DataType, Decimal}
-import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
 class HoodiePartitionFileSliceMapping(values: InternalRow,
                                       slices: Map[String, FileSlice])

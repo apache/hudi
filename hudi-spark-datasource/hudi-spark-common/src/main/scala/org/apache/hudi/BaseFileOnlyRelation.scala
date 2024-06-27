@@ -18,12 +18,13 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX
 import org.apache.hudi.HoodieBaseRelation.projectReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieROTablePathFilter
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow

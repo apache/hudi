@@ -35,7 +35,6 @@ import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.{Locale, TimeZone}
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import scala.util.control.NonFatal

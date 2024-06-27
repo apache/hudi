@@ -42,6 +42,7 @@ import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 

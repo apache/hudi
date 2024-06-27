@@ -17,9 +17,10 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.hudi.Spark33HoodieFileScanRDD
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow

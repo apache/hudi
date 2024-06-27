@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.connector.expressions.{NamedReference, Transform}
 
 trait HoodieSpark3CatalogUtils extends HoodieCatalogUtils {

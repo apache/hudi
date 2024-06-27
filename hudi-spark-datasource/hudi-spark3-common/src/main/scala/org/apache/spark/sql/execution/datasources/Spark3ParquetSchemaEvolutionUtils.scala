@@ -25,12 +25,11 @@ import org.apache.hudi.common.util
 import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.metadata.FileMetaData
@@ -43,6 +42,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 
 import java.time.ZoneId
+
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,

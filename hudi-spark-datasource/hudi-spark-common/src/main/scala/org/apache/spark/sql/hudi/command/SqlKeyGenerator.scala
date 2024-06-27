@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen._
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{StructType, TimestampType}

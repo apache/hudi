@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieFileGroup, HoodieLogFile}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -30,6 +31,7 @@ import org.apache.spark.sql.{Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.{Consumer, Predicate, ToLongFunction}
+
 import scala.collection.JavaConverters._
 
 /**

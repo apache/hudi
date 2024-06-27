@@ -17,8 +17,6 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
@@ -38,6 +36,9 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
+
+import org.apache.avro.Schema
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat

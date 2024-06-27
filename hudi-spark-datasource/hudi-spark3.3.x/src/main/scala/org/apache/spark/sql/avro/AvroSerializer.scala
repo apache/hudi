@@ -19,11 +19,11 @@ package org.apache.spark.sql.avro
 
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
-import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
+import org.apache.avro.{LogicalTypes, Schema}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.avro.AvroSerializer.{createDateRebaseFuncInWrite, createTimestampRebaseFuncInWrite}
 import org.apache.spark.sql.avro.AvroUtils.{AvroMatchedField, toFieldStr}
@@ -37,6 +37,7 @@ import org.apache.spark.sql.types._
 
 import java.nio.ByteBuffer
 import java.util.TimeZone
+
 import scala.collection.JavaConverters._
 
 /**

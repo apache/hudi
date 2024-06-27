@@ -26,6 +26,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 
 /**

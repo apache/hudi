@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.DefaultSource
+
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
