@@ -95,7 +95,7 @@ At a high level, Hudi is based on MVCC design that writes data to versioned parq
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/0.12.0/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -245,9 +245,13 @@ The indexing component is a key part of the Hudi writing and it maps a given rec
 
 Hudi supports a few options for indexing as below
 
- - *HoodieBloomIndex (default)* : Uses a bloom filter and ranges information placed in the footer of parquet/base files (and soon log files as well)
- - *HoodieGlobalBloomIndex* : The default indexing only enforces uniqueness of a key inside a single partition i.e the user is expected to know the partition under which a given record key is stored. This helps the indexing scale very well for even [very large datasets](https://eng.uber.com/uber-big-data-platform/). However, in some cases, it might be necessary instead to do the de-duping/enforce uniqueness across all partitions and the global bloom index does exactly that. If this is used, incoming records are compared to files across the entire dataset and ensure a recordKey is only present in one partition.
- - *HBaseIndex* : Apache HBase is a key value store, typically found in close proximity to HDFS. You can also store the index inside HBase, which could be handy if you are already operating HBase.
+- *HoodieBloomIndex * : Uses a bloom filter and ranges information placed in the footer of parquet/base files (and soon log files as well)
+- *HoodieGlobalBloomIndex* : The non global indexing only enforces uniqueness of a key inside a single partition i.e the user is expected to know the partition under which a given record key is stored. This helps the indexing scale very well for even [very large datasets](https://eng.uber.com/uber-big-data-platform/). However, in some cases, it might be necessary instead to do the de-duping/enforce uniqueness across all partitions and the global bloom index does exactly that. If this is used, incoming records are compared to files across the entire dataset and ensure a recordKey is only present in one partition.
+- *HBaseIndex* : Apache HBase is a key value store, typically found in close proximity to HDFS. You can also store the index inside HBase, which could be handy if you are already operating HBase.
+- *HoodieSimpleIndex (default)* : A simple index which reads interested fields (record key and partition path) from base files and joins with incoming records to find the tagged location.
+- *HoodieGlobalSimpleIndex* : Global version of Simple Index, where in uniqueness is on record key across entire table.
+- *HoodieBucketIndex* : Each partition has statically defined buckets to which records are tagged with. Since locations are tagged via hashing mechanism, this index lookup will be very efficient.
+- *HoodieSparkConsistentBucketIndex* : This is also similar to Bucket Index. Only difference is that, data skews can be tackled by dynamically changing the bucket number.
 
 You can implement your own index if you'd like, by subclassing the `HoodieIndex` class and configuring the index class name in configs. 
 
@@ -284,8 +288,8 @@ Depending on how you write to Hudi these are the possible options currently.
    - Please note it is not possible to disable async compaction for MOR dataset with spark structured streaming. 
 - Flink:
    - Async compaction is enabled by default for Merge-On-Read table.
-   - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
-   - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/next/compaction/#flink-offline-compaction) periodically to execute the plans.
+   - Offline compaction can be achieved by setting ```compaction.async.enabled``` to ```false``` and periodically running [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction). When running the offline compactor, one needs to ensure there are no active writes to the table.
+   - Third option (highly recommended over the second one) is to schedule the compactions from the regular ingestion job and executing the compaction plans from an offline job. To achieve this set ```compaction.async.enabled``` to ```false```, ```compaction.schedule.enabled``` to ```true``` and then run the [Flink offline Compactor](https://hudi.apache.org/docs/compaction/#flink-offline-compaction) periodically to execute the plans.
 
 ### What performance/ingest latency can I expect for Hudi writing?
 
@@ -528,7 +532,7 @@ But manually changing it will result in checksum errors. So, we have to go via h
 ### Can I get notified when new commits happen in my Hudi table?
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/writing_data/#commit-notifications)
 for details
 
 ### How do I verify datasource schema reconciliation in Hudi?
@@ -580,6 +584,48 @@ After the second write:
 |-------------------|--------------------|------------------|----------------------|--------------------|-----------------|---|----|
 |  20220622204044318|20220622204044318...|                 1|                      |890aafc0-d897-44d...|hudi.apache.com|  1|   1|
 |  20220622204208997|20220622204208997...|                 2|                      |890aafc0-d897-44d...|             null|  1|   2|
+
+### I see two different records for the same record key value, each record key with a different timestamp format. How is this possible?
+
+This is a known issue with enabling row-writer for bulk_insert operation. When you do a bulk_insert followed by another
+write operation such as upsert/insert this might be observed for timestamp fields specifically. For example, bulk_insert might produce
+timestamp `2016-12-29 09:54:00.0` for record key whereas non bulk_insert write operation might produce a long value like
+`1483023240000000` for the record key thus creating two different records. To fix this, starting 0.10.1 a new config [hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled](https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritekeygeneratorconsistentlogicaltimestampenabled)
+is introduced to bring consistency irrespective of whether row writing is enabled on not. However, for the sake of
+backwards compatibility and not breaking existing pipelines, this config is set to false by default and will have to be enabled explicitly.
+
+
+### Can I switch from one index type to another without having to rewrite the entire table?
+
+It should be okay to switch between Bloom index and Simple index as long as they are not global.
+Moving from global to non-global and vice versa may not work. Also switching between Hbase (gloabl index) and regular bloom might not work.
+
+### How can I resolve the NoSuchMethodError from HBase when using Hudi with metadata table on HDFS?
+From 0.11.0 release, we have upgraded the HBase version to 2.4.9, which is released based on Hadoop 2.x.  Hudi's metadata
+table uses HFile as the base file format, relying on the HBase library.  When enabling metadata table in a Hudi table on
+HDFS using Hadoop 3.x, NoSuchMethodError can be thrown due to compatibility issues between Hadoop 2.x and 3.x.
+To address this, here's the workaround:
+
+(1) Download HBase source code from `https://github.com/apache/hbase`;
+
+(2) Switch to the source code of 2.4.9 release with the tag `rel/2.4.9`:
+```shell
+git checkout rel/2.4.9
+```
+
+(3) Package a new version of HBase 2.4.9 with Hadoop 3 version:
+```shell
+mvn clean install -Denforcer.skip -DskipTests -Dhadoop.profile=3.0 -Psite-install-step
+```
+
+(4) Package Hudi again.
+
+### How can I resolve the RuntimeException saying `hbase-default.xml file seems to be for an older version of HBase`?
+
+This usually happens when there are other HBase libs provided by the runtime environment in the classpath, such as
+Cloudera CDP stack, causing the conflict.  To get around the RuntimeException, you can set the
+`hbase.defaults.for.version.skip` to `true` in the `hbase-site.xml` configuration file, e.g., overwriting the config
+within the Cloudera manager.
 
 ## Contributing to FAQ
 

@@ -221,14 +221,14 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
  - **Soft Deletes** : With soft deletes, user wants to retain the key but just null out the values for all other fields. 
  This can be simply achieved by ensuring the appropriate fields are nullable in the table schema and simply upserting the table after setting these fields to null.
  - **Hard Deletes** : A stronger form of delete is to physically remove any trace of the record from the table. This can be achieved by issuing an upsert with a custom payload implementation
- via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.EmptyHoodieRecordPayload` class that does exactly this.
+ via either DataSource or DeltaStreamer which always returns Optional.Empty as the combined value. Hudi ships with a built-in `org.apache.hudi.common.model.EmptyHoodieRecordPayload` class that does exactly this.
  
 ```java
  deleteDF // dataframe containing just records to be deleted
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
  
 ```
 

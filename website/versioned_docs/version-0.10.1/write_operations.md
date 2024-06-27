@@ -39,22 +39,22 @@ The following is an inside look on the Hudi write path and the sequence of event
 
 1. [Deduping](/docs/configurations/#writeinsertdeduplicate)
    1. First your input records may have duplicate keys within the same batch and duplicates need to be combined or reduced by key.
-2. [Index Lookup](/docs/next/indexing)
+2. [Index Lookup](/docs/indexing)
    1. Next, an index lookup is performed to try and match the input records to identify which file groups they belong to.
-3. [File Sizing](/docs/next/file_sizing)
+3. [File Sizing](/docs/file_sizing)
    1. Then, based on the average size of previous commits, Hudi will make a plan to add enough records to a small file to get it close to the configured maximum limit.
-4. [Partitioning](/docs/next/file_layouts)
+4. [Partitioning](/docs/file_layouts)
    1. We now arrive at partitioning where we decide what file groups certain updates and inserts will be placed in or if new file groups will be created
 5. Write I/O
    1. Now we actually do the write operations which is either creating a new base file, appending to the log file,
    or versioning an existing base file.
-6. Update [Index](/docs/next/indexing)
+6. Update [Index](/docs/indexing)
    1. Now that the write is performed, we will go back and update the index.
 7. Commit
-   1. Finally we commit all of these changes atomically. (A [callback notification](/docs/next/writing_data#commit-notifications) is exposed)
-8. [Clean](/docs/next/hoodie_cleaner) (if needed)
+   1. Finally we commit all of these changes atomically. (A [callback notification](/docs/writing_data#commit-notifications) is exposed)
+8. [Clean](/docs/hoodie_cleaner) (if needed)
    1. Following the commit, cleaning is invoked if needed.
-9. [Compaction](/docs/next/compaction)
+9. [Compaction](/docs/compaction)
    1. If you are using MOR tables, compaction will either run inline, or be scheduled asynchronously
 10. Archive
-    1. Lastly, we perform an archival step which moves old [timeline](/docs/next/timeline) items to an archive folder.
+    1. Lastly, we perform an archival step which moves old [timeline](/docs/timeline) items to an archive folder.

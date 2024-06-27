@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[81328],{9435:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/data-governance","name":"data governance","count":1,"permalink":"/videos/tags/data-governance"}')}}]);

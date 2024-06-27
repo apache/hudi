@@ -261,7 +261,7 @@ Spark SQL needs an explicit create table command.
   considered a managed table. You can read more about external vs managed
   tables [here](https://sparkbyexamples.com/apache-hive/difference-between-hive-internal-tables-and-external-tables/).
 
-*Read more in the [table management](/docs/table_management) guide.*
+*Read more in the [table management](/docs/0.12.0/table_management) guide.*
 
 :::note
 1. Since Hudi 0.10.0, `primaryKey` is required. It aligns with Hudi DataSource writer’s and resolves behavioural
@@ -272,9 +272,7 @@ Spark SQL needs an explicit create table command.
 3. `primaryKey`, `preCombineField`, and `type` are case-sensitive.
 4. `preCombineField` is required for MOR tables.
 5. When set `primaryKey`, `preCombineField`, `type` or other Hudi configs, `tblproperties` is preferred over `options`.
-6. A new Hudi table created by Spark SQL will by default
-   set `hoodie.table.keygenerator.class=org.apache.hudi.keygen.ComplexKeyGenerator` and
-   `hoodie.datasource.write.hive_style_partitioning=true`.
+6. A new Hudi table created by Spark SQL will by default set `hoodie.datasource.write.hive_style_partitioning=true`.
 :::
 
 **Create a Non-Partitioned Table**
@@ -288,7 +286,7 @@ create table hudi_cow_nonpcf_tbl (
 ) using hudi;
 
 
--- create a mor non-partitioned table without preCombineField provided
+-- create a mor non-partitioned table with preCombineField provided
 create table hudi_mor_tbl (
   id int,
   name string,
@@ -459,9 +457,9 @@ hudi_options = {
     'hoodie.insert.shuffle.parallelism': 2
 }
 
-df.write.format("hudi").
-    options(**hudi_options).
-    mode("overwrite").
+df.write.format("hudi"). \
+    options(**hudi_options). \
+    mode("overwrite"). \
     save(basePath)
 ```
 :::info
@@ -522,7 +520,7 @@ complex, custom, NonPartitioned Key gen, etc.
 
 
 :::tip
-With [externalized config file](/docs/next/configurations#externalized-config-file),
+With [externalized config file](/docs/configurations#externalized-config-file),
 instead of directly passing configuration settings to every Hudi job, 
 you can also centrally set them in a configuration file `hudi-default.conf`.
 :::
@@ -638,7 +636,7 @@ spark.read. \
   option("as.of.instant", "2021-07-28 14: 11: 08"). \
   load(basePath)
 
-// It is equal to "as.of.instant = 2021-07-28 00:00:00"
+# It is equal to "as.of.instant = 2021-07-28 00:00:00"
 spark.read. \
   format("hudi"). \
   option("as.of.instant", "2021-07-28"). \
@@ -753,7 +751,6 @@ update hudi_cow_pt_tbl set ts = 1001 where name = 'a1';
 MERGE INTO tableIdentifier AS target_alias
 USING (sub_query | tableIdentifier) AS source_alias
 ON <merge_condition>
-[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
 [ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
 [ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
 
@@ -898,6 +895,196 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
 :::
+
+## Structured Streaming
+
+Hudi supports Spark Structured Streaming reads and writes.
+Structured Streaming reads are based on Hudi Incremental Query feature, therefore streaming read can return data for which commits and base files were not yet removed by the cleaner. You can control commits retention time.
+
+### Streaming Read
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+// reload data
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Overwrite).
+  save(basePath)
+
+// read stream and output results to console
+spark.readStream.
+  format("hudi").
+  load(basePath).
+  writeStream.
+  format("console").
+  start()
+
+// read stream to streaming df
+val df = spark.readStream.
+        format("hudi").
+        load(basePath)
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+# reload data
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(
+    dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+df.write.format("hudi"). \
+    options(**hudi_options). \
+    mode("overwrite"). \
+    save(basePath)
+
+# read stream to streaming df
+df = spark.readStream \
+    .format("hudi") \
+    .load(basePath)
+
+# read stream and output results to console
+spark.readStream \
+    .format("hudi") \
+    .load(basePath) \
+    .writeStream \
+    .format("console") \
+    .start()
+
+```
+
+</TabItem>
+
+</Tabs
+>
+
+### Streaming Write
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+// prepare to stream write to new table
+import org.apache.spark.sql.streaming.Trigger
+
+val streamingTableName = "hudi_trips_cow_streaming"
+val baseStreamingPath = "file:///tmp/hudi_trips_cow_streaming"
+val checkpointLocation = "file:///tmp/checkpoints/hudi_trips_cow_streaming"
+
+// create streaming df
+val df = spark.readStream.
+        format("hudi").
+        load(basePath)
+
+// write stream to new hudi table
+df.writeStream.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, streamingTableName).
+  outputMode("append").
+  option("path", baseStreamingPath).
+  option("checkpointLocation", checkpointLocation).
+  trigger(Trigger.Once()).
+  start()
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+# prepare to stream write to new table
+streamingTableName = "hudi_trips_cow_streaming"
+baseStreamingPath = "file:///tmp/hudi_trips_cow_streaming"
+checkpointLocation = "file:///tmp/checkpoints/hudi_trips_cow_streaming"
+
+hudi_streaming_options = {
+    'hoodie.table.name': streamingTableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': streamingTableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+# create streaming df
+df = spark.readStream \
+    .format("hudi") \
+    .load(basePath)
+
+# write stream to new hudi table
+df.writeStream.format("hudi") \
+    .options(**hudi_streaming_options) \
+    .outputMode("append") \
+    .option("path", baseStreamingPath) \
+    .option("checkpointLocation", checkpointLocation) \
+    .trigger(once=True) \
+    .start()
+
+```
+
+</TabItem>
+
+</Tabs
+>
+
+:::info
+Spark SQL can be used within ForeachBatch sink to do INSERT, UPDATE, DELETE and MERGE INTO.
+Target table must exist before write.
+:::
+
+### Table maintenance
+Hudi can run async or inline table services while running Structured Streaming query and takes care of cleaning, compaction and clustering. There's no operational overhead for the user.  
+For CoW tables, table services work in inline mode by default.  
+For MoR tables, some async services are enabled by default.
+
+:::note
+Since Hudi 0.11 Metadata Table is enabled by default. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/0.12.0/metadata#deployment-considerations) for detailed instructions.
+
+If you're using Foreach or ForeachBatch streaming sink you must use inline table services, async table services are not supported.
+:::
+
+Hive Sync works with Structured Streaming, it will create table if not exists and synchronize table to metastore aftear each streaming write.
 
 ## Point in time query
 
@@ -1047,7 +1234,7 @@ meta_columns = ["_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_k
   "_hoodie_partition_path", "_hoodie_file_name"]
 excluded_columns = meta_columns + ["ts", "uuid", "partitionpath"]
 nullify_columns = list(filter(lambda field: field[0] not in excluded_columns, \
-  list(map(lambda field: (field.name, field.dataType), softDeleteDs.schema.fields))))
+  list(map(lambda field: (field.name, field.dataType), soft_delete_ds.schema.fields))))
 
 hudi_soft_delete_options = {
   'hoodie.table.name': tableName,
@@ -1115,7 +1302,7 @@ val hardDeleteDf = spark.read.json(spark.sparkContext.parallelize(deletes, 2))
 
 hardDeleteDf.write.format("hudi").
   options(getQuickstartWriteConfigs).
-  option(OPERATION_OPT_KEY,"delete").
+  option(OPERATION_OPT_KEY, "delete").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
@@ -1189,7 +1376,7 @@ roAfterDeleteViewDF = spark. \
   read. \
   format("hudi"). \
   load(basePath) 
-roAfterDeleteViewDF.registerTempTable("hudi_trips_snapshot")
+roAfterDeleteViewDF.createOrReplaceTempView("hudi_trips_snapshot")
 # fetch should return (total - 2) records
 spark.sql("select uuid, partitionpath from hudi_trips_snapshot").count()
 ```
@@ -1212,6 +1399,7 @@ steps in the upsert write path completely.
 defaultValue="scala"
 values={[
 { label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
 { label: 'Spark SQL', value: 'sparksql', },
 ]}
 >
@@ -1248,6 +1436,38 @@ spark.
   select("uuid","partitionpath").
   sort("partitionpath","uuid").
   show(100, false)
+```
+</TabItem>
+
+<TabItem value="python">
+
+```python
+# pyspark
+spark.read.format("hudi"). \
+    load(basePath). \
+    select(["uuid", "partitionpath"]). \
+    sort(["partitionpath", "uuid"]). \
+    show(n=100, truncate=False)
+    
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(dataGen.generateInserts(10)) 
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2)). \
+    filter("partitionpath = 'americas/united_states/san_francisco'")
+hudi_insert_overwrite_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'insert_overwrite',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+df.write.format("hudi").options(**hudi_insert_overwrite_options).mode("append").save(basePath)
+spark.read.format("hudi"). \
+    load(basePath). \
+    select(["uuid", "partitionpath"]). \
+    sort(["partitionpath", "uuid"]). \
+    show(n=100, truncate=False)
 ```
 </TabItem>
 

@@ -22,14 +22,14 @@
     <groupId>org.apache.hudi</groupId>
     <artifactId>hudi-utils</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.15.0</version>
     <name>hudiUtils</name>
 
     <properties>
         <jdk.version>1.8</jdk.version>
-        <hudi.version>0.13.0-SNAPSHOT</hudi.version>
+        <hudi.version>0.15.0</hudi.version>
         <hudi.spark.module>hudi-spark2</hudi.spark.module>
-        <scala.binary.version>2.11</scala.binary.version>
+        <scala.binary.version>2.12</scala.binary.version>
         <junit.version>4.11</junit.version>
     </properties>
 
@@ -57,6 +57,12 @@
 
         <dependency>
             <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-aws</artifactId>
+            <version>${hudi.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
             <version>${hudi.version}</version>
         </dependency>
@@ -66,6 +72,12 @@
           <groupId>org.apache.hudi</groupId>
           <artifactId>hudi-flink</artifactId>
           <version>${hudi.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hive</groupId>
+            <artifactId>hive-common</artifactId>
+            <version>2.3.1</version>
         </dependency>
 
         <!-- Logging -->

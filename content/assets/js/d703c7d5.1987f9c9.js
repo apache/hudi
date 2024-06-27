@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[67204],{9496:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/glue-notebook","name":"glue notebook","count":1,"permalink":"/videos/tags/glue-notebook"}')}}]);

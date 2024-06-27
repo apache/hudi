@@ -87,8 +87,7 @@ hh string
 ) using hudi
 options (
   type = 'cow',
-  primaryKey = 'id',
-  preCombineField = 'ts'
+  primaryKey = 'id'
  ) 
 partitioned by (dt, hh);
 ```
@@ -157,7 +156,7 @@ create table if not exists h3(
 options (
   primaryKey = 'id',
   type = 'mor',
-  ${hoodie.config.key1} = '${hoodie.config.value2}',
+  ${hoodie.config.key1} = '${hoodie.config.value1}',
   ${hoodie.config.key2} = '${hoodie.config.value2}',
   ....
 );
@@ -188,6 +187,12 @@ ALTER TABLE tableIdentifier ADD COLUMNS(colAndType (,colAndType)*)
 -- Alter table column type
 ALTER TABLE tableIdentifier CHANGE COLUMN colName colName colType
 ```
+
+:::note
+`ALTER TABLE ... RENAME TO ...` is not supported when using AWS Glue Data Catalog as hive metastore as Glue itself does 
+not support table renames.
+:::
+
 ### Examples
 ```sql
 alter table h0 rename to h0_1;

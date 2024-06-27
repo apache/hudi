@@ -17,22 +17,26 @@
 # limitations under the License.
 #
 
-VERSION=0.13.0
+VERSION=0.15.0
 
 JARS=(
-"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.11/$VERSION-SNAPSHOT/hudi-utilities-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-spark2.4-bundle_2.11/$VERSION-SNAPSHOT/hudi-spark2.4-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.14-bundle_2.11/$VERSION-SNAPSHOT/hudi-flink1.14-bundle_2.11-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION-SNAPSHOT/hudi-kafka-connect-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION-SNAPSHOT/hudi-datahub-sync-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION-SNAPSHOT/hudi-gcp-bundle-$VERSION-SNAPSHOT.jar"
-"$HOME/.m2/repository/org/apache/hudi/hudi-aws-bundle/$VERSION-SNAPSHOT/hudi-aws-bundle-$VERSION-SNAPSHOT.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-utilities-bundle_2.12/$VERSION/hudi-utilities-bundle_2.12-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-spark3.5-bundle_2.12/$VERSION/hudi-spark3.5-bundle_2.12-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-flink1.18-bundle/$VERSION/hudi-flink1.18-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-kafka-connect-bundle/$VERSION/hudi-kafka-connect-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-datahub-sync-bundle/$VERSION/hudi-datahub-sync-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-gcp-bundle/$VERSION/hudi-gcp-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-aws-bundle/$VERSION/hudi-aws-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-hadoop-mr-bundle/$VERSION/hudi-hadoop-mr-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-hive-sync-bundle/$VERSION/hudi-hive-sync-bundle-$VERSION.jar"
+"$HOME/.m2/repository/org/apache/hudi/hudi-metaserver-server-bundle/$VERSION/hudi-metaserver-server-bundle-$VERSION.jar"
 )
 
 printf -v CLASSPATH ':%s' "${JARS[@]}"
 echo "CLASSPATH=$CLASSPATH"
 
-java -cp target/hudi-utils-1.0-SNAPSHOT-jar-with-dependencies.jar$CLASSPATH \
+java -cp target/hudi-utils-0.15.0-jar-with-dependencies.jar$CLASSPATH \
 org.apache.hudi.utils.HoodieConfigDocGenerator
 
 cp /tmp/configurations.md ../website/docs/configurations.md
+cp /tmp/basic_configurations.md ../website/docs/basic_configurations.md

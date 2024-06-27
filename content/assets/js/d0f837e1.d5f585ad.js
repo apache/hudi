@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[80445],{6889:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/aws-data-exchange","name":"aws data exchange","count":1,"permalink":"/blog/tags/aws-data-exchange"}')}}]);

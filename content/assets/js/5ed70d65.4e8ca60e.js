@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[32285],{73425:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/aws-transfer-family","name":"aws transfer family","count":1,"permalink":"/videos/tags/aws-transfer-family"}')}}]);

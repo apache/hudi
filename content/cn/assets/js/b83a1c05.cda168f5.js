@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[15036],{44730:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/apache-airflow","name":"apache airflow","count":2,"permalink":"/cn/videos/tags/apache-airflow"}')}}]);

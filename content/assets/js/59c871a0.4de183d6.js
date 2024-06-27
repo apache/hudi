@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[2351],{85393:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/apache-avro","name":"apache avro","count":1,"permalink":"/blog/tags/apache-avro"}')}}]);

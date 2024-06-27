@@ -391,7 +391,7 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 
    1) Using DataSource, set `OPERATION.key()` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
    
-   2) Using DataSource, set `HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
+   2) Using DataSource, set `HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()` to `"org.apache.hudi.common.model.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
    
    3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
     
@@ -401,7 +401,7 @@ Example using hard delete method 2, remove all the records from the table that e
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
  
 ```
 

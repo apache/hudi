@@ -1,0 +1,70 @@
+/**
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/*
+Hide toggle in small viewports
+ */
+@media (max-width: 996px) {
+  .toggle {
+    display: none;
+  }
+}
+
+.navbarHideable {
+  transition: transform var(--ifm-transition-fast) ease;
+}
+
+.navbarHidden {
+  transform: translate3d(0, calc(-100% - 2px), 0);
+}
+
+.navbarSidebarToggle {
+  margin-right: 1rem;
+}
+
+.navbarWrapper {
+  padding-left: 80px !important;
+  padding-right: 80px !important;
+  box-shadow: none;
+  background: var(--ifm-color-primary-light-grey);
+}
+
+.navbarLogo {
+  max-width: 148px;
+}
+
+@media(max-width:1820px){
+  .navbarFontSize{
+    font-size:90% !important;
+  }
+}
+@media(max-width:1602px){
+  .navbarFontSize{
+    font-size:80% !important;
+  }
+}
+@media(max-width:1440px){
+  .navbarFontSize{
+    font-size:70% !important;
+  }
+}
+@media(min-width: 1300px) {
+  div[class^="navbar__item"] {
+    font-size: 100% !important;
+  }
+}
+@media(max-width: 1350px) {
+  .navbarWrapper {
+    padding: 0 !important;
+  }
+  .navbarInnerStyle {
+    margin: 0 auto;
+    max-width: var(--ifm-container-width) !important;
+    padding: 0 var(--ifm-spacing-horizontal) !important;
+    width: 100%;
+  }
+}

@@ -4,6 +4,11 @@ excerpt: "How to style blog focused projects on teaching how to build an open La
 author: Vinoth Govindarajan
 category: blog
 image: /assets/images/blog/hudi_dbt_lakehouse.png
+tags:
+- how-to
+- deltastreamer
+- incremental processing
+- apache hudi
 ---
 
 The focus of this blog is to show you how to build an open lakehouse leveraging incremental data processing and performing field-level updates. We are excited to announce that you can now use Apache Hudi + dbt for building open data lakehouses.
@@ -59,7 +64,7 @@ You can follow the instructions on this [page](https://github.com/apache/hudi/bl
 
 This is the first step in building your data lake and there are many choices here to load the data into our open lakehouse. I’m going to go with one of the Hudi’s native tools called Delta Streamer since all the ingestion features are pre-built and battle-tested in production at scale.
 
-Hudi’s [DeltaStreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) does the EL in ELT (Extract, Load, Transform) processes – it’s extremely good at extracting, loading, and optionally [transforming data](https://hudi.apache.org/docs/transforms) that’s already loaded into your lakehouse.
+Hudi’s [DeltaStreamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion) does the EL in ELT (Extract, Load, Transform) processes – it’s extremely good at extracting, loading, and optionally [transforming data](https://hudi.apache.org/docs/hoodie_streaming_ingestion#transformers) that’s already loaded into your lakehouse.
 
 ## Step 2: How to configure hudi with the dbt project?
 

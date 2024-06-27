@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[677],{22720:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/yugabyte","name":"yugabyte","count":1,"permalink":"/cn/videos/tags/yugabyte"}')}}]);

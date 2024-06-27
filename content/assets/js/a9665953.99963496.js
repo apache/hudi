@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[10595],{44942:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/bulk-insert-sort-modes","name":"bulk-insert sort modes","count":1,"permalink":"/videos/tags/bulk-insert-sort-modes"}')}}]);

@@ -4,10 +4,15 @@ excerpt: "A review of new Debezium source connector for Apache Hudi"
 author: Rajesh Mahindra
 category: blog
 image: /assets/images/blog/debezium.png
-
+tags:
+- design
+- deltastreamer
+- cdc
+- change data capture
+- apache hudi
 ---
 
-As of Hudi v0.10.0, we are excited to announce the availability of [Debezium](https://debezium.io/) sources for [Deltastreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) that provide the ingestion of change capture data (CDC) from Postgres and Mysql databases to your data lake. For more details, please refer to the original [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-39/rfc-39.md).
+As of Hudi v0.10.0, we are excited to announce the availability of [Debezium](https://debezium.io/) sources for [Deltastreamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion) that provide the ingestion of change capture data (CDC) from Postgres and Mysql databases to your data lake. For more details, please refer to the original [RFC](https://github.com/apache/hudi/blob/master/rfc/rfc-39/rfc-39.md).
 
 <!--truncate-->
 
@@ -23,9 +28,9 @@ Now that [Apache Hudi](https://hudi.apache.org/docs/overview/) offers a Debezium
 
 The architecture for an end-to-end CDC ingestion flow with Apache Hudi is shown above. The first component is the Debezium deployment, which consists of a Kafka cluster, schema registry (Confluent or Apicurio), and the Debezium connector. The Debezium connector continuously polls the changelogs from the database and writes an AVRO message with the changes for each database row to a dedicated Kafka topic per table.
 
-The second component is [Hudi Deltastreamer](https://hudi.apache.org/docs/hoodie_deltastreamer) that reads and processes the incoming Debezium records from Kafka for each table and writes (updates) the corresponding rows in a Hudi table on your cloud storage.
+The second component is [Hudi Deltastreamer](https://hudi.apache.org/docs/hoodie_streaming_ingestion) that reads and processes the incoming Debezium records from Kafka for each table and writes (updates) the corresponding rows in a Hudi table on your cloud storage.
 
-To ingest the data from the database table into a Hudi table in near real-time, we implement two classes that can be plugged into the Deltastreamer. Firstly, we implemented a [Debezium source](https://github.com/apache/hudi/blob/83f8ed2ae3ba7fb20813cbb8768deae6244b020c/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/debezium/DebeziumSource.java). With Deltastreamer running in continuous mode, the source continuously reads and processes the Debezium change records in Avro format from the Kafka topic for a given table, and writes the updated record to the destination Hudi table. In addition to the columns from the database table, we also ingest some meta fields that are added by Debezium in the target Hudi table. The meta fields help us correctly merge updates and delete records. The records are read using the latest schema from the [Schema Registry](https://hudi.apache.org/docs/hoodie_deltastreamer#schema-providers).
+To ingest the data from the database table into a Hudi table in near real-time, we implement two classes that can be plugged into the Deltastreamer. Firstly, we implemented a [Debezium source](https://github.com/apache/hudi/blob/83f8ed2ae3ba7fb20813cbb8768deae6244b020c/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/debezium/DebeziumSource.java). With Deltastreamer running in continuous mode, the source continuously reads and processes the Debezium change records in Avro format from the Kafka topic for a given table, and writes the updated record to the destination Hudi table. In addition to the columns from the database table, we also ingest some meta fields that are added by Debezium in the target Hudi table. The meta fields help us correctly merge updates and delete records. The records are read using the latest schema from the [Schema Registry](https://hudi.apache.org/docs/hoodie_streaming_ingestion#schema-providers).
 
 Secondly, we implement a custom [Debezium Payload](https://github.com/apache/hudi/blob/83f8ed2ae3ba7fb20813cbb8768deae6244b020c/hudi-common/src/main/java/org/apache/hudi/common/model/debezium/AbstractDebeziumAvroPayload.java) that essentially governs how Hudi records are merged when the same row is updated or deleted. When a new Hudi record is received for an existing row, the payload picks the latest record using the higher value of the appropriate column (FILEID and POS fields in MySql and LSN fields in Postgres). In the case that the latter event is a delete record, the payload implementation ensures that the record is hard deleted from the storage. Delete records are identified using the op field, which has a value of **d** for deletes.
 
@@ -42,7 +47,7 @@ It is important to consider the following configurations of your Hudi deployment
 One important use case might be when CDC ingestion has to be done for existing database tables. There are two ways we can ingest existing database data prior to streaming the changes:
 
 1.  By default on initialization, Debezium performs an initial consistent snapshot of the database (controlled by config snapshot.mode). After the initial snapshot, it continues streaming updates from the correct position to avoid loss of data.
-2.  While the first approach is simple, for large tables it may take a long time for Debezium to bootstrap the initial snapshot. Alternatively, we could run a Deltastreamer job to bootstrap the table directly from the database using the [JDBC source](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/JdbcSource.java). This provides more flexibility to the users in defining and executing more optimized SQL queries required to bootstrap the database table. Once the bootstrap job finishes successfully, another Deltastreamer job is executed that processes the database changelogs from Debezium. Users will have to use [checkpointing](https://hudi.apache.org/docs/hoodie_deltastreamer/#checkpointing) in Deltastreamer to ensure the second job starts processing the changelogs from the correct position to avoid data loss.
+2.  While the first approach is simple, for large tables it may take a long time for Debezium to bootstrap the initial snapshot. Alternatively, we could run a Deltastreamer job to bootstrap the table directly from the database using the [JDBC source](https://github.com/apache/hudi/blob/master/hudi-utilities/src/main/java/org/apache/hudi/utilities/sources/JdbcSource.java). This provides more flexibility to the users in defining and executing more optimized SQL queries required to bootstrap the database table. Once the bootstrap job finishes successfully, another Deltastreamer job is executed that processes the database changelogs from Debezium. Users will have to use [checkpointing](https://hudi.apache.org/docs/hoodie_streaming_ingestion/#checkpointing) in Deltastreamer to ensure the second job starts processing the changelogs from the correct position to avoid data loss.
 
 ### Example Implementation
 
@@ -185,4 +190,4 @@ spark-submit \\
 
 This post introduced the Debezium Source for Hudi Deltastreamer to ingest Debezium changelogs into Hudi tables. Database data can now be ingested into data lakes to provide a cost-effective way to store and analyze database data.
 
-Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1290) to learn more about active development on this new feature. I look forward to more contributions and feedback from the community. Come join our [Hudi Slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w) channel or attend one of our [community events](https://hudi.apache.org/community/syncs) to learn more.
+Please follow this [JIRA](https://issues.apache.org/jira/browse/HUDI-1290) to learn more about active development on this new feature. I look forward to more contributions and feedback from the community. Come join our [Hudi Slack](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g) channel or attend one of our [community events](https://hudi.apache.org/community/syncs) to learn more.

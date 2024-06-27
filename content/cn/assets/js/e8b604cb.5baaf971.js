@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[19215],{79342:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/amazon-rds","name":"amazon rds","count":1,"permalink":"/cn/blog/tags/amazon-rds"}')}}]);

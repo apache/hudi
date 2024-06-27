@@ -3,6 +3,10 @@ title: "Apache Hudi Key Generators"
 excerpt: "Different key generators available with Apache Hudi"
 author: shivnarayan
 category: blog
+tags:
+- blog
+- key generators
+- apache hudi
 ---
 
 Every record in Hudi is uniquely identified by a primary key, which is a pair of record key and partition path where
@@ -34,6 +38,11 @@ key generators.
 | ```hoodie.datasource.write.keygenerator.class``` | Refers to Key generator class(including full path). Could refer to any of the available ones or user defined one. This is a mandatory field. | 
 | ```hoodie.datasource.write.partitionpath.urlencode```| When set to true, partition path will be url encoded. Default value is false. |
 | ```hoodie.datasource.write.hive_style_partitioning```| When set to true, uses hive style partitioning. Partition field name will be prefixed to the value. Format: “<partition_path_field_name>=<partition_path_value>”. Default value is false.|
+
+NOTE: 
+Please use `hoodie.datasource.write.keygenerator.class` instead of `hoodie.datasource.write.keygenerator.type`. The second config was introduced more recently.
+and will internally instantiate the correct KeyGenerator class based on the type name. The second one is intended for ease of use and is being actively worked on.
+We still recommend using the first config until it is marked as deprecated.
 
 There are few more configs involved if you are looking for TimestampBasedKeyGenerator. Will cover those in the respective section.
 
@@ -184,8 +193,8 @@ Example config value: ```“field_3:simple,field_5:timestamp”```
 RecordKey config value is either single field incase of SimpleKeyGenerator or a comma separate field names if referring to ComplexKeyGenerator.
 Eg: “col1” or “col3,col4”.
 
-### [NonPartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
-If your hudi dataset is not partitioned, you could use this “NonPartitionedKeyGenerator” which will return an empty 
+### [NonpartitionedKeyGenerator](https://github.com/apache/hudi/blob/master/hudi-client/hudi-spark-client/src/main/java/org/apache/hudi/keygen/NonpartitionedKeyGenerator.java)
+If your hudi dataset is not partitioned, you could use this “NonpartitionedKeyGenerator” which will return an empty 
 partition for all records. In other words, all records go to the same partition (which is empty “”) 
 
 Hope this blog gave you a good understanding of different types of Key Generators available in Apache Hudi. Thanks for your continued support for Hudi's community. 

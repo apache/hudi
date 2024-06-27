@@ -94,7 +94,7 @@ At a high level, Hudi is based on MVCC design that writes data to versioned parq
 
 ### What are some ways to write a Hudi dataset?
 
-Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
+Typically, you obtain a set of partial updates/inserts from your source and issue [write operations](https://hudi.apache.org/docs/write_operations/) against a Hudi dataset.  If you ingesting data from any of the standard sources like Kafka, or tailing DFS, the [delta streamer](https://hudi.apache.org/docs/0.11.1/hoodie_deltastreamer#deltastreamer) tool is invaluable and provides an easy, self-managed solution to getting data written into Hudi. You can also write your own code to capture data from a custom source using the Spark datasource API and use a [Hudi datasource](https://hudi.apache.org/docs/writing_data/#spark-datasource-writer) to write into Hudi. 
 
 ### How is a Hudi job deployed?
 
@@ -505,7 +505,7 @@ But manually changing it will result in checksum errors. So, we have to go via h
 ### Can I get notified when new commits happen in my Hudi table?
 
 Yes. Hudi provides the ability to post a callback notification about a write commit. You can use a http hook or choose to 
-be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/next/writing_data/#commit-notifications)
+be notified via a Kafka/pulsar topic or plug in your own implementation to get notified. Please refer [here](https://hudi.apache.org/docs/writing_data/#commit-notifications)
 for details
 
 ### How do I verify datasource schema reconciliation in Hudi?

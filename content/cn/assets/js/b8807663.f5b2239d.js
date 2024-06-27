@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[12135],{56595:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/table-formats","name":"table formats","count":1,"permalink":"/cn/blog/tags/table-formats"}')}}]);

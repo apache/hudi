@@ -505,7 +505,7 @@ No File renames needed to unschedule file from pending compaction. Operation suc
 In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
 
 ```java
-hudi:trips->compaction unschedule --compactionInstant <compactionInstant>
+hudi:trips->compaction unschedule --instant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
 ```

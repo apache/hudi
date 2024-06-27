@@ -372,7 +372,7 @@ No File renames needed to unschedule file from pending compaction. Operation suc
 In other cases, an entire compaction plan needs to be reverted. This is supported by the following CLI
 
 ```java
-hudi:trips->compaction unschedule --compactionInstant <compactionInstant>
+hudi:trips->compaction unschedule --instant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
 ```
@@ -394,7 +394,7 @@ Compaction successfully repaired
 
 ## Savepoint and Restore 
 As the name suggest, "savepoint" saves the table as of the commit time, so that it lets you restore the table to this 
-savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/docs/next/disaster_recovery)
+savepoint at a later point in time if need be. You can read more about savepoints and restore [here](/docs/disaster_recovery)
 
 To trigger savepoint for a hudi table
 ```java

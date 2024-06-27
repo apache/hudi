@@ -346,7 +346,7 @@ No File renames needed to unschedule file from pending compaction. Operation suc
 在其他情况下，需要撤销整个压缩计划。以下CLI支持此功能
 
 ```java
-hoodie:trips->compaction unschedule --compactionInstant <compactionInstant>
+hoodie:trips->compaction unschedule --instant <compactionInstant>
 .....
 No File renames needed to unschedule pending compaction. Operation successful.
 ```

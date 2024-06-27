@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[78880],{80964:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/data-mesh","name":"data mesh","count":1,"permalink":"/cn/blog/tags/data-mesh"}')}}]);

@@ -358,7 +358,7 @@ For those on hudi versions < 0.6.0, you can use the following key generator clas
  - Simple record key and custom timestamp based partition path (with optional hive style partitioning) - `TimestampBasedKeyGenerator.java`
  - Composite record keys (combination of multiple fields) and composite partition paths - `ComplexKeyGenerator.java`
  - Composite record keys and timestamp based partition paths (composite also supported) - You might need to move to 0.6.0 and use `CustomKeyGenerator.java` class
- - Non partitioned table - `NonPartitionedKeyGenerator.java`. Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)
+ - Non partitioned table - `NonpartitionedKeyGenerator.java`. Non-partitioned tables can currently only have a single key column, [HUDI-1053](https://issues.apache.org/jira/browse/HUDI-1053)
  
  
 ## Syncing to Hive
@@ -392,7 +392,7 @@ For more info refer to [Delete support in Hudi](https://cwiki.apache.org/conflue
 
    1) Using DataSource, set `OPERATION_OPT_KEY` to `DELETE_OPERATION_OPT_VAL`. This will remove all the records in the DataSet being submitted.
    
-   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
+   2) Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.common.model.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
    
    3) Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.
     
@@ -402,7 +402,7 @@ Example using hard delete method 2, remove all the records from the table that e
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
  
 ```
 

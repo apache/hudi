@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[64716],{42738:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/data-sahring","name":"data sahring","count":1,"permalink":"/blog/tags/data-sahring"}')}}]);

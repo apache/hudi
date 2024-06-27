@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[70227],{61515:a=>{a.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/apache-xtable","name":"apache xtable","count":1,"permalink":"/videos/tags/apache-xtable"}')}}]);

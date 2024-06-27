@@ -154,7 +154,7 @@ Following illustrates how the table works, and shows two types of queries - snap
 There are lot of interesting things happening in this example, which bring out the subtleties in the approach.
 
  - We now have commits every 1 minute or so, something we could not do in the other table type.
- - Within each file id group, now there is an delta log file, which holds incoming updates to records in the base columnar files. In the example, the delta log files hold
+ - Within each file id group, now there is an delta log file, which holds incoming updates to the records already present in the base columnar files. In the example, the delta log files hold
  all the data from 10:05 to 10:10. The base columnar files are still versioned with the commit, as before.
  Thus, if one were to simply look at base files alone, then the table layout looks exactly like a copy on write table.
  - A periodic compaction process reconciles these changes from the delta log and produces a new version of base file, just like what happened at 10:05 in the example.

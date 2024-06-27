@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[44482],{94303:s=>{s.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/timestamp-collision","name":"timestamp collision","count":1,"permalink":"/blog/tags/timestamp-collision"}')}}]);

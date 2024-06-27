@@ -361,7 +361,7 @@ mode(Append).
 save(basePath);
 ```
 
-2. Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
+2. Using DataSource, set `PAYLOAD_CLASS_OPT_KEY` to `"org.apache.hudi.common.model.EmptyHoodieRecordPayload"`. This will remove all the records in the DataSet being submitted. 
 
 This example will remove all the records from the table that exist in the DataSet `deleteDF`:
 ```scala
@@ -369,7 +369,7 @@ This example will remove all the records from the table that exist in the DataSe
    .write().format("org.apache.hudi")
    .option(...) // Add HUDI options like record-key, partition-path and others as needed for your setup
    // specify record_key, partition_key, precombine_fieldkey & usual params
-   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.EmptyHoodieRecordPayload")
+   .option(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY, "org.apache.hudi.common.model.EmptyHoodieRecordPayload")
 ```
 
 3. Using DataSource or DeltaStreamer, add a column named `_hoodie_is_deleted` to DataSet. The value of this column must be set to `true` for all the records to be deleted and either `false` or left null for any records which are to be upserted.

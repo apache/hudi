@@ -25,18 +25,18 @@ values={[
 ]}>
 <TabItem value="scala">
 
-```scala
-// spark-shell for spark 3
+```shell
+# spark-shell for spark 3
 spark-shell \
   --packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.12
+# spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
   
-// spark-shell for spark 2 with scala 2.11
+# spark-shell for spark 2 with scala 2.11
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
@@ -45,23 +45,23 @@ spark-shell \
 </TabItem>
 <TabItem value="python">
 
-```python
+```shell
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
 
 # for spark3
-pyspark
---packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1
+pyspark \
+--packages org.apache.hudi:hudi-spark3-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:3.0.1 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.12
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.12:0.8.0,org.apache.spark:spark-avro_2.12:2.4.4 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 
 # for spark2 with scala 2.11
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.11:0.8.0,org.apache.spark:spark-avro_2.11:2.4.4 \
 --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
 ```
 
@@ -357,6 +357,95 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
 :::
+
+## Structured Streaming
+
+Hudi supports Spark Structured Streaming reads.
+Structured Streaming reads are based on Hudi Incremental Query feature, therefore streaming read can return data for which commits and base files were not yet removed by the cleaner. You can control commits retention time.
+
+### Streaming Read
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+// reload data
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Overwrite).
+  save(basePath)
+
+// read stream and output results to console
+spark.readStream.
+  format("hudi").
+  load(basePath).
+  writeStream.
+  format("console").
+  start()
+
+// read stream to streaming df
+val df = spark.readStream.
+        format("hudi").
+        load(basePath)
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+# reload data
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(
+    dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+df.write.format("hudi"). \
+    options(**hudi_options). \
+    mode("overwrite"). \
+    save(basePath)
+
+# read stream to streaming df
+df = spark.readStream \
+    .format("hudi") \
+    .load(basePath)
+
+# read stream and output results to console
+spark.readStream \
+    .format("hudi") \
+    .load(basePath) \
+    .writeStream \
+    .format("console") \
+    .start()
+
+```
+
+</TabItem>
+
+</Tabs
+>
 
 ## Point in time query
 

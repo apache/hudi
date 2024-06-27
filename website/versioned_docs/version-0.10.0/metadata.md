@@ -34,6 +34,6 @@ ensure the Metadata Table stays up to date.
 
 :::note
 If your current deployment model is single writer along with async table services (such as cleaning, clustering, compaction) 
-configured, then it is a must to have [lock providers configured](/docs/next/concurrency_control#enabling-multi-writing) 
+configured, then it is a must to have [lock providers configured](/docs/concurrency_control#enabling-multi-writing) 
 before turning on the metadata table.
 :::

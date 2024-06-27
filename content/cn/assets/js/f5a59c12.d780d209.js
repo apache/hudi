@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[83251],{61275:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/jack-vanlightly","name":"jack-vanlightly","count":3,"permalink":"/cn/blog/tags/jack-vanlightly"}')}}]);

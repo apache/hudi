@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[39552],{4058:e=>{e.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/templated-architecture","name":"templated architecture","count":1,"permalink":"/videos/tags/templated-architecture"}')}}]);

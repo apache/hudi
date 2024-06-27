@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[24156],{87484:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/apicurio-registry","name":"apicurio registry","count":1,"permalink":"/cn/blog/tags/apicurio-registry"}')}}]);

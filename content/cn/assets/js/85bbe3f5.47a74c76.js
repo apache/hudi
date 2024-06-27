@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[49369],{88809:n=>{n.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/async-indexing","name":"async indexing","count":1,"permalink":"/cn/blog/tags/async-indexing"}')}}]);

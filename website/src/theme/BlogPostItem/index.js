@@ -4,242 +4,215 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
- import React from 'react';
- import clsx from 'clsx';
- import {MDXProvider} from '@mdx-js/react';
- import Translate, {translate} from '@docusaurus/Translate';
- import Link from '@docusaurus/Link';
- import {useBaseUrlUtils} from '@docusaurus/useBaseUrl';
- import {usePluralForm} from '@docusaurus/theme-common';
- import MDXComponents from '@theme/MDXComponents';
- import EditThisPage from '@theme/EditThisPage';
- import styles from './styles.module.css';
- import TagsListInline from '@theme/TagsListInline';
- import BlogPostAuthors from '@theme/BlogPostAuthors'; // Very simple pluralization: probably good enough for now
- import Tag from '@theme/Tag';
+import React from 'react';
+import clsx from 'clsx';
+import {MDXProvider} from '@mdx-js/react';
+import {translate} from '@docusaurus/Translate';
+import Link from '@docusaurus/Link';
+import {useBaseUrlUtils} from '@docusaurus/useBaseUrl';
+import {usePluralForm} from '@docusaurus/theme-common';
+import MDXComponents from '@theme/MDXComponents';
+import EditThisPage from '@theme/EditThisPage';
+import styles from './styles.module.css';
+import Tag from '@theme/Tag';
+import AuthorName from "@site/src/components/AuthorName";
+import { useLocation } from 'react-router-dom';
+import classNames from "classnames";
 
- function useReadingTimePlural() {
-   const {selectMessage} = usePluralForm();
-   return (readingTimeFloat) => {
-     const readingTime = Math.ceil(readingTimeFloat);
-     return selectMessage(
-       readingTime,
-       translate(
-         {
-           id: 'theme.blog.post.readingTime.plurals',
-           description:
-             'Pluralized label for "{readingTime} min read". Use as much plural forms (separated by "|") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)',
-           message: 'One min read|{readingTime} min read',
-         },
-         {
-           readingTime,
-         },
-       ),
-     );
-   };
- }
- 
- function BlogPostItem(props) {
-   const readingTimePlural = useReadingTimePlural();
-   const {withBaseUrl} = useBaseUrlUtils();
-   const {
-     children,
-     frontMatter,
-     assets,
-     metadata,
-     truncated,
-     isBlogPostPage = false,
-   } = props;
-   const {
-     date,
-     formattedDate,
-     permalink,
-     tags,
-     readingTime,
-     title,
-     editUrl,
-     authors,
-   } = metadata;
-   const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi.png';
-   const truncatedPost = !isBlogPostPage && truncated;
-   const tagsExists = tags.length > 0;
-
-  const tagsList = () => {
-    return (
-        <>
-          <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm')}>
-         
-            {tags.map(({label, permalink: tagPermalink}) => (
-              <li key={tagPermalink} className={styles.tag}>
-                <Tag className={clsx(styles.greyLink)} name={label} permalink={tagPermalink} />
-              </li>
-            ))}
-          </ul>
-        </>
-      );
+function useReadingTimePlural() {
+    const {selectMessage} = usePluralForm();
+    return (readingTimeFloat) => {
+        const readingTime = Math.ceil(readingTimeFloat);
+        return selectMessage(
+            readingTime,
+            translate(
+                {
+                    id: 'theme.blog.post.readingTime.plurals',
+                    description:
+                        'Pluralized label for "{readingTime} min read". Use as much plural forms (separated by "|") as your language support (see https://www.unicode.org/cldr/cldr-aux/charts/34/supplemental/language_plural_rules.html)',
+                    message: 'One min read|{readingTime} min read',
+                },
+                {
+                    readingTime,
+                },
+            ),
+        );
+    };
 }
-const AuthorsList = () => {
-  
-const authorsCount = authors.length;
-  if (authorsCount === 0) {
-      return  (
-          <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
-              <time dateTime={date} itemProp="datePublished">
-                  {formattedDate}
-              </time>
-          </div>
-      )
 
-  }
- 
-  return (
-    <>
-    {isBlogPostPage ? <div className={clsx(styles.blogPostText, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
-          <time dateTime={date} itemProp="datePublished">
-              {formattedDate}  
-          </time>
+function BlogPostItem(props) {
+    const readingTimePlural = useReadingTimePlural();
+    const location = useLocation();
+    const { withBaseUrl } = useBaseUrlUtils();
 
-           {authors.map((author, idx) => (
-            
-            <div  key={idx}>
-                  <div className="avatar margin-bottom--sm">
-                 
-                      {author.name && (
-                              <div>
-                              <>
-                                {idx!== 0 ? idx!== authors.length - 1 ?   ',' : 'and':''}</>
-                                <Link href={author.url} itemProp="url">
+    const {
+        children,
+        frontMatter,
+        assets,
+        metadata,
+        truncated,
+        isBlogPostPage = false,
+    } = props;
 
-                                <span className={clsx(styles.blogPostAuthorsList)} itemProp="name">{author.name}</span>
-                                </Link> 
-                                 
-                              </div>
-                          )
-                      }
-                  </div>
-              </div>
-            ))}
+    const {
+        date,
+        formattedDate,
+        permalink,
+        tags,
+        readingTime,
+        title,
+        editUrl,
+        authors,
+    } = metadata;
+    const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi-logo-medium.png';
+    const tagsExists = tags.length > 0;
 
-      </div> : <div className={clsx(styles.authorTimeTags, "row margin-top--sm margin-bottom--sm 'margin-vert--md'")}>
-          <time dateTime={date} itemProp="datePublished">
-              {formattedDate} by  
-          </time>
+    const manageVideoOpen = (videoLink) => {
+        if(videoLink) {
+            window.open(videoLink, '_blank', 'noopener noreferrer');
+        }
+    }
 
-           {authors.map((author, idx) => (
-            
-            <div  key={idx}>
-                  <div className="avatar margin-bottom--sm">
-                 
-                      {author.name && (
-                              <div>
-                              <>
-                                {idx!== 0 ? idx!== authors.length - 1 ?  ',' : 'and': '' }</>
-                                <Link href={author.url} itemProp="url">
+    const tagsList = () => {
+        return (
+            <>
+                <ul className={clsx(styles.tags, styles.authorTimeTags, 'padding--none', 'margin-left--sm', {[styles.tagsWrapperPostPage]: isBlogPostPage})}>
 
-                                <span className={clsx(styles.authorsList)} itemProp="name">{author.name}</span>
-                                </Link> 
-                                 
-                              </div>
-                          )
-                      }
-                  </div>
-              </div>
-            ))}
+                    {tags.map(({label, permalink: tagPermalink}) => (
+                        <li key={tagPermalink} className={clsx(styles.tag, {[styles.tagPostPage]: isBlogPostPage})}>
+                            <Tag className={clsx(styles.greyLink)} name={label} permalink={tagPermalink}/>
+                        </li>
+                    ))}
+                </ul>
+            </>
+        );
+    }
+    const AuthorsList = () => {
 
-      </div>}
-      
-      </>
+        const authorsCount = authors.length;
+        if (authorsCount === 0) {
+            return (
+                <div className={clsx(styles.authorTimeTags, "row 'margin-vert--md'")}>
+                    <time dateTime={date} itemProp="datePublished">
+                        {formattedDate}
+                    </time>
+                </div>
+            )
+
+        }
+
+        return (
+            <>
+                {isBlogPostPage ? <div className={clsx(styles.blogPostText, "row")}>
+                    <time dateTime={date} itemProp="datePublished">
+                        {formattedDate}
+                    </time>
+                    <AuthorName authors={authors} className={styles.blogPostAuthorsList} />
+
+                </div> : <div
+                    className={clsx(styles.authorTimeTags, "row 'margin-vert--md'")}>
+                    <time dateTime={date} itemProp="datePublished">
+                        {formattedDate} by
+                    </time>
+                    <AuthorName authors={authors} className={styles.authorsList} />
+                </div>}
+
+            </>
+        );
+    }
+
+    const renderPostHeader = () => {
+        const TitleHeading = isBlogPostPage ? 'h1' : 'h2';
+        return (
+            <header className={styles.postHeader}>
+                <div>
+                    {!isBlogPostPage && image && (
+                        <div className="col blogThumbnail" itemProp="blogThumbnail">
+                            {
+                            location.pathname.startsWith('/blog') ? <Link itemProp="url" to={permalink}>
+                                <img
+                                    src={withBaseUrl(image, {
+                                        absolute: true,
+                                    })}
+                                    className="blog-image"
+                                />
+                                </Link> :
+                                <img onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                    src={withBaseUrl(image, {
+                                        absolute: true,
+                                        })}
+                                    className={classNames(styles.videoImage, 'blog-image')}
+                                    />
+                                }
+
+                        </div>
+                    )}
+                    <TitleHeading className={styles.blogPostTitle} itemProp="headline">
+                        {isBlogPostPage ? (
+                             <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
+                                {title}
+                            </TitleHeading>
+                        ) : (
+                        location.pathname.startsWith('/blog') ?
+                            <Link itemProp="url" to={permalink}>
+                                <TitleHeading className={styles.blogPostTitle} itemProp="headline">
+                                    {title}
+                                </TitleHeading>
+                            </Link>
+                            :
+                            <TitleHeading onClick={() => manageVideoOpen(frontMatter?.navigate)}
+                                className={styles.blogPostTitle} itemProp="headline">
+                                    {title}
+                            </TitleHeading>
+                        )}
+                    </TitleHeading>
+                    <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
+                        {AuthorsList()}
+                        {isBlogPostPage && readingTime && <div className={clsx(styles.blogPostData, { [styles.blogpostReadingTime]: !isBlogPostPage })}>
+                            <>
+                                {typeof readingTime !== 'undefined' && (
+                                    <>
+                                        {readingTimePlural(readingTime)}
+                                    </>
+                                )}
+                            </>
+                        </div>
+                        }
+                    </div>
+                </div>
+                {!!tags.length && (
+                    tagsList()
+                )}
+            </header>
+        );
+    };
+
+    return (
+        <article
+            className={clsx({"blog-list-item": !isBlogPostPage})}
+            itemProp="blogPost"
+            itemScope
+            itemType="http://schema.org/BlogPosting">
+            {renderPostHeader()}
+
+            {isBlogPostPage && (
+                <div className="markdown" itemProp="articleBody">
+                    <MDXProvider components={MDXComponents}>{children}</MDXProvider>
+                </div>
+            )}
+
+            {(tagsExists || truncated) && isBlogPostPage && editUrl && (
+                <footer0
+                    className={clsx('row docusaurus-mt-lg', {
+                        [styles.blogPostDetailsFull]: isBlogPostPage,
+                    })}>
+                    <div className="col margin-top--sm">
+                        <EditThisPage editUrl={editUrl}/>
+                    </div>
+                </footer0>
+            )}
+        </article>
     );
 }
- 
- 
-   const renderPostHeader = () => {
-     const TitleHeading = isBlogPostPage ? 'h1' : 'h2';
-     return (
-       <header>
-        {!isBlogPostPage && image && (
-            <div className="col blogThumbnail" itemProp="blogThumbnail">
-              <Link itemProp="url" to={permalink}>
-                <img
-                 src={withBaseUrl(image, {
-                     absolute: true,
-                 })}
-                />
-              </Link>
-             </div>
-        )}
-      
-         <TitleHeading className={styles.blogPostTitle} itemProp="headline">
-         {isBlogPostPage ? (
-             <TitleHeading className={styles.blogPostPageTitle} itemProp="headline">
-             {title}
-             </TitleHeading>
-           ) : (
-             <Link itemProp="url" to={permalink}>
-             <TitleHeading className={styles.blogPostTitle} itemProp="headline">
-               {title}
-               </TitleHeading>
-             </Link>
-             
-           )}
-         </TitleHeading>
-       
-       {AuthorsList()}
-         <div className={clsx(styles.blogPostData, 'margin-vert--md')}>
-           
- {isBlogPostPage && <>
-           {typeof readingTime !== 'undefined' && (
-             <>
-               {readingTimePlural(readingTime)}
-             </>
-           )}</>}
-         </div>
 
-         
-        
-       
-        {( tags.length > 0)&&(
-           tagsList()
-            
-        )}
-       
-       </header>
-     );
-   };
- 
-   return (
-     
-     <article
-       className={!isBlogPostPage ? 'blog-list-item' : undefined}
-       itemProp="blogPost"
-       itemScope
-       itemType="http://schema.org/BlogPosting">
-       {renderPostHeader()}
- 
- 
-         {isBlogPostPage && (
-             <div className="markdown" itemProp="articleBody">
-                 <MDXProvider components={MDXComponents}>{children}</MDXProvider>
-             </div>
-         )}
- 
-       {(tagsExists || truncated) && (
-         <footer
-           className={clsx('row docusaurus-mt-lg', {
-             [styles.blogPostDetailsFull]: isBlogPostPage,
-           })}>
-          
- 
-           {isBlogPostPage && editUrl && (
-             <div className="col margin-top--sm">
-               <EditThisPage editUrl={editUrl} />
-             </div>
-           )}
-         </footer>
-       )}
-     </article>
-   );
- }
- 
- export default BlogPostItem;
- 
+export default BlogPostItem;

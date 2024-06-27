@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[70683],{9936:e=>{e.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/gdpr-deletion","name":"gdpr deletion","count":4,"permalink":"/cn/blog/tags/gdpr-deletion"}')}}]);

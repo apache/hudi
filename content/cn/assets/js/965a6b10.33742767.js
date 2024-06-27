@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[14371],{53428:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/compression","name":"compression","count":1,"permalink":"/cn/blog/tags/compression"}')}}]);

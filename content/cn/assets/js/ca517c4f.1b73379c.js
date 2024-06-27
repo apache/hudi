@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[41089],{55342:t=>{t.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/techtarget","name":"techtarget","count":2,"permalink":"/cn/blog/tags/techtarget"}')}}]);

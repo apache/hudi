@@ -1,0 +1,113 @@
+/*@import "../../css/custom.css";*/
+
+.joinCommunityWrapper {
+    background: var(--ifm-color-white);
+    padding: 100px 0;
+}
+.communityContent {
+    display: grid;
+    grid-template-columns: 50% 50%;
+    align-items: center;
+    gap: 2%;
+    margin: 0 auto;
+}
+.communityDescription {
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 26px;
+    max-width: 480px;
+}
+
+.communityCardWrapper {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 25px;
+}
+
+.communityCardChildWrapper {
+    display: flex;
+    justify-content: center;
+}
+
+.communityCardChildWrapper > div {
+    margin-right: 25px;
+    width: calc(33% - 16px);
+}
+
+.communityCardChildWrapper :last-child {
+    margin-right: 0;
+}
+
+.communityCard {
+    background: var(--ifm-color-primary-light-grey);
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.mediaTitle {
+    padding-top: 5px;
+}
+.title {
+    font-weight: 400;
+    font-size: 20px;
+    line-height: 26px;
+    margin-bottom: 10px;
+}
+.linkText {
+    display: flex;
+    align-items: center;
+    color: var(--ifm-color-primary-text);
+    width: max-content;
+    margin: 0 auto;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.leftSideWrapper {
+    width: fit-content;
+    margin: 0 auto;
+}
+
+@media only screen and (max-width: 992px) {
+    .communityContent {
+        grid-template-columns: auto;
+    }
+    .leftSideWrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .communityDescription {
+        text-align: center;
+    }
+}
+
+@media only screen and (max-width: 600px) {
+    .communityCardWrapper {
+        gap: 0;
+    }
+
+    .communityCardChildWrapper {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .communityCardChildWrapper > div {
+        margin-right: 0;
+        margin-bottom: 25px;
+        width: 100%;
+    }
+
+    .communityCardChildWrapper :last-child {
+        margin-bottom: 25px;
+    }
+}
+

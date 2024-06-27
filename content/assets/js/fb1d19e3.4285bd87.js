@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[75694],{87869:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/slowly-changing-dimensions-type-2","name":"slowly changing dimensions type 2","count":1,"permalink":"/videos/tags/slowly-changing-dimensions-type-2"}')}}]);

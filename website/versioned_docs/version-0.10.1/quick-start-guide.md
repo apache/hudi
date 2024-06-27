@@ -37,26 +37,26 @@ values={[
 
 From the extracted directory run spark-shell with Hudi as:
 
-```scala
-// spark-shell for spark 3.1
+```shell
+# spark-shell for spark 3.1
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
-// spark-shell for spark 3.2
+# spark-shell for spark 3.2
 spark-shell \
   --packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
   
-// spark-shell for spark 2 with scala 2.12
+# spark-shell for spark 2 with scala 2.12
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
   
-// spark-shell for spark 2 with scala 2.11
+# spark-shell for spark 2 with scala 2.11
 spark-shell \
   --packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4 \
   --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
@@ -97,32 +97,32 @@ spark-sql \
 
 From the extracted directory run pyspark with Hudi as:
 
-```python
+```shell
 # pyspark
 export PYSPARK_PYTHON=$(which python3)
 
 # for spark3.1
-pyspark
---packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+pyspark \
+--packages org.apache.hudi:hudi-spark3.1.2-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.1.2 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
 # for spark3.0
-pyspark
---packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+pyspark \
+--packages org.apache.hudi:hudi-spark3.0.3-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:3.0.3 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
 # for spark2 with scala 2.12
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.12:0.10.1,org.apache.spark:spark-avro_2.12:2.4.4 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 
 # for spark2 with scala 2.11
-pyspark
---packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4
---conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer'
+pyspark \
+--packages org.apache.hudi:hudi-spark-bundle_2.11:0.10.1,org.apache.spark:spark-avro_2.11:2.4.4 \
+--conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
 --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension'
 ```
 
@@ -683,7 +683,6 @@ MERGE INTO tableIdentifier AS target_alias
 USING (sub_query | tableIdentifier) AS source_alias
 ON <merge_condition>
 [ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
-[ WHEN MATCHED [ AND <condition> ] THEN <matched_action> ]
 [ WHEN NOT MATCHED [ AND <condition> ]  THEN <not_matched_action> ]
 
 <merge_condition> =A equal bool condition 
@@ -821,6 +820,196 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
 :::
+
+## Structured Streaming
+
+Hudi supports Spark Structured Streaming reads and writes.
+Structured Streaming reads are based on Hudi Incremental Query feature, therefore streaming read can return data for which commits and base files were not yet removed by the cleaner. You can control commits retention time.
+
+### Streaming Read
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+// reload data
+df.write.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, tableName).
+  mode(Overwrite).
+  save(basePath)
+
+// read stream and output results to console
+spark.readStream.
+  format("hudi").
+  load(basePath).
+  writeStream.
+  format("console").
+  start()
+
+// read stream to streaming df
+val df = spark.readStream.
+        format("hudi").
+        load(basePath)
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+# reload data
+inserts = sc._jvm.org.apache.hudi.QuickstartUtils.convertToStringList(
+    dataGen.generateInserts(10))
+df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+
+hudi_options = {
+    'hoodie.table.name': tableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': tableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+df.write.format("hudi"). \
+    options(**hudi_options). \
+    mode("overwrite"). \
+    save(basePath)
+
+# read stream to streaming df
+df = spark.readStream \
+    .format("hudi") \
+    .load(basePath)
+
+# read stream and output results to console
+spark.readStream \
+    .format("hudi") \
+    .load(basePath) \
+    .writeStream \
+    .format("console") \
+    .start()
+
+```
+
+</TabItem>
+
+</Tabs
+>
+
+### Streaming Write
+
+<Tabs
+defaultValue="scala"
+values={[
+{ label: 'Scala', value: 'scala', },
+{ label: 'Python', value: 'python', },
+]}
+>
+
+<TabItem value="scala">
+
+```scala
+// spark-shell
+// prepare to stream write to new table
+import org.apache.spark.sql.streaming.Trigger
+
+val streamingTableName = "hudi_trips_cow_streaming"
+val baseStreamingPath = "file:///tmp/hudi_trips_cow_streaming"
+val checkpointLocation = "file:///tmp/checkpoints/hudi_trips_cow_streaming"
+
+// create streaming df
+val df = spark.readStream.
+        format("hudi").
+        load(basePath)
+
+// write stream to new hudi table
+df.writeStream.format("hudi").
+  options(getQuickstartWriteConfigs).
+  option(PRECOMBINE_FIELD_OPT_KEY, "ts").
+  option(RECORDKEY_FIELD_OPT_KEY, "uuid").
+  option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").
+  option(TABLE_NAME, streamingTableName).
+  outputMode("append").
+  option("path", baseStreamingPath).
+  option("checkpointLocation", checkpointLocation).
+  trigger(Trigger.Once()).
+  start()
+
+```
+
+</TabItem>
+<TabItem value="python">
+
+```python
+# pyspark
+# prepare to stream write to new table
+streamingTableName = "hudi_trips_cow_streaming"
+baseStreamingPath = "file:///tmp/hudi_trips_cow_streaming"
+checkpointLocation = "file:///tmp/checkpoints/hudi_trips_cow_streaming"
+
+hudi_streaming_options = {
+    'hoodie.table.name': streamingTableName,
+    'hoodie.datasource.write.recordkey.field': 'uuid',
+    'hoodie.datasource.write.partitionpath.field': 'partitionpath',
+    'hoodie.datasource.write.table.name': streamingTableName,
+    'hoodie.datasource.write.operation': 'upsert',
+    'hoodie.datasource.write.precombine.field': 'ts',
+    'hoodie.upsert.shuffle.parallelism': 2,
+    'hoodie.insert.shuffle.parallelism': 2
+}
+
+# create streaming df
+df = spark.readStream \
+    .format("hudi") \
+    .load(basePath)
+
+# write stream to new hudi table
+df.writeStream.format("hudi") \
+    .options(**hudi_streaming_options) \
+    .outputMode("append") \
+    .option("path", baseStreamingPath) \
+    .option("checkpointLocation", checkpointLocation) \
+    .trigger(once=True) \
+    .start()
+
+```
+
+</TabItem>
+
+</Tabs
+>
+
+:::info
+Spark SQL can be used within ForeachBatch sink to do INSERT, UPDATE, DELETE and MERGE INTO.
+Target table must exist before write.
+:::
+
+### Table maintenance
+Hudi can run async or inline table services while running Structured Streaming query and takes care of cleaning, compaction and clustering. There's no operational overhead for the user.  
+For CoW tables, table services work in inline mode by default.  
+For MoR tables, some async services are enabled by default.
+
+:::note
+In Hudi 0.10 Metadata Table was introduced. When using async table services with Metadata Table enabled you must use Optimistic Concurrency Control to avoid the risk of data loss (even in single writer scenario). See [Metadata Table deployment considerations](/docs/0.10.1/metadata#deployment-considerations) for detailed instructions.
+
+If you're using Foreach or ForeachBatch streaming sink you must use inline table services, async table services are not supported.
+:::
+
+Hive Sync works with Structured Streaming, it will create table if not exists and synchronize table to metastore aftear each streaming write.
 
 ## Point in time query
 

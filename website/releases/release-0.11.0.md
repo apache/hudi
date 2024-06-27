@@ -1,11 +1,41 @@
 ---
 title: "Release 0.11.0"
-sidebar_position: 4
+sidebar_position: 12
 layout: releases
 toc: true
 last_modified_at: 2022-01-27T22:07:00+08:00
 ---
-# [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+## [Release 0.11.0](https://github.com/apache/hudi/releases/tag/release-0.11.0) ([docs](/docs/quick-start-guide))
+
+## Migration Guide
+
+With 0.11.0, we have added a checksum mechanism for validating the `hoodie.proerties`, which introduces a new table version, `4`.
+  Whenever a Hudi job is launched with this release on a table with older table version, an upgrade step is executed automatically to upgrade the table to table version `4`.
+  This automatic upgrade step happens just once per Hudi table as the hoodie.table.version will be updated in property file after upgrade is completed.
+  Similarly, a command line tool for Downgrading (command - downgrade) is added if in case some users want to downgrade Hudi
+  from table version `4` to `3` or move from Hudi 0.11.0 to pre 0.11.0. This needs to be executed from a 0.11.0 hudi-cli binary/script.
+
+### Bundle usage updates
+
+- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
+- Users are encouraged to use bundles with specific Spark version in the name (`hudi-sparkX.Y-bundle`) and move away
+  from the legacy bundles (`hudi-spark-bundle` and `hudi-spark3-bundle`).
+- Spark or Utilities bundle no longer requires additional `spark-avro` package at runtime; the
+  option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
+
+### Configuration updates
+
+- For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
+- Only set `hoodie.datasource.write.drop.partition.columns=true` when work
+  with [BigQuery integration](/docs/gcp_bigquery).
+- For Spark readers that rely on extracting physical partition path,
+  set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
+- Default index type for Spark was changed from `BLOOM`
+  to `SIMPLE` ([HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091)). If you currently rely on the default `BLOOM`
+  index type, please update your configuration accordingly.
 
 ## Release Highlights
 
@@ -26,7 +56,7 @@ latency with data skipping. Two new indices are added to the metadata table
 2. column stats index containing the statistics of all/interested columns to improve file pruning based on key and
    column value range in both the writer and the reader, in query planning in Spark for example.
 
-They are disabled by default. You can enable them by setting `hoodie.metadata.index.bloom.filter.enable` 
+They are disabled by default. You can enable them by setting `hoodie.metadata.index.bloom.filter.enable`
 and `hoodie.metadata.index.column.stats.enable` to `true`, respectively.
 
 *Refer to the [metadata table guide](/docs/metadata#deployment-considerations) for detailed instructions on upgrade and
@@ -84,7 +114,7 @@ time. Spark SQL DDL support (experimental) was added for Spark 3.1.x and Spark 3
 
 ### Spark SQL Improvements
 
-- Users can update or delete records in Hudi tables using non-primary-key fields. 
+- Users can update or delete records in Hudi tables using non-primary-key fields.
 - Time travel query is now supported via `timestamp as of` syntax. (Spark 3.2+ only)
 - `CALL` command is added to support invoking more actions on Hudi tables.
 
@@ -93,7 +123,7 @@ time. Spark SQL DDL support (experimental) was added for Spark 3.1.x and Spark 3
 ### Spark Versions and Bundles
 
 - Spark 3.2 support is added; users who are on Spark 3.2 can use `hudi-spark3.2-bundle` or `hudi-spark3-bundle` (legacy bundle name).
-- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`. 
+- Spark 3.1 will continue to be supported via `hudi-spark3.1-bundle`.
 - Spark 2.4 will continue to be supported via `hudi-spark2.4-bundle` or `hudi-spark-bundle` (legacy bundle name).
 
 *See the [migration guide](#migration-guide) for usage updates.*
@@ -180,26 +210,16 @@ detailed settings.
 In 0.11.0, `org.apache.hudi.utilities.schema.HiveSchemaProvider` is added for getting schema from user-defined hive
 tables. This is useful when tailing Hive tables in `HoodieDeltaStreamer` instead of having to provide avro schema files.
 
-## Migration Guide
+## Known Regression
 
-### Bundle usage updates
+In 0.11.0 release, with the newly added support for Spark SQL features, the following performance regressions were
+inadvertently introduced:
+* Partition pruning for some of the COW tables is not applied properly
+* Spark SQL query caching (which caches parsed and resolved queries) was not working correctly resulting in additional
+* overhead to re-analyze the query every time when it's executed (listing the table contents, etc.)
 
-- Spark bundle for 3.0.x is no longer officially supported. Users are encouraged to upgrade to Spark 3.2 or 3.1.
-- Users are encouraged to use bundles with specific Spark version in the name (`hudi-sparkX.Y-bundle`) and move away
-  from the legacy bundles (`hudi-spark-bundle` and `hudi-spark3-bundle`).
-- Spark or Utilities bundle no longer requires additional `spark-avro` package at runtime; the
-  option `--package org.apache.spark:spark-avro_2.1*:*` can be dropped.
-
-### Configuration updates
-
-- For MOR tables, `hoodie.datasource.write.precombine.field` is required for both write and read.
-- Only set `hoodie.datasource.write.drop.partition.columns=true` when work
-  with [BigQuery integration](/docs/gcp_bigquery).
-- For Spark readers that rely on extracting physical partition path,
-  set `hoodie.datasource.read.extract.partition.values.from.path=true` to stay compatible with existing behaviors.
-- Default index type for Spark was changed from `BLOOM`
-  to `SIMPLE` ([HUDI-3091](https://issues.apache.org/jira/browse/HUDI-3091)). If you currently rely on the default `BLOOM`
-  index type, please update your configuration accordingly.
+All of these issues have been addressed in 0.11.1 and are validated to be resolved by benchmarking the set of changes
+on TPC-DS against 0.10.1.
 
 ## Raw Release Notes
 

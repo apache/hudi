@@ -18,6 +18,20 @@ module.exports = {
   favicon: '/assets/images/favicon.ico',
   organizationName: 'apache',
   projectName: 'hudi',
+  customFields: {
+    copyrightText:
+        "Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.",
+    tagline: "Hudi brings transactions, record-level updates/deletes and change streams to data lakes!",
+    taglineConfig: {
+      prefix: "Hudi brings ",
+      suffix: " to data lakes!",
+      content: [
+        "transactions",
+        "record-level updates/deletes",
+        "change streams",
+      ],
+    },
+  },
   i18n: {
     defaultLocale: 'en',
     locales: ['en', 'cn'],
@@ -33,6 +47,12 @@ module.exports = {
     },
   },
   plugins: [
+    ['@docusaurus/plugin-content-blog', {
+      id: 'video-blog',
+      path: 'videoBlog',
+      routeBasePath: 'videos',
+      blogSidebarCount: 0,
+    }],
     [
       '@docusaurus/plugin-content-docs',
       {
@@ -98,11 +118,11 @@ module.exports = {
           },
           {
             from: ['/docs/releases', '/docs/next/releases'],
-            to: '/releases/release-0.12.0',
+            to: '/releases/release-0.15.0',
           },
           {
             from: ['/releases'],
-            to: '/releases/release-0.12.0',
+            to: '/releases/release-0.15.0',
           },
         ],
       },
@@ -134,12 +154,20 @@ module.exports = {
               to: 'talks',
             },
             {
+              label: 'Video Guides',
+              to: 'videos',
+            },
+            {
               label: 'FAQ',
               href: '/docs/faq',
             },
             {
               label: 'Tech Specs',
               href: '/tech-specs',
+            },
+            {
+              label: 'Tech Specs 1.0',
+              href: '/tech-specs-1point0',
             },
             {
               label: 'Technical Wiki',
@@ -195,6 +223,7 @@ module.exports = {
             }
           ],
         },
+        {"to": "/ecosystem","label": "Ecosystem","position": "left"},
         {to: '/blog', label: "Blog", position: 'left'},
         {to: '/powered-by', label: "Who's Using", position: 'left'},
         {to: '/roadmap', label: "Roadmap", position: 'left'},
@@ -230,7 +259,7 @@ module.exports = {
           'aria-label': 'Hudi Twitter Handle',
         },
         {
-          href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w',
+          href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g',
           position: 'right',
           className: 'header-slack-link',
           'aria-label': 'Hudi Slack Channel',
@@ -240,6 +269,12 @@ module.exports = {
           position: 'right',
           className: 'header-youtube-link',
           'aria-label': 'Hudi YouTube Channel',
+        },
+        {
+          href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
+          position: 'right',
+          className: 'header-linkedin-link',
+          'aria-label': 'Hudi Linkedin Page',
         },
       ],
     },
@@ -263,7 +298,7 @@ module.exports = {
             },
             {
               label: 'Releases',
-              to: '/releases/release-0.12.0',
+              to: '/releases/release-0.15.0',
             },
             {
               label: 'Download',
@@ -293,6 +328,10 @@ module.exports = {
             {
               label: 'Talks',
               to: 'talks',
+            },
+            {
+              label: 'Video Guides',
+              to: 'videos',
             },
             {
               label: 'FAQ',
@@ -338,11 +377,11 @@ module.exports = {
           items: [
             {
               label: 'Get Involved',
-              to: '/contribute/get-involved'
+              to: '/community/get-involved'
             },
             {
               label: 'Slack',
-              href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w',
+              href: 'https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g',
             },
             {
               label: 'GitHub',
@@ -355,6 +394,10 @@ module.exports = {
             {
               label: 'YouTube',
               href:  'https://www.youtube.com/channel/UCs7AhE0BWaEPZSChrBR-Muw',
+            },
+            {
+              label: 'Linkedin',
+              href: 'https://www.linkedin.com/company/apache-hudi/?viewAsMember=true',
             },
             {
               label: 'Mailing List',
@@ -397,7 +440,8 @@ module.exports = {
         src: '/assets/images/logo-big.png',
         href: 'https://hudi.apache.org/',
       },
-      copyright: 'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
+      copyright:
+          'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
     },
     prism: {
       theme: darkCodeTheme,
@@ -405,13 +449,27 @@ module.exports = {
       prismPath: require.resolve('./src/theme/prism-include-languages.js'),
     },
     announcementBar: {
-      id: 'announcementBar-1', // Increment on change
-      content:
-          '⭐️ If you like Apache Hudi, give it a star on <a target="_blank" rel="noopener noreferrer" href="https://github.com/apache/hudi">GitHub</a>! ⭐',
+      "id": "announcementBar-2",
+      "content": "⭐️ If you like <b>Apache Hudi</b>, give it a star on <a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://github.com/apache/hudi\"><b>GitHub!<svg xmlns='http://www.w3.org/2000/svg\\' width='16' height='16' fill='currentColor' class='bi bi-github' viewBox='0 -2 16 16'><path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z'/></svg></b></a> ⭐",
+      "isCloseable": false
     },
     colorMode: {
       defaultMode: 'light',
       disableSwitch: true,
+    },
+    blog: {
+      path: 'blog', // Path to the existing blog folder
+      routeBasePath: 'blog', // Route for the existing blog
+      include: ['*.md', '*.mdx'], // File types to include for the existing blog
+
+      // Add the new blog for videos
+      videoBlog: {
+        path: 'video-blog', // Path to the video blog folder
+        routeBasePath: 'videos', // Route for the video blog
+        include: ['*.md', '*.mdx'], // File types to include for the video blog
+        videoBlogRoute: '/videos'
+        // Add any other specific settings for the video blog
+      },
     },
   },
   presets: [
@@ -435,8 +493,8 @@ module.exports = {
               path: 'next',
               banner: 'unreleased',
             },
-            '0.12.0': {
-              label: '0.12.0',
+            '0.15.0': {
+              label: '0.15.0',
               path: '',
             }
           },

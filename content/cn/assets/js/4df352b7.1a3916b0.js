@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[37814],{12645:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/data-skipping","name":"data skipping","count":2,"permalink":"/cn/blog/tags/data-skipping"}')}}]);

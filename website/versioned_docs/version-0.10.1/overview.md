@@ -11,10 +11,10 @@ how to learn more to get started.
 
 ## What is Apache Hudi
 Apache Hudi (pronounced “hoodie”) is the next generation [streaming data lake platform](/blog/2021/07/21/streaming-data-lake-platform). 
-Apache Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](/docs/next/table_management), 
-[transactions](/docs/next/timeline), [efficient upserts/deletes](/docs/next/write_operations), [advanced indexes](/docs/next/indexing), 
-[streaming ingestion services](/docs/next/hoodie_deltastreamer), data [clustering](/docs/next/clustering)/[compaction](/docs/next/compaction) optimizations, 
-and [concurrency](/docs/next/concurrency_control) all while keeping your data in open source file formats.
+Apache Hudi brings core warehouse and database functionality directly to a data lake. Hudi provides [tables](/docs/0.10.1/table_management), 
+[transactions](/docs/timeline), [efficient upserts/deletes](/docs/write_operations), [advanced indexes](/docs/indexing), 
+[streaming ingestion services](/docs/hoodie_streaming_ingestion), data [clustering](/docs/clustering)/[compaction](/docs/compaction) optimizations, 
+and [concurrency](/docs/concurrency_control) all while keeping your data in open source file formats.
 
 Not only is Apache Hudi great for streaming workloads, but it also allows you to create efficient incremental batch pipelines. 
 Read the docs for more [use case descriptions](/docs/use_cases) and check out [who's using Hudi](/powered-by), to see how some of the 
@@ -28,10 +28,10 @@ the popular query engines including, Apache Spark, Flink, Presto, Trino, Hive, e
 
 ## Core Concepts to Learn
 If you are relatively new to Apache Hudi, it is important to be familiar with a few core concepts:
-- [Hudi Timeline](/docs/next/timeline) – How Hudi manages transactions and other table services
-- [Hudi File Layout](/docs/next/file_layouts) - How the files are laid out on storage
-- [Hudi Table Types](/docs/next/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
-- [Hudi Query Types](/docs/next/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
+- [Hudi Timeline](/docs/timeline) – How Hudi manages transactions and other table services
+- [Hudi File Layout](/docs/file_layouts) - How the files are laid out on storage
+- [Hudi Table Types](/docs/table_types) – `COPY_ON_WRITE` and `MERGE_ON_READ`
+- [Hudi Query Types](/docs/table_types#query-types) – Snapshot Queries, Incremental Queries, Read-Optimized Queries
 
 See more in the "Concepts" section of the docs.
 
@@ -51,7 +51,7 @@ resources to learn more, engage, and get help as you get started.
 
 ### Join in on discussions
 See all the ways to [engage with the community here](/community/get-involved). Two most popular methods include:
-- [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w)
+- [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g)
 - [Hudi mailing list](mailto:users-subscribe@hudi.apache.org) - (send any msg to subscribe)
 
 ### Come to Office Hours for help
@@ -65,5 +65,5 @@ Apache Hudi welcomes you to join in on the fun and make a lasting impact on the 
 [contributor guide](/contribute/how-to-contribute) to learn more, and don’t hesitate to directly reach out to any of the 
 current committers to learn more.
 
-Have an idea, an ask, or feedback about a pain-point, but don’t have time to contribute? Join the [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-1e94d3xro-JvlNO1kSeIHJBTVfLPlI5w)
+Have an idea, an ask, or feedback about a pain-point, but don’t have time to contribute? Join the [Hudi Slack Channel](https://join.slack.com/t/apache-hudi/shared_invite/zt-2ggm1fub8-_yt4Reu9djwqqVRFC7X49g)
 and share!

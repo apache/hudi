@@ -20,14 +20,34 @@ To contribute code, you need
  - (Recommended) Join our dev mailing list & slack channel, listed on [community](/community/get-involved) page.
 
 
-## IDE Setup
+## IntelliJ Setup
 
-To contribute, you would need to do the following
+IntelliJ is the recommended IDE for developing Hudi. To contribute, you would need to do the following
  
-- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide)
+- Fork the Hudi code on Github & then clone your own fork locally. Once cloned, we recommend building as per instructions on [spark quickstart](/docs/quick-start-guide) or [flink quickstart](/docs/flink-quick-start-guide).
+
+- In IntelliJ, select `File` > `New` > `Project from Existing Sources...` and select the `pom.xml` file under your local Hudi source folder.
+
+- In `Project Structure`, select Java 1.8 as the Project SDK.
+
+  ![IDE setup java](/assets/images/contributing/IDE_setup_java.png)
+
+- Make the following configuration in `Preferences` or `Settings` in newer IntelliJ so the Hudi code can compile in the IDE:
+  * Enable annotation processing in compiler.
+
+    ![IDE setup annotation processing](/assets/images/contributing/IDE_setup_annotation.png)
+  * Configure Maven *NOT* to delegate IDE build/run actions to Maven so you can run tests in IntelliJ directly.
+
+    ![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
+    ![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
+
+- If you switch maven build profile, e.g., from Spark 3.2 to Spark 3.3, you need to first build Hudi in the command line first and `Reload All Maven Projects` in IntelliJ like below,
+so that IntelliJ re-indexes the code.
+
+   ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
 
 - \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
-    * Open Project Preferences in IDE
+    * Open Project Preferences in IntelliJ
     * Install and activate CheckStyle plugin
 
       ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
@@ -54,13 +74,6 @@ To contribute, you would need to do the following
 
 ![IDE setup copyright 1](/assets/images/contributing/IDE_setup_copyright_1.png)
 ![IDE setup copyright 2](/assets/images/contributing/IDE_setup_copyright_2.png)
-
-- \[Optional\] If needed, add spark jars to the classpath of your module in Intellij by following the steps from [here](https://stackoverflow.com/questions/1051640/correct-way-to-add-external-jars-lib-jar-to-an-intellij-idea-project). 
-
-- \[Optional\] You may configure IntelliJ to respect maven CLI and pom.xml settings.
-
-![IDE setup maven 1](/assets/images/contributing/IDE_setup_maven_1.png)
-![IDE setup maven 2](/assets/images/contributing/IDE_setup_maven_2.png)
 
 ## Accounts and Permissions
 
@@ -139,7 +152,10 @@ and more importantly also try to improve the process along the way as well.
  - Sending a Pull Request
    - Format commit and the pull request title like `[HUDI-XXX] Fixes bug in Spark Datasource`, 
      where you replace `HUDI-XXX` with the appropriate JIRA issue. 
+   - Pull request titles must have either `[HUDI-XXX]` or `[MINOR]` in their title. Note the brackets and capitalization.
    - Please ensure your commit message body is descriptive of the change. Bulleted summary would be appreciated.
+   - You must follow the instructions in the template and fill out all fields to pass our compliance checks.
+   - Do not remove or modify any headings in the template.
    - Push your commit to your own fork/branch & create a pull request (PR) against the Hudi repo.
    - If you don't hear back within 3 days on the PR, please send an email to the dev @ mailing list.
    - Address code review comments & keep pushing changes to your fork/branch, which automatically updates the PR
@@ -245,6 +261,70 @@ to effect change and source feedback, start a new email thread with the `[DISCUS
 by a [vote](https://www.apache.org/foundation/voting) by a PMC member or others (depending on the specific scenario). 
 For technical suggestions, you can also leverage [our RFC Process](https://cwiki.apache.org/confluence/display/HUDI/RFC+Process) to outline your ideas in greater detail.
 
+### Useful Maven commands for developers. 
+Listing out some of the maven commands that could be useful for developers. 
+
+- Compile/build entire project 
+
+```shell
+mvn clean package -DskipTests 
+```
+Default profile is spark2 and scala2.11
+
+- For continuous development, you may want to build only the modules of interest. for eg, if you have been working with 
+deltastreamer, you can build using this command instead of entire project. Majority of time goes into building all different bundles we have 
+like flink bundle, presto bundle, trino bundle etc. But if you are developing something confined to hudi-utilties, you can achieve faster 
+build times.
+
+```shell
+mvn package -DskipTests -pl packaging/hudi-utilities-bundle/ -am
+```
+
+To enable multi-threaded building, you can add -T. 
+```shell
+mvn -T 2C package -DskipTests -pl packaging/hudi-utilities-bundle/ -am
+```
+This command will use 2 parallel threads to build. 
+
+You can also confine the build to just one module if need be. 
+```shell
+mvn -T 2C package -DskipTests -pl hudi-spark-datasource/hudi-spark -am
+```
+Note: "-am" will build all dependent modules as well. 
+In local laptop, entire project build can take somewhere close to 7 to 10 mins. While buildig just hudi-spark-datasource/hudi-spark
+with multi-threaded, could get your compilation in 1.5 to 2 mins. 
+
+If you wish to run any single test class in java. 
+```shell
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner
+```
+
+If you wish to run a single test method in java. 
+```shell
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR 
+```
+
+To filter particular scala test:
+```shell
+mvn -Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " -Dtest=abc -DfailIfNoTests=false test -pl packaging/hudi-spark-bundle -am
+```
+-Dtest=abc will assist in skipping all java tests.
+-Dsuites="org.apache.spark.sql.hudi.TestSpark3DDL @Test Chinese table " filters for a single scala test.
+
+- Run an Integration Test
+
+```shell
+mvn -T 2C -Pintegration-tests -DfailIfNoTests=false -Dit.test=ITTestHoodieSanity#testRunHoodieJavaAppOnMultiPartitionKeysMORTable verify
+```
+
+`verify` phase runs the integration test and cleans up the docker cluster after execution. To retain the docker cluster use
+`integration-test` phase instead.
+
+**Note:** If you encounter `unknown shorthand flag: 'H' in -H`, this error occurs when local environment has docker-compose version >= 2.0.
+The latest docker-compose is accessible using `docker-compose` whereas v1 version is accessible using `docker-compose-v1` locally.<br/>
+You can use `alt def` command to define different docker-compose versions. Refer https://github.com/dotboris/alt. <br/>
+Use `alt use` to use v1 version of docker-compose while running integration test locally.
+
 
 ## Releases
 
@@ -274,6 +354,20 @@ Discussion about contributing code to Hudi happens on the [dev@ mailing list](/c
 ## Code WalkThrough
 
 This Quick Video will give a code walkthrough to start with [watch](https://www.youtube.com/watch?v=N2eDfU_rQ_U).
+
+## Running unit tests and local debugger via Intellij IDE
+
+#### IMPORTANT REMINDER FOR BELOW STEPS: When submitting a PR please make sure to NOT commit the changes mentioned in these steps, instead once testing is done make sure to revert the changes and then submit a pr.
+
+0. Build the project with the intended profiles via the `mvn` cli, for example for spark 3.2 use `mvn clean package -Dspark3.2 -Dscala-2.12 -DskipTests`. 
+1. Install the "Maven Helper" plugin from the Intellij IDE.
+2. Make sure IDEA uses Maven to build/run tests:
+   * You need to select the intended Maven profiles (using Maven tool pane in IDEA): select profiles you are targeting for example `spark2.4` and `scala-2.11` or `spark3.2`, `scala-2.12` etc. 
+   * Add `.mvn/maven.config` file at the root of the repo w/ the the profiles you selected in the pane: `-Dspark3.2` `-Dscala-2.12`
+   * Add `.mvn/` to the `.gitignore` file located in the root of the project. 
+3. Make sure you change (temporarily) the `scala.binary.version` in the root `pom.xml` to the intended scala profile version. For example if running with spark3 `scala.binary.version` should be `2.12`
+4. Finally right click on the unit test's method signature you are trying to run, there should be an option with a mvn symbol that allows you to `run <test-name>`, as well as an option to `debug <test-name>`.
+    * For debugging make sure to first set breakpoints in the src code see (https://www.jetbrains.com/help/idea/debugging-code.html)
 
 ## Docker Setup
 

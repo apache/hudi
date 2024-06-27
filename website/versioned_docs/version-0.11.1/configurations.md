@@ -582,7 +582,7 @@ Flink jobs using the SQL can be configured through the options in WITH clause. T
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Key generator type, that implements will extract the key out of incoming record<br></br>
+> Key generator type, that implements will extract the key out of incoming record. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGEN_TYPE`<br></br>
 
@@ -2295,7 +2295,7 @@ Configurations that control write behavior on Hudi tables. These can be directly
 ---
 
 > #### hoodie.datasource.write.keygenerator.type
-> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE<br></br>
+> Easily configure one the built-in key generators, instead of specifying the key generator class.Currently supports SIMPLE, COMPLEX, TIMESTAMP, CUSTOM, NON_PARTITION, GLOBAL_DELETE. **Note** This is being actively worked on. Please use `hoodie.datasource.write.keygenerator.class` instead.<br></br>
 > **Default Value**: SIMPLE (Optional)<br></br>
 > `Config Param: KEYGENERATOR_TYPE`<br></br>
 
@@ -3440,7 +3440,7 @@ Configurations that control indexing behavior, which tags incoming records as ei
 ---
 
 > #### hoodie.index.type
-> Type of index to use. Default is Bloom filter. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
+> Type of index to use. Default is SIMPLE on Spark engine and INMEMORY on Flink and Java engines. Possible options are [BLOOM | GLOBAL_BLOOM |SIMPLE | GLOBAL_SIMPLE | INMEMORY | HBASE | BUCKET]. Bloom filters removes the dependency on a external system and is stored in the footer of the Parquet Data Files<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: INDEX_TYPE`<br></br>
 
