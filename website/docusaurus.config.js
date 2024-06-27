@@ -223,6 +223,7 @@ module.exports = {
             }
           ],
         },
+        {"to": "/ecosystem","label": "Ecosystem","position": "left"},
         {to: '/blog', label: "Blog", position: 'left'},
         {to: '/powered-by', label: "Who's Using", position: 'left'},
         {to: '/roadmap', label: "Roadmap", position: 'left'},
