@@ -43,7 +43,7 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
     // is used - it will use custom logic to forcefully add/remove fields.
     // And available public methods does not allow to specify exact instant to get schema from, only latest after some filtering
     // which may lead to false positives in test scenarios.
-    val lastInstant = metaClient.getActiveTimeline.lastInstant().get()
+    val lastInstant = metaClient.getActiveTimeline.getCompletedReplaceTimeline.lastInstant().get()
     val commitMetadata = HoodieCommitMetadata.fromBytes(metaClient.getActiveTimeline.getInstantDetails(lastInstant).get(), classOf[HoodieCommitMetadata])
     val schemaStr = commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY)
     val schema = new Schema.Parser().parse(schemaStr)
