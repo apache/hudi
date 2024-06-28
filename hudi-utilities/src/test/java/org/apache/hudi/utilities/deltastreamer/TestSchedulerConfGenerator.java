@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkConfigs;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
@@ -91,10 +90,6 @@ public class TestSchedulerConfGenerator {
     Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
 
     URI schedulerFile = URI.create(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()));
-    if (HoodieSparkUtils.gteqSpark3_2()) {
-      assertNotNull(schedulerFile.getScheme());
-    } else {
-      assertNull(schedulerFile.getScheme());
-    }
+    assertNotNull(schedulerFile.getScheme());
   }
 }

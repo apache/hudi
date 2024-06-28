@@ -36,16 +36,18 @@ import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, UnsafeProjection}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils.pruneInternalSchema
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetFileFormatHelper, ParquetReadSupport, Spark3HoodieVectorizedParquetRecordReader, VectorizedParquetRecordReader}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType}
 
+import java.time.ZoneId
+
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
-abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
-                                                 filePath: Path,
-                                                 requiredSchema: StructType,
-                                                 partitionSchema: StructType) extends SparkAdapterSupport{
+class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+                                        filePath: Path,
+                                        requiredSchema: StructType,
+                                        partitionSchema: StructType) extends SparkAdapterSupport{
   // Fetch internal schema
   private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
 
@@ -178,6 +180,35 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
         } else attr
       }
       GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+    }
+  }
+
+  def buildVectorizedReader(convertTz: ZoneId,
+                            datetimeRebaseMode: String,
+                            datetimeRebaseTz: String,
+                            int96RebaseMode: String,
+                            int96RebaseTz: String,
+                            useOffHeap: Boolean,
+                            capacity: Int): VectorizedParquetRecordReader = {
+    if (shouldUseInternalSchema) {
+      new Spark3HoodieVectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity,
+        typeChangeInfos)
+    } else {
+      new VectorizedParquetRecordReader(
+        convertTz,
+        datetimeRebaseMode,
+        datetimeRebaseTz,
+        int96RebaseMode,
+        int96RebaseTz,
+        useOffHeap,
+        capacity)
     }
   }
 }

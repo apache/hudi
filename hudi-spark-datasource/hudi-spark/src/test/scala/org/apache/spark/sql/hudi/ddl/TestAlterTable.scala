@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -204,11 +203,9 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000, null)
         )
 
-        if (HoodieSparkUtils.gteqSpark3_1) {
-          withSQLConf("hoodie.schema.on.read.enable" -> "true") {
-            spark.sql(s"alter table $tableName2 add columns(hh string comment 'hour time')")
-            Seq(1, "a1", 10.0, 1000, null, null)
-          }
+        withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+          spark.sql(s"alter table $tableName2 add columns(hh string comment 'hour time')")
+          Seq(1, "a1", 10.0, 1000, null, null)
         }
       }
     }

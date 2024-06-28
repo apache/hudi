@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util.InternalSchemaCache
@@ -174,35 +173,18 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       // Try to push down filters when filter push-down is enabled.
       val pushed = if (enableParquetFilterPushDown) {
         val parquetSchema = footerFileMetaData.getSchema
-        val parquetFilters = if (HoodieSparkUtils.gteqSpark3_2_1) {
-          // NOTE: Below code could only be compiled against >= Spark 3.2.1,
-          //       and unfortunately won't compile against Spark 3.2.0
-          //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
-          val datetimeRebaseSpec =
+        val datetimeRebaseSpec =
           DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          new ParquetFilters(
-            parquetSchema,
-            pushDownDate,
-            pushDownTimestamp,
-            pushDownDecimal,
-            pushDownStringStartWith,
-            pushDownInFilterThreshold,
-            isCaseSensitive,
-            datetimeRebaseSpec)
-        } else {
-          // Spark 3.2.0
-          val datetimeRebaseMode =
-            Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          createParquetFilters(
-            parquetSchema,
-            pushDownDate,
-            pushDownTimestamp,
-            pushDownDecimal,
-            pushDownStringStartWith,
-            pushDownInFilterThreshold,
-            isCaseSensitive,
-            datetimeRebaseMode)
-        }
+        val parquetFilters = new ParquetFilters(
+          parquetSchema,
+          pushDownDate,
+          pushDownTimestamp,
+          pushDownDecimal,
+          pushDownStringStartWith,
+          pushDownInFilterThreshold,
+          isCaseSensitive,
+          datetimeRebaseSpec)
+
         filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
           // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
@@ -271,7 +253,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            new Spark32PlusHoodieVectorizedParquetRecordReader(
+            new Spark3HoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,
@@ -280,7 +262,7 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity,
               typeChangeInfos)
-          } else if (HoodieSparkUtils.gteqSpark3_2_1) {
+          } else {
             // NOTE: Below code could only be compiled against >= Spark 3.2.1,
             //       and unfortunately won't compile against Spark 3.2.0
             //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
@@ -294,18 +276,6 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               datetimeRebaseSpec.timeZone,
               int96RebaseSpec.mode.toString,
               int96RebaseSpec.timeZone,
-              enableOffHeapColumnVector && taskContext.isDefined,
-              capacity)
-          } else {
-            // Spark 3.2.0
-            val datetimeRebaseMode =
-              Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            val int96RebaseMode =
-              Spark33DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-            createVectorizedParquetRecordReader(
-              convertTz.orNull,
-              datetimeRebaseMode.toString,
-              int96RebaseMode.toString,
               enableOffHeapColumnVector && taskContext.isDefined,
               capacity)
           }
@@ -345,31 +315,15 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = if (HoodieSparkUtils.gteqSpark3_2_1) {
-          // ParquetRecordReader returns InternalRow
-          // NOTE: Below code could only be compiled against >= Spark 3.2.1,
-          //       and unfortunately won't compile against Spark 3.2.0
-          //       However this code is runtime-compatible w/ both Spark 3.2.0 and >= Spark 3.2.1
-          val int96RebaseSpec =
+        val int96RebaseSpec =
           DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-          val datetimeRebaseSpec =
-            DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          new ParquetReadSupport(
-            convertTz,
-            enableVectorizedReader = false,
-            datetimeRebaseSpec,
-            int96RebaseSpec)
-        } else {
-          val datetimeRebaseMode =
-            Spark33DataSourceUtils.datetimeRebaseMode(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          val int96RebaseMode =
-            Spark33DataSourceUtils.int96RebaseMode(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
-          createParquetReadSupport(
-            convertTz,
-            /* enableVectorizedReader = */ false,
-            datetimeRebaseMode,
-            int96RebaseMode)
-        }
+        val datetimeRebaseSpec =
+          DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
+        val readSupport = new ParquetReadSupport(
+          convertTz,
+          enableVectorizedReader = false,
+          datetimeRebaseSpec,
+          int96RebaseSpec)
 
         val reader = if (pushed.isDefined && enableRecordFilter) {
           val parquetFilter = FilterCompat.get(pushed.get, null)

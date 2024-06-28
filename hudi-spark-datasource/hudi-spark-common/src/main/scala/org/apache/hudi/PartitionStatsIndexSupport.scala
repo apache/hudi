@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 

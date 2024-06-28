@@ -20,6 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+
 import org.apache.spark.sql.catalyst.InternalRow
 
 class HoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,

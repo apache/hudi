@@ -23,7 +23,6 @@ import org.apache.commons.lang3.SystemUtils
 import org.apache.spark.util.Utils
 
 import java.io.{OutputStream, PrintStream}
-
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._

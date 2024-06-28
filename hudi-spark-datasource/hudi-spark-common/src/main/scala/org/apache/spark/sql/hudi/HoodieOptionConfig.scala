@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.{HoodieRecordMerger, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.config.HoodieIndexConfig
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 

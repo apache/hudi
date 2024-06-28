@@ -20,6 +20,7 @@ package org.apache.hudi.cdc
 
 import org.apache.hudi.HoodieTableSchema
 import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String

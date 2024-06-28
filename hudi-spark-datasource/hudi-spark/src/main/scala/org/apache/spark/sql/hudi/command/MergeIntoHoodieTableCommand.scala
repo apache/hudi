@@ -29,7 +29,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, SparkAdapterSupport}
 
 import org.apache.avro.Schema
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
@@ -272,11 +272,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     this.sparkSession = sparkSession
     // TODO move to analysis phase
     validate
-
-    if (HoodieSparkUtils.isSpark2) {
-      //already enabled by default for spark 3+
-      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
-    }
 
     val projectedJoinedDF: DataFrame = projectedJoinedDataset
     // Create the write parameters

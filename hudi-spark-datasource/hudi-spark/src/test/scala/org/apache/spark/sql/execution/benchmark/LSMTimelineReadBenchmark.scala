@@ -18,6 +18,7 @@
 
 package org.apache.spark.sql.execution.benchmark
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
 import org.apache.hudi.client.timeline.LSMTimelineWriter
@@ -28,12 +29,9 @@ import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
-
-import org.apache.hadoop.fs.Path
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 
 import java.util
-
 import scala.collection.JavaConverters._
 
 object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
