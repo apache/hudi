@@ -20,13 +20,14 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -34,15 +35,21 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestMercifulJsonConverter {
@@ -66,12 +73,12 @@ public class TestMercifulJsonConverter {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
-  
+
   /**
    * Covered case:
    * Avro Logical Type: Decimal
@@ -95,7 +102,7 @@ public class TestMercifulJsonConverter {
     record.put("decimalField", conv.toBytes(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   private static final String DECIMAL_FIXED_AVRO_FILE_PATH = "/decimal-logical-type-fixed-type.avsc";
@@ -194,7 +201,7 @@ public class TestMercifulJsonConverter {
     String json = MAPPER.writeValueAsString(data);
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> decimalGoodCases() {
@@ -260,7 +267,7 @@ public class TestMercifulJsonConverter {
     durationRecord.put("duration", new GenericData.Fixed(schema.getField("duration").schema(), buffer.array()));
 
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(durationRecord, real);
+    assertEquals(durationRecord, real);
   }
 
   static Stream<Object> durationGoodCases() {
@@ -320,7 +327,7 @@ public class TestMercifulJsonConverter {
     data.put("dateField", dateInput);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> dataProvider() {
@@ -381,7 +388,7 @@ public class TestMercifulJsonConverter {
     data.put("localTimestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> localTimestampGoodCaseProvider() {
@@ -501,7 +508,7 @@ public class TestMercifulJsonConverter {
     data.put("timestampMicrosField", timeMicro);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> timestampGoodCaseProvider() {
@@ -604,7 +611,7 @@ public class TestMercifulJsonConverter {
     data.put("timeMillisField", timeMilli);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> timeGoodCaseProvider() {
@@ -678,7 +685,7 @@ public class TestMercifulJsonConverter {
     data.put("uuidField", uuid);
     String json = MAPPER.writeValueAsString(data);
     GenericRecord real = CONVERTER.convert(json, schema);
-    Assertions.assertEquals(record, real);
+    assertEquals(record, real);
   }
 
   static Stream<Object> uuidDimension() {
@@ -710,7 +717,7 @@ public class TestMercifulJsonConverter {
     rec.put("favorite__number", number);
     rec.put("favorite__color__", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 
   @Test
@@ -733,6 +740,69 @@ public class TestMercifulJsonConverter {
     rec.put("favorite_number", number);
     rec.put("favorite_color", color);
 
-    Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+    assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+  }
+
+  @Test
+  void testEncodedDecimal() throws JsonProcessingException {
+    Random rand = new Random();
+    testEncodedDecimalHelper(rand, 6, 10);
+    testEncodedDecimalHelper(rand, 30, 32);
+    testEncodedDecimalHelper(rand, 1, 3);
+
+    //size calculated using AvroInternalSchemaConverter.computeMinBytesForPrecision
+    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 5, 6, 10);
+    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 14, 30, 32);
+    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 2, 1, 3);
+  }
+
+  private static void testEncodedDecimalHelper(Random rand, int scale, int precision) throws JsonProcessingException {
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    Schema tripSchema = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA.replace("6", Integer.toString(scale)).replace("10", Integer.toString(precision)));
+    GenericRecord genrec = CONVERTER.convert(json, tripSchema);
+    Schema decimalFieldSchema = tripSchema.getField("decfield").schema();
+    BigDecimal decoded = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) genrec.get("decfield")).array(),
+        (LogicalTypes.Decimal) decimalFieldSchema.getLogicalType());
+    assertEquals(decfield, decoded);
+  }
+
+  private static void testEncodedDecimalAvroSparkPostProcessorCaseHelper(Random rand, int size, int scale, int precision) throws JsonProcessingException {
+    String postProcessSchemaString = String.format("{\"type\":\"record\",\"name\":\"tripUberRec\","
+        + "\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"_row_key\","
+        + "\"type\":\"string\",\"doc\":\"\"},{\"name\":\"rider\",\"type\":\"string\",\"doc\":\"\"},"
+        + "{\"name\":\"decfield\",\"type\":{\"type\":\"fixed\",\"name\":\"fixed\","
+        + "\"namespace\":\"tripUberRec.decfield\",\"size\":%d,\"logicalType\":\"decimal\","
+        + "\"precision\":%d,\"scale\":%d},\"doc\":\"\"},{\"name\":\"driver\",\"type\":\"string\","
+        + "\"doc\":\"\"},{\"name\":\"fare\",\"type\":\"double\",\"doc\":\"\"},{\"name\":\"_hoodie_is_deleted\","
+        + "\"type\":\"boolean\",\"doc\":\"\"}]}", size, precision, scale);
+    Schema postProcessSchema = new Schema.Parser().parse(postProcessSchemaString);
+    BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
+        .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
+    Map<String, Object> data = new HashMap<>();
+    data.put("_row_key", "mykey");
+    long timestamp = 214523432;
+    data.put("timestamp", timestamp);
+    data.put("rider", "myrider");
+    data.put("decfield", Base64.getEncoder().encodeToString(decfield.unscaledValue().toByteArray()));
+    data.put("driver", "mydriver");
+    data.put("fare", rand.nextDouble() * 100);
+    data.put("_hoodie_is_deleted", false);
+    String json = MAPPER.writeValueAsString(data);
+    GenericRecord genrec = CONVERTER.convert(json, postProcessSchema);
+    GenericData.Fixed fixed = (GenericData.Fixed) genrec.get("decfield");
+    Conversions.DecimalConversion decimalConverter = new Conversions.DecimalConversion();
+    Schema decimalFieldSchema = postProcessSchema.getField("decfield").schema();
+    assertEquals(decfield, decimalConverter.fromFixed(fixed, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
   }
 }

@@ -46,6 +46,7 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -272,16 +273,26 @@ public class MercifulJsonConverter {
           return Pair.of(false, null);
         }
 
-        // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
-        // parsing it to Fixed avro type.
-        if (value instanceof List<?> && schema.getType() == Type.FIXED) {
-          JsonToAvroFieldProcessor processor = generateFixedTypeHandler();
-          return processor.convert(value, name, schema, shouldSanitize, invalidCharMask);
+        if (schema.getType() == Type.FIXED) {
+          if (value instanceof List<?>) {
+            // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
+            // parsing it to Fixed avro type.
+            JsonToAvroFieldProcessor processor = generateFixedTypeHandler();
+            return processor.convert(value, name, schema, shouldSanitize, invalidCharMask);
+          } else if (value instanceof String) {
+            try {
+              // It is a kafka encoded string that is here because of the spark avro post processor
+              Object fixed = HoodieAvroUtils.convertBytesToFixed(decodeStringToBigDecimalBytes(value), schema);
+              return Pair.of(true, fixed);
+            } catch (IllegalArgumentException e) {
+              // no-op
+            }
+          }
         }
 
         // Case 2: Input is a number or String number.
         LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
-        Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value);
+        Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, schema);
         if (Boolean.FALSE.equals(parseResult.getLeft())) {
           return Pair.of(false, null);
         }
@@ -336,7 +347,7 @@ public class MercifulJsonConverter {
        * @return Pair object, with left as boolean indicating if the parsing was successful and right as the
        * BigDecimal value.
        */
-      private static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj) {
+      private static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
         // Case 1: Object is a number.
         if (obj instanceof Number) {
           return Pair.of(true, BigDecimal.valueOf(((Number) obj).doubleValue()));
@@ -344,6 +355,16 @@ public class MercifulJsonConverter {
 
         // Case 2: Object is a number in String format.
         if (obj instanceof String) {
+          if (schema.getType() == Type.BYTES) {
+            try {
+              //encoded big decimal
+              BigDecimal bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
+                  (LogicalTypes.Decimal) schema.getLogicalType());
+              return Pair.of(true, bigDecimal);
+            } catch (IllegalArgumentException e) {
+              //no-op
+            }
+          }
           BigDecimal bigDecimal = null;
           try {
             bigDecimal = new BigDecimal(((String) obj));
@@ -354,6 +375,10 @@ public class MercifulJsonConverter {
         }
         return Pair.of(false, null);
       }
+    }
+
+    private static byte[] decodeStringToBigDecimalBytes(Object value) {
+      return Base64.getDecoder().decode(((String) value).getBytes());
     }
 
     private static class DurationLogicalTypeProcessor extends JsonToAvroFieldProcessor {
@@ -423,7 +448,7 @@ public class MercifulJsonConverter {
     }
 
     /**
-     * Processor utility handling Number inputs. Consumed by TimeLogicalTypeProcessor. 
+     * Processor utility handling Number inputs. Consumed by TimeLogicalTypeProcessor.
      */
     private interface NumericParser {
       // Convert the input number to Avro data type according to the class

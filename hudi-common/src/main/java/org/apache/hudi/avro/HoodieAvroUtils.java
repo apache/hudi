@@ -75,6 +75,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -1143,12 +1144,55 @@ public class HoodieAvroUtils {
             // due to Java, there will be precision problems in direct conversion, we should use string instead of use double
             BigDecimal bigDecimal = new java.math.BigDecimal(oldValue.toString()).setScale(decimal.getScale(), RoundingMode.HALF_UP);
             return DECIMAL_CONVERSION.toFixed(bigDecimal, newSchema, newSchema.getLogicalType());
+          } else if (oldSchema.getType() == Schema.Type.BYTES) {
+            return convertBytesToFixed(((ByteBuffer) oldValue).array(), newSchema);
           }
         }
         break;
       default:
     }
     throw new HoodieAvroSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));
+  }
+
+  /**
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static Object convertBytesToFixed(byte[] bytes, Schema schema) {
+    LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
+    BigDecimal bigDecimal = convertBytesToBigDecimal(bytes, decimal);
+    return DECIMAL_CONVERSION.toFixed(bigDecimal, schema, decimal);
+  }
+
+  /**
+   * Use this instead of DECIMAL_CONVERSION.fromBytes() because that method does not add in precision
+   *
+   * bytes is the result of BigDecimal.unscaledValue().toByteArray();
+   * This is also what Conversions.DecimalConversion.toBytes() outputs inside a byte buffer
+   */
+  public static BigDecimal convertBytesToBigDecimal(byte[] value, LogicalTypes.Decimal decimal) {
+    return new BigDecimal(new BigInteger(value),
+        decimal.getScale(), new MathContext(decimal.getPrecision(), RoundingMode.HALF_UP));
+  }
+
+  public static boolean hasDecimalField(Schema schema) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (Field field : schema.getFields()) {
+          if (hasDecimalField(field.schema())) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return hasDecimalField(schema.getElementType());
+      case MAP:
+        return hasDecimalField(schema.getValueType());
+      case UNION:
+        return hasDecimalField(getActualSchemaFromUnion(schema, null));
+      default:
+        return schema.getLogicalType() instanceof LogicalTypes.Decimal;
+    }
   }
 
   /**

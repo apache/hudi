@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/product.schema.json",
+  "title": "Product",
+  "description": "A product from Acme's catalog",
+  "type": "object",
+  "properties": {
+    "product": {
+      "description": "The unique identifier for a product",
+      "type": "integer"
+    },
+    "productId": {
+      "description": "The unique identifier for a product",
+      "title": "org.apache.kafka.connect.data.Decimal",
+      "connect.parameters": {
+        "connect.decimal.precision": "14",
+        "scale": "2"
+      },
+      "connect.type": "bytes",
+      "type": "number"
+    },
+    "productName": {
+      "description": "Name of the product",
+      "type": "string"
+    }
+  },
+  "required": [ "product", "productId", "productName" ]
+}

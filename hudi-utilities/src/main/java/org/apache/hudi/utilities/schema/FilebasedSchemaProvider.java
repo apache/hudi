@@ -21,10 +21,16 @@ package org.apache.hudi.utilities.schema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
+import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -53,14 +59,11 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     super(props, jssc);
     checkRequiredConfigProperties(props, Collections.singletonList(FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE));
     String sourceFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.SOURCE_SCHEMA_FILE);
-    boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
-    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
     this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
-    this.sourceSchema = readAvroSchemaFromFile(sourceFile, this.fs, shouldSanitize, invalidCharMask);
+    this.sourceSchema = readSchemaFromFile(sourceFile, this.fs, props);
     if (containsConfigProperty(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE)) {
-      this.targetSchema = readAvroSchemaFromFile(
-          getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE),
-          this.fs, shouldSanitize, invalidCharMask);
+      this.targetSchema = readSchemaFromFile(
+          getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE), this.fs, props);
     }
   }
 
@@ -78,13 +81,46 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     }
   }
 
-  private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
-    String schemaStr;
+  private static Schema readSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
+    return schemaPath.endsWith(".json")
+        ? readJsonSchemaFromFile(schemaPath, fs, props)
+        : readAvroSchemaFromFile(schemaPath, fs, props);
+  }
+
+  private static Schema readJsonSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
+    String schemaConverterClass = getStringWithAltKeys(props, HoodieSchemaProviderConfig.SCHEMA_CONVERTER, true);
+    SchemaRegistryProvider.SchemaConverter schemaConverter;
+    try {
+      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(schemaConverterClass),
+          "Schema converter class must be set for the json file based schema provider");
+      schemaConverter = ReflectionUtils.loadClass(
+          schemaConverterClass, new Class<?>[] {TypedProperties.class}, props);
+    } catch (Exception e) {
+      throw new HoodieSchemaProviderException("Error loading json schema converter", e);
+    }
+    String schemaStr = readSchemaString(schemaPath, fs);
+    ParsedSchema parsedSchema = new JsonSchema(schemaStr);
+    String convertedSchema;
+    try {
+      convertedSchema = schemaConverter.convert(parsedSchema);
+    } catch (IOException e) {
+      throw new HoodieSchemaProviderException(String.format("Error converting json schema from file %s", schemaPath), e);
+    }
+    return new Schema.Parser().parse(convertedSchema);
+  }
+
+  private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, TypedProperties props) {
+    boolean shouldSanitize = SanitizationUtils.shouldSanitize(props);
+    String invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
+    String schemaStr = readSchemaString(schemaPath, fs);
+    return SanitizationUtils.parseAvroSchema(schemaStr, shouldSanitize, invalidCharMask);
+  }
+
+  private static String readSchemaString(String schemaPath, FileSystem fs) {
     try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
-      schemaStr = FileIOUtils.readAsUTFString(in);
+      return FileIOUtils.readAsUTFString(in);
     } catch (IOException ioe) {
       throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);
     }
-    return SanitizationUtils.parseAvroSchema(schemaStr, sanitizeSchema, invalidCharMask);
   }
 }
