@@ -493,7 +493,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     try {
       Table table = client.getTable(databaseName, tableName);
       return table.getSd().getLocation();
-    } catch (TException e) {
+    } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
     }
   }
