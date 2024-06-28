@@ -40,7 +40,8 @@ class TestJsonToAvroSchemaConverter {
       "example-geographical-location",
       "multiple-properties",
       "nested-properties",
-      "single-properties"
+      "single-properties",
+      "kafka-decimal-simple,"
   })
   void testConvertJsonSchemaToAvroSchema(String inputCase) throws IOException {
     String jsonSchema = loadJsonSchema(inputCase);
