@@ -834,32 +834,34 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     reSyncHiveTable();
 
-    int fields = hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size();
-
     String commitTime2 = "105";
-    basePath = Files.createTempDirectory("hivesynctest_v1" + Instant.now().toEpochMilli()).toUri().toString();
+    // let's update the basepath
+    basePath = Files.createTempDirectory("hivesynctest_new" + Instant.now().toEpochMilli()).toUri().toString();
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
-    HiveTestUtil.createCOWTable(commitTime2, 5, true);
+
+    // let's create new table in new basepath
+    HiveTestUtil.createCOWTable(commitTime2, 2, true);
     // Now lets create more partitions and these are the only ones which needs to be synced
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime3 = "110";
-    HiveTestUtil.addCOWPartitions(1, false, true, dateTime, commitTime3);
+    // let's add 2 more partitions to the new basepath
+    HiveTestUtil.addCOWPartitions(2, false, true, dateTime, commitTime3);
+
+    // reinitialize hive client
+    reInitHiveSyncClient();
+    // after reinitializing hive client, table location shouldn't match hoodie base path
+    assertNotEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(HiveTestUtil.TABLE_NAME), "new table location should match hoodie basepath");
 
     // Lets do the sync
-    reInitHiveSyncClient();
     reSyncHiveTable();
-    assertEquals(fields + 3, hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
-        "Hive Schema has evolved and should not be 3 more field");
-    assertEquals("BIGINT", hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).get("favorite_number"),
-        "Hive Schema has evolved - Field favorite_number has evolved from int to long");
-    assertTrue(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).containsKey("favorite_movie"),
-        "Hive Schema has evolved - Field favorite_movie was added");
-
-    // Sync should add the one partition
-    assertEquals(6, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
-        "The one partition we wrote should be added to hive");
+    // verify partition count should be 4 from new basepath, not 5 from old
+    assertEquals(4, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
+        "the 4 partitions from new base path should be present for hive");
+    // verify last commit time synced
     assertEquals(commitTime3, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
-        "The last commit that was synced should be 101");
+        "The last commit that was synced should be 110");
+    // table location now should be updated to latest hoodie basepath
+    assertEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(HiveTestUtil.TABLE_NAME), "new table location should match hoodie basepath");
   }
 
   @ParameterizedTest
@@ -1073,48 +1075,51 @@ public class TestHiveSyncTool {
         useSchemaFromCommitMetadata);
 
     String roTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+    String rtTableName = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
     reInitHiveSyncClient();
     assertFalse(hiveClient.tableExists(roTableName), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+    assertFalse(hiveClient.tableExists(rtTableName), "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
     // Lets do the sync
     reSyncHiveTable();
 
-    // change the base path
-    basePath = Files.createTempDirectory("hivesynctest_v1" + Instant.now().toEpochMilli()).toUri().toString();
+    // change the hoodie base path
+    basePath = Files.createTempDirectory("hivesynctest_new" + Instant.now().toEpochMilli()).toUri().toString();
     hiveSyncProps.setProperty(META_SYNC_BASE_PATH.key(), basePath);
 
     String instantTime2 = "102";
     String deltaCommitTime2 = "103";
-    HiveTestUtil.createMORTable(instantTime2, deltaCommitTime2, 5, true,
+    // let's create MOR table in the new basepath
+    HiveTestUtil.createMORTable(instantTime2, deltaCommitTime2, 2, true,
         useSchemaFromCommitMetadata);
 
-    // Now lets create more partitions and these are the only ones which needs to be synced
+    // let's add more partitions in the new basepath
     ZonedDateTime dateTime = ZonedDateTime.now().plusDays(6);
     String commitTime3 = "104";
     String deltaCommitTime3 = "105";
-
-    HiveTestUtil.addCOWPartitions(1, true, useSchemaFromCommitMetadata, dateTime, commitTime3);
-    HiveTestUtil.addMORPartitions(1, true, false,
+    HiveTestUtil.addMORPartitions(2, true, false,
         useSchemaFromCommitMetadata, dateTime, commitTime3, deltaCommitTime3);
-    // Lets do the sync
+
+    // reinitialize hive client
     reInitHiveSyncClient();
+    // verify table location is different from hoodie basepath
+    assertNotEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(roTableName), "ro table location should not match hoodie base path before sync");
+    assertNotEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(rtTableName), "rt table location should not match hoodie base path before sync");
+    // Lets do the sync
     reSyncHiveTable();
 
-    if (useSchemaFromCommitMetadata) {
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize()
-              + HoodieRecord.HOODIE_META_COLUMNS.size(),
-          "Hive Schema should match the evolved table schema + partition field");
-    } else {
-      // The data generated and schema in the data file do not have metadata columns, so we need a separate check.
-      assertEquals(hiveClient.getMetastoreSchema(roTableName).size(),
-          SchemaTestUtil.getEvolvedSchema().getFields().size() + getPartitionFieldSize(),
-          "Hive Schema should match the evolved table schema + partition field");
-    }
-    // Sync should add the one partition
-    assertEquals(6, hiveClient.getAllPartitions(roTableName).size(),
-        "The 2 partitions we wrote should be added to hive");
+    // verify partition count should be 4, not 5 from old basepath
+    assertEquals(4, hiveClient.getAllPartitions(roTableName).size(),
+        "the 4 partitions from new base path should be present for ro table");
+    assertEquals(4, hiveClient.getAllPartitions(rtTableName).size(),
+        "the 4 partitions from new base path should be present for rt table");
+    // verify last synced commit time
     assertEquals(deltaCommitTime3, hiveClient.getLastCommitTimeSynced(roTableName).get(),
         "The last commit that was synced should be 103");
+    assertEquals(deltaCommitTime3, hiveClient.getLastCommitTimeSynced(rtTableName).get(),
+        "The last commit that was synced should be 103");
+    // verify table location is updated to the new hoodie basepath
+    assertEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(roTableName), "ro table location should match hoodie base path after sync");
+    assertEquals(hiveClient.getBasePath(), hiveClient.getTableLocation(rtTableName), "rt table location should match hoodie base path after sync");
   }
 
   @ParameterizedTest
