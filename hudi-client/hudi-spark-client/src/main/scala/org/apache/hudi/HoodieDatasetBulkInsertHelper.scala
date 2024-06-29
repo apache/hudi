@@ -221,15 +221,13 @@ object HoodieDatasetBulkInsertHelper
       .reduceByKey ((oneRow, otherRow) => {
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
-        onePreCombineVal match {
-          case string: UTF8String
-            if (string.binaryCompare(otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) =>
-              oneRow
-          case _ =>
-            if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0)
-              oneRow
-            else
-              otherRow
+        if (onePreCombineVal.isInstanceOf[UTF8String]
+          && onePreCombineVal.asInstanceOf[UTF8String].binaryCompare(otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
+          oneRow
+        } else if (onePreCombineVal.compareTo(otherPreCombineVal.asInstanceOf[AnyRef]) >= 0) {
+          oneRow
+        } else {
+          otherRow
         }
       }, targetParallelism)
       .values
