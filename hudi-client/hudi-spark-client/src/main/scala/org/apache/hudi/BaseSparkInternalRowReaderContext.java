@@ -147,6 +147,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         || (o1 instanceof UTF8String && o2 instanceof String)) {
       return o1.toString().compareTo(o2.toString());
     }
+    if (o1 instanceof UTF8String && o2 instanceof UTF8String){
+      return ((UTF8String) o1).binaryCompare((UTF8String) o2);
+    }
     return super.compareTo(o1, o2);
   }
 
