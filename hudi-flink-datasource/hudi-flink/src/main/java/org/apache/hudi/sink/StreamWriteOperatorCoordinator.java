@@ -191,7 +191,6 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
-    this.registerMetrics();
   }
 
   @Override
@@ -221,6 +220,7 @@ public class StreamWriteOperatorCoordinator
     if (OptionsResolver.isMultiWriter(conf)) {
       initClientIds(conf);
     }
+    this.registerMetrics();
   }
 
   @Override
