@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.common.util.collection.Spark4FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -252,8 +253,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
     }, (o1, o2) -> {
-        FlatLists.ComparableList values1 = FlatLists.ofComparableArray(o1.toArray());
-        FlatLists.ComparableList values2 = FlatLists.ofComparableArray(o2.toArray());
+        FlatLists.ComparableList values1 = Spark4FlatLists.ofComparableArray(o1.toArray());
+        FlatLists.ComparableList values2 = Spark4FlatLists.ofComparableArray(o2.toArray());
         return values1.compareTo(values2);
       });
 

@@ -20,7 +20,7 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.common.util.collection.Spark4FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -61,7 +61,7 @@ public class RDDCustomColumnsSortPartitioner<T>
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
-        record -> FlatLists.ofComparableArray(
+        record -> Spark4FlatLists.ofComparableArray(
             BulkInsertPartitioner.prependPartitionPath(
                 record.getPartitionPath(),
                 record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled))
