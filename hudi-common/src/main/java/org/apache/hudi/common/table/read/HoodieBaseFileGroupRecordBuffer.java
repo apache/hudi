@@ -189,6 +189,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       } else {
         return readerContext.compareTo(o1, o2);
       }
+    } catch (UnsupportedOperationException uoe) {
+      // SPARK-46832 UTF8String doesn't support compareTo anymore
+      return readerContext.compareTo(o1, o2);
     } catch (Throwable e) {
       throw new HoodieException("Cannot compare values: "
           + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
