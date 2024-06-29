@@ -132,7 +132,7 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
       )
 
       val errorMsg = if (HoodieSparkUtils.gteqSpark4_0)
-        "[[INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000]"
+        "[INTERNAL_ERROR] Eagerly executed command failed. You hit a bug in Spark or the Spark plugins you use. Please, report this bug to the corresponding communities or vendors, and provide the full stack trace. SQLSTATE: XX000"
       else
         "[assertion failed: Target table's field(price) cannot be the right-value of the update clause for MOR table.]"
 
