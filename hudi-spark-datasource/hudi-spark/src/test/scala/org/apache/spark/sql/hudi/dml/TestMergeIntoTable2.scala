@@ -378,7 +378,6 @@ class TestMergeIntoTable2 extends HoodieSparkSqlTestBase {
           Seq(1, "a1", 10.0, 1000)
         )
       }
-}
     }
   }
 
