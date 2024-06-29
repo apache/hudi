@@ -78,6 +78,12 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
       super(bloomFilter);
     }
 
+    // [SPARK-46832] UTF8String compareTo would throw UnsupportedOperationException since Spark 4.0
+    @Override
+    public void addKey(UTF8String recordKey) {
+      super.addKey(recordKey, UTF8String::binaryCompare);
+    }
+
     @Override
     protected byte[] getUTF8Bytes(UTF8String key) {
       return key.getBytes();

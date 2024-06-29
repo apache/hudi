@@ -18,6 +18,7 @@
 
 package org.apache.hudi.avro;
 
+import java.util.Comparator;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 
@@ -53,13 +54,17 @@ public abstract class HoodieBloomFilterWriteSupport<T extends Comparable<T>> {
   }
 
   public void addKey(T recordKey) {
+    addKey(recordKey, T::compareTo);
+  }
+
+  public void addKey(T recordKey, Comparator<T> comparator) {
     bloomFilter.add(getUTF8Bytes(recordKey));
 
-    if (minRecordKey == null || minRecordKey.compareTo(recordKey) > 0) {
+    if (minRecordKey == null || comparator.compare(minRecordKey, recordKey) > 0) {
       minRecordKey = dereference(recordKey);
     }
 
-    if (maxRecordKey == null || maxRecordKey.compareTo(recordKey) < 0) {
+    if (maxRecordKey == null || comparator.compare(maxRecordKey, recordKey) < 0) {
       maxRecordKey = dereference(recordKey);
     }
   }
