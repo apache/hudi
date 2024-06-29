@@ -101,6 +101,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           case JDBC:
             ddlExecutor = new JDBCExecutor(config);
             break;
+          case GLUE:
+            throw new HoodieHiveSyncException("GLUE mode is supported in AwsGlueCatalogSyncTool class only. "
+                    + "Please specify a correct sync-tool class.");
           default:
             throw new HoodieHiveSyncException("Invalid sync mode given " + config.getString(HIVE_SYNC_MODE));
         }
