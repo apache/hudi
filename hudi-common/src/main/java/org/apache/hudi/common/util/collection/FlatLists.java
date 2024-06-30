@@ -141,7 +141,6 @@ public class FlatLists {
       list = (List<T>) kryo.readClassAndObject(input);
     }
   }
-
 }
 
 

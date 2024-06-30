@@ -108,7 +108,7 @@ statement
     : query                                                            #statementDefault
     | ctes? dmlStatementNoWith                                         #dmlStatement
     | USE NAMESPACE? multipartIdentifier                               #use
-    | CREATE namespace (IF NOT EXISTS)? multipartIdentifier
+    | CREATE namespace (IF errorCapturingNot EXISTS)? multipartIdentifier
         (commentSpec |
          locationSpec |
          (WITH (DBPROPERTIES | PROPERTIES) tablePropertyList))*        #createNamespace
@@ -123,7 +123,7 @@ statement
     | createTableHeader ('(' colTypeList ')')? tableProvider?
         createTableClauses
         (AS? query)?                                                   #createTable
-    | CREATE TABLE (IF NOT EXISTS)? target=tableIdentifier
+    | CREATE TABLE (IF errorCapturingNot EXISTS)? target=tableIdentifier
         LIKE source=tableIdentifier
         (tableProvider |
         rowFormat |
@@ -170,7 +170,7 @@ statement
         SET SERDE STRING (WITH SERDEPROPERTIES tablePropertyList)?     #setTableSerDe
     | ALTER TABLE multipartIdentifier (partitionSpec)?
         SET SERDEPROPERTIES tablePropertyList                          #setTableSerDe
-    | ALTER (TABLE | VIEW) multipartIdentifier ADD (IF NOT EXISTS)?
+    | ALTER (TABLE | VIEW) multipartIdentifier ADD (IF errorCapturingNot EXISTS)?
         partitionSpecLocation+                                         #addTablePartition
     | ALTER TABLE multipartIdentifier
         from=partitionSpec RENAME TO to=partitionSpec                  #renameTablePartition
@@ -182,7 +182,7 @@ statement
     | DROP TABLE (IF EXISTS)? multipartIdentifier PURGE?               #dropTable
     | DROP VIEW (IF EXISTS)? multipartIdentifier                       #dropView
     | CREATE (OR REPLACE)? (GLOBAL? TEMPORARY)?
-        VIEW (IF NOT EXISTS)? multipartIdentifier
+        VIEW (IF errorCapturingNot EXISTS)? multipartIdentifier
         identifierCommentList?
         (commentSpec |
          (PARTITIONED ON identifierList) |
@@ -192,7 +192,7 @@ statement
         tableIdentifier ('(' colTypeList ')')? tableProvider
         (OPTIONS tablePropertyList)?                                   #createTempViewUsing
     | ALTER VIEW multipartIdentifier AS? query                         #alterViewQuery
-    | CREATE (OR REPLACE)? TEMPORARY? FUNCTION (IF NOT EXISTS)?
+    | CREATE (OR REPLACE)? TEMPORARY? FUNCTION (IF errorCapturingNot EXISTS)?
         multipartIdentifier AS className=STRING
         (USING resource (',' resource)*)?                              #createFunction
     | DROP TEMPORARY? FUNCTION (IF EXISTS)? multipartIdentifier        #dropFunction
@@ -304,7 +304,7 @@ unsupportedHiveNativeCommands
     ;
 
 createTableHeader
-    : CREATE TEMPORARY? EXTERNAL? TABLE (IF NOT EXISTS)? multipartIdentifier
+    : CREATE TEMPORARY? EXTERNAL? TABLE (IF errorCapturingNot EXISTS)? multipartIdentifier
     ;
 
 replaceTableHeader
@@ -336,8 +336,8 @@ query
     ;
 
 insertInto
-    : INSERT OVERWRITE TABLE? multipartIdentifier (partitionSpec (IF NOT EXISTS)?)?  identifierList?        #insertOverwriteTable
-    | INSERT INTO TABLE? multipartIdentifier partitionSpec? (IF NOT EXISTS)? identifierList?                #insertIntoTable
+    : INSERT OVERWRITE TABLE? multipartIdentifier (partitionSpec (IF errorCapturingNot EXISTS)?)?  identifierList?        #insertOverwriteTable
+    | INSERT INTO TABLE? multipartIdentifier partitionSpec? (IF errorCapturingNot EXISTS)? identifierList?                #insertIntoTable
     | INSERT OVERWRITE LOCAL? DIRECTORY path=STRING rowFormat? createFileFormat?                            #insertOverwriteHiveDir
     | INSERT OVERWRITE LOCAL? DIRECTORY (path=STRING)? tableProvider (OPTIONS options=tablePropertyList)?   #insertOverwriteDir
     ;
@@ -548,7 +548,7 @@ matchedClause
     : WHEN MATCHED (AND matchedCond=booleanExpression)? THEN matchedAction
     ;
 notMatchedClause
-    : WHEN NOT MATCHED (AND notMatchedCond=booleanExpression)? THEN notMatchedAction
+    : WHEN errorCapturingNot MATCHED (AND notMatchedCond=booleanExpression)? THEN notMatchedAction
     ;
 
 matchedAction
@@ -828,15 +828,15 @@ booleanExpression
     ;
 
 predicate
-    : NOT? kind=BETWEEN lower=valueExpression AND upper=valueExpression
-    | NOT? kind=IN '(' expression (',' expression)* ')'
-    | NOT? kind=IN '(' query ')'
-    | NOT? kind=RLIKE pattern=valueExpression
-    | NOT? kind=LIKE quantifier=(ANY | SOME | ALL) ('('')' | '(' expression (',' expression)* ')')
-    | NOT? kind=LIKE pattern=valueExpression (ESCAPE escapeChar=STRING)?
-    | IS NOT? kind=NULL
-    | IS NOT? kind=(TRUE | FALSE | UNKNOWN)
-    | IS NOT? kind=DISTINCT FROM right=valueExpression
+    : errorCapturingNot? kind=BETWEEN lower=valueExpression AND upper=valueExpression
+    | errorCapturingNot? kind=IN '(' expression (',' expression)* ')'
+    | errorCapturingNot? kind=IN '(' query ')'
+    | errorCapturingNot? kind=RLIKE pattern=valueExpression
+    | errorCapturingNot? kind=LIKE quantifier=(ANY | SOME | ALL) ('('')' | '(' expression (',' expression)* ')')
+    | errorCapturingNot? kind=LIKE pattern=valueExpression (ESCAPE escapeChar=STRING)?
+    | IS errorCapturingNot? kind=NULL
+    | IS errorCapturingNot? kind=(TRUE | FALSE | UNKNOWN)
+    | IS errorCapturingNot? kind=DISTINCT FROM right=valueExpression
     ;
 
 valueExpression
@@ -950,7 +950,7 @@ qualifiedColTypeWithPositionList
     ;
 
 qualifiedColTypeWithPosition
-    : name=multipartIdentifier dataType (NOT NULL)? commentSpec? colPosition?
+    : name=multipartIdentifier dataType (errorCapturingNot NULL)? commentSpec? colPosition?
     ;
 
 colTypeList
@@ -958,7 +958,7 @@ colTypeList
     ;
 
 colType
-    : colName=errorCapturingIdentifier dataType (NOT NULL)? commentSpec?
+    : colName=errorCapturingIdentifier dataType (errorCapturingNot NULL)? commentSpec?
     ;
 
 complexColTypeList
@@ -966,7 +966,7 @@ complexColTypeList
     ;
 
 complexColType
-    : identifier ':'? dataType (NOT NULL)? commentSpec?
+    : identifier ':'? dataType (errorCapturingNot NULL)? commentSpec?
     ;
 
 whenClause
@@ -1066,7 +1066,7 @@ alterColumnAction
     : TYPE dataType
     | commentSpec
     | colPosition
-    | setOrDrop=(SET | DROP) NOT NULL
+    | setOrDrop=(SET | DROP) errorCapturingNot NULL
     ;
 
 // When `SQL_standard_keyword_behavior=true`, there are 2 kinds of keywords in Spark SQL.
