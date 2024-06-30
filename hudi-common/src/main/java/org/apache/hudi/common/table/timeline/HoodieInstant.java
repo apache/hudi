@@ -262,8 +262,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = timestamp + "_" + completionTime;
+    String timestampWithCompletionTime;
+    if (StringUtils.isNullOrEmpty(completionTime)) {
+      timestampWithCompletionTime = timestamp;
+    } else {
+      timestampWithCompletionTime = timestamp + "_" + completionTime;
+    }
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:

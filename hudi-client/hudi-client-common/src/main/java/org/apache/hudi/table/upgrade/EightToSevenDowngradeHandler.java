@@ -20,9 +20,16 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
 
+import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -32,6 +39,26 @@ import java.util.Map;
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
+    if (!instants.isEmpty()) {
+      context.map(instants, instant -> {
+        if (!instant.getFileName().contains("_")) {
+          return false;
+        }
+        try {
+          StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName());
+          StoragePath toPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName().replaceAll("_\\d+", ""));
+          boolean success = metaClient.getStorage().rename(fromPath, toPath);
+          if (!success) {
+            throw new HoodieIOException("Error when rename the instant file: " + fromPath + " to: " + toPath);
+          }
+          return true;
+        } catch (IOException e) {
+          throw new HoodieException("Can not to complete the downgrade from version eight to version seven.", e);
+        }
+      }, instants.size());
+    }
     return Collections.emptyMap();
   }
 }
