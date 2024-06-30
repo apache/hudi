@@ -1606,7 +1606,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    */
   private def withPredicate(e: Expression, ctx: PredicateContext): Expression = withOrigin(ctx) {
     // Invert a predicate if it has a valid NOT clause.
-    def invertIfNotDefined(e: Expression): Expression = ctx.errorCapturingNot match {
+    def invertIfNotDefined(e: Expression): Expression = ctx.NOT match {
       case null => e
       case not => Not(e)
     }
@@ -1636,7 +1636,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               // If there are many pattern expressions, will throw StackOverflowError.
               // So we use LikeAny or NotLikeAny instead.
               val patterns = expressions.map(_.eval(EmptyRow).asInstanceOf[UTF8String])
-              ctx.errorCapturingNot match {
+              ctx.NOT match {
                 case null => LikeAny(e, patterns)
                 case _ => NotLikeAny(e, patterns)
               }
@@ -1651,7 +1651,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
               // If there are many pattern expressions, will throw StackOverflowError.
               // So we use LikeAll or NotLikeAll instead.
               val patterns = expressions.map(_.eval(EmptyRow).asInstanceOf[UTF8String])
-              ctx.errorCapturingNot match {
+              ctx.NOT match {
                 case null => LikeAll(e, patterns)
                 case _ => NotLikeAll(e, patterns)
               }
@@ -1670,23 +1670,23 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         }
       case HoodieSqlBaseParser.RLIKE =>
         invertIfNotDefined(RLike(e, expression(ctx.pattern)))
-      case HoodieSqlBaseParser.NULL if ctx.errorCapturingNot != null =>
+      case HoodieSqlBaseParser.NULL if ctx.NOT != null =>
         IsNotNull(e)
       case HoodieSqlBaseParser.NULL =>
         IsNull(e)
-      case HoodieSqlBaseParser.TRUE => ctx.errorCapturingNot match {
+      case HoodieSqlBaseParser.TRUE => ctx.NOT match {
         case null => EqualNullSafe(e, Literal(true))
         case _ => Not(EqualNullSafe(e, Literal(true)))
       }
-      case HoodieSqlBaseParser.FALSE => ctx.errorCapturingNot match {
+      case HoodieSqlBaseParser.FALSE => ctx.NOT match {
         case null => EqualNullSafe(e, Literal(false))
         case _ => Not(EqualNullSafe(e, Literal(false)))
       }
-      case HoodieSqlBaseParser.UNKNOWN => ctx.errorCapturingNot match {
+      case HoodieSqlBaseParser.UNKNOWN => ctx.NOT match {
         case null => IsUnknown(e)
         case _ => IsNotUnknown(e)
       }
-      case HoodieSqlBaseParser.DISTINCT if ctx.errorCapturingNot != null =>
+      case HoodieSqlBaseParser.DISTINCT if ctx.NOT != null =>
         EqualNullSafe(e, expression(ctx.right))
       case HoodieSqlBaseParser.DISTINCT =>
         Not(EqualNullSafe(e, expression(ctx.right)))
