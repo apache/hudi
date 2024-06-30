@@ -46,6 +46,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
@@ -134,14 +135,17 @@ public class TestStreamSyncUnitTests {
 
     //Actually create the deltastreamer
     StreamSync streamSync = new StreamSync(cfg, sparkSession, propsSpy, hoodieSparkEngineContext,
-        fs, configuration, client -> true, schemaProvider, errorTableWriterOption, sourceFormatAdapter, transformerOption, useRowWriter, false);
+        fs, configuration, client -> true, schemaProvider, errorTableWriterOption, sourceFormatAdapter, transformerOption, false);
     StreamSync spy = spy(streamSync);
+    doReturn(useRowWriter).when(spy).canUseRowWriter(any());
+    doReturn(useRowWriter).when(spy).isRowWriterEnabled();
     SchemaProvider deducedSchemaProvider;
     deducedSchemaProvider = getSchemaProvider("deduced", false);
     doReturn(deducedSchemaProvider).when(spy).getDeducedSchemaProvider(any(), any(), any());
 
     //run the method we are unit testing:
-    InputBatch batch = spy.fetchNextBatchFromSource(Option.empty(), mock(HoodieTableMetaClient.class));
+    Pair<InputBatch, Boolean> batchAndUseRowWriter = spy.fetchNextBatchFromSource(Option.empty(), mock(HoodieTableMetaClient.class));
+    InputBatch batch = batchAndUseRowWriter.getLeft();
 
     //make sure getDeducedSchemaProvider is always called once
     verify(spy, times(1)).getDeducedSchemaProvider(any(), any(), any());
@@ -170,7 +174,7 @@ public class TestStreamSyncUnitTests {
     when(commitsTimeline.lastInstant()).thenReturn(Option.of(hoodieInstant));
 
     StreamSync streamSync = new StreamSync(cfg, sparkSession, props, hoodieSparkEngineContext,
-            fs, configuration, client -> true, null,Option.empty(),null,Option.empty(),true,true);
+            fs, configuration, client -> true, null, Option.empty(), null, Option.empty(), true);
     StreamSync spy = spy(streamSync);
     doReturn(Option.of(commitMetadata)).when(spy).getLatestCommitMetadataWithValidCheckpointInfo(any());
 

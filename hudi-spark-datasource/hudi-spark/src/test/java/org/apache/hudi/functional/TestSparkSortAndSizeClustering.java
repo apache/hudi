@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -40,6 +41,10 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -53,6 +58,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
 
@@ -126,6 +134,19 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     List<Row> rows = readRecords();
     Assertions.assertEquals(numRecords, rows.size());
+    validateDecimalTypeAfterClustering(writeStats);
+  }
+
+  // Validate that clustering produces decimals in legacy format
+  private void validateDecimalTypeAfterClustering(List<HoodieWriteStat> writeStats) {
+    writeStats.stream().map(writeStat -> new Path(metaClient.getBasePathV2(), writeStat.getPath())).forEach(writtenPath -> {
+      MessageType schema = ParquetUtils.readMetadata(hadoopConf, writtenPath)
+          .getFileMetaData().getSchema();
+      int index = schema.getFieldIndex("height");
+      Type decimalType = schema.getFields().get(index);
+      assertEquals("DECIMAL", decimalType.getOriginalType().toString());
+      assertEquals("FIXED_LEN_BYTE_ARRAY", decimalType.asPrimitiveType().getPrimitiveTypeName().toString());
+    });
   }
 
   private List<WriteStatus> writeData(String commitTime, int totalRecords, boolean doCommit) {
@@ -138,7 +159,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     org.apache.hudi.testutils.Assertions.assertNoWriteErrors(writeStatues);
 
     if (doCommit) {
-      Assertions.assertTrue(writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+      assertTrue(writeClient.commitStats(commitTime, context.parallelize(writeStatues, 1), writeStatues.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
           Option.empty(), metaClient.getCommitActionType()));
     }
 

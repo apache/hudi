@@ -108,6 +108,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
@@ -258,14 +259,12 @@ public class StreamSync implements Serializable, Closeable {
 
   private final boolean autoGenerateRecordKeys;
 
-  private final boolean useRowWriter;
-
   @VisibleForTesting
   StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
              TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
              Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, SchemaProvider userProvidedSchemaProvider,
              Option<BaseErrorTableWriter> errorTableWriter, SourceFormatAdapter formatAdapter, Option<Transformer> transformer,
-             boolean useRowWriter, boolean autoGenerateRecordKeys) {
+             boolean autoGenerateRecordKeys) {
     this.cfg = cfg;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
@@ -281,7 +280,6 @@ public class StreamSync implements Serializable, Closeable {
     this.errorTableWriter = errorTableWriter;
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
-    this.useRowWriter = useRowWriter;
     this.streamContext = Option.empty();
   }
 
@@ -321,9 +319,6 @@ public class StreamSync implements Serializable, Closeable {
 
     Supplier<Option<Schema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceSchema());
     this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
-    // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
-    this.useRowWriter = this.cfg.operation == WriteOperationType.BULK_INSERT && source.getSourceType() == Source.SourceType.ROW
-        && this.props.getBoolean("hoodie.streamer.write.row.writer.enable", false);
   }
 
   /**
@@ -427,10 +422,10 @@ public class StreamSync implements Serializable, Closeable {
         .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
         .build();
 
-    InputBatch inputBatch = readFromSource(instantTime, metaClient);
-
-    if (inputBatch != null) {
-
+    Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
+    if (inputBatchAndUseRowWriter != null) {
+      InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
+      boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
       // this is the first input batch. If schemaProvider not set, use it and register Avro Schema and start
       // compactor
       if (writeClient == null) {
@@ -473,7 +468,7 @@ public class StreamSync implements Serializable, Closeable {
         }
       }
 
-      result = writeToSinkAndDoMetaSync(instantTime, inputBatch, metrics, overallTimerContext);
+      result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
     }
 
     metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
@@ -499,11 +494,11 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Read from Upstream Source and apply transformation if needed.
    *
-   * @return Pair<InputBatch and Boolean> Input data read from upstream source, and boolean is true if empty.
+   * @return Pair<InputBatch and Boolean> Input data read from upstream source, and boolean is true if the result should use the row writer path.
    * @throws Exception in case of any Exception
    */
 
-  public InputBatch readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
+  public Pair<InputBatch, Boolean> readFromSource(String instantTime, HoodieTableMetaClient metaClient) throws IOException {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitsTimelineOpt.isPresent()) {
@@ -518,7 +513,7 @@ public class StreamSync implements Serializable, Closeable {
 
     int maxRetryCount = cfg.retryOnSourceFailures ? cfg.maxRetryCount : 1;
     int curRetryCount = 0;
-    InputBatch sourceDataToSync = null;
+    Pair<InputBatch, Boolean> sourceDataToSync = null;
     while (curRetryCount++ < maxRetryCount && sourceDataToSync == null) {
       try {
         sourceDataToSync = fetchFromSourceAndPrepareRecords(resumeCheckpointStr, instantTime, metaClient);
@@ -538,7 +533,7 @@ public class StreamSync implements Serializable, Closeable {
     return sourceDataToSync;
   }
 
-  private InputBatch fetchFromSourceAndPrepareRecords(Option<String> resumeCheckpointStr, String instantTime,
+  private Pair<InputBatch, Boolean> fetchFromSourceAndPrepareRecords(Option<String> resumeCheckpointStr, String instantTime,
         HoodieTableMetaClient metaClient) {
     HoodieRecordType recordType = createRecordMerger(props).getRecordType();
     if (recordType == HoodieRecordType.SPARK && HoodieTableType.valueOf(cfg.tableType) == HoodieTableType.MERGE_ON_READ
@@ -549,7 +544,9 @@ public class StreamSync implements Serializable, Closeable {
     }
 
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Fetching next batch: " + cfg.targetTableName);
-    InputBatch inputBatch = fetchNextBatchFromSource(resumeCheckpointStr, metaClient);
+    Pair<InputBatch, Boolean> inputBatchAndRowWriterEnabled = fetchNextBatchFromSource(resumeCheckpointStr, metaClient);
+    InputBatch inputBatch = inputBatchAndRowWriterEnabled.getLeft();
+    boolean useRowWriter = inputBatchAndRowWriterEnabled.getRight();
     final String checkpointStr = inputBatch.getCheckpointForNextBatch();
     final SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
 
@@ -567,21 +564,35 @@ public class StreamSync implements Serializable, Closeable {
 
 
     if (useRowWriter) { // no additional processing required for row writer.
-      return inputBatch;
+      return Pair.of(inputBatch, true);
     } else {
       Option<JavaRDD<HoodieRecord>> recordsOpt = HoodieStreamerUtils.createHoodieRecords(cfg, props, inputBatch.getBatch(), schemaProvider,
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter);
-      return new InputBatch(recordsOpt, checkpointStr, schemaProvider);
+      return Pair.of(new InputBatch(recordsOpt, checkpointStr, schemaProvider), false);
     }
+  }
+
+  @VisibleForTesting
+  boolean canUseRowWriter(Schema targetSchema) {
+    // enable row writer only when operation is BULK_INSERT, and source is ROW type and if row writer is not explicitly disabled.
+    boolean rowWriterEnabled = isRowWriterEnabled();
+    return rowWriterEnabled && targetSchema != null && HoodieDataTypeUtils.canUseRowWriter(targetSchema, conf);
+  }
+
+  @VisibleForTesting
+  boolean isRowWriterEnabled() {
+    return cfg.operation == WriteOperationType.BULK_INSERT && formatAdapter.getSource().getSourceType() == Source.SourceType.ROW
+        && this.props.getBoolean("hoodie.streamer.write.row.writer.enable", false);
   }
 
   /**
    * Fetch data from source, apply transformations if any, align with schema from schema provider if need be and return the input batch.
    * @param resumeCheckpointStr checkpoint to resume from source.
-   * @return {@link InputBatch} containing the new batch of data from source along with new checkpoint and schema provider instance to use.
+   * @return Pair with {@link InputBatch} containing the new batch of data from source along with new checkpoint and schema provider instance to use,
+   *         and a boolean set to `true` if row writer can be used.
    */
   @VisibleForTesting
-  InputBatch fetchNextBatchFromSource(Option<String> resumeCheckpointStr, HoodieTableMetaClient metaClient) {
+  Pair<InputBatch, Boolean> fetchNextBatchFromSource(Option<String> resumeCheckpointStr, HoodieTableMetaClient metaClient) {
     Option<JavaRDD<GenericRecord>> avroRDDOptional = null;
     String checkpointStr = null;
     SchemaProvider schemaProvider = null;
@@ -604,6 +615,7 @@ public class StreamSync implements Serializable, Closeable {
           && this.userProvidedSchemaProvider.getTargetSchema() != InputBatch.NULL_SCHEMA) {
         // Let's deduce the schema provider for writer side first!
         schemaProvider = getDeducedSchemaProvider(this.userProvidedSchemaProvider.getTargetSchema(), this.userProvidedSchemaProvider, metaClient);
+        boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetSchema());
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
         } else {
@@ -639,7 +651,7 @@ public class StreamSync implements Serializable, Closeable {
                 AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), getAvroRecordQualifiedName(cfg.targetTableName)))
             .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetSchema);
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
-
+        boolean useRowWriter = canUseRowWriter(schemaProvider.getTargetSchema());
         if (useRowWriter) {
           inputBatchForWriter = new InputBatch(transformed, checkpointStr, schemaProvider);
         } else {
@@ -649,11 +661,17 @@ public class StreamSync implements Serializable, Closeable {
         }
       }
     } else {
-      if (useRowWriter) {
+      if (isRowWriterEnabled()) {
         InputBatch inputBatchNeedsDeduceSchema = formatAdapter.fetchNewDataInRowFormat(resumeCheckpointStr, cfg.sourceLimit);
-        inputBatchForWriter = new InputBatch<>(inputBatchNeedsDeduceSchema.getBatch(), inputBatchNeedsDeduceSchema.getCheckpointForNextBatch(),
-            getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
-      } else {
+        if (canUseRowWriter(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema())) {
+          inputBatchForWriter = new InputBatch<>(inputBatchNeedsDeduceSchema.getBatch(), inputBatchNeedsDeduceSchema.getCheckpointForNextBatch(),
+              getDeducedSchemaProvider(inputBatchNeedsDeduceSchema.getSchemaProvider().getTargetSchema(), inputBatchNeedsDeduceSchema.getSchemaProvider(), metaClient));
+        } else {
+          LOG.warn("Row-writer is enabled but cannot be used due to the target schema");
+        }
+      }
+      // if row writer was enabled but the target schema prevents us from using it, do not use the row writer
+      if (inputBatchForWriter == null) {
         // Pull the data from the source & prepare the write
         InputBatch<JavaRDD<GenericRecord>> dataAndCheckpoint = formatAdapter.fetchNewDataInAvroFormat(resumeCheckpointStr, cfg.sourceLimit);
         checkpointStr = dataAndCheckpoint.getCheckpointForNextBatch();
@@ -677,10 +695,10 @@ public class StreamSync implements Serializable, Closeable {
         }
       }
     }
-    if (useRowWriter) {
-      return inputBatchForWriter;
+    if (inputBatchForWriter != null) {
+      return Pair.of(inputBatchForWriter, true);
     } else {
-      return new InputBatch(avroRDDOptional, checkpointStr, schemaProvider);
+      return Pair.of(new InputBatch(avroRDDOptional, checkpointStr, schemaProvider), false);
     }
   }
 
@@ -819,11 +837,12 @@ public class StreamSync implements Serializable, Closeable {
    * @return Option Compaction instant if one is scheduled
    */
   private Pair<Option<String>, JavaRDD<WriteStatus>> writeToSinkAndDoMetaSync(String instantTime, InputBatch inputBatch,
+                                                                              boolean useRowWriter,
                                                                               HoodieIngestionMetrics metrics,
                                                                               Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
-    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime);
+    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
 
     JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
@@ -947,7 +966,7 @@ public class StreamSync implements Serializable, Closeable {
     throw lastException;
   }
 
-  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime) {
+  private WriteClientWriteResult writeToSink(InputBatch inputBatch, String instantTime, boolean useRowWriter) {
     WriteClientWriteResult writeClientWriteResult = null;
     instantTime = startCommit(instantTime, !autoGenerateRecordKeys);
 
