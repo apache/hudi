@@ -820,7 +820,7 @@ expressionSeq
     ;
 
 booleanExpression
-    : NOT booleanExpression                                        #logicalNot
+    : (NOT | BANG) booleanExpression                                        #logicalNot
     | EXISTS '(' query ')'                                         #exists
     | valueExpression predicate?                                   #predicated
     | left=booleanExpression operator=AND right=booleanExpression  #logicalBinary
@@ -837,6 +837,11 @@ predicate
     | IS errorCapturingNot? kind=NULL
     | IS errorCapturingNot? kind=(TRUE | FALSE | UNKNOWN)
     | IS errorCapturingNot? kind=DISTINCT FROM right=valueExpression
+    ;
+
+errorCapturingNot
+    : NOT
+    | BANG
     ;
 
 valueExpression
