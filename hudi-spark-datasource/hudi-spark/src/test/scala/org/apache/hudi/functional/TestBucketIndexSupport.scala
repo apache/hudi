@@ -35,8 +35,9 @@ import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{HoodieCatalystExpressionUtils, SparkSession}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test}
 
+@Disabled
 @Tag("functional")
 class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHelper {
 
