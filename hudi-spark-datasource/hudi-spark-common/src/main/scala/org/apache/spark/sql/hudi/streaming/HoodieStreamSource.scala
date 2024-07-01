@@ -124,7 +124,7 @@ class HoodieStreamSource(
             .skip(activeInstants.countInstants() - 1)
             .findFirst()
             .get()
-            .getStateTransitionTime
+            .getCompletionTime
         } else {
           activeInstants.lastInstant().get().getTimestamp
         }

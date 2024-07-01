@@ -377,7 +377,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         .getInstantsOrderedByStateTransitionTime()
         .skip(activeTimeline.countInstants() - 1)
         .findFirst()
-        .map(i -> Option.of(i.getStateTransitionTime()))
+        .map(i -> Option.of(i.getCompletionTime()))
         .orElse(Option.empty());
     if (lastCommitSynced.isPresent()) {
       try {

@@ -1642,7 +1642,7 @@ public class TestHiveSyncTool {
   private String getLastCommitCompletionTimeSynced() {
     return hiveClient.getActiveTimeline()
         .getInstantsOrderedByStateTransitionTime()
-        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getStateTransitionTime();
+        .skip(hiveClient.getActiveTimeline().countInstants() - 1).findFirst().get().getCompletionTime();
   }
 
   private void reInitHiveSyncClient() {
