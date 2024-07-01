@@ -80,7 +80,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @Override
-  public Timer.Context getErrorTableTimerContext() {
+  public Timer.Context getErrorTableWriteTimerContext() {
     if (writeConfig.isMetricsOn() && errorTableWriteTimer == null) {
       errorTableWriteTimer = createTimer(errorTableWriteTimerName);
     }

@@ -22,6 +22,7 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamerSchemaEvolutionBase.TestErrorTable;
@@ -48,23 +49,23 @@ public class TestErrorTableUtils {
     // No error table writer config
     assertThrows(IllegalArgumentException.class,
         () -> ErrorTableUtils.getErrorTableWriter(
-            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem));
+            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()));
 
     // Empty error table writer config
     props.put("hoodie.errortable.write.class", StringUtils.EMPTY_STRING);
     assertThrows(IllegalStateException.class,
         () -> ErrorTableUtils.getErrorTableWriter(
-            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem));
+            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()));
 
     // Proper error table writer config
     props.put("hoodie.errortable.write.class", TestErrorTable.class.getName());
     assertTrue(ErrorTableUtils.getErrorTableWriter(
-        new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem).get() instanceof TestErrorTable);
+        new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()).get() instanceof TestErrorTable);
 
     // Wrong error table writer config
     props.put("hoodie.errortable.write.class", HoodieConfig.class.getName());
     assertThrows(HoodieException.class,
         () -> ErrorTableUtils.getErrorTableWriter(
-            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem));
+            new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()));
   }
 }
