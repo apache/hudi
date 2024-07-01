@@ -142,10 +142,10 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     replacedFileIdsP2.add(fileId4);
     partitionToReplaceFileIds.put(partitionPath2, replacedFileIdsP2);
     HoodieCommitMetadata commitMetadata =
-        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
+        CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, commitTime1);
     saveAsComplete(
         commitTimeline,
         instant1,

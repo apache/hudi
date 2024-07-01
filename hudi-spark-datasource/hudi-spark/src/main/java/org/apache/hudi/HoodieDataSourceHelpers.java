@@ -21,11 +21,9 @@ package org.apache.hudi;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -100,11 +98,7 @@ public class HoodieDataSourceHelpers {
             .setBasePath(basePath)
             .setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      return metaClient.getActiveTimeline().getTimelineOfActions(
-          CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
-              HoodieActiveTimeline.DELTA_COMMIT_ACTION,
-              HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
-              HoodieTimeline.CLUSTER_ACTION)).filterCompletedInstants();
+      return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }
@@ -116,11 +110,7 @@ public class HoodieDataSourceHelpers {
         .setConf(storage.getConf().newInstance())
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     if (metaClient.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      return metaClient.getActiveTimeline().getTimelineOfActions(
-          CollectionUtils.createSet(HoodieActiveTimeline.COMMIT_ACTION,
-              HoodieActiveTimeline.DELTA_COMMIT_ACTION,
-              HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
-              HoodieTimeline.CLUSTER_ACTION)).filterCompletedInstants();
+      return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     } else {
       return metaClient.getCommitTimeline().filterCompletedInstants();
     }
@@ -133,7 +123,7 @@ public class HoodieDataSourceHelpers {
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
     Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(instantTime)
-            && (instant.getAction().equals(HoodieTimeline.CLUSTER_ACTION) || instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)))
+            && ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction()))
         .firstInstant();
     Option<HoodieInstant> requestedClusteringInstant = hoodieInstant.map(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
         ? HoodieTimeline.getReplaceCommitRequestedInstant(instant.getTimestamp())

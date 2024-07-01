@@ -321,7 +321,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLUSTER_ACTION, "07")
     ).collect(Collectors.toList()));
     assertTrue(timeline.isBeforeTimelineStarts("00"));
     assertTrue(timeline.isBeforeTimelineStarts("01"));
@@ -352,10 +353,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Test that various types of getXXX operations from HoodieActiveTimeline
     // return the correct set of Instant
     checkTimeline.accept(timeline.getCommitsTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTER_ACTION));
     checkTimeline.accept(timeline.getWriteTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTER_ACTION));
+    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTER_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
     checkTimeline.accept(timeline.getRollbackTimeline(), Collections.singleton(HoodieTimeline.ROLLBACK_ACTION));
@@ -363,7 +364,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getSavePointTimeline(), Collections.singleton(HoodieTimeline.SAVEPOINT_ACTION));
     checkTimeline.accept(timeline.getAllCommitsTimeline(), CollectionUtils.createSet(
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION,
-        HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.INDEXING_ACTION));
+        HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTER_ACTION, HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.INDEXING_ACTION));
 
     // Get some random Instants
     Random rand = new Random();
@@ -577,6 +578,34 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertEquals(1, validReplaceInstants.size());
     assertEquals(instant3.getTimestamp(), validReplaceInstants.get(0).getTimestamp());
     assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, validReplaceInstants.get(0).getAction());
+
+    assertStreamEquals(
+        Stream.of(instant1, instant2, instant3),
+        timeline.getCommitAndReplaceTimeline().getInstantsAsStream(), "Check the instants stream");
+
+    assertStreamEquals(
+        Stream.of(instant1, instant2),
+        timeline.getCommitTimeline().getInstantsAsStream(), "Check the instants stream");
+  }
+
+  @Test
+  public void testClusterActionsTimeline() {
+    int instantTime = 1;
+    List<HoodieInstant> allInstants = new ArrayList<>();
+    HoodieInstant instant1 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant1);
+    HoodieInstant instant2 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant2);
+    HoodieInstant instant3 = new HoodieInstant(State.COMPLETED, HoodieTimeline.CLUSTER_ACTION, String.format("%03d", instantTime++));
+    allInstants.add(instant3);
+
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.setInstants(allInstants);
+    List<HoodieInstant> validClusterInstants = timeline.getCompletedClusterTimeline().getInstants();
+
+    assertEquals(1, validClusterInstants.size());
+    assertEquals(instant3.getTimestamp(), validClusterInstants.get(0).getTimestamp());
+    assertEquals(HoodieTimeline.CLUSTER_ACTION, validClusterInstants.get(0).getAction());
 
     assertStreamEquals(
         Stream.of(instant1, instant2, instant3),

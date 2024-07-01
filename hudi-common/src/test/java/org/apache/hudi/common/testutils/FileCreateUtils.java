@@ -510,6 +510,10 @@ public class FileCreateUtils {
     removeMetaFile(basePath, instantTime, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
   }
 
+  public static void deleteClusterCommit(String basePath, String instantTime) throws IOException {
+    removeMetaFile(basePath, instantTime, HoodieTimeline.CLUSTER_COMMIT_EXTENSION);
+  }
+
   public static void deleteRollbackCommit(String basePath, String instantTime) throws IOException {
     removeMetaFile(basePath, instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
   }

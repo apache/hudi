@@ -695,8 +695,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   private void inlineClustering(HoodieTable table, Option<Map<String, String>> extraMetadata) {
-    // TODO: #CLUSTER_REPLACE - Check if we need to replace here. This will lead to config value change for hoodie.table.service.manager.actions
-    if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.cluster)) {
       scheduleClustering(extraMetadata);
     } else {
       runAnyPendingClustering(table);

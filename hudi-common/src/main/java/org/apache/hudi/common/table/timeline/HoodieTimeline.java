@@ -200,6 +200,13 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline getCompletedReplaceTimeline();
 
   /**
+   * Timeline to just include cluster instants.
+   *
+   * @return
+   */
+  HoodieTimeline getCompletedClusterTimeline();
+
+  /**
    * Timeline to just include replace or cluster instants
    *
    * @return

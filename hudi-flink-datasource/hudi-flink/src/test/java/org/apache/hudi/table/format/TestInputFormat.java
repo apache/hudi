@@ -519,7 +519,7 @@ public class TestInputFormat {
     TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
 
     // read from the clustering commit
-    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    String secondCommit = TestUtils.getNthCompleteInstant(metaClient.getBasePath(), 0, HoodieTimeline.CLUSTER_ACTION);
     conf.setString(FlinkOptions.READ_START_COMMIT, secondCommit);
 
     IncrementalInputSplits.Result splits2 = incrementalInputSplits.inputSplits(metaClient, null, false);

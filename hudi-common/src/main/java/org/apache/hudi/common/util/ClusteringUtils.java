@@ -79,6 +79,16 @@ public class ClusteringUtils {
    * is a clustering operation, by checking whether the requested instant contains
    * a clustering plan.
    *
+   * @param actionType      Action type
+   * @return whether the action type is a clustering or replace commit action type
+   */
+  public static boolean isClusteringOrReplaceCommitAction(String actionType) {
+    return actionType.equals(HoodieTimeline.CLUSTER_ACTION) || actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
+  }
+
+  /**
+   * Checks if the action type is a clustering or replace commit action type.
+   *
    * @param timeline       Hudi timeline.
    * @param replaceInstant the instant of replacecommit action to check.
    * @return whether the instant is a clustering operation.

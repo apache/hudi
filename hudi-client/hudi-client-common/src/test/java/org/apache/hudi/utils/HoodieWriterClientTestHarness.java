@@ -542,10 +542,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
    */
   protected void verifyClusteredFilesWithReplaceCommitMetadata(String partitionPath) throws IOException {
     metaClient = HoodieTableMetaClient.reload(createMetaClient());
-    HoodieInstant replaceCommitInstant =
-            metaClient.getActiveTimeline().getCompletedReplaceTimeline().firstInstant().get();
+    HoodieInstant clusterCommitInstant =
+            metaClient.getActiveTimeline().getCompletedClusterTimeline().firstInstant().get();
     HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
-            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(replaceCommitInstant).get(),
+            .fromBytes(metaClient.getActiveTimeline().getInstantDetails(clusterCommitInstant).get(),
                     HoodieReplaceCommitMetadata.class);
 
     List<String> filesFromReplaceCommit = new ArrayList<>();
@@ -556,7 +556,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     List<StoragePathInfo> pathInfoList =
             storage.listDirectEntries(new StoragePath(basePath, partitionPath));
     List<String> clusteredFiles = pathInfoList.stream()
-            .filter(entry -> entry.getPath().getName().contains(replaceCommitInstant.getTimestamp()))
+            .filter(entry -> entry.getPath().getName().contains(clusterCommitInstant.getTimestamp()))
             .map(pathInfo -> partitionPath + StoragePath.SEPARATOR + pathInfo.getPath().getName())
             .collect(Collectors.toList());
     assertEquals(clusteredFiles, filesFromReplaceCommit);

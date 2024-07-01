@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2Migrati
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -243,8 +244,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private Stream<String> getPartitionsForInstants(HoodieInstant instant) {
     try {
-      if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())
-          || HoodieTimeline.CLUSTER_ACTION.equals(instant.getAction())) {
+      if (ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction())) {
         HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
             hoodieTable.getActiveTimeline().getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());

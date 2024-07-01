@@ -181,6 +181,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline getCompletedClusterTimeline() {
+    return new HoodieDefaultTimeline(
+        getInstantsAsStream().filter(s -> s.getAction().equals(CLUSTER_ACTION)).filter(HoodieInstant::isCompleted), details);
+  }
+
+  @Override
   public HoodieTimeline getCompletedReplaceOrClusterTimeline() {
     return new HoodieDefaultTimeline(
         getInstantsAsStream().filter(s -> s.getAction().equals(REPLACE_COMMIT_ACTION) || s.getAction().equals(CLUSTER_ACTION))
@@ -557,12 +563,12 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
-    HoodieTimeline replaceTimeline = filterPendingClusterTimeline();
+    HoodieTimeline pendingClusterTimeline = filterPendingClusterTimeline();
     Stream<HoodieInstant> replaceStream;
     if (isLast) {
-      replaceStream = replaceTimeline.getReverseOrderedInstants();
+      replaceStream = pendingClusterTimeline.getReverseOrderedInstants();
     } else {
-      replaceStream = replaceTimeline.getInstantsAsStream();
+      replaceStream = pendingClusterTimeline.getInstantsAsStream();
     }
     return  Option.fromJavaOptional(replaceStream
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());

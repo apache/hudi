@@ -447,9 +447,9 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     var success = false
     while ({!success && (currTime - beginTime) < timeoutMsecs}) try {
       this.metaClient.reloadActiveTimeline()
-      val completeReplaceSize = this.metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.toArray.length
-      println("completeReplaceSize:" + completeReplaceSize)
-      if (completeReplaceSize > 0) {
+      val completeClusterSize = this.metaClient.getActiveTimeline.getCompletedReplaceOrClusterTimeline.getInstants.toArray.length
+      println("completeClusterSize:" + completeClusterSize)
+      if (completeClusterSize > 0) {
         success = true
       }
     } catch {
@@ -459,7 +459,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       Thread.sleep(sleepSecsAfterEachRun * 1000)
       currTime = System.currentTimeMillis
     }
-    if (!success) throw new IllegalStateException("Timed-out waiting for completing replace instant appear in " + tablePath)
+    if (!success) throw new IllegalStateException("Timed-out waiting for completing cluster instant appear in " + tablePath)
   }
 
   private def latestInstant(storage: HoodieStorage, basePath: String, instantAction: String): String = {

@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -93,8 +93,7 @@ class ShowCommitWriteStatsProcedure() extends BaseProcedure with ProcedureBuilde
 
   private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
-      // TODO: #CLUSTER_REPLACE - move this check to a separate function
-      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION || hoodieInstant.get.getAction == HoodieTimeline.CLUSTER_ACTION) {
+      if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
         Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieReplaceCommitMetadata]))
       } else {
