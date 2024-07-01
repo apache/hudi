@@ -229,3 +229,13 @@ f490ff75ed8 [ENG-10656][INTERNAL] Make FSView consistent when multiple base file
 84ff62d8b9d [ENG-10550][HUDI-7909] Add Comment to the FieldSchema returned by Aws Glue Client (#773)
 1f73f2e1131 [ENG-9899][HUDI-7881] Verify table base path as well for syncing table in bigquery metastore (#764)
 9d7b01f97cd [AUDIT-827] Changelog for release-v1.20.0 (#772)
+
+---[2024-07-01 10:22:36] [release-v1.21.0] ---
+d0b2f68be46 [ENG-11023][INTERNAL] Fix hudi-integ-test usage of readFromSource (#802)
+5f59a366256 [ENG-10592][HUDI-7937] Handle legacy writer requirements in StreamSync and Clustering (#790)
+fc8495ab6f4 [ENG-10989][INTERNAL] Support decimal in jsonkafkasource (#780)
+60ac3d08423 [ENG-10962][HUDI-7927] Lazy init secondary view in FS view (#791)
+ba4a79376e2 [ENG-10642][HUDI-7924] Capture Latency and Failure Metrics For Hive Table recreation (#775)
+0f73453ad12 [ENG-8468][HUDI-7774] Add Avro Logical type support for Merciful Java convertor (#697)
+a50f83ae187 [ENG-10237][MINOR] Reduce logging volume (#760)
+e1a2c0a3cf4 [AUDIT-830]: Changelog for release-v1.20.1 (#785)
