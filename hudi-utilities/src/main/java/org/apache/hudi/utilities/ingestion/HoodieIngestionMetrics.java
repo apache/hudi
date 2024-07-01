@@ -50,7 +50,7 @@ public abstract class HoodieIngestionMetrics implements Serializable {
 
   public abstract Timer.Context getMetaSyncTimerContext();
 
-  public abstract Timer.Context getErrorTableTimerContext();
+  public abstract Timer.Context getErrorTableWriteTimerContext();
 
   public abstract void updateStreamerMetrics(long durationNanos);
 
