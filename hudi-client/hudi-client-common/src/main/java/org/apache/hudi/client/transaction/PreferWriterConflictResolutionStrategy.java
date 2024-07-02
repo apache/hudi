@@ -54,8 +54,7 @@ public class PreferWriterConflictResolutionStrategy
   public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
                                                     Option<HoodieInstant> lastSuccessfulInstant) {
     HoodieActiveTimeline activeTimeline = metaClient.reloadActiveTimeline();
-    if ((REPLACE_COMMIT_ACTION.equals(currentInstant.getAction())
-        && ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant))
+    if (ClusteringUtils.isClusteringInstant(activeTimeline, currentInstant)
         || COMPACTION_ACTION.equals(currentInstant.getAction())) {
       return getCandidateInstantsForTableServicesCommits(activeTimeline, currentInstant);
     } else {

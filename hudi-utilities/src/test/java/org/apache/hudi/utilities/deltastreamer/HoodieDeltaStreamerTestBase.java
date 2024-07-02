@@ -477,8 +477,8 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     addCommitToTimeline(metaClient, WriteOperationType.UPSERT, HoodieTimeline.COMMIT_ACTION, extraMetadata);
   }
 
-  static void addReplaceCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
-    addCommitToTimeline(metaClient, WriteOperationType.CLUSTER, HoodieTimeline.REPLACE_COMMIT_ACTION, extraMetadata);
+  static void addClusterCommitToTimeline(HoodieTableMetaClient metaClient, Map<String, String> extraMetadata) throws IOException {
+    addCommitToTimeline(metaClient, WriteOperationType.CLUSTER, HoodieTimeline.CLUSTER_ACTION, extraMetadata);
   }
 
   static void addCommitToTimeline(HoodieTableMetaClient metaClient, WriteOperationType writeOperationType, String commitActiontype,
@@ -488,10 +488,16 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     extraMetadata.forEach((k, v) -> commitMetadata.getExtraMetadata().put(k, v));
     String commitTime = metaClient.createNewInstantTime();
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
-    metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime));
-    metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
-        TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+    HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
+    metaClient.getActiveTimeline().createNewInstant(inflightInstant);
+    if (commitActiontype.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+      metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant,
+          TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+    } else {
+      metaClient.getActiveTimeline().saveAsComplete(
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime),
+          TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
+    }
   }
 
   void assertRecordCount(long expected, String tablePath, SQLContext sqlContext) {

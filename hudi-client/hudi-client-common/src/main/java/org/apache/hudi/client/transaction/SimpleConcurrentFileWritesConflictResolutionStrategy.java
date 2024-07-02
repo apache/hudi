@@ -38,8 +38,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
@@ -65,7 +65,7 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
-        .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
+        .getTimelineOfActions(CollectionUtils.createSet(CLUSTER_ACTION, COMPACTION_ACTION))
         .findInstantsAfter(currentInstant.getTimestamp())
         .filterInflightsAndRequested()
         .getInstantsAsStream();
