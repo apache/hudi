@@ -17,6 +17,7 @@ You can push a commit notification to an HTTP URL and can specify custom values 
 | CALLBACK_HTTP_TIMEOUT_IN_SECONDS | Callback timeout in seconds | optional | 3 |
 | CALLBACK_CLASS_NAME | Full path of callback class and must be a subclass of HoodieWriteCommitCallback class, org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback by default | optional | org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback |
 | CALLBACK_HTTP_API_KEY_VALUE | Http callback API key | optional | hudi_write_commit_http_callback |
+| CALLBACK_HTTP_CUSTOM_HEADERS | Http callback custom headers. Format: HeaderName1:HeaderValue1;HeaderName2:HeaderValue2 | optional | N/A |
 | | | | |
 
 ## Kafka Endpoints
