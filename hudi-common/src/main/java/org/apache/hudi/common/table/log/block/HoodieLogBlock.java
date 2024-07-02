@@ -320,6 +320,7 @@ public abstract class HoodieLogBlock {
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged
+      deflate();
       inflate();
     }
   }
