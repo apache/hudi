@@ -136,10 +136,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           state = State.COMPLETED;
         }
       }
-      completionTime = timestamps.length > 1
-          ? timestamps[1]
-          // for backward compatibility with 0.x release.
-          : state == State.COMPLETED ? pathInfo.getModificationTime() + "" : null;
+      completionTime = timestamps.length > 1 ? timestamps[1] : null;
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
@@ -262,8 +259,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = timestamp + "_" + completionTime;
+    String timestampWithCompletionTime;
+    if (StringUtils.isNullOrEmpty(completionTime)) {
+      timestampWithCompletionTime = timestamp;
+    } else {
+      timestampWithCompletionTime = timestamp + "_" + completionTime;
+    }
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
