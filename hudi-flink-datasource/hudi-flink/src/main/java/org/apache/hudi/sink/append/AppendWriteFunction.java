@@ -26,6 +26,7 @@ import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.WriteResultEvent;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
@@ -119,7 +120,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
       }
       // the JM may have also been rebooted, sends the bootstrap event either
     }
-    this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
+    this.eventGateway.sendEventToCoordinator(WriteResultEvent.emptyBootstrap(taskID, currentInstant));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 
@@ -163,7 +164,7 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .lastBatch(true)
         .endInput(endInput)
         .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, currentInstant));
     // nullify the write helper for next ckp
     this.writerHelper = null;
     this.writeStatuses.addAll(writeStatus);
