@@ -29,6 +29,7 @@ import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
@@ -70,8 +71,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   private var tableId = 0
 
+  private var extraConf = Map[String, String]()
+
   def sparkConf(): SparkConf = {
-    getSparkConfForTest("Hoodie SQL Test")
+    val conf = getSparkConfForTest("Hoodie SQL Test")
+    conf.setAll(extraConf)
+    conf
+  }
+
+  protected def initQueryIndexConf(): Unit = {
+    extraConf = extraConf ++ Map(
+      DataSkippingFailureMode.configName -> DataSkippingFailureMode.Strict.value
+    )
   }
 
   protected def withTempDir(f: File => Unit): Unit = {

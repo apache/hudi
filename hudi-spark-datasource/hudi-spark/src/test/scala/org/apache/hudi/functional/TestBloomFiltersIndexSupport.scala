@@ -69,6 +69,7 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
   @BeforeEach
   override def setUp(): Unit = {
     initPath()
+    initQueryIndexConf()
     initSparkContexts()
     initHoodieStorage()
     initTestDataGenerator()

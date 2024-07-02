@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
@@ -31,6 +32,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
                                      metadataConfig: HoodieMetadataConfig,
@@ -42,6 +44,23 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  def computeCandidateIsStrict(spark: SparkSession,
+                               fileIndex: HoodieFileIndex,
+                               queryFilters: Seq[Expression],
+                               queryReferencedColumns: Seq[String],
+                               prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                               shouldPushDownFilesFilter: Boolean): Option[Set[String]] = {
+    try {
+      computeCandidateFileNames(fileIndex, queryFilters, queryReferencedColumns, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
+    } catch {
+      case NonFatal(e) =>
+        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+          case DataSkippingFailureMode.Fallback.value => Option.empty
+          case DataSkippingFailureMode.Strict.value => throw e;
+        }
+    }
+  }
 
   def computeCandidateFileNames(fileIndex: HoodieFileIndex,
                                 queryFilters: Seq[Expression],
