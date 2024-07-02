@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -35,8 +36,7 @@ import org.apache.spark.api.java.JavaRDD;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class NonSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class NonSortPartitioner<T> implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final boolean enforceNumOutputPartitions;
 
@@ -56,9 +56,16 @@ public class NonSortPartitioner<T>
     this.enforceNumOutputPartitions = enforceNumOutputPartitions;
   }
 
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public NonSortPartitioner(HoodieWriteConfig config) {
+    this();
+  }
+
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     if (enforceNumOutputPartitions) {
       return records.coalesce(outputSparkPartitions);
     }

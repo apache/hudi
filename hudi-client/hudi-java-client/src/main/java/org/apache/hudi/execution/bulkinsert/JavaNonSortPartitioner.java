@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.List;
@@ -29,12 +30,21 @@ import java.util.List;
  *
  * @param <T> HoodieRecordPayload type
  */
-public class JavaNonSortPartitioner<T>
-    implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+public class JavaNonSortPartitioner<T> implements BulkInsertPartitioner<List<HoodieRecord<T>>> {
+
+  public JavaNonSortPartitioner() {
+  }
+
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public JavaNonSortPartitioner(HoodieWriteConfig config) {
+    this();
+  }
 
   @Override
-  public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records,
-                                                  int outputPartitions) {
+  public List<HoodieRecord<T>> repartitionRecords(List<HoodieRecord<T>> records, int outputPartitions) {
     return records;
   }
 

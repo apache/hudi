@@ -57,8 +57,7 @@ public class PartitionPathRepartitionAndSortPartitioner<T extends HoodieRecordPa
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     if (!shouldPopulateMetaFields) {
       throw new HoodieException(PARTITION_PATH_REPARTITION_AND_SORT.name() + " mode requires meta-fields to be enabled");
     }

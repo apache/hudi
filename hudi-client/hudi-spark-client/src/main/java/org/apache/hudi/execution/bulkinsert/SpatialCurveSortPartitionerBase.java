@@ -19,6 +19,7 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -33,6 +34,14 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
   private final String[] orderByColumns;
   private final HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy;
   private final HoodieClusteringConfig.SpatialCurveCompositionStrategyType curveCompositionStrategyType;
+
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public SpatialCurveSortPartitionerBase(HoodieWriteConfig config) {
+    this(config.getClusteringSortColumns(), config.getLayoutOptimizationStrategy(), config.getLayoutOptimizationCurveBuildMethod());
+  }
 
   public SpatialCurveSortPartitionerBase(String orderByColumns,
                                          HoodieClusteringConfig.LayoutOptimizationStrategy layoutOptStrategy,

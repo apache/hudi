@@ -27,16 +27,13 @@ import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 
-import java.util.Arrays;
-
 /**
  * A partitioner that globally sorts a {@link JavaRDD<HoodieRecord>} based on partition path column and custom columns.
  *
  * @see GlobalSortPartitioner
  * @see BulkInsertSortMode#GLOBAL_SORT
  */
-public class RDDCustomColumnsSortPartitioner<T>
-    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+public class RDDCustomColumnsSortPartitioner<T> implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
 
   private final String[] sortColumnNames;
   private final SerializableSchema serializableSchema;
@@ -44,7 +41,7 @@ public class RDDCustomColumnsSortPartitioner<T>
 
   public RDDCustomColumnsSortPartitioner(HoodieWriteConfig config) {
     this.serializableSchema = new SerializableSchema(new Schema.Parser().parse(config.getSchema()));
-    this.sortColumnNames = getSortColumnName(config);
+    this.sortColumnNames = BulkInsertPartitioner.getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
@@ -55,8 +52,7 @@ public class RDDCustomColumnsSortPartitioner<T>
   }
 
   @Override
-  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
-                                                     int outputSparkPartitions) {
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records, int outputSparkPartitions) {
     final String[] sortColumns = this.sortColumnNames;
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
@@ -73,8 +69,4 @@ public class RDDCustomColumnsSortPartitioner<T>
     return true;
   }
 
-  private String[] getSortColumnName(HoodieWriteConfig config) {
-    return Arrays.stream(config.getUserDefinedBulkInsertPartitionerSortColumns().split(","))
-        .map(String::trim).toArray(String[]::new);
-  }
 }
