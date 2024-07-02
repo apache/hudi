@@ -1026,6 +1026,9 @@ public class HoodieTableMetadataUtil {
   public static List<FileSlice> getPartitionLatestMergedFileSlices(
       HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition {}", partition);
+    if (fsView == null) {
+      System.out.println("testKeepLatestCommitWithDeletePartitionasfd");
+    }
     return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
   }
 
