@@ -19,13 +19,9 @@
 package org.apache.hudi.internal.schema.visitor;
 
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
 
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFullName;
@@ -33,18 +29,15 @@ import static org.apache.hudi.internal.schema.utils.InternalSchemaUtils.createFu
 /**
  * Schema visitor to produce name -> id map for internalSchema.
  */
-public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>> {
-  private final Deque<String> fieldNames = new LinkedList<>();
-  private final Map<String, Integer> nameToId = new HashMap<>();
+public class NameToIDVisitor extends AbstractNameVisitor<Map<String, Integer>> {
 
+  public NameToIDVisitor() {
+    super(new HashMap<>());
+  }
+  
   @Override
   public void beforeField(Types.Field field) {
     fieldNames.push(field.name());
-  }
-
-  @Override
-  public void afterField(Types.Field field) {
-    fieldNames.pop();
   }
 
   @Override
@@ -53,38 +46,13 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
   }
 
   @Override
-  public void afterArrayElement(Types.Field elementField) {
-    fieldNames.pop();
-  }
-
-  @Override
   public void beforeMapKey(Types.Field keyField) {
     fieldNames.push(keyField.name());
   }
 
   @Override
-  public void afterMapKey(Types.Field keyField) {
-    fieldNames.pop();
-  }
-
-  @Override
   public void beforeMapValue(Types.Field valueField) {
     fieldNames.push(valueField.name());
-  }
-
-  @Override
-  public void afterMapValue(Types.Field valueField) {
-    fieldNames.pop();
-  }
-
-  @Override
-  public Map<String, Integer> schema(InternalSchema schema, Map<String, Integer> recordResult) {
-    return nameToId;
-  }
-
-  @Override
-  public Map<String, Integer> record(Types.RecordType record, List<Map<String, Integer>> fieldResults) {
-    return nameToId;
   }
 
   @Override
@@ -103,11 +71,6 @@ public class NameToIDVisitor extends InternalSchemaVisitor<Map<String, Integer>>
   public Map<String, Integer> map(Types.MapType map, Map<String, Integer> keyResult, Map<String, Integer> valueResult) {
     nameToId.put(createFullName(InternalSchema.MAP_KEY, fieldNames), map.keyId());
     nameToId.put(createFullName(InternalSchema.MAP_VALUE, fieldNames), map.valueId());
-    return nameToId;
-  }
-
-  @Override
-  public Map<String, Integer> primitive(Type.PrimitiveType primitive) {
     return nameToId;
   }
 }
