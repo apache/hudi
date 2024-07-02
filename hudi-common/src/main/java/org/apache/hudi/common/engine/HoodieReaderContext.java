@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -143,15 +142,6 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
   public static final String INTERNAL_META_SCHEMA = "_5";
-
-  /**
-   * Gets the file system based on the file path and configuration.
-   *
-   * @param path File path to get the file system.
-   * @param conf {@link StorageConfiguration} for I/O.
-   * @return The {@link HoodieStorage} instance to use.
-   */
-  public abstract HoodieStorage getStorage(String path, StorageConfiguration<?> conf);
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
