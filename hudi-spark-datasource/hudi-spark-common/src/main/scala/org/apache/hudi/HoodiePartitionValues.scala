@@ -22,7 +22,7 @@ package org.apache.hudi
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{DataType, Decimal}
-import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
+import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String, VariantVal}
 
 case class HoodiePartitionValues(values: InternalRow) extends InternalRow {
   override def numFields: Int = {
@@ -87,6 +87,10 @@ case class HoodiePartitionValues(values: InternalRow) extends InternalRow {
 
   override def getInterval(ordinal: Int): CalendarInterval = {
     values.getInterval(ordinal)
+  }
+
+  override def getVariant(ordinal: Int): VariantVal = {
+    values.getVariant(ordinal)
   }
 
   override def getStruct(ordinal: Int, numFields: Int): InternalRow = {

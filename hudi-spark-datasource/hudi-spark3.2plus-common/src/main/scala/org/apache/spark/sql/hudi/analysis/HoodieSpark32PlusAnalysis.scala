@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
@@ -37,6 +36,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 
 /**
@@ -58,7 +58,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
-        throw new AnalysisException("Version expression is not supported for time travel")
+        throw new HoodieAnalysisException("Version expression is not supported for time travel")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
@@ -290,7 +290,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
   }
 
   private def missingFieldError(fieldName: Seq[String], table: LogicalPlan, context: Origin): Throwable = {
-    throw new AnalysisException(
+    throw new HoodieAnalysisException(
       s"Missing field ${fieldName.mkString(".")} with schema:\n" +
         table.schema.treeString,
       context.line,
