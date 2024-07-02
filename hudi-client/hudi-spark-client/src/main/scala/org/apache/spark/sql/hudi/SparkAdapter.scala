@@ -249,7 +249,15 @@ trait SparkAdapter extends Serializable {
                 alwaysNullable: Boolean = false,
                 isTimestampNTZ: Boolean = false): StructType
 
+  /**
+   * [SPARK-46832] Using UTF8String compareTo directly would throw UnsupportedOperationException since Spark 4.0
+   */
   def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.compareTo(b)
 
+  /**
+   * [SPARK-46832] Using UTF8String compareTo directly would throw UnsupportedOperationException since Spark 4.0
+   * FlatLists is a static class and we cannot override any methods within to change the logic for comparison
+   * So we have to create [[Spark4FlatLists]] for Spark 4.0+
+   */
   def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = FlatLists.ofComparableArray(t)
 }

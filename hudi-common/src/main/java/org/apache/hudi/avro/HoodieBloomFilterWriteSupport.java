@@ -18,7 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import java.util.Comparator;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 
