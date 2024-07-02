@@ -20,6 +20,9 @@ query, perform any repartitioning if required and will write the data as Hudi, p
 |--output-format|Output format for the exported dataset; accept these values: json,parquet,hudi|required||
 |--output-partition-field|A field to be used by Spark repartitioning|optional|Ignored when "Hudi" or when --output-partitioner is specified.The output dataset's default partition field will inherent from the source Hudi dataset.|
 |--output-partitioner|A class to facilitate custom repartitioning|optional|Ignored when using output-format "Hudi"|
+|--transformer-class|A subclass of org.apache.hudi.utilities.transform.Transformer. Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before writing.|optional|Ignored when using output-format "Hudi". Available transformers: org.apache.hudi.utilities.transform.SqlQueryBasedTransformer, org.apache.hudi.utilities.transform.SqlFileBasedTransformer, org.apache.hudi.utilities.transform.FlatteningTransformer, org.apache.hudi.utilities.transform.AWSDmsTransformer.|
+|--transformer-sql|sql-query template be used to transform the source before writing. The query should reference the source as a table named "\<SRC\>".|optional|Is required for SqlQueryBasedTransformer transformer class, ignored in other cases|
+|--transformer-sql|File with a SQL query to be executed during write. The query should reference the source as a table named "\<SRC\>".|optional|Is required for SqlFileBasedTransformer, ignored in other cases|
 
 ## Examples
 
@@ -48,6 +51,23 @@ spark-submit \
       packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
   --source-base-path "/tmp/" \
   --target-output-path "/tmp/exported/json/" \
+  --output-format "json"  # or "parquet"
+```
+
+### Export to json or parquet dataset with transformation/filtering
+The Exporter supports custom transformation/filtering on records before writing to json or parquet dataset. This is done by supplying
+implementation of `org.apache.hudi.utilities.transform.Transformer` via `--transformer-class` option.
+
+```bash
+spark-submit \
+  --jars "packaging/hudi-spark-bundle/target/hudi-spark-bundle_2.11-0.15.0.jar" \
+  --deploy-mode "client" \
+  --class "org.apache.hudi.utilities.HoodieSnapshotExporter" \
+      packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.15.0.jar \
+  --source-base-path "/tmp/" \
+  --target-output-path "/tmp/exported/json/" \
+  --transformer-class "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer" \
+  --transformer-sql "SELECT substr(rider,1,10) as rider, trip_type as tripType FROM <SRC> WHERE trip_type = 'BLACK' LIMIT 10" \
   --output-format "json"  # or "parquet"
 ```
 
