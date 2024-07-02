@@ -245,6 +245,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedReplaceFileName(timestamp);
       }
+    } else if (HoodieTimeline.CLUSTER_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightClusterFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedClusterFileName(timestamp);
+      }
     } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       if (isInflight()) {
         return HoodieTimeline.makeInflightIndexFileName(timestamp);

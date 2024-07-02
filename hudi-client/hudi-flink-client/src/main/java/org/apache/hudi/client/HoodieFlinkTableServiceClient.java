@@ -115,7 +115,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       String clusteringCommitTime,
       Option<HoodieData<WriteStatus>> writeStatuses) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
-    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTER_ACTION, clusteringCommitTime);
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
         e.getValue().stream()).collect(Collectors.toList());
     if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
@@ -137,9 +137,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
-      table.getActiveTimeline().transitionReplaceInflightToComplete(
+      table.getActiveTimeline().transitionClusterInflightToComplete(
           false,
-          HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
+          HoodieTimeline.getClusterCommitInflightInstant(clusteringCommitTime),
           serializeCommitMetadata(metadata));
     } catch (IOException e) {
       throw new HoodieClusteringException(
@@ -154,7 +154,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
         metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(clusteringCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
+            durationInMs, metadata, HoodieActiveTimeline.CLUSTER_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
             + config.getBasePath() + " at time " + clusteringCommitTime, e);

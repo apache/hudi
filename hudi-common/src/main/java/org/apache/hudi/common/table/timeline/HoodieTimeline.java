@@ -50,6 +50,7 @@ public interface HoodieTimeline extends Serializable {
   String ROLLBACK_ACTION = "rollback";
   String SAVEPOINT_ACTION = "savepoint";
   String REPLACE_COMMIT_ACTION = "replacecommit";
+  String CLUSTER_ACTION = "cluster";
   String INFLIGHT_EXTENSION = ".inflight";
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
@@ -63,7 +64,7 @@ public interface HoodieTimeline extends Serializable {
   String SCHEMA_COMMIT_ACTION = "schemacommit";
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION};
+      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION, INDEXING_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -90,6 +91,8 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION;
   String REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION;
+  String INFLIGHT_CLUSTER_COMMIT_EXTENSION = "." + CLUSTER_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_CLUSTER_COMMIT_EXTENSION = "." + CLUSTER_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION;
   String INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION;
@@ -220,6 +223,16 @@ public interface HoodieTimeline extends Serializable {
    * Filter this timeline to just include requested and inflight replacecommit instants.
    */
   HoodieTimeline filterPendingReplaceTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight cluster commit instants.
+   */
+  HoodieTimeline filterPendingClusterTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight cluster or replace commit instants.
+   */
+  HoodieTimeline filterPendingReplaceOrClusterTimeline();
 
   /**
    * Filter this timeline to include pending rollbacks.
@@ -513,6 +526,14 @@ public interface HoodieTimeline extends Serializable {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
   }
 
+  static HoodieInstant getClusterCommitRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, CLUSTER_ACTION, timestamp);
+  }
+
+  static HoodieInstant getClusterCommitInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, CLUSTER_ACTION, timestamp);
+  }
+
   static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
     return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
   }
@@ -646,6 +667,14 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedReplaceFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedClusterFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLUSTER_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightClusterFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLUSTER_COMMIT_EXTENSION);
   }
 
   static String makeDeltaFileName(String instantTime) {

@@ -2648,8 +2648,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");
 
-    // add a replace commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
-    addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
+    // add a cluster commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    addClusterCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");

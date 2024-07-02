@@ -128,6 +128,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           switch (action) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
+            case HoodieTimeline.CLUSTER_ACTION:
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               break;
             case HoodieTimeline.COMPACTION_ACTION:

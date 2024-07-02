@@ -105,6 +105,7 @@ import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
@@ -1196,7 +1197,8 @@ public class HoodieTestTable implements AutoCloseable {
 
   private Option<HoodieCommitMetadata> getCommitMeta(HoodieInstant hoodieInstant) throws IOException {
     switch (hoodieInstant.getAction()) {
-      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case REPLACE_COMMIT_ACTION:
+      case CLUSTER_ACTION:
         HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
             .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata);
