@@ -292,6 +292,37 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Insert Into Table with partition field not in the end") {
+    if (HoodieSparkUtils.gteqSpark3_2) {
+      withTempDir { tmp =>
+        val tableName = "rides"
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price int,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = 'mor',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(price)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName (id, name, ts, price) values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName (id, name, ts, price) values(2, 'a2', 100, 200000)")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 1000, 10),
+          Seq(2, "a2", 200000, 100)
+        )
+      }
+    }
+  }
+
   test("Test Insert Into with multi partition") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
