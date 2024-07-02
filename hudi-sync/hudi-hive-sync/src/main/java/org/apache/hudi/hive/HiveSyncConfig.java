@@ -32,6 +32,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 
 import javax.annotation.concurrent.Immutable;
 
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -213,5 +214,25 @@ public class HiveSyncConfig extends HoodieSyncConfig {
 
   public void validateParameters() {
     ValidationUtils.checkArgument(getIntOrDefault(HIVE_BATCH_SYNC_PARTITION_NUM) > 0, "batch-sync-num for sync hive table must be greater than 0, pls check your parameter");
+  }
+
+  public boolean getIsHiveSupportTimestampType() {
+    return getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE);
+  }
+
+  public boolean getHiveCreateManagedTable() {
+    return getBoolean(HIVE_CREATE_MANAGED_TABLE);
+  }
+
+  public boolean getHiveCreateExternalTable() {
+    return !getHiveCreateManagedTable();
+  }
+
+  public List<String> getMetaSyncPartitionFields() {
+    return getSplitStrings(META_SYNC_PARTITION_FIELDS);
+  }
+
+  public String getBuckets() {
+    return getString(HIVE_SYNC_BUCKET_SYNC_SPEC);
   }
 }
