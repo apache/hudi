@@ -20,6 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.Spark40HoodieFileScanRDD
+import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
@@ -33,7 +34,7 @@ import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40ParquetReader, Spark40LegacyHoodieParquetFileFormat, SparkParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.jdbc.JdbcDialect
@@ -43,6 +44,7 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.sql.{Connection, ResultSet}
 
@@ -158,4 +160,8 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
                          isTimestampNTZ: Boolean = false): StructType = {
     JdbcUtils.getSchema(conn, resultSet, dialect, alwaysNullable)
   }
+
+  override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
+
+  override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = Spark4FlatLists.ofComparableArray(t)
 }

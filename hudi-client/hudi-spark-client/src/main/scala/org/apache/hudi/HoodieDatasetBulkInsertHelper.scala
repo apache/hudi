@@ -52,7 +52,9 @@ import scala.collection.JavaConverters.asScalaBufferConverter
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
-  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df))) with Logging {
+  extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
+    with Logging
+    with SparkAdapterSupport {
 
   /**
    * Prepares [[DataFrame]] for bulk-insert into Hudi table, taking following steps:
@@ -222,7 +224,7 @@ object HoodieDatasetBulkInsertHelper
         val onePreCombineVal = getNestedInternalRowValue(oneRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         val otherPreCombineVal = getNestedInternalRowValue(otherRow, preCombineFieldPath).asInstanceOf[Comparable[AnyRef]]
         if (onePreCombineVal.isInstanceOf[UTF8String]) {
-          if (onePreCombineVal.asInstanceOf[UTF8String].binaryCompare(otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
+          if (sparkAdapter.compareUTF8String(onePreCombineVal.asInstanceOf[UTF8String], otherPreCombineVal.asInstanceOf[UTF8String]) >= 0) {
             oneRow
           } else {
             otherRow

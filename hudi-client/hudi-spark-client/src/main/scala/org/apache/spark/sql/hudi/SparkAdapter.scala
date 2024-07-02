@@ -21,9 +21,9 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.util.collection.FlatLists
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -44,6 +44,7 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.sql.{Connection, ResultSet}
 import java.util.{Locale, TimeZone}
@@ -247,4 +248,8 @@ trait SparkAdapter extends Serializable {
                 dialect: JdbcDialect,
                 alwaysNullable: Boolean = false,
                 isTimestampNTZ: Boolean = false): StructType
+
+  def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.compareTo(b)
+
+  def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = FlatLists.ofComparableArray(t)
 }

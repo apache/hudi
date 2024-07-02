@@ -18,12 +18,12 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.FlatLists;
-import org.apache.hudi.common.util.collection.Spark4FlatLists;
 import org.apache.hudi.table.BucketIndexBulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
@@ -85,8 +85,8 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
     final String[] sortColumns = sortColumnNames;
     final SerializableSchema schema = new SerializableSchema(HoodieAvroUtils.addMetadataFields((new Schema.Parser().parse(table.getConfig().getSchema()))));
     Comparator<HoodieRecord<T>> comparator = (Comparator<HoodieRecord<T>> & Serializable) (t1, t2) -> {
-      FlatLists.ComparableList obj1 = Spark4FlatLists.ofComparableArray(t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
-      FlatLists.ComparableList obj2 = Spark4FlatLists.ofComparableArray(t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      FlatLists.ComparableList obj1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(t1.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
+      FlatLists.ComparableList obj2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(t2.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled));
       return obj1.compareTo(obj2);
     };
 
