@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.hudi.HoodieDatasetBulkInsertHelper;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
@@ -133,7 +133,9 @@ public class BulkInsertDataInternalWriterHelper {
         // Drop the partition columns from the row
         // Using the deprecated JavaConversions to be compatible with scala versions < 2.12. Once hudi support for scala versions < 2.12 is
         // stopped, can move this to JavaConverters.seqAsJavaList(...)
-        List<String> partitionCols = JavaScalaConverters.convertScalaListToJavaList(HoodieDatasetBulkInsertHelper.getPartitionPathCols(this.writeConfig));
+        List<String> partitionCols = JavaScalaConverters.convertScalaListToJavaList(
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper()
+                .getPartitionPathCols(this.writeConfig));
         Set<Integer> partitionIdx = new HashSet<Integer>();
         for (String col : partitionCols) {
           partitionIdx.add(this.structType.fieldIndex(col));

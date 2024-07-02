@@ -131,7 +131,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(props).combineInput(false, false).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+    Dataset<Row> result = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
         new NonSortPartitionerWithRows(), "0000000001");
     StructType resultSchema = result.schema();
 
@@ -175,7 +175,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
         .withPopulateMetaFields(false)
         .build();
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+    Dataset<Row> result = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
         new NonSortPartitionerWithRows(), "000001111");
     StructType resultSchema = result.schema();
 
@@ -212,7 +212,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     rows.addAll(inserts);
     rows.addAll(updates);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
-    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+    Dataset<Row> result = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
         new NonSortPartitionerWithRows(), "000001111");
     StructType resultSchema = result.schema();
 
@@ -316,7 +316,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
@@ -328,7 +328,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
@@ -340,7 +340,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     rows = DataSourceTestUtils.generateRandomRows(10);
     dataset = sqlContext.createDataFrame(rows, structType);
     try {
-      Dataset<Row> preparedDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+      Dataset<Row> preparedDF = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
           new NonSortPartitionerWithRows(), "000001111");
       preparedDF.count();
       fail("Should have thrown exception");
@@ -367,7 +367,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     Dataset<Row> dataset = sqlContext.createDataFrame(inserts, structType).repartition(3);
     assertNotEquals(checkParallelism, HoodieUnsafeUtils.getNumPartitions(dataset));
     assertNotEquals(checkParallelism, sqlContext.sparkContext().defaultParallelism());
-    Dataset<Row> result = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(dataset, config,
+    Dataset<Row> result = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(dataset, config,
         new NonSortPartitionerWithRows(), "000001111");
     // trigger job
     result.count();
