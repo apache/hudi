@@ -20,6 +20,7 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
@@ -184,6 +185,13 @@ public interface HoodieMetaSyncOperations {
    */
   default List<FieldSchema> getStorageFieldSchemas() {
     return Collections.emptyList();
+  }
+
+  /**
+   * Get the base path of the table from metastore
+   */
+  default String getTableLocation(String tableName) {
+    return StringUtils.EMPTY_STRING;
   }
 
   /**

@@ -645,6 +645,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
   }
 
+  @Override
+  public String getTableLocation(String tableName) {
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      return table.storageDescriptor().location();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to get base path for the table " + tableId(databaseName, tableName), e);
+    }
+  }
+
   private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {
     List<Column> cols = new ArrayList<>();
     for (String key : mapSchema.keySet()) {
