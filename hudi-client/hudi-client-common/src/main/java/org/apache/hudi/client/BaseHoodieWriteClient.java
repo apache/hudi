@@ -222,54 +222,59 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = createTable(config);
-    HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
-        extraMetadata, operationType, config.getWriteSchema(), commitActionType);
-    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
-    HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    this.txnManager.beginTransaction(Option.of(inflightInstant),
-        lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+    HoodieTable<T, I, K, O> table = null;
     try {
-      preCommit(inflightInstant, metadata);
-      if (extraPreCommitFunc.isPresent()) {
-        extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
+      table = createTable(config);
+      HoodieCommitMetadata metadata = CommitUtils.buildMetadata(stats, partitionToReplaceFileIds,
+          extraMetadata, operationType, config.getWriteSchema(), commitActionType);
+      HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
+      HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
+      this.txnManager.beginTransaction(Option.of(inflightInstant),
+          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+      try {
+        preCommit(inflightInstant, metadata);
+        if (extraPreCommitFunc.isPresent()) {
+          extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
+        }
+        commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
+        postCommit(table, metadata, instantTime, extraMetadata);
+        LOG.info("Committed " + instantTime);
+      } catch (IOException e) {
+        throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
+      } finally {
+        this.txnManager.endTransaction(Option.of(inflightInstant));
+        releaseResources(instantTime);
       }
-      commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
-      postCommit(table, metadata, instantTime, extraMetadata);
-      LOG.info("Committed " + instantTime);
-    } catch (IOException e) {
-      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
+
+      // trigger clean and archival.
+      // Each internal call should ensure to lock if required.
+      mayBeCleanAndArchive(table);
+      // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
+      try {
+        // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
+        runTableServicesInline(table, metadata, extraMetadata);
+      } catch (Exception e) {
+        if (config.isFailOnInlineTableServiceExceptionEnabled()) {
+          throw e;
+        }
+        LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
+            + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
+      }
+
+      emitCommitMetrics(instantTime, metadata, commitActionType);
+
+      // callback if needed.
+      if (config.writeCommitCallbackOn()) {
+        if (null == commitCallback) {
+          commitCallback = HoodieCommitCallbackFactory.create(config);
+        }
+        commitCallback.call(new HoodieWriteCommitCallbackMessage(
+            instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
+      }
+      return true;
     } finally {
-      this.txnManager.endTransaction(Option.of(inflightInstant));
-      releaseResources(instantTime);
+      closeHoodieTable(table);
     }
-
-    // trigger clean and archival.
-    // Each internal call should ensure to lock if required.
-    mayBeCleanAndArchive(table);
-    // We don't want to fail the commit if hoodie.fail.writes.on.inline.table.service.exception is false. We catch warn if false
-    try {
-      // do this outside of lock since compaction, clustering can be time taking and we don't need a lock for the entire execution period
-      runTableServicesInline(table, metadata, extraMetadata);
-    } catch (Exception e) {
-      if (config.isFailOnInlineTableServiceExceptionEnabled()) {
-        throw e;
-      }
-      LOG.warn("Inline compaction or clustering failed with exception: " + e.getMessage()
-          + ". Moving further since \"hoodie.fail.writes.on.inline.table.service.exception\" is set to false.");
-    }
-
-    emitCommitMetrics(instantTime, metadata, commitActionType);
-
-    // callback if needed.
-    if (config.writeCommitCallbackOn()) {
-      if (null == commitCallback) {
-        commitCallback = HoodieCommitCallbackFactory.create(config);
-      }
-      commitCallback.call(new HoodieWriteCommitCallbackMessage(
-          instantTime, config.getTableName(), config.getBasePath(), stats, Option.of(commitActionType), extraMetadata));
-    }
-    return true;
   }
 
   protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
@@ -344,8 +349,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected void preCommit(HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
     // Create a Hoodie table after startTxn which encapsulated the commits and files visible.
     // Important to create this after the lock to ensure the latest commits show up in the timeline without need for reload
-    HoodieTable table = createTable(config);
-    resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    HoodieTable<T, I, K, O> table = null;
+    try {
+      table = createTable(config);
+      resolveWriteConflict(table, metadata, this.pendingInflightAndRequestedInstants);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -365,8 +375,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieException("Cannot bootstrap the table in multi-writer mode");
     }
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UPSERT, Option.ofNullable(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS));
-    tableServiceClient.rollbackFailedBootstrap();
-    table.bootstrap(context, extraMetadata);
+    try {
+      tableServiceClient.rollbackFailedBootstrap();
+      table.bootstrap(context, extraMetadata);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -611,13 +625,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void savepoint(String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config);
-    if (table.getCompletedCommitsTimeline().empty()) {
-      throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
-    }
+    try {
+      if (table.getCompletedCommitsTimeline().empty()) {
+        throw new HoodieSavepointException("Could not savepoint. Commit timeline is empty");
+      }
 
-    String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().getTimestamp();
-    LOG.info("Savepointing latest commit " + latestCommit);
-    savepoint(latestCommit, user, comment);
+      String latestCommit = table.getCompletedCommitsTimeline().lastInstant().get().getTimestamp();
+      LOG.info("Savepointing latest commit " + latestCommit);
+      savepoint(latestCommit, user, comment);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -635,7 +653,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void savepoint(String instantTime, String user, String comment) {
     HoodieTable<T, I, K, O> table = createTable(config);
-    table.savepoint(context, instantTime, user, comment);
+    try {
+      table.savepoint(context, instantTime, user, comment);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -643,14 +665,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void deleteSavepoint() {
     HoodieTable<T, I, K, O> table = createTable(config);
-    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
-    if (savePointTimeline.empty()) {
-      throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
-    }
+    try {
+      HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+      if (savePointTimeline.empty()) {
+        throw new HoodieSavepointException("Could not delete savepoint. Savepoint timeline is empty");
+      }
 
-    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
-    LOG.info("Deleting latest savepoint time " + savepointTime);
-    deleteSavepoint(savepointTime);
+      String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+      LOG.info("Deleting latest savepoint time " + savepointTime);
+      deleteSavepoint(savepointTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -661,7 +687,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void deleteSavepoint(String savepointTime) {
     HoodieTable<T, I, K, O> table = createTable(config);
-    SavepointHelpers.deleteSavepoint(table, savepointTime);
+    try {
+      SavepointHelpers.deleteSavepoint(table, savepointTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -669,14 +699,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void restoreToSavepoint() {
     HoodieTable<T, I, K, O> table = createTable(config);
-    HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
-    if (savePointTimeline.empty()) {
-      throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
-    }
+    try {
+      HoodieTimeline savePointTimeline = table.getActiveTimeline().getSavePointTimeline();
+      if (savePointTimeline.empty()) {
+        throw new HoodieSavepointException("Could not restore to savepoint. Savepoint timeline is empty");
+      }
 
-    String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
-    LOG.info("Restoring to latest savepoint time " + savepointTime);
-    restoreToSavepoint(savepointTime);
+      String savepointTime = savePointTimeline.lastInstant().get().getTimestamp();
+      LOG.info("Restoring to latest savepoint time " + savepointTime);
+      restoreToSavepoint(savepointTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -731,25 +765,37 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initializeMetadataTableIfNecessary);
-    SavepointHelpers.validateSavepointPresence(table, savepointTime);
-    ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
-        + " is enabled");
-    restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
-    SavepointHelpers.validateSavepointRestore(table, savepointTime);
+    try {
+      SavepointHelpers.validateSavepointPresence(table, savepointTime);
+      ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
+          + " is enabled");
+      restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
+      SavepointHelpers.validateSavepointRestore(table, savepointTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Deprecated
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
-    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
+    try {
+      Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+      return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Deprecated
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
-    Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false);
+    try {
+      Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+      return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -761,8 +807,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public HoodieRestoreMetadata restoreToInstant(final String savepointToRestoreTimestamp, boolean initialMetadataTableIfNecessary) throws HoodieRestoreException {
     LOG.info("Begin restore to instant " + savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
+    HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
     try {
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
       Pair<String, Option<HoodieRestorePlan>> timestampAndRestorePlan = scheduleAndGetRestorePlan(savepointToRestoreTimestamp, table);
       final String restoreInstantTimestamp = timestampAndRestorePlan.getLeft();
       Option<HoodieRestorePlan> restorePlanOption = timestampAndRestorePlan.getRight();
@@ -783,6 +829,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
     } catch (Exception e) {
       throw new HoodieRestoreException("Failed to restore to " + savepointToRestoreTimestamp, e);
+    } finally {
+      closeHoodieTable(table);
     }
   }
 
@@ -865,8 +913,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void archive() {
     // Create a Hoodie table which encapsulated the commits and files visible
-    HoodieTable table = createTable(config);
-    archive(table);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      archive(table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -974,7 +1026,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return {@link Option<HoodieIndexCommitMetadata>} after successful indexing.
    */
   public Option<HoodieIndexCommitMetadata> index(String indexInstantTime) {
-    return createTable(config).index(context, indexInstantTime);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      return table.index(context, indexInstantTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -983,26 +1040,30 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
    */
   public void dropIndex(List<MetadataPartitionType> partitionTypes) {
-    HoodieTable table = createTable(config);
-    String dropInstant = createNewInstantTime();
-    HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
-    this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
+    HoodieTable<T, I, K, O> table = createTable(config);
     try {
-      context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
-      Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
-      if (metadataWriterOpt.isPresent()) {
-        try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-          metadataWriter.dropMetadataPartitions(partitionTypes);
-        } catch (Exception e) {
-          if (e instanceof HoodieException) {
-            throw (HoodieException) e;
-          } else {
-            throw new HoodieException("Failed to drop partitions from metadata", e);
+      String dropInstant = createNewInstantTime();
+      HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
+      this.txnManager.beginTransaction(Option.of(ownerInstant), Option.empty());
+      try {
+        context.setJobStatus(this.getClass().getSimpleName(), "Dropping partitions from metadata table: " + config.getTableName());
+        Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
+        if (metadataWriterOpt.isPresent()) {
+          try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+            metadataWriter.dropMetadataPartitions(partitionTypes);
+          } catch (Exception e) {
+            if (e instanceof HoodieException) {
+              throw (HoodieException) e;
+            } else {
+              throw new HoodieException("Failed to drop partitions from metadata", e);
+            }
           }
         }
+      } finally {
+        this.txnManager.endTransaction(Option.of(ownerInstant));
       }
     } finally {
-      this.txnManager.endTransaction(Option.of(ownerInstant));
+      closeHoodieTable(table);
     }
   }
 
@@ -1088,9 +1149,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void commitLogCompaction(String logCompactionInstantTime, HoodieCommitMetadata metadata,
                                   Option<Map<String, String>> extraMetadata) {
-    HoodieTable table = createTable(config);
-    extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
-    completeLogCompaction(metadata, table, logCompactionInstantTime);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      extraMetadata.ifPresent(m -> m.forEach(metadata::addMetadata));
+      completeLogCompaction(metadata, table, logCompactionInstantTime);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -1107,9 +1172,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config);
-    preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
-    return tableServiceClient.compact(compactionInstantTime, shouldComplete);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
+      return tableServiceClient.compact(compactionInstantTime, shouldComplete);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -1128,9 +1197,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> logCompact(String logCompactionInstantTime, boolean shouldComplete) {
-    HoodieTable table = createTable(config);
-    preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
-    return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      preWrite(logCompactionInstantTime, WriteOperationType.LOG_COMPACT, table.getMetaClient());
+      return tableServiceClient.logCompact(logCompactionInstantTime, shouldComplete);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -1166,15 +1239,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of Write Status
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
-    HoodieTable table = createTable(config);
-    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
-    return tableServiceClient.cluster(clusteringInstant, shouldComplete);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+      return tableServiceClient.cluster(clusteringInstant, shouldComplete);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   public boolean purgePendingClustering(String clusteringInstant) {
-    HoodieTable table = createTable(config);
-    preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
-    return tableServiceClient.purgePendingClustering(clusteringInstant);
+    HoodieTable<T, I, K, O> table = createTable(config);
+    try {
+      preWrite(clusteringInstant, WriteOperationType.CLUSTER, table.getMetaClient());
+      return tableServiceClient.purgePendingClustering(clusteringInstant);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   /**
@@ -1268,7 +1349,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
-    HoodieTable table = createTable(config, metaClient);
+    HoodieTable<T, I, K, O> table = createTable(config, metaClient);
 
     // Validate table properties
     metaClient.validateTableProperties(config.getProps());

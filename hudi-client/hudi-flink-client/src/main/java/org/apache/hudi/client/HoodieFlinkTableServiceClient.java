@@ -203,28 +203,32 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   public void initMetadataTable() {
     HoodieFlinkTable<?> table = getHoodieTable();
-    if (config.isMetadataTableEnabled()) {
-      Option<String> latestPendingInstant = table.getActiveTimeline()
-          .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getTimestamp);
-      try {
-        // initialize the metadata table path
-        // guard the metadata writer with concurrent lock
-        this.txnManager.getLockManager().lock();
-        try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
-          if (metadataWriter.isInitialized()) {
-            metadataWriter.performTableServices(Option.empty());
+    try {
+      if (config.isMetadataTableEnabled()) {
+        Option<String> latestPendingInstant = table.getActiveTimeline()
+            .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getTimestamp);
+        try {
+          // initialize the metadata table path
+          // guard the metadata writer with concurrent lock
+          this.txnManager.getLockManager().lock();
+          try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
+            if (metadataWriter.isInitialized()) {
+              metadataWriter.performTableServices(Option.empty());
+            }
           }
+        } catch (Exception e) {
+          throw new HoodieException("Failed to initialize metadata table", e);
+        } finally {
+          this.txnManager.getLockManager().unlock();
         }
-      } catch (Exception e) {
-        throw new HoodieException("Failed to initialize metadata table", e);
-      } finally {
-        this.txnManager.getLockManager().unlock();
+        // clean the obsolete index stats
+        table.deleteMetadataIndexIfNecessary();
+      } else {
+        // delete the metadata table if it was enabled but is now disabled
+        table.maybeDeleteMetadataTable();
       }
-      // clean the obsolete index stats
-      table.deleteMetadataIndexIfNecessary();
-    } else {
-      // delete the metadata table if it was enabled but is now disabled
-      table.maybeDeleteMetadataTable();
+    } finally {
+      closeHoodieTable(table);
     }
   }
 

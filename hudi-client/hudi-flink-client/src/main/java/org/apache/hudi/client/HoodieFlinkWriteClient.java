@@ -126,10 +126,14 @@ public class HoodieFlinkWriteClient<T> extends
   public List<HoodieRecord<T>> filterExists(List<HoodieRecord<T>> hoodieRecords) {
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieFlinkTable<T> table = getHoodieTable();
-    Timer.Context indexTimer = metrics.getIndexCtx();
-    List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
-    metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
-    return recordsWithLocation.stream().filter(v1 -> !v1.isCurrentLocationKnown()).collect(Collectors.toList());
+    try {
+      Timer.Context indexTimer = metrics.getIndexCtx();
+      List<HoodieRecord<T>> recordsWithLocation = getIndex().tagLocation(HoodieListData.eager(hoodieRecords), context, table).collectAsList();
+      metrics.updateIndexMetrics(LOOKUP_STR, metrics.getDurationInMs(indexTimer == null ? 0L : indexTimer.stop()));
+      return recordsWithLocation.stream().filter(v1 -> !v1.isCurrentLocationKnown()).collect(Collectors.toList());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
@@ -141,16 +145,20 @@ public class HoodieFlinkWriteClient<T> extends
   public List<WriteStatus> upsert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
-      result = ((HoodieFlinkTable<T>) table).upsert(context, closeableHandle.getWriteHandle(), instantTime, records);
+    try {
+      table.validateUpsertSchema();
+      preWrite(instantTime, WriteOperationType.UPSERT, table.getMetaClient());
+      HoodieWriteMetadata<List<WriteStatus>> result;
+      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
+        result = ((HoodieFlinkTable<T>) table).upsert(context, closeableHandle.getWriteHandle(), instantTime, records);
+      }
+      if (result.getIndexLookupDuration().isPresent()) {
+        metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+      }
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
     }
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
-    }
-    return postWrite(result, instantTime, table);
   }
 
   @Override
@@ -158,34 +166,42 @@ public class HoodieFlinkWriteClient<T> extends
     // only used for metadata table, the upsert happens in single thread
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
-    table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
-    Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
-        .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
-    return preppedRecordsByFileId.values().stream().parallel().map(records -> {
-      HoodieWriteMetadata<List<WriteStatus>> result;
-      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
-        result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, closeableHandle.getWriteHandle(), instantTime, records);
-      }
-      return postWrite(result, instantTime, table);
-    }).flatMap(Collection::stream).collect(Collectors.toList());
+    try {
+      table.validateUpsertSchema();
+      preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+      Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
+          .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
+      return preppedRecordsByFileId.values().stream().parallel().map(records -> {
+        HoodieWriteMetadata<List<WriteStatus>> result;
+        try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
+          result = ((HoodieFlinkTable<T>) table).upsertPrepped(context, closeableHandle.getWriteHandle(), instantTime, records);
+        }
+        return postWrite(result, instantTime, table);
+      }).flatMap(Collection::stream).collect(Collectors.toList());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public List<WriteStatus> insert(List<HoodieRecord<T>> records, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.INSERT, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
-    // create the write handle if not exists
-    HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
-      result = ((HoodieFlinkTable<T>) table).insert(context, closeableHandle.getWriteHandle(), instantTime, records);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT, table.getMetaClient());
+      // create the write handle if not exists
+      HoodieWriteMetadata<List<WriteStatus>> result;
+      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table)) {
+        result = ((HoodieFlinkTable<T>) table).insert(context, closeableHandle.getWriteHandle(), instantTime, records);
+      }
+      if (result.getIndexLookupDuration().isPresent()) {
+        metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
+      }
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
     }
-    if (result.getIndexLookupDuration().isPresent()) {
-      metrics.updateIndexMetrics(LOOKUP_STR, result.getIndexLookupDuration().get().toMillis());
-    }
-    return postWrite(result, instantTime, table);
   }
 
   /**
@@ -199,14 +215,18 @@ public class HoodieFlinkWriteClient<T> extends
       List<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.INSERT_OVERWRITE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
-    // create the write handle if not exists
-    HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
-      result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, closeableHandle.getWriteHandle(), instantTime, records);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE, table.getMetaClient());
+      // create the write handle if not exists
+      HoodieWriteMetadata<List<WriteStatus>> result;
+      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
+        result = ((HoodieFlinkTable<T>) table).insertOverwrite(context, closeableHandle.getWriteHandle(), instantTime, records);
+      }
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
     }
-    return postWrite(result, instantTime, table);
   }
 
   /**
@@ -219,14 +239,18 @@ public class HoodieFlinkWriteClient<T> extends
   public List<WriteStatus> insertOverwriteTable(
       List<HoodieRecord<T>> records, final String instantTime) {
     HoodieTable table = initTable(WriteOperationType.INSERT_OVERWRITE_TABLE, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
-    // create the write handle if not exists
-    HoodieWriteMetadata<List<WriteStatus>> result;
-    try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
-      result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, closeableHandle.getWriteHandle(), instantTime, records);
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.INSERT_OVERWRITE_TABLE, table.getMetaClient());
+      // create the write handle if not exists
+      HoodieWriteMetadata<List<WriteStatus>> result;
+      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
+        result = ((HoodieFlinkTable<T>) table).insertOverwriteTable(context, closeableHandle.getWriteHandle(), instantTime, records);
+      }
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
     }
-    return postWrite(result, instantTime, table);
   }
 
   @Override
@@ -249,45 +273,61 @@ public class HoodieFlinkWriteClient<T> extends
     // only used for metadata table, the bulk_insert happens in single JVM process
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
-    table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
-    Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
-        .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
-    return preppedRecordsByFileId.values().stream().parallel().map(records -> {
-      records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
-      HoodieWriteMetadata<List<WriteStatus>> result;
-      records.get(0).getCurrentLocation().setInstantTime("I");
-      try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
-        result = ((HoodieFlinkTable<T>) table).bulkInsertPrepped(context, closeableHandle.getWriteHandle(), instantTime, records);
-      }
-      return postWrite(result, instantTime, table);
-    }).flatMap(Collection::stream).collect(Collectors.toList());
+    try {
+      table.validateInsertSchema();
+      preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
+      Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
+          .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
+      return preppedRecordsByFileId.values().stream().parallel().map(records -> {
+        records.sort(Comparator.comparing(HoodieRecord::getRecordKey));
+        HoodieWriteMetadata<List<WriteStatus>> result;
+        records.get(0).getCurrentLocation().setInstantTime("I");
+        try (AutoCloseableWriteHandle closeableHandle = new AutoCloseableWriteHandle(records, instantTime, table, true)) {
+          result = ((HoodieFlinkTable<T>) table).bulkInsertPrepped(context, closeableHandle.getWriteHandle(), instantTime, records);
+        }
+        return postWrite(result, instantTime, table);
+      }).flatMap(Collection::stream).collect(Collectors.toList());
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public List<WriteStatus> delete(List<HoodieKey> keys, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context, instantTime, keys);
-    return postWrite(result, instantTime, table);
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE, table.getMetaClient());
+      HoodieWriteMetadata<List<WriteStatus>> result = table.delete(context, instantTime, keys);
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override
   public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context, instantTime, preppedRecords);
-    return postWrite(result, instantTime, table);
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+      HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context, instantTime, preppedRecords);
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   public List<WriteStatus> deletePartitions(List<String> partitions, String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PARTITION, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
-    HoodieWriteMetadata<List<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
-    return postWrite(result, instantTime, table);
+    try {
+      preWrite(instantTime, WriteOperationType.DELETE_PARTITION, table.getMetaClient());
+      HoodieWriteMetadata<List<WriteStatus>> result = table.deletePartitions(context, instantTime, partitions);
+      return postWrite(result, instantTime, table);
+    } finally {
+      closeHoodieTable(table);
+    }
   }
 
   @Override

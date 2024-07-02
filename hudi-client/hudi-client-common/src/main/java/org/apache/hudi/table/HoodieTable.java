@@ -123,7 +123,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
-public abstract class HoodieTable<T, I, K, O> implements Serializable {
+public abstract class HoodieTable<T, I, K, O> implements Serializable, AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTable.class);
 
   protected final HoodieWriteConfig config;
@@ -137,6 +137,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private transient FileSystemViewManager viewManager;
   protected final transient HoodieEngineContext context;
+  private HoodieTableFileSystemView tableFileSystemView;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
@@ -326,7 +327,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Get the view of the file system for this table.
    */
   public TableFileSystemView getFileSystemView() {
-    return new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    if (tableFileSystemView == null) {
+      tableFileSystemView = new HoodieTableFileSystemView(metaClient, getCompletedCommitsTimeline());
+    }
+    return tableFileSystemView;
   }
 
   /**
@@ -1110,5 +1114,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     } else {
       HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
     }
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (tableFileSystemView != null) {
+      this.tableFileSystemView.close();
+      this.tableFileSystemView = null;
+    }
+    this.viewManager.close();
+    this.viewManager = null;
+    this.metadata.close();
   }
 }

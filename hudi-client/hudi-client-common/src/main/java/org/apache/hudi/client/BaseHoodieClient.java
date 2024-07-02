@@ -296,4 +296,12 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
       }
     }
   }
+
+  protected void closeHoodieTable(HoodieTable table) {
+    try {
+      table.close();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to close HoodieTable instance ", e);
+    }
+  }
 }
