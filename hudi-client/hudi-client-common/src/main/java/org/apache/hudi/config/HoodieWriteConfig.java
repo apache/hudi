@@ -338,6 +338,12 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "of Spark tasks do not exceed the value. If rollback is slow due to the limited "
           + "parallelism, you can increase this to tune the performance.");
 
+  public static final ConfigProperty<String> BUILD_WORKLOAD_PARALLELISM_VALUE = ConfigProperty
+          .key("hoodie.build.workload.parallelism")
+          .defaultValue("0")
+          .markAdvanced()
+          .withDocumentation("Set number of parallelism during building workload profile.");
+
   public static final ConfigProperty<String> WRITE_BUFFER_LIMIT_BYTES_VALUE = ConfigProperty
       .key("hoodie.write.buffer.limit.bytes")
       .defaultValue(String.valueOf(4 * 1024 * 1024))
@@ -1407,6 +1413,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getFinalizeWriteParallelism() {
     return getInt(FINALIZE_WRITE_PARALLELISM_VALUE);
+  }
+
+  public int getBuildWorkloadParallelism() {
+    return getIntOrDefault(BUILD_WORKLOAD_PARALLELISM_VALUE);
   }
 
   public boolean isTimelineServerBasedInstantStateEnabled() {
