@@ -37,8 +37,16 @@ public interface StreamContext {
   SchemaProvider getSchemaProvider();
 
   /**
-   * An optional stream profile supplying details regarding how the next input batch in StreamSync should be consumed and written.
+   * An optional source profile supplying details regarding how the next input batch in
+   * the {@link org.apache.hudi.utilities.sources.Source} within StreamSync should be consumed and written.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<SourceProfileSupplier> getSourceProfileSupplier();
+
+  /**
+   * An optional stream profile supplying details regarding how the next input batch in
+   * should be processed.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  Option<StreamProfileSupplier> getStreamProfileSupplier();
 }
