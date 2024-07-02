@@ -153,6 +153,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected final List<MetadataPartitionType> enabledPartitionTypes;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
+  private List<HoodieTableFileSystemView> fileSystemViews = new ArrayList<>();
 
   /**
    * Hudi backed table metadata writer.
@@ -1082,8 +1083,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
     HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(dataMetaClient);
+    fileSystemViews.add(fsView);
+    HoodieTableFileSystemView finalFsView = fsView;
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, value) -> {
-      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.ofNullable(fsView), dataPartition);
+      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.ofNullable(finalFsView), dataPartition);
       fileSlices.forEach(fileSlice -> {
         // Filter log files for the instant time and add to this partition fileSlice pairs
         List<HoodieLogFile> logFilesForInstant = fileSlice.getLogFiles()
@@ -1302,6 +1305,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   @Override
   public void close() throws Exception {
+    fileSystemViews.forEach(fsView -> fsView.close());
     if (metadata != null) {
       metadata.close();
     }
@@ -1413,6 +1417,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
 
     HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient);
+    fileSystemViews.add(fsView);
     for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
       final String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(entry.getKey(), dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
       HoodieData<HoodieRecord> records = entry.getValue();
