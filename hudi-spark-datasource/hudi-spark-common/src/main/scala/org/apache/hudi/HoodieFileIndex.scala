@@ -208,7 +208,7 @@ case class HoodieFileIndex(spark: SparkSession,
     } else if (shouldEmbedFileSlices) {
       assert(partitionSchema.isEmpty)
       prunedPartitionsAndFilteredFileSlices
-    }else {
+    } else {
       Seq(PartitionDirectory(InternalRow.empty, prunedPartitionsAndFilteredFileSlices.flatMap(_.files)))
     }
   }
