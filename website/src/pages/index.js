@@ -24,7 +24,8 @@ export default function Home() {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout
-      title={`Hello from ${siteConfig.title}`}
+      title={`Hudi Apache | An Open Source Data Lake Platform`}
+      shouldShowOnlyTitle={true}
       description="Description will go into a meta tag in <head />"
       wrapperClassName={styles.homePage}
     >
