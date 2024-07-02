@@ -20,6 +20,7 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
@@ -235,12 +236,24 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public boolean deleteDirectory(StoragePath path) throws IOException {
-    return fs.delete(convertToHadoopPath(path), true);
+    return delete(path, true);
+
   }
 
   @Override
   public boolean deleteFile(StoragePath path) throws IOException {
-    return fs.delete(convertToHadoopPath(path), false);
+    return delete(path, false);
+  }
+
+  private boolean delete(StoragePath path, boolean recursive) throws IOException {
+    Path hadoopPath = convertToHadoopPath(path);
+    boolean success = fs.delete(hadoopPath, recursive);
+    if (!success) {
+      if (fs.exists(hadoopPath)) {
+        throw new HoodieIOException("Failed to delete invalid data file: " + path);
+      }
+    }
+    return success;
   }
 
   @Override
