@@ -1295,11 +1295,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
-  public boolean isCDCEnabled() {
-    return getBooleanOrDefault(
-        HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
-  }
-
   public boolean isConsistentHashingEnabled() {
     return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
   }
@@ -1307,6 +1302,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isSimpleBucketIndex() {
     return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
+  }
+
+  /**
+   * Returns whether the table writer would generate pure log files at the very first place.
+   */
+  public boolean isYieldingPureLogForMor() {
+    switch (getIndexType()) {
+      case BUCKET:
+      case FLINK_STATE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {

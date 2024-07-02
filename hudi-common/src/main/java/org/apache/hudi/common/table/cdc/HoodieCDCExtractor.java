@@ -90,14 +90,18 @@ public class HoodieCDCExtractor {
 
   private HoodieTableFileSystemView fsView;
 
+  private final boolean consumeChangesFromCompaction;
+
   public HoodieCDCExtractor(
       HoodieTableMetaClient metaClient,
-      InstantRange range) {
+      InstantRange range,
+      boolean consumeChangesFromCompaction) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePath();
     this.storage = metaClient.getStorage();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.instantRange = range;
+    this.consumeChangesFromCompaction = consumeChangesFromCompaction;
     init();
   }
 
@@ -226,7 +230,8 @@ public class HoodieCDCExtractor {
             }
             return Pair.of(instant, commitMetadata);
           }).filter(pair ->
-              WriteOperationType.isDataChange(pair.getRight().getOperationType())
+              WriteOperationType.yieldChanges(pair.getRight().getOperationType())
+                  || (this.consumeChangesFromCompaction && pair.getRight().getOperationType() == WriteOperationType.COMPACT)
           ).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     } catch (Exception e) {
       throw new HoodieIOException("Fail to get the commit metadata for CDC");
@@ -322,8 +327,9 @@ public class HoodieCDCExtractor {
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
-          HoodieBaseFile baseFile = new HoodieBaseFile(
-              storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
+          HoodieBaseFile baseFile = fileSlice.getLeft().isEmpty()
+              ? null
+              : new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
           List<StoragePath> logFilePaths = fileSlice.getRight().stream()
               .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))

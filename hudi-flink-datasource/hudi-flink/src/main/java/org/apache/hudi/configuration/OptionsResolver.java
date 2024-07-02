@@ -194,12 +194,21 @@ public class OptionsResolver {
   /**
    * Returns whether the source should emit changelog.
    *
-   * @return true if the source is read as streaming with changelog mode enabled
+   * @return true if the source should emit changes.
    */
   public static boolean emitChangelog(Configuration conf) {
     return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
         || conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CDC_ENABLED)
         || isIncrementalQuery(conf) && conf.getBoolean(FlinkOptions.CDC_ENABLED);
+  }
+
+  /**
+   * Returns whether the source should emit deletes.
+   *
+   * @return true if the source is read as streaming with changelog mode enabled.
+   */
+  public static boolean emitDeletes(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   /**
@@ -352,6 +361,18 @@ public class OptionsResolver {
     HollowCommitHandling handlingMode = HollowCommitHandling.valueOf(conf
         .getString(INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.defaultValue()));
     return handlingMode == HollowCommitHandling.USE_TRANSITION_TIME;
+  }
+
+  /**
+   * Returns whether to read the data changes only from changelog files. When CDC is enabled,
+   * i) for COW table, the changelog is generated on each file update;
+   * ii) for MOR table, the changelog is generated on compaction.
+   *
+   * <p>By default, always read from the changelog file,
+   * once it is disabled, the reader would infer the changes based on the file slice dependencies.
+   */
+  public static boolean readCDCFromChangelog(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG);
   }
 
   /**

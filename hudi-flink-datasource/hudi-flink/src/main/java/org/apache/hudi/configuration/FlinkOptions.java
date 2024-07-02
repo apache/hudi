@@ -362,6 +362,17 @@ public class FlinkOptions extends HoodieConfig {
           + "default no limit");
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
+      .key("read.cdc.from.changelog")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to consume the delta changes only from the cdc changelog files.\n"
+          + "When CDC is enabled, i). for COW table, the changelog is generated on each file update;\n"
+          + "ii). for MOR table, the changelog is generated on compaction.\n"
+          + "By default, always read from the changelog file,\n"
+          + "once it is disabled, the reader would infer the changes based on the file slice dependencies.");
+
+  @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
       .key("read.data.skipping.enabled")
       .booleanType()
