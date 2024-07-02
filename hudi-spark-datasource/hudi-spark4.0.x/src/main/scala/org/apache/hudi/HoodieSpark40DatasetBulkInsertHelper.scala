@@ -32,8 +32,7 @@ import org.apache.spark.unsafe.types.UTF8String
 object HoodieSpark40DatasetBulkInsertHelper
   extends ParallelismHelper[DataFrame](toJavaSerializableFunctionUnchecked(df => getNumPartitions(df)))
     with HoodieDatasetBulkInsertHelper
-    with Logging
-    with Serializable {
+    with Logging {
 
   override protected def deduceShuffleParallelism(input: DataFrame, configuredParallelism: Int): Int = {
     val deduceParallelism = super.deduceShuffleParallelism(input, configuredParallelism)
