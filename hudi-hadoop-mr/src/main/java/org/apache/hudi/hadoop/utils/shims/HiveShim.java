@@ -18,6 +18,10 @@
 
 package org.apache.hudi.hadoop.utils.shims;
 
+import java.io.IOException;
+import java.util.Map;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.plan.PartitionDesc;
 import org.apache.hadoop.io.Writable;
 
 /**
@@ -32,4 +36,7 @@ public interface HiveShim {
   int getDays(Object dateWritable);
 
   long getMills(Object timestamp);
+
+  PartitionDesc getPartitionDesc(Map<Path, PartitionDesc> pathToPartitionInfo, Path dir,
+      Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap) throws IOException;
 }
