@@ -14,7 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-# RFC-[number]: [Title]
+# RFC-79: Improving reliability of concurrent table service executions and rollbacks
 
 ## Proposers
 
@@ -27,16 +27,17 @@
 
 ## Status
 
-JIRA: <link to umbrella JIRA>
+JIRA: HUDI-7946
 
-> Please keep the status updated in `rfc/README.md`.
 
 ## Abstract
+In order to reduce the latency and overhead of ingestion writes into a HUDI dataset, HUDI does not require that table service operations (such as clustering and compaction) be serially and sequentially performed before/after an ingestion write. Using HUDI multiwriter, different writers can potentially execute table service plans concurrently to an ingestion writers. This setup though is currently not reliable for clustering and compaction as failed executions and rollbacks may cause dataset corruptions or table services plans to be prematurely aborted. This RFC proposes to address these limitations by using HUDI's heartbeating and transaction manager to update the behavior for clustering, compaction, and rollback of failed writes.
 
-Describe the problem you are trying to solve and a brief description of why it’s needed
 
 ## Background
-Introduce any much background context which is relevant or necessary to understand the feature and design choices.
+The table service operations compact, logcompact, and cluster, have the following multiwriter issues when writers execute or rollback these table service plans (note that “removable-plan” is defined as a table service plan that is configured such that when it is rolled back, its plan is deleted from the timeline and cannot be re-executed - only clustering and logcompaction are expected to support this option)
+
+### s
 
 ## Implementation
 Describe the new thing you want to do in appropriate detail, how it fits into the project architecture. 
