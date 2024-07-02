@@ -23,6 +23,8 @@ import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -841,9 +843,20 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   public Option<String> getLastCommitTimeSynced(String tableName) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
-      return Option.ofNullable(table.parameters().get(HOODIE_LAST_COMMIT_TIME_SYNC));
+      return Option.ofNullable(table.parameters().getOrDefault(HOODIE_LAST_COMMIT_TIME_SYNC, null));
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to get last sync commit time for " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public Option<String> getLastCommitCompletionTimeSynced(String tableName) {
+    // Get the last commit completion time from the TBLproperties
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      return Option.ofNullable(table.parameters().getOrDefault(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, null));
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get the last commit completion time synced from the table " + tableName, e);
     }
   }
 
@@ -854,15 +867,27 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
-    if (!getActiveTimeline().lastInstant().isPresent()) {
+    HoodieTimeline activeTimeline = getActiveTimeline();
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitCompletionSynced = activeTimeline
+        .getInstantsOrderedByCompletionTime()
+        .skip(activeTimeline.countInstants() - 1)
+        .findFirst()
+        .map(i -> Option.of(i.getCompletionTime()))
+        .orElse(Option.empty());
+    if (lastCommitSynced.isPresent()) {
+      try {
+        HashMap<String, String> propertyMap = new HashMap<>();
+        propertyMap.put(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
+        if (lastCommitCompletionSynced.isPresent()) {
+          propertyMap.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
+        }
+        updateTableParameters(awsGlue, databaseName, tableName, propertyMap, skipTableArchive);
+      } catch (Exception e) {
+        throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
+      }
+    } else {
       LOG.warn("No commit in active timeline.");
-      return;
-    }
-    final String lastCommitTimestamp = getActiveTimeline().lastInstant().get().getTimestamp();
-    try {
-      updateTableParameters(awsGlue, databaseName, tableName, Collections.singletonMap(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitTimestamp), skipTableArchive);
-    } catch (Exception e) {
-      throw new HoodieGlueSyncException("Fail to update last sync commit time for " + tableId(databaseName, tableName), e);
     }
     try {
       // as a side effect, we also refresh the partition indexes if needed
