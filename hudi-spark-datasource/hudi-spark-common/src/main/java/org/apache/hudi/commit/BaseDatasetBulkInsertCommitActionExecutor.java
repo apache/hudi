@@ -20,7 +20,7 @@ package org.apache.hudi.commit;
 
 import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -96,7 +96,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
     table = writeClient.initTable(getWriteOperationType(), Option.ofNullable(instantTime));
 
     BulkInsertPartitioner<Dataset<Row>> bulkInsertPartitionerRows = getPartitioner(populateMetaFields, isTablePartitioned);
-    Dataset<Row> hoodieDF = SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, instantTime);
+    Dataset<Row> hoodieDF = HoodieDatasetBulkInsertHelper.prepareForBulkInsert(records, writeConfig, bulkInsertPartitionerRows, instantTime);
 
     preExecute();
     HoodieWriteMetadata<JavaRDD<WriteStatus>> result = buildHoodieWriteMetadata(doExecute(hoodieDF, bulkInsertPartitionerRows.arePartitionRecordsSorted()));

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -79,7 +79,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
 
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper().bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
+    return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
         partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
   }
 

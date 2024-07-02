@@ -19,7 +19,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
@@ -81,9 +81,8 @@ public class SparkSingleFileSortExecutionStrategy<T>
     BulkInsertPartitioner<Dataset<Row>> partitioner = getRowPartitioner(strategyParams, schema);
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
-    return SparkAdapterSupport$.MODULE$.sparkAdapter().getDatasetBulkInsertHelper()
-        .bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-            partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+    return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
   }
 
   @Override
