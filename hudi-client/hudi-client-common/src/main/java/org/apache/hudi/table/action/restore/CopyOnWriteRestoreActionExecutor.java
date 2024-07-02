@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.table.HoodieTable;
@@ -41,7 +42,7 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
   @Override
   protected HoodieRollbackMetadata rollbackInstant(HoodieInstant instantToRollback) {
     if (!instantToRollback.getAction().equals(HoodieTimeline.COMMIT_ACTION)
-        && !instantToRollback.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+        && !ClusteringUtils.isClusteringOrReplaceCommitAction(instantToRollback.getAction())) {
       throw new HoodieRollbackException("Unsupported action in rollback instant:" + instantToRollback);
     }
     table.getMetaClient().reloadActiveTimeline();

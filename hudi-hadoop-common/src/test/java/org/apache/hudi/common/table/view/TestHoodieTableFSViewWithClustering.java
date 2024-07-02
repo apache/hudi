@@ -145,7 +145,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, commitTime1);
     saveAsComplete(
         commitTimeline,
         instant1,

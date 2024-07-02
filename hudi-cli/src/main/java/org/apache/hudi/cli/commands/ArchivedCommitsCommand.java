@@ -239,6 +239,7 @@ public class ArchivedCommitsCommand {
       case HoodieTimeline.COMPACTION_ACTION:
         return commitDetail(record, "hoodieCompactionMetadata", skipMetadata);
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case HoodieTimeline.CLUSTER_ACTION:
         return commitDetail(record, "hoodieReplaceCommitMetadata", skipMetadata);
       default: {
         throw new HoodieException("Unexpected action type: " + actionType);
