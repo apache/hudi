@@ -1969,6 +1969,15 @@ public class TestHiveSyncTool {
     assertEquals(3, hiveClient.getAllPartitions(tableName).size());
   }
 
+  @Test
+  public void testGlueSyncNotAllowed() {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "GLUE");
+    assertThrows(HoodieHiveSyncException.class, this::reInitHiveSyncClient);
+
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "HMS");
+    assertDoesNotThrow(this::reInitHiveSyncClient);
+  }
+
   private void reSyncHiveTable() {
     hiveSyncTool.syncHoodieTable();
     // we need renew the hive client after tool.syncHoodieTable(), because it will close hive
