@@ -331,6 +331,18 @@ public class MarkerUtils {
   }
 
   /**
+   * Get fileID from full marker path, for example:
+   * 20210623/0/20210825/932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0_85-15-1390_20220620181735781.parquet.marker.MERGE
+   *    ==> get 932a86d9-5c1d-44c7-ac99-cb88b8ef8478-0
+   * @param marker
+   * @return
+   */
+  public static String makerToFileID(String marker) {
+    String[] ele = marker.split("_")[0].split("/");
+    return ele[ele.length - 1];
+  }
+
+  /**
    * Get instantTime from full marker path, for example:
    * /var/folders/t3/th1dw75d0yz2x2k2qt6ys9zh0000gp/T/junit6502909693741900820/dataset/.hoodie/.temp/003
    *    ==> 003
