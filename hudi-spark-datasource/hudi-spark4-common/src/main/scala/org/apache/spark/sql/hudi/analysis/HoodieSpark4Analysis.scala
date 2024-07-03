@@ -20,7 +20,7 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils.MatchResolvedTable
+import org.apache.spark.sql.HoodieSpark4CatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
@@ -33,7 +33,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusAnalysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.analysis.HoodieSpark4Analysis.{HoodieV1OrV2Table, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
@@ -52,7 +52,7 @@ import org.apache.spark.sql.hudi.logical.TimeTravelRelation
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
  */
-case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
+case class HoodieSpark4ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   with SparkAdapterSupport with ProvidesHoodieConfig {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
@@ -310,7 +310,7 @@ case class HoodieSpark32PlusResolveReferences(spark: SparkSession) extends Rule[
  * Rule replacing resolved Spark's commands (not working for Hudi tables out-of-the-box) with
  * corresponding Hudi implementations
  */
-case class HoodieSpark32PlusPostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class HoodieSpark4PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       case ShowPartitions(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), specOpt, _) =>
@@ -338,7 +338,7 @@ case class HoodieSpark32PlusPostAnalysisRule(sparkSession: SparkSession) extends
   }
 }
 
-object HoodieSpark32PlusAnalysis extends SparkAdapterSupport {
+object HoodieSpark4Analysis extends SparkAdapterSupport {
 
   private[sql] object HoodieV1OrV2Table {
     def unapply(table: Table): Option[CatalogTable] = table match {

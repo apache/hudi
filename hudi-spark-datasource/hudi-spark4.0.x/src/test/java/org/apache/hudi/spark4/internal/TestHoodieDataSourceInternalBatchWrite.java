@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.spark3.internal;
+package org.apache.hudi.spark4.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -24,8 +24,6 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.HoodieBulkInsertInternalWriterTestBase;
-import org.apache.hudi.spark4.internal.HoodieDataSourceInternalBatchWrite;
-import org.apache.hudi.spark4.internal.HoodieWriterCommitMessage;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;

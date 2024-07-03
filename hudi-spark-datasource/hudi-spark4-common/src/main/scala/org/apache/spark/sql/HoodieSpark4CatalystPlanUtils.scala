@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.command.{CreateTableLikeCommand, ExplainCo
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
-trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
+trait HoodieSpark4CatalystPlanUtils extends HoodieCatalystPlansUtils {
 
   /**
    * Instantiates [[ProjectionOverSchema]] utility
@@ -86,7 +86,7 @@ trait HoodieSpark3CatalystPlanUtils extends HoodieCatalystPlansUtils {
   }
 }
 
-object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
+object HoodieSpark4CatalystPlanUtils extends SparkAdapterSupport {
 
   /**
    * This is an extractor to accommodate for [[ResolvedTable]] signature change in Spark 3.2
@@ -94,7 +94,7 @@ object HoodieSpark3CatalystPlanUtils extends SparkAdapterSupport {
   object MatchResolvedTable {
     def unapply(plan: LogicalPlan): Option[(TableCatalog, Identifier, Table)] =
       sparkAdapter.getCatalystPlanUtils match {
-        case spark3Utils: HoodieSpark3CatalystPlanUtils => spark3Utils.unapplyResolvedTable(plan)
+        case spark4Utils: HoodieSpark4CatalystPlanUtils => spark4Utils.unapplyResolvedTable(plan)
         case _ => None
       }
   }
