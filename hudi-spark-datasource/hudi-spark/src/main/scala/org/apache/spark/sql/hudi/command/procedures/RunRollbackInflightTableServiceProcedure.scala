@@ -78,7 +78,7 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
     var isClustering: Boolean = true
     var instant: HoodieInstant = null
     val pendingCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, pendingInstant)
-    val pendingClusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingInstant)
+    val pendingClusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTER_ACTION, pendingInstant)
     val timeline = metaClient.getActiveTimeline.getWriteTimeline
     if (!timeline.containsInstant(pendingCompactionInstant) && !timeline.containsInstant(pendingClusteringInstant)) {
       throw new RuntimeException(s"there is no pending instant : [$pendingClusteringInstant | $pendingCompactionInstant]")

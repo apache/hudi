@@ -119,7 +119,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
       .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
       .lastInstant().get()
     if (getLatestCompactionInstant() != getLatestMetaClient(false).getActiveTimeline.lastInstant()
-      && lastInstant.getAction != ActionType.cluster.name()
+      && lastInstant.getAction != ActionType.replacecommit.name()
       && lastInstant.getAction != ActionType.clean.name()) {
       mergedDfList = mergedDfList.take(mergedDfList.size - 1)
     }

@@ -490,7 +490,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, commitActiontype, commitTime));
     HoodieInstant inflightInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, commitActiontype, commitTime);
     metaClient.getActiveTimeline().createNewInstant(inflightInstant);
-    if (commitActiontype.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+    if (commitActiontype.equals(HoodieTimeline.CLUSTER_ACTION)) {
       metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant,
           TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
     } else {
@@ -741,9 +741,9 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
       assertEquals(0, numDeltaCommits, "Got=" + numDeltaCommits + ", exp =" + 0);
     }
 
-    static void assertAtLeastNReplaceRequests(int minExpected, String tablePath) {
+    static void assertAtLeastNClusterRequests(int minExpected, String tablePath) {
       HoodieTableMetaClient meta = createMetaClient(storage.getConf(), tablePath);
-      HoodieTimeline timeline = meta.getActiveTimeline().filterPendingReplaceTimeline();
+      HoodieTimeline timeline = meta.getActiveTimeline().filterPendingClusterTimeline();
       LOG.info("Timeline Instants=" + meta.getActiveTimeline().getInstants());
       int numDeltaCommits = timeline.countInstants();
       assertTrue(minExpected <= numDeltaCommits, "Got=" + numDeltaCommits + ", exp >=" + minExpected);
