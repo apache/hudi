@@ -112,6 +112,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightClusterCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
@@ -121,6 +122,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSav
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedClusterCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
@@ -335,6 +337,18 @@ public class HoodieTestTable implements AutoCloseable {
   public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addRequestedCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }

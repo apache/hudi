@@ -119,9 +119,15 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieInstant instant1 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTER_ACTION, ts1);
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(instant1,
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
-            newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    if (withReplace) {
+      activeTimeline.saveAsComplete(instant1,
+          Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    } else {
+      activeTimeline.transitionClusterInflightToComplete(true, instant1,
+          Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    }
     metaClient.reloadActiveTimeline();
 
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
@@ -132,9 +138,15 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     HoodieInstant instant2 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTER_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(instant2,
-        Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
-            newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    if (withReplace) {
+      activeTimeline.saveAsComplete(instant2,
+          Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    } else {
+      activeTimeline.transitionClusterInflightToComplete(true, instant2,
+          Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    }
     metaClient.reloadActiveTimeline();
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(1, partitions.size());
@@ -269,7 +281,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     activeTimeline.createNewInstant(instant2);
     String newValueForMetadata = "newValue2";
     extraMetadata.put(extraMetadataKey, newValueForMetadata);
-    activeTimeline.saveAsComplete(instant2,
+    activeTimeline.transitionClusterInflightToComplete(true, instant2,
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();

@@ -187,7 +187,11 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
       HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
-      timeline.saveAsComplete(inflight, data);
+      if (inflight.getAction().equals(HoodieTimeline.CLUSTER_ACTION)) {
+        timeline.transitionClusterInflightToComplete(true, inflight, data);
+      } else {
+        timeline.saveAsComplete(inflight, data);
+      }
     }
   }
 }

@@ -551,13 +551,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
     HoodieTimeline pendingClusterTimeline = filterPendingClusterTimeline();
-    Stream<HoodieInstant> replaceStream;
+    Stream<HoodieInstant> clusterStream;
     if (isLast) {
-      replaceStream = pendingClusterTimeline.getReverseOrderedInstants();
+      clusterStream = pendingClusterTimeline.getReverseOrderedInstants();
     } else {
-      replaceStream = pendingClusterTimeline.getInstantsAsStream();
+      clusterStream = pendingClusterTimeline.getInstantsAsStream();
     }
-    return  Option.fromJavaOptional(replaceStream
+    return  Option.fromJavaOptional(clusterStream
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
   }
 

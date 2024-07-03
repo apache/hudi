@@ -176,7 +176,7 @@ class RunClusteringProcedure extends BaseProcedure
       }
 
       val clusteringInstants = metaClient.reloadActiveTimeline().getInstants.iterator().asScala
-        .filter(p => p.getAction == HoodieTimeline.CLUSTER_ACTION && filteredPendingClusteringInstants.contains(p.getTimestamp))
+        .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && filteredPendingClusteringInstants.contains(p.getTimestamp))
         .toSeq
         .sortBy(f => f.getTimestamp)
         .reverse

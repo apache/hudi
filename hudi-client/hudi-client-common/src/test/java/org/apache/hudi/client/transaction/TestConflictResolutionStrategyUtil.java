@@ -109,7 +109,7 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceRequested(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterRequested(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
@@ -126,11 +126,11 @@ public class TestConflictResolutionStrategyUtil {
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addRequestedReplace(instantTime, Option.of(requestedReplaceMetadata))
+        .addRequestedCluster(instantTime, requestedReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
@@ -140,7 +140,7 @@ public class TestConflictResolutionStrategyUtil {
     writeStat.setFileId("file-1");
     inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     HoodieTestTable.of(metaClient)
-        .addInflightReplace(instantTime, Option.of(inflightReplaceMetadata))
+        .addInflightCluster(instantTime, Option.of(inflightReplaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -261,7 +261,7 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceInflight(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterInflight(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
     Option<HoodieCommitMetadata> inflightReplaceMetadata = Option.empty();
     if (WriteOperationType.INSERT_OVERWRITE.equals(writeOperationType)) {
       inflightReplaceMetadata = Option.of(createReplaceCommitMetadata(WriteOperationType.INSERT_OVERWRITE));

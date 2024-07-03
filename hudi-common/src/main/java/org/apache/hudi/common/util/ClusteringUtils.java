@@ -43,6 +43,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -108,18 +109,30 @@ public class ClusteringUtils {
    * @throws IOException
    */
   private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant) throws IOException {
-    final HoodieInstant requestedInstant;
-    if (!pendingReplaceOrClusterInstant.isRequested()) {
+    HoodieInstant requestedInstant;
+    if (pendingReplaceOrClusterInstant.isInflight()) {
       // inflight replacecommit files don't have clustering plan.
       // This is because replacecommit inflight can have workload profile for 'insert_overwrite'.
       // Get the plan from corresponding requested instant.
-      requestedInstant = pendingReplaceOrClusterInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
-          ? HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceOrClusterInstant.getTimestamp())
-          : HoodieTimeline.getClusterCommitRequestedInstant(pendingReplaceOrClusterInstant.getTimestamp());
-    } else {
+      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, pendingReplaceOrClusterInstant.getAction(), pendingReplaceOrClusterInstant.getTimestamp());
+    } else if (pendingReplaceOrClusterInstant.isRequested()) {
       requestedInstant = pendingReplaceOrClusterInstant;
+    } else {
+      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTER_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
     }
-    Option<byte[]> content = timeline.getInstantDetails(requestedInstant);
+    Option<byte[]> content;
+    try {
+      content = timeline.getInstantDetails(requestedInstant);
+    } catch (HoodieIOException e) {
+      if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
+        // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
+        // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
+        requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
+        content = timeline.getInstantDetails(requestedInstant);
+      } else {
+        throw e;
+      }
+    }
     if (!content.isPresent() || content.get().length == 0) {
       // few operations create requested file without any content. Assume these are not clustering
       return Option.empty();

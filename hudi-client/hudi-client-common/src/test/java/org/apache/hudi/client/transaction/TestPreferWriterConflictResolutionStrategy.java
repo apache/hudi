@@ -41,8 +41,8 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompactionRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceInflight;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceRequested;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterInflight;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 
 public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTestHarness {
 
@@ -171,8 +171,8 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     createInflightCommit(currentWriterInstant, metaClient);
     // clustering 1 gets scheduled
     String newInstantTime = metaClient.createNewInstantTime();
-    createReplaceRequested(newInstantTime, metaClient);
-    createReplaceInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
+    createClusterRequested(newInstantTime, metaClient);
+    createClusterInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();

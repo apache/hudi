@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompaction;
@@ -51,8 +52,6 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceInflight;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplaceRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRequestedCommit;
 
 public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends HoodieCommonTestHarness {
@@ -128,7 +127,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testConcurrentWritesWithReplaceInflightCommit() throws Exception {
-    createReplaceInflight(metaClient.createNewInstantTime(), metaClient);
+    TestConflictResolutionStrategyUtil.createClusterInflight(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = Option.empty();
 
@@ -139,7 +138,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
     // writer 2 starts and finishes
     String newInstantTime = metaClient.createNewInstantTime();
-    createReplaceInflight(newInstantTime, metaClient);
+    TestConflictResolutionStrategyUtil.createClusterInflight(newInstantTime, metaClient);
 
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
     HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
@@ -149,7 +148,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
         Collectors.toList());
 
     // writer 1 conflicts with writer 2
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
@@ -262,7 +261,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createInflightCommit(currentWriterInstant, metaClient);
     // clustering 1 gets scheduled
     String newInstantTime = metaClient.createNewInstantTime();
-    createReplaceRequested(newInstantTime, metaClient);
+    createClusterRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
@@ -271,7 +270,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
         Collectors.toList());
     // writer 1 conflicts with scheduled compaction plan 1
-    Assertions.assertTrue(candidateInstants.size() == 1);
+    Assertions.assertEquals(1, candidateInstants.size());
     ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
     ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
     Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));

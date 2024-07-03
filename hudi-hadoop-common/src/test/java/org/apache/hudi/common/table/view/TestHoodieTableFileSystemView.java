@@ -191,9 +191,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
-    saveAsComplete(commitTimeline, clusteringInstant3,
+    saveAsCompleteCluster(commitTimeline, clusteringInstant3,
         serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));
-    saveAsComplete(
+    saveAsCompleteCluster(
         commitTimeline,
         clusteringInstant4,
         serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));

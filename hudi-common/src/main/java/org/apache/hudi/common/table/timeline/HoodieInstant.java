@@ -191,6 +191,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     Map<String, String> comparableMap = new HashMap<>();
     comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
     comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
+    comparableMap.put(HoodieTimeline.CLUSTER_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
     return comparableMap;
   }
 
