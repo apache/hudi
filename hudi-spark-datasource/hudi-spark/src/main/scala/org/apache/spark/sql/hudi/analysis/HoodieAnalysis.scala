@@ -93,7 +93,11 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-      val spark32PlusResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
+
+      val spark32PlusResolveReferencesClass = if (HoodieSparkUtils.gteqSpark4_0)
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
+      else
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark4ResolveReferences"
       val spark32PlusResolveReferences: RuleBuilder =
         session => instantiateKlass(spark32PlusResolveReferencesClass, session)
 
@@ -148,7 +152,13 @@ object HoodieAnalysis extends SparkAdapterSupport {
       session => HoodiePostAnalysisRule(session)
     )
 
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark4_0) {
+      val spark4PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark4PostAnalysisRule"
+      val spark4PostHocResolution: RuleBuilder =
+        session => instantiateKlass(spark4PostHocResolutionClass, session)
+
+      rules += spark4PostHocResolution
+    } else if (HoodieSparkUtils.gteqSpark3_2) {
       val spark3PostHocResolutionClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusPostAnalysisRule"
       val spark3PostHocResolution: RuleBuilder =
         session => instantiateKlass(spark3PostHocResolutionClass, session)
