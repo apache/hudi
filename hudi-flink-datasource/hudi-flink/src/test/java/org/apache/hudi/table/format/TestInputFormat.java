@@ -610,7 +610,7 @@ public class TestInputFormat {
     TestData.assertRowDataEquals(result3, TestData.dataSetInsert(3, 4));
 
     // test c2 and c4, c2 completion time > c1, so it is not a hollow instant
-    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getStateTransitionTime(), false);
+    IncrementalInputSplits.Result splits4 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(0).getTimestamp(), oriInstants.get(0).getCompletionTime(), false);
     assertFalse(splits4.isEmpty());
     List<RowData> result4 = readData(inputFormat, splits4.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result4, TestData.dataSetInsert(3, 4, 7, 8));
@@ -631,7 +631,7 @@ public class TestInputFormat {
 
     // test c2 and c4, c2 is recognized as a hollow instant
     // the (version_number, completion_time) pair is not consistent, just for test purpose
-    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getStateTransitionTime(), false);
+    IncrementalInputSplits.Result splits7 = incrementalInputSplits.inputSplits(metaClient, oriInstants.get(2).getTimestamp(), oriInstants.get(3).getCompletionTime(), false);
     assertFalse(splits7.isEmpty());
     List<RowData> result7 = readData(inputFormat, splits7.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
     TestData.assertRowDataEquals(result7, TestData.dataSetInsert(3, 4, 7, 8));

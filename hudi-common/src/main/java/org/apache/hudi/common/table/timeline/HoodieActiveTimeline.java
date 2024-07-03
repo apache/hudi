@@ -304,6 +304,23 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     }
   }
 
+  /**
+   * Many callers might not pass completionTime, here we have to search
+   * timeline to get completionTime, the impact should be minor since
+   * 1. It appeals only tests pass instant without completion time
+   * 2. we already holds all instants in memory, the cost should be minor.
+   *
+   * <p>TODO: [HUDI-6885] Depreciate HoodieActiveTimeline#getInstantFileName and fix related tests.
+   */
+  protected String getInstantFileName(HoodieInstant instant) {
+    if (instant.isCompleted() && instant.getCompletionTime() == null) {
+      return getInstantsAsStream().filter(s -> s.equals(instant))
+          .findFirst().orElseThrow(() -> new HoodieIOException("Cannot find the instant" + instant))
+          .getFileName();
+    }
+    return instant.getFileName();
+  }
+
   @Override
   public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     StoragePath detailPath = getInstantFileNamePath(instant.getFileName());
@@ -601,28 +618,32 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   protected void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data,
        boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()), String.format("%s and %s are not consistent when transition state.", fromInstant, toInstant));
+    String fromInstantFileName = fromInstant.getFileName();
+    // Ensures old state exists in timeline
+    LOG.info("Checking for file exists ?" + getInstantFileNamePath(fromInstantFileName));
     try {
       HoodieStorage storage = metaClient.getStorage();
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         // Re-create the .inflight file by opening a new file and write the commit metadata in
-        createFileInMetaPath(fromInstant.getFileName(), data, allowRedundantTransitions);
-        StoragePath fromInstantPath = getInstantFileNamePath(fromInstant.getFileName());
-        StoragePath toInstantPath = getInstantFileNamePath(toInstant.getFileName());
+        createFileInMetaPath(fromInstantFileName, data, allowRedundantTransitions);
+        StoragePath fromInstantPath = getInstantFileNamePath(fromInstantFileName);
+        StoragePath toInstantPath = getInstantFileNamePath(getInstantFileName(toInstant));
+        // TODO: [HUDI-7893] Avoid rename for cloud storage
         boolean success = storage.rename(fromInstantPath, toInstantPath);
         if (!success) {
           throw new HoodieIOException("Could not rename " + fromInstantPath + " to " + toInstantPath);
         }
       } else {
         // Ensures old state exists in timeline
-        ValidationUtils.checkArgument(storage.exists(getInstantFileNamePath(fromInstant.getFileName())),
-            "File " + getInstantFileNamePath(fromInstant.getFileName()) + " does not exist!");
+        ValidationUtils.checkArgument(storage.exists(getInstantFileNamePath(fromInstantFileName)),
+            "File " + getInstantFileNamePath(fromInstantFileName) + " does not exist!");
         // Use Write Once to create Target File
         if (allowRedundantTransitions) {
-          FileIOUtils.createFileInPath(storage, getInstantFileNamePath(toInstant.getFileName()), data);
+          FileIOUtils.createFileInPath(storage, getInstantFileNamePath(getInstantFileName(toInstant)), data);
         } else {
-          storage.createImmutableFileInPath(getInstantFileNamePath(toInstant.getFileName()), data);
+          storage.createImmutableFileInPath(getInstantFileNamePath(getInstantFileName(toInstant)), data);
         }
-        LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(toInstant.getFileName()));
+        LOG.info("Create new file for toInstant ?" + getInstantFileNamePath(getInstantFileName(toInstant)));
       }
     } catch (IOException e) {
       throw new HoodieIOException("Could not complete " + fromInstant, e);
@@ -636,6 +657,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
         if (!metaClient.getStorage().exists(inFlightCommitFilePath)) {
+          // TODO: [HUDI-7893] Avoid rename for cloud storage
           boolean success = metaClient.getStorage().rename(commitFilePath, inFlightCommitFilePath);
           if (!success) {
             throw new HoodieIOException(
