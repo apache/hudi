@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.model;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;
@@ -65,7 +66,8 @@ public class TestHoodieInternalRow {
     Object[] values = getRandomValue(true);
 
     InternalRow row = new GenericInternalRow(values);
-    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+    HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+        UTF8String.fromString("commitTime"),
         UTF8String.fromString("commitSeqNo"),
         UTF8String.fromString("recordKey"),
         UTF8String.fromString("partitionPath"),
@@ -81,7 +83,8 @@ public class TestHoodieInternalRow {
   public void testUpdate() {
     Object[] values = getRandomValue(true);
     InternalRow row = new GenericInternalRow(values);
-    HoodieInternalRow hoodieInternalRow = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+    HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+        UTF8String.fromString("commitTime"),
         UTF8String.fromString("commitSeqNo"),
         UTF8String.fromString("recordKey"),
         UTF8String.fromString("partitionPath"),
@@ -116,14 +119,16 @@ public class TestHoodieInternalRow {
   public void testNumFields() {
     Object[] values = getRandomValue(true);
     InternalRow row = new GenericInternalRow(values);
-    HoodieInternalRow hoodieInternalRow1 = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+    HoodieInternalRow hoodieInternalRow1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+        UTF8String.fromString("commitTime"),
         UTF8String.fromString("commitSeqNo"),
         UTF8String.fromString("recordKey"),
         UTF8String.fromString("partitionPath"),
         UTF8String.fromString("fileName"),
         row,
         true);
-    HoodieInternalRow hoodieInternalRow2 = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+    HoodieInternalRow hoodieInternalRow2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+        UTF8String.fromString("commitTime"),
         UTF8String.fromString("commitSeqNo"),
         UTF8String.fromString("recordKey"),
         UTF8String.fromString("partitionPath"),
@@ -141,7 +146,8 @@ public class TestHoodieInternalRow {
       Object[] values = getRandomValue(true);
 
       InternalRow row = new GenericInternalRow(values);
-      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+      HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+          UTF8String.fromString("commitTime"),
           UTF8String.fromString("commitSeqNo"),
           UTF8String.fromString("recordKey"),
           UTF8String.fromString("partitionPath"),
@@ -170,7 +176,8 @@ public class TestHoodieInternalRow {
 
       Object[] values = getRandomValue(true);
       InternalRow row = new GenericInternalRow(values);
-      HoodieInternalRow hoodieInternalRow = new HoodieInternalRow(UTF8String.fromString("commitTime"),
+      HoodieInternalRow hoodieInternalRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(
+          UTF8String.fromString("commitTime"),
           UTF8String.fromString("commitSeqNo"),
           UTF8String.fromString("recordKey"),
           UTF8String.fromString("partitionPath"),

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.spark3.internal;
+package org.apache.hudi.spark4.internal;
 
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;

@@ -135,7 +135,7 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <skipTests>${skip.hudi-spark3.unit.tests}</skipTests>
+          <skipTests>${skip.hudi-spark4.unit.tests}</skipTests>
         </configuration>
       </plugin>
       <plugin>
@@ -206,17 +206,17 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>${fasterxml.spark3.version}</version>
+      <version>${fasterxml.spark4.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-annotations</artifactId>
-      <version>${fasterxml.spark3.version}</version>
+      <version>${fasterxml.spark4.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-core</artifactId>
-      <version>${fasterxml.spark3.version}</version>
+      <version>${fasterxml.spark4.version}</version>
     </dependency>
 
     <dependency>
@@ -246,14 +246,7 @@
     <!-- Hoodie Spark 3.x common  -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-
-    <!-- Hoodie Spark >= 3.2 common  -->
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark3.2plus-common</artifactId>
+      <artifactId>hudi-spark4-common</artifactId>
       <version>${project.version}</version>
     </dependency>
 
@@ -313,7 +306,7 @@
     <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-core_${scala.binary.version}</artifactId>
-      <version>${spark3.version}</version>
+      <version>${spark40.version}</version>
       <classifier>tests</classifier>
       <scope>test</scope>
     </dependency>

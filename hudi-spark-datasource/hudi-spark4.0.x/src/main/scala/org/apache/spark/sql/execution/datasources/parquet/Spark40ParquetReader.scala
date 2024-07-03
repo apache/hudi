@@ -87,7 +87,7 @@ class Spark40ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+    val schemaEvolutionUtils = new Spark4ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
 
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading

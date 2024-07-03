@@ -115,7 +115,8 @@ object HoodieDatasetBulkInsertHelper
             val filename = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
-            new HoodieInternalRow(commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
+            sparkAdapter.createInternalRow(
+              commitTimestamp, commitSeqNo, recordKey, partitionPath, filename, row, false)
           }
         }, SQLConf.get)
       }

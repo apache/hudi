@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -25,8 +26,9 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession, SQLContext}
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
@@ -34,13 +36,13 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.JavaConverters._
 
 /**
@@ -105,5 +107,21 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                                                  queryExecution: QueryExecution,
                                                  name: Option[String])(body: => T): T = {
       SQLExecution.withNewExecutionId(queryExecution, name)(body)
+  }
+
+  override def createInternalRow(commitTime: UTF8String,
+                                commitSeqNumber: UTF8String,
+                                recordKey: UTF8String,
+                                partitionPath: UTF8String,
+                                fileName: UTF8String,
+                                sourceRow: InternalRow,
+                                sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark3HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createInternalRow(metaFields: Array[UTF8String],
+                                sourceRow: InternalRow,
+                                sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark3HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 }

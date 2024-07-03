@@ -20,6 +20,7 @@ package org.apache.spark.sql.adapter
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.Spark40HoodieFileScanRDD
+import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
@@ -49,9 +50,9 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.sql.{Connection, ResultSet}
 
 /**
- * Implementation of [[SparkAdapter]] for Spark 3.5.x branch
+ * Implementation of [[SparkAdapter]] for Spark 4.0.x branch
  */
-class Spark4_0Adapter extends BaseSpark3Adapter {
+class Spark4_0Adapter extends BaseSpark4Adapter {
 
   override def resolveHoodieTable(plan: LogicalPlan): Option[CatalogTable] = {
     super.resolveHoodieTable(plan).orElse {
@@ -78,7 +79,7 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def getCatalogUtils: HoodieSpark3CatalogUtils = HoodieSpark40CatalogUtils
+  override def getCatalogUtils: HoodieSpark4CatalogUtils = HoodieSpark40CatalogUtils
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark40CatalystExpressionUtils
 
@@ -164,4 +165,20 @@ class Spark4_0Adapter extends BaseSpark3Adapter {
   override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
 
   override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = Spark4FlatLists.ofComparableArray(t)
+
+  override def createInternalRow(commitTime: UTF8String,
+                                 commitSeqNumber: UTF8String,
+                                 recordKey: UTF8String,
+                                 partitionPath: UTF8String,
+                                 fileName: UTF8String,
+                                 sourceRow: InternalRow,
+                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark4HoodieInternalRow(commitTime, commitSeqNumber, recordKey, partitionPath, fileName, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createInternalRow(metaFields: Array[UTF8String],
+                                 sourceRow: InternalRow,
+                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
+    new Spark4HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+  }
 }

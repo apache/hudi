@@ -283,7 +283,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
               DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
             val datetimeRebaseSpec =
               DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-            new Spark32PlusHoodieVectorizedParquetRecordReader(
+            new Spark4PlusHoodieVectorizedParquetRecordReader(
               convertTz.orNull,
               datetimeRebaseSpec.mode.toString,
               datetimeRebaseSpec.timeZone,

@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.util.collection.FlatLists
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
@@ -260,4 +261,16 @@ trait SparkAdapter extends Serializable {
    * So we have to create [[Spark4FlatLists]] for Spark 4.0+
    */
   def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = FlatLists.ofComparableArray(t)
+
+  def createInternalRow(commitTime: UTF8String,
+                        commitSeqNumber: UTF8String,
+                        recordKey: UTF8String,
+                        partitionPath: UTF8String,
+                        fileName: UTF8String,
+                        sourceRow: InternalRow,
+                        sourceContainsMetaFields: Boolean): HoodieInternalRow
+
+  def createInternalRow(metaFields: Array[UTF8String],
+                        sourceRow: InternalRow,
+                        sourceContainsMetaFields: Boolean): HoodieInternalRow
 }
