@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.avro.model.HoodieCommitMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieIndexCommitMetadata;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
 /**
  * Utils for Hudi timeline metadata.
  */
-public class TimelineMetadataUtils {
+public class TimelineMetadataUtils  {
 
   private static final Integer DEFAULT_VERSION = 1;
 
@@ -150,6 +151,21 @@ public class TimelineMetadataUtils {
     return serializeAvroMetadata(indexCommitMetadata, HoodieIndexCommitMetadata.class);
   }
 
+  /*public static Option<byte[]> serializeCommitMetadata(org.apache.hudi.common.model.HoodieCommitMetadata commitMetadata) throws IOException {
+    if (commitMetadata instanceof org.apache.hudi.common.model.HoodieReplaceCommitMetadata) {
+      return serializeReplaceCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
+    }
+    return serializeCommitMetadata(MetadataConversionUtils.convertCommitMetadata(commitMetadata));
+  }*/
+
+  /*private static Option<byte[]> serializeReplaceCommitMetadata(HoodieReplaceCommitMetadata commitMetadata) throws IOException {
+    return serializeAvroMetadata(commitMetadata, HoodieReplaceCommitMetadata.class);
+  }*/
+
+  private static Option<byte[]> serializeCommitMetadata(HoodieCommitMetadata commitMetadata) throws IOException {
+    return serializeAvroMetadata(commitMetadata, HoodieCommitMetadata.class);
+  }
+
   public static <T extends SpecificRecordBase> Option<byte[]> serializeAvroMetadata(T metadata, Class<T> clazz)
       throws IOException {
     DatumWriter<T> datumWriter = new SpecificDatumWriter<>(clazz);
@@ -207,6 +223,14 @@ public class TimelineMetadataUtils {
     FileReader<T> fileReader = DataFileReader.openReader(new SeekableByteArrayInput(bytes), reader);
     ValidationUtils.checkArgument(fileReader.hasNext(), "Could not deserialize metadata of type " + clazz);
     return fileReader.next();
+  }
+
+  public static HoodieCommitMetadata deserializeCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieCommitMetadata.class);
+  }
+
+  public static HoodieReplaceCommitMetadata deserializeReplaceCommitMetadata(byte[] bytes) throws IOException {
+    return deserializeAvroMetadata(bytes, HoodieReplaceCommitMetadata.class);
   }
 
   public static <T extends SpecificRecordBase> T deserializeAvroRecordMetadata(byte[] bytes, Schema schema)

@@ -19,6 +19,8 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,6 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
@@ -511,11 +515,31 @@ public class HoodieCommitMetadata implements Serializable {
     return result;
   }
 
-  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
+  /*public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
       return fromJsonString(fromUTF8Bytes(bytes), clazz);
     } catch (Exception e) {
       throw new IOException("unable to read commit metadata", e);
+    }
+  }*/
+
+  public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
+    try {
+      if (bytes.length == 0) {
+        return clazz.newInstance();
+      }
+      return fromJsonString(
+          fromUTF8Bytes(
+              convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class)),
+          clazz);
+    } catch (Exception e) {
+      LOG.info("Failed to deserialize commit metadata as avro, trying json ");
+      try {
+        return fromJsonString(fromUTF8Bytes(bytes), clazz);
+      } catch (Exception e2) {
+        throw new IOException("unable to read commit metadata", e2);
+      }
+      //throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
   }
 

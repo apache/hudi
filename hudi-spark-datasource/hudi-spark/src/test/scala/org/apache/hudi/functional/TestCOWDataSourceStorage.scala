@@ -35,13 +35,12 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlCon
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -236,6 +235,21 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
+  }
+
+  @Test
+  def testRead0XTables(): Unit = {
+    val path = "/tmp/hudi_trips_mor_1_x/"
+    val df = spark.read.format("hudi").load(path)
+    df.registerTempTable("tbl1")
+    spark.sql("select * from tbl1 limit 4").show(false)
+    println("Completed")
+
+    val path1 = "/tmp/hudi_trips_cow/"
+    val df1 = spark.read.format("hudi").load(path1)
+    df1.registerTempTable("tbl2")
+    spark.sql("select * from tbl2 limit 4").show(false)
+    println("Completed")
   }
 
   @ParameterizedTest

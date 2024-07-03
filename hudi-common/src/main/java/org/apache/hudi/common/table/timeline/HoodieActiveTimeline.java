@@ -355,6 +355,26 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
         });
   }
 
+  /**
+   * Returns stream of {@link HoodieCommitMetadata} in order reverse to chronological (ie most
+   * recent metadata being the first element)
+   */
+  /*private Stream<Pair<HoodieInstant, HoodieCommitMetadata>> getCommitMetadataStream() {
+    // NOTE: Streams are lazy
+    return getCommitsTimeline().filterCompletedInstants()
+        .getInstantsAsStream()
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
+        .map(instant -> {
+          try {
+            HoodieCommitMetadata commitMetadata =
+                HoodieCommitMetadata.fromBytes(getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+            return Pair.of(instant, commitMetadata);
+          } catch (IOException e) {
+            throw new HoodieIOException(String.format("Failed to fetch HoodieCommitMetadata for instant (%s)", instant), e);
+          }
+        });
+  }*/
+
   public Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant) {
     // Cleaner metadata are always stored only in timeline .hoodie
     return readDataFromPath(getInstantFileNamePath(instant.getFileName()));

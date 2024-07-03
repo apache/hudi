@@ -19,7 +19,7 @@
 package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.avro.model.HoodieWriteStat;
-import org.apache.hudi.client.utils.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 
 import java.util.LinkedHashMap;
