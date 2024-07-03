@@ -18,12 +18,11 @@
 
 ## Proposers
 
-- @<proposer1 github username>
-- @<proposer2 github username>
+- @kbuci
+- @suryaprasanna
+- @nsivabalan
 
 ## Approvers
- - @<approver1 github username>
- - @<approver2 github username>
 
 ## Status
 
@@ -63,11 +62,14 @@ The compact/logcompact/cluster API that executes a plan will now have the follow
 7. Run the existing compact/logcompact/cluster execute API logic on P. Note that if P is not a removable-plan, this will implicitly rollback P (if it is currently inflight or has a pending rollback plan targeting it) before the actual execution phase.
 8. After the execution attempt succeeds/fails, clean up the heartbeat file before returning
 
+- The check in (3) needs to be within a transaction in order to ensure at most once writer has an active heartbeat against P at any given time. If this was done outside a transaction, then concurrent writers may each check that no heartbeat exists, and then start one at the same time.
+- It is possible for a removable-plan P to be in a requested state, and past writer may have scheduled a rollback for P but failed before completing it. In order to handle this case (4) i needed
 ### Changes to clean's rollback of failed writers
 The clean logic for rolling back failed writes will be changed such that a table lock will be acquired while iterating through all existing inflight and pending rollback plans and scheduling new rollback plans. If a pending instant of a non removable-plan table service is encountered, the instant will be skipped (and will not have a rollback scheduled). In addition if the plan is not at least `table_service_rollback_delay` minutes old or has an active heartbeat, it will also be skipped. Otherwise this table service plan is neither a will also be marked for rollback, the same way that ingestion inflights are targeted for rollback, since it is neither a recent removable-plan nor a non removable-plan instant. Once all required rollback plans have been scheduled, the table lock will be released, and any/all scheduled rollback plans will be executed (this means that executions of the rollback plans won’t be under a lock). As a result of this change, the logic for rolling back failed writes will be now split into two steps:
 1. Within a transaction, reload the active timeline and then get all instants that require a rollback plan be scheduled. For each, schedule a rollback plan.
 2. Execute any pending rollback plans (be it pending rollback plans that already existed or new pending rollback plans scheduled during (1)).
 
+- The reason (1) needs to be within a transaciton is in order to handle the case where a concurrent writer executing a table service plan might start the heartbeat at the same time
 
 ## Test Plan
 
