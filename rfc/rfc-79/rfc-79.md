@@ -85,7 +85,7 @@ Assume that table service plan P is either a compaction or a logcompaction/clust
 
 | #|  Scenario | Expectations |
 | - | - | -| 
-|A.| Multiple writers executing  on the same new plan P | At most one attempt will complete execution, the rest will either fail or return the completed metadata| 
+|A.| Multiple writers executing  on the same new plan P , which is in a requested state | At most one attempt will complete execution and create the completed data files and commit metadata for P, the rest will either fail or return the completed metadata (due to starting after P was already completed) | 
 |B.| <pre> <p> 1. Writer X starts execution of P and transitions to inflight </p> <p> 2. Writer Y starts executing P, after it has been transitioned to inflight </p> </pre> | X or Y may complete execution (or neither), though both may still succeed. If Y completed P, it would have first rolled back the existing attempt. If X completed P, Y would either fail or return completed metadata |
 |C.|<pre> <p> 1. Plan P exists on the timeline, which has already been transitioned to inflight </p> <p> 2. Writer X starts executing P </p> <p> 3. Writer Y starts executing P </p> </pre> | X or Y may complete execution (or neither),  though both may still succeed. If X completed execution, it would have had to rollback P.inflight first before re-execution. If Y completed execution, it may or may not have had to do a rollback, depending on if X failed after rolling back P.inflight but before re-attempting the actual execution. |
 
@@ -93,35 +93,13 @@ Assume that table service plan P is either a compaction or a logcompaction/clust
 ### Removable-plan clustering / logcompaction
 Assume that table service plan P is a logcompaction/clustering plan that is configured to be a removable-plan.
 
-
-
-Scenario
-Expectations
-A.
-Multiple writers executing  on the same new plan P
-At most one attempt will complete execution, the rest will either fail or return the completed metadata
-B.
-Writer X starts execution of P and transitions to inflight
-Writer Y starts executing P, after it has been transitioned to inflight
-
-
-X might complete execution or fail. If x ended up completing execution, Y may either fail or return completed metadata. Otherwise if X fails, Y will fail.
-C.
-Plan P exists on the timeline, which has already been transitioned to inflight
-Writer X starts executing P
-Writer Y starts executing P
-Both X and Y will fail
-D.
-Plan P is scheduled on timeline
-Writer X starts executing P
-Writer Y executes Clean 
-X may complete execution of P or fail.
-If X is currently executing P or P was scheduled very recently and not transitioned to inflight yet, the Y should not attempt to rollback P. Otherwise Y may try rollback P.
-E.
-Plan P is scheduled on timeline
-Writer X executes clean
-Writer Y starts executing P
-If P was recent then X should ignore P, and Y will have the chance to try to execute it. Otherwise, X will try to rollback P. The only scenario where Y might actually start executing P and transitions it to inflight/completed is if X happened to fail before creating a rollback plan. Otherwise, Y is expected to fail.
+| #|  Scenario | Expectations |
+| - | - | -| 
+|A.| Multiple writers executing  on the same new plan P , which is in a requested state | At most one attempt will complete execution and create the completed data files and commit metadata for P, the rest will either fail or return the completed metadata (due to starting after P was already completed) | 
+|B.| <pre> <p> 1. Writer X starts execution of P and transitions to inflight </p> <p> 2. Writer Y starts executing P, after it has been transitioned to inflight </p> </pre> | X might complete execution or fail. If X ended up completing execution, Y may either fail or return completed metadata. Otherwise if X fails, Y will fail. |
+|C.| <pre> <p> 1. Plan P exists on the timeline, which has already been transitioned to inflight </p> <p> 2. Writer X starts executing P </p> <p> 3. Writer Y starts executing P </p> | Both X and Y will fail |
+|D.|<pre> <p> 1. Plan P is scheduled on timeline </p> <p> 2. Writer X starts executing P <p> 3. Writer Y executes Clean </p> </pre> | X may complete execution of P or fail. If X is currently executing P or P was scheduled very recently and not transitioned to inflight yet, the Y should not attempt to rollback P. Otherwise Y may try rollback P. |
+|E.| <pre> <p> 1. Plan P is scheduled on timeline </p> <p> 2. Writer X executes clean </p> <p> 3. Writer Y starts executing P </p> </pre> | If P is newer than table_service_rollback_delay` then X should ignore P, and Y will have the chance to try to execute it. Otherwise, X will try to rollback P. The only scenario where Y might actually start executing P and transitions it to inflight/completed is if X happened to fail before creating a rollback plan. Otherwise, Y is expected to fail. |
 
 
 
