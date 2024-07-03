@@ -95,9 +95,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
 
       val spark32PlusResolveReferencesClass = if (HoodieSparkUtils.gteqSpark4_0)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
-      else
         "org.apache.spark.sql.hudi.analysis.HoodieSpark4ResolveReferences"
+      else
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark32PlusResolveReferences"
       val spark32PlusResolveReferences: RuleBuilder =
         session => instantiateKlass(spark32PlusResolveReferencesClass, session)
 
