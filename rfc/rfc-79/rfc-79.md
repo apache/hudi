@@ -78,4 +78,50 @@ The clean logic for rolling back failed writes will be changed such that a table
 
 ## Test Plan
 
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
+A proposed fix should handle any combination of table service execution/rollback operations. A few scenarios for compaction, logcomopaction, and clustering that can be tested are listed below
+
+### Compaction and table service plans that are not removable-plan
+Assume that table service plan P is either a compaction or a logcompaction/clustering plan that is configured to not be a removable-plan.
+
+| #|  Scenario | Expectations |
+| - | - | -| 
+|A.| Multiple writers executing  on the same new plan P | At most one attempt will complete execution, the rest will either fail or return the completed metadata| 
+|B.| <pre> <p> 1. Writer X starts execution of P and transitions to inflight </p> <p> 2. Writer Y starts executing P, after it has been transitioned to inflight </p> </pre> | X or Y may complete execution (or neither), though both may still succeed. If Y completed P, it would have first rolled back the existing attempt. If X completed P, Y would either fail or return completed metadata |
+|C.|<pre> <p> 1. Plan P exists on the timeline, which has already been transitioned to inflight </p> <p> 2. Writer X starts executing P </p> <p> 3. Writer Y starts executing P </p> </pre> | X or Y may complete execution (or neither),  though both may still succeed. If X completed execution, it would have had to rollback P.inflight first before re-execution. If Y completed execution, it may or may not have had to do a rollback, depending on if X failed after rolling back P.inflight but before re-attempting the actual execution. |
+
+
+### Removable-plan clustering / logcompaction
+Assume that table service plan P is a logcompaction/clustering plan that is configured to be a removable-plan.
+
+
+
+Scenario
+Expectations
+A.
+Multiple writers executing  on the same new plan P
+At most one attempt will complete execution, the rest will either fail or return the completed metadata
+B.
+Writer X starts execution of P and transitions to inflight
+Writer Y starts executing P, after it has been transitioned to inflight
+
+
+X might complete execution or fail. If x ended up completing execution, Y may either fail or return completed metadata. Otherwise if X fails, Y will fail.
+C.
+Plan P exists on the timeline, which has already been transitioned to inflight
+Writer X starts executing P
+Writer Y starts executing P
+Both X and Y will fail
+D.
+Plan P is scheduled on timeline
+Writer X starts executing P
+Writer Y executes Clean 
+X may complete execution of P or fail.
+If X is currently executing P or P was scheduled very recently and not transitioned to inflight yet, the Y should not attempt to rollback P. Otherwise Y may try rollback P.
+E.
+Plan P is scheduled on timeline
+Writer X executes clean
+Writer Y starts executing P
+If P was recent then X should ignore P, and Y will have the chance to try to execute it. Otherwise, X will try to rollback P. The only scenario where Y might actually start executing P and transitions it to inflight/completed is if X happened to fail before creating a rollback plan. Otherwise, Y is expected to fail.
+
+
+
