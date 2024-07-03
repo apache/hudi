@@ -69,13 +69,6 @@ The clean logic for rolling back failed writes will be changed such that a table
 2. Execute any pending rollback plans (be it pending rollback plans that already existed or new pending rollback plans scheduled during (1)).
 
 
-## Rollout/Adoption Plan
-
- - What impact (if any) will there be on existing users? 
- - If we are changing behavior how will we phase out the older behavior?
- - If we need special migration tools, describe them here.
- - When will we remove the existing behavior
-
 ## Test Plan
 
 A proposed fix should handle any combination of table service execution/rollback operations. A few scenarios for compaction, logcomopaction, and clustering that can be tested are listed below
@@ -101,5 +94,9 @@ Assume that table service plan P is a logcompaction/clustering plan that is conf
 |D.|<pre> <p> 1. Plan P is scheduled on timeline </p> <p> 2. Writer X starts executing P <p> 3. Writer Y executes Clean </p> </pre> | X may complete execution of P or fail. If X is currently executing P or P was newer than `table_service_rollback_delay` and not transitioned to inflight yet, the Y should not attempt to rollback P. Otherwise Y may try rollback P. |
 |E.| <pre> <p> 1. Plan P is scheduled on timeline </p> <p> 2. Writer X executes clean </p> <p> 3. Writer Y starts executing P </p> </pre> | If P is newer than `table_service_rollback_delay` then X should ignore P, and Y will have the chance to try to execute it. Otherwise, X will try to rollback P. The only scenario where Y might actually start executing P and transitions it to inflight/completed is if X happened to fail before creating a rollback plan. Otherwise, Y is expected to fail. |
 
+## Rollout/Adoption Plan
+
+- In order to not impact existing users, `table_service_rollback_delay` can be set to a large value, which will allow the current clean behavior (where removeable plans may be prematurely rolled-back) to remain.
+- There is a small possibility that users using concurrent writers to execute table services may see that, after an execution attempt of a table service plan failed, retries within the next few minutes may all fail as well. This is since there is a chance that a writer may fail and terminate before it has a chance to cleanup it's heartbeat. In order to address this potential (but unlikely) scenario, the new changes to compact/cluster execution can be made to only trigger if a new config flag is enabled. 
 
 
