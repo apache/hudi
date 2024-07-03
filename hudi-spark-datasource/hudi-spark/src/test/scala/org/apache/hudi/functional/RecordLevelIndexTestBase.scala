@@ -84,6 +84,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   @BeforeEach
   override def setUp() {
     initPath()
+    initQueryIndexConf()
     initSparkContexts()
     initHoodieStorage()
     initTestDataGenerator()

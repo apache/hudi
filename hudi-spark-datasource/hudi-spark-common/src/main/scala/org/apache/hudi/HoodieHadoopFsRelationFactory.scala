@@ -211,7 +211,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     includeLogFiles = true,
     shouldEmbedFileSlices = true)
 
-  val configProperties: TypedProperties = getConfigProperties(sparkSession, options)
+  val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
   val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
     .fromProperties(configProperties)
     .enable(configProperties.getBoolean(ENABLE.key, DEFAULT_METADATA_ENABLE_FOR_READERS)
