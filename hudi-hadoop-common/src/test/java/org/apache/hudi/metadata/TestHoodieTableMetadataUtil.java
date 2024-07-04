@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -98,6 +100,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     // Generate 10 inserts for each partition and populate partitionBaseFilePairs and recordKeys.
     DATE_PARTITIONS.forEach(p -> {
       try {
+        URI partitionMetaFile = FileCreateUtils.createPartitionMetaFile(basePath, p);
+        StoragePath partitionMetadataPath = new StoragePath(partitionMetaFile);
         String fileId1 = UUID.randomUUID().toString();
         FileSlice fileSlice1 = new FileSlice(p, instant1, fileId1);
         StoragePath storagePath1 = new StoragePath(hoodieTestTable.getBaseFilePath(p, fileId1).toUri());
@@ -122,7 +126,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         fileSlice2.setBaseFile(baseFile2);
         partitionInfoList.add(new HoodieTableMetadataUtil.DirectoryInfo(
             p,
-            metaClient.getStorage().listDirectEntries(Arrays.asList(storagePath1, storagePath2)),
+            metaClient.getStorage().listDirectEntries(Arrays.asList(partitionMetadataPath, storagePath1, storagePath2)),
             instant2,
             Collections.emptySet()));
       } catch (Exception e) {
