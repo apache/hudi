@@ -227,7 +227,7 @@ public class TestHoodieInternalRow {
   }
 
   private void assertValues(HoodieInternalRow hoodieInternalRow, String commitTime, String commitSeqNo, String recordKey, String partitionPath, String filename, Object[] values,
-                            List<Integer> nullIndexes) {
+      List<Integer> nullIndexes) {
     for (Integer index : nullIndexes) {
       assertTrue(hoodieInternalRow.isNullAt(index));
     }

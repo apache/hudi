@@ -284,8 +284,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
   }
 
   private void performRollbackAndValidate(boolean isUsingMarkers, HoodieWriteConfig cfg, HoodieTable table,
-                                          List<FileSlice> firstPartitionCommit2FileSlices,
-                                          List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
+      List<FileSlice> firstPartitionCommit2FileSlices,
+      List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     //2. rollback
     HoodieInstant commitInstant;
     if (isUsingMarkers) {
