@@ -357,7 +357,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private Table isHoodieTable(Table hiveTable) {
     if (!hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")
         && !isFlinkHoodieTable(hiveTable)) {
-      throw new HoodieCatalogException(String.format("the %s is not hoodie table", hiveTable.getTableName()));
+      throw new HoodieCatalogException(String.format("Table %s is not a hoodie table", hiveTable.getTableName()));
     }
     return hiveTable;
   }
@@ -374,7 +374,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (NoSuchObjectException e) {
       throw new TableNotExistException(getName(), tablePath);
     } catch (TException e) {
-      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()));
+      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()), e);
     }
   }
 
