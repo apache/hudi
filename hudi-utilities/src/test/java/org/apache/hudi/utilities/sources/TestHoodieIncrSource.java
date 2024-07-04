@@ -282,7 +282,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
       // Pending clustering exists
       Option<HoodieInstant> clusteringInstant =
-          metaClient.getActiveTimeline().filterPendingReplaceTimeline()
+          metaClient.getActiveTimeline().filterPendingClusterTimeline()
               .filter(instant -> ClusteringUtils.getClusteringPlan(metaClient, instant).isPresent())
               .firstInstant();
       assertTrue(clusteringInstant.isPresent());

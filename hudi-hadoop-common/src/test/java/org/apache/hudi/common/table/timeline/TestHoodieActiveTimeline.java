@@ -741,6 +741,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         if (state == State.COMPLETED && action.equals(HoodieTimeline.COMPACTION_ACTION)) {
           action = HoodieTimeline.COMMIT_ACTION;
         }
+        // Cluster complete is called replacecommit complete
+        if (state == State.COMPLETED && action.equals(HoodieTimeline.CLUSTER_ACTION)) {
+          action = HoodieTimeline.REPLACE_COMMIT_ACTION;
+        }
 
         allInstants.add(new HoodieInstant(state, action, String.format("%03d", instantTime++)));
       }
