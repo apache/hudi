@@ -28,6 +28,7 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -154,6 +155,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         )
         // set small file limit to 0 so that each insert creates a new file
         spark.sql("set hoodie.parquet.small.file.limit=0")
+        spark.sql("set hoodie.parquet.max.file.size=1")
         // insert data in below pattern so that multiple records for 'texas' and 'california' partition are in same file
         spark.sql(
           s"""
@@ -166,7 +168,10 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
         spark.sql(
           s"""
              | insert into $tableName
-             | values (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P','houston','texas'), (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O','austin','texas')
+             | values
+             | (1695516137,'e3cf430c-889d-4015-bc98-59bdce1e530c','rider-C','driver-P','houston','texas'),
+             | (1695332066,'1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O','austin','texas'),
+             | (1695516138,'e3cf430c-889d-4015-bc98-59bdce1e530d','rider-C','driver-P','houston','texas')
              | """.stripMargin
         )
 
@@ -210,6 +215,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           Seq("334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "san_francisco", "california"),
           Seq("7a84095f-737f-40bc-b62f-6b69664712d2", "rider-B", "new york city", "new york"),
           Seq("e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-C", "houston", "texas"),
+          Seq("e3cf430c-889d-4015-bc98-59bdce1e530d", "rider-C", "houston", "texas"),
           Seq("3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04", "rider-D", "princeton", "new jersey"),
           Seq("1dced545-862b-4ceb-8b43-d2a568f6616b", "rider-E", "austin", "texas"),
           Seq("e96c4396-3fad-413a-a942-4cb36106d721", "rider-F", "sunnyvale", "california")
@@ -236,8 +242,8 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |create table $tableName (
              |  id int,
              |  name string,
-             |  ts long,
-             |  price int
+             |  price int,
+             |  ts long
              |) using hudi
              |partitioned by (ts)
              |tblproperties (

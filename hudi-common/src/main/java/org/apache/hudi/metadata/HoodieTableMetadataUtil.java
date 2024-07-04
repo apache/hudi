@@ -2043,7 +2043,7 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
       // Step 3: Aggregate Column Ranges
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-          .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
+          .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(toList()), false).iterator();
     });
   }
@@ -2107,7 +2107,7 @@ public class HoodieTableMetadataUtil {
             .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
         // Step 3: Aggregate Column Ranges
         Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-            .map(entry -> FileFormatUtils.getColumnRangeInPartition(entry.getValue()));
+            .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionName, entry.getValue()));
         return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
       });
     } catch (Exception e) {

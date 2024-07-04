@@ -102,8 +102,6 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
       checkAnswer(s"select id, name, price, ts, dt from $tableName where attributes.color = 'red'")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05")
       )
-      // TODO add this fallback param, cause by PartitionStatsIndexSupport, cause by HUDI-7144,may be fix by HUDI-7903
-      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode = fallback")
       // Check the case where the WHERE condition only includes columns supported by column stats
       checkAnswer(s"select id, name, price, ts, dt from $tableName where name='a1'")(
         Seq(1, "a1", 10.0, 1000, "2021-01-05")

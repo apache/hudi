@@ -118,6 +118,12 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
    */
   protected def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String], inMemoryProjectionThreshold: Integer): Boolean = {
+    // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
+    //       it's most often preferential to fetch index w/in the same process (usually driver),
+    //       w/o resorting to on-cluster execution.
+    //       For that we use a simple-heuristic to determine whether we should read and process the index in-memory or
+    //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
+    //       threshold (of 100k records)
     Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
       case Some(mode) =>
         mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
