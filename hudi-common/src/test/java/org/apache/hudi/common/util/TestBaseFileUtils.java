@@ -30,18 +30,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestBaseFileUtils {
+  private static final String PARTITION_PATH = "partition";
+  private static final String COLUMN_NAME = "columnName";
 
   @Test
   public void testGetColumnRangeInPartition() {
     // Step 1: Set Up Test Data
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "columnName", 1, 5, 0, 10, 100, 200);
+        "path/to/file1", COLUMN_NAME, 1, 5, 0, 10, 100, 200);
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file2", "columnName", 3, 8, 1, 15, 120, 250);
+        "path/to/file2", COLUMN_NAME, 3, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges);
     // Step 3: Assertions
+    assertEquals(PARTITION_PATH, result.getFilePath());
+    assertEquals(COLUMN_NAME, result.getColumnName());
     assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
     assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
     assertEquals(1, result.getNullCount());
@@ -54,14 +58,16 @@ public class TestBaseFileUtils {
   public void testGetColumnRangeInPartitionWithNullMinMax() {
     // Step 1: Set Up Test Data
     HoodieColumnRangeMetadata<Comparable> fileColumnRange1 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file1", "columnName", 1, null, 0, 10, 100, 200);
+        "path/to/file1", COLUMN_NAME, 1, null, 0, 10, 100, 200);
     HoodieColumnRangeMetadata<Comparable> fileColumnRange2 = HoodieColumnRangeMetadata.<Comparable>create(
-        "path/to/file2", "columnName", null, 8, 1, 15, 120, 250);
+        "path/to/file2", COLUMN_NAME, null, 8, 1, 15, 120, 250);
 
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(fileColumnRanges);
+    HoodieColumnRangeMetadata<Comparable> result = FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges);
     // Step 3: Assertions
+    assertEquals(PARTITION_PATH, result.getFilePath());
+    assertEquals(COLUMN_NAME, result.getColumnName());
     assertEquals(Integer.valueOf(1), new Integer(result.getMinValue().toString()));
     assertEquals(Integer.valueOf(8), new Integer(result.getMaxValue().toString()));
     assertEquals(1, result.getNullCount());
@@ -79,6 +85,6 @@ public class TestBaseFileUtils {
         "path/to/file2", "columnName2", null, 8, 1, 15, 120, 250);
     List<HoodieColumnRangeMetadata<Comparable>> fileColumnRanges = Arrays.asList(fileColumnRange1, fileColumnRange2);
     // Step 2: Call the Method
-    assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(fileColumnRanges));
+    assertThrows(IllegalArgumentException.class, () -> FileFormatUtils.getColumnRangeInPartition(PARTITION_PATH, fileColumnRanges));
   }
 }

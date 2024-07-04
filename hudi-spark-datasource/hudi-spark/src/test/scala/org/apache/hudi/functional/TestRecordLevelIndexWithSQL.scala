@@ -216,11 +216,12 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val fileIndex = new HoodieFileIndex(sparkSession, metaClient, Option.empty, Map("glob.paths" -> globbedPaths), includeLogFiles = includeLogFiles)
     val selectedPartition = "2016/03/15"
     val partitionFilter: Expression = EqualTo(AttributeReference("partition", StringType)(), Literal(selectedPartition))
-    val prunedPaths = fileIndex.getFileSlicesForPrunedPartitions(Seq(partitionFilter))
+    val (isPruned, prunedPaths) = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq(partitionFilter))
     val storagePaths = RecordLevelIndexSupport.getPrunedStoragePaths(prunedPaths, fileIndex)
     // verify pruned paths contain the selected partition and the size of the pruned file paths
     // when includeLogFiles is set to true, there are two storages paths - base file and log file
     // every partition contains only one file slice
+    assertTrue(isPruned)
     assertEquals(if (includeLogFiles) 2 else 1, storagePaths.size)
     assertTrue(storagePaths.forall(path => path.toString.contains(selectedPartition)))
 
