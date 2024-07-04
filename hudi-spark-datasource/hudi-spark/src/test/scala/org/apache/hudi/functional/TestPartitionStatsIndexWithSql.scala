@@ -153,7 +153,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |location '$tablePath'
          """.stripMargin
         )
-        // set small file limit to 0 so that each insert creates a new file
+        // set small file limit to 0 and parquet max file size to 1 so that each insert creates a new file
         spark.sql("set hoodie.parquet.small.file.limit=0")
         spark.sql("set hoodie.parquet.max.file.size=1")
         // insert data in below pattern so that multiple records for 'texas' and 'california' partition are in same file
@@ -182,6 +182,10 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           .build()
         assertResult(tableName)(metaClient.getTableConfig.getTableName)
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+        val fileIndex = HoodieFileIndex(spark, metaClient, None, Map("path" -> metaClient.getBasePath.toString))
+        val partitionFiles = fileIndex.listFiles(Seq.empty, Seq.empty)
+        // Make sure there are partition(s) with a single file and multiple files
+        assertTrue(partitionFiles.exists(p => p.files.size == 1) && partitionFiles.exists(p => p.files.size > 1))
 
         // Test pruning
         spark.sql("set hoodie.metadata.enable=true")
