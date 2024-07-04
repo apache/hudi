@@ -46,21 +46,21 @@ class TestHoodieDataTypeUtils {
     Schema mapSchema = Schema.createMap(Schema.create(Schema.Type.INT));
 
     Schema schemaWithSmallDecimal = Schema.createRecord("schemaWithSmallDecimal", null, null, false,
-        Collections.singletonList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA)));
+        Collections.singletonList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA, null, null)));
     Schema schemaWithSmallDecimalAndList = Schema.createRecord("schemaWithSmallDecimalAndList", null, null, false,
-        Arrays.asList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA), new Schema.Field("intField", Schema.create(Schema.Type.INT)),
-            new Schema.Field("listField", listSchema)));
+        Arrays.asList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+            new Schema.Field("listField", listSchema, null, null)));
     Schema schemaWithSmallDecimalAndMap = Schema.createRecord("schemaWithSmallDecimalAndMap", null, null, false,
-        Arrays.asList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA), new Schema.Field("intField", Schema.create(Schema.Type.INT)),
-            new Schema.Field("mapField", mapSchema)));
+        Arrays.asList(new Schema.Field("smallDecimal", SMALL_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+            new Schema.Field("mapField", mapSchema,null, null)));
     Schema schemaWithLargeDecimalAndList = Schema.createRecord("schemaWithLargeDecimalAndList", null, null, false,
-        Arrays.asList(new Schema.Field("largeDecimal", LARGE_DECIMAL_SCHEMA), new Schema.Field("intField", Schema.create(Schema.Type.INT)),
-            new Schema.Field("listField", listSchema)));
+        Arrays.asList(new Schema.Field("largeDecimal", LARGE_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+            new Schema.Field("listField", listSchema, null, null)));
     Schema schemaWithLargeDecimalAndMap = Schema.createRecord("schemaWithLargeDecimalAndMap", null, null, false,
-        Arrays.asList(new Schema.Field("largeDecimal", LARGE_DECIMAL_SCHEMA), new Schema.Field("intField", Schema.create(Schema.Type.INT)),
-            new Schema.Field("mapField", mapSchema)));
+        Arrays.asList(new Schema.Field("largeDecimal", LARGE_DECIMAL_SCHEMA, null, null), new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+            new Schema.Field("mapField", mapSchema, null, null)));
     Schema schemaWithoutSpecialTypes = Schema.createRecord("schemaWithInt", null, null, false,
-        Collections.singletonList(new Schema.Field("intField", Schema.create(Schema.Type.INT))));
+        Collections.singletonList(new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null)));
 
     Configuration configurationWithLegacyListFormat = new Configuration(false);
     configurationWithLegacyListFormat.set(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, "true");
@@ -100,7 +100,7 @@ class TestHoodieDataTypeUtils {
   void testAutoModifyParquetWriteLegacyFormatParameter(boolean smallDecimal, Boolean propValue, Boolean expectedPropValue) {
     Schema decimalType = smallDecimal ? SMALL_DECIMAL_SCHEMA : LARGE_DECIMAL_SCHEMA;
     Schema schema = Schema.createRecord("test", null, null, false,
-        Collections.singletonList(new Schema.Field("decimalField", decimalType)));
+        Collections.singletonList(new Schema.Field("decimalField", decimalType, null, null)));
     TypedProperties options = propValue != null
         ? TypedProperties.fromMap(Collections.singletonMap(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED.key(), String.valueOf(propValue)))
         : new TypedProperties();
