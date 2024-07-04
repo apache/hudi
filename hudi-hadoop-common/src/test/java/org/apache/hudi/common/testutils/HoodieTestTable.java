@@ -341,6 +341,13 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
   public HoodieTestTable addRequestedCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws Exception {
     createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
     currentInstantTime = instantTime;
@@ -349,6 +356,18 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addCluster(
+      String instantTime,
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -1027,7 +1046,12 @@ public class HoodieTestTable implements AutoCloseable {
     HoodieReplaceCommitMetadata replaceMetadata =
         (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
             REPLACE_COMMIT_ACTION);
-    addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setOperationType(WriteOperationType.CLUSTER.name())
+        .setExtraMetadata(Collections.emptyMap())
+        .setClusteringPlan(new HoodieClusteringPlan())
+        .build();
+    addCluster(commitTime, requestedReplaceMetadata, Option.empty(), replaceMetadata);
     return replaceMetadata;
   }
 

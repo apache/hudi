@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompaction;
@@ -202,7 +203,7 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
     Thread.sleep(1000);
     // clustering writer starts and complete before ingestion commit.
     String replaceWriterInstant = metaClient.createNewInstantTime();
-    createReplace(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
+    createCluster(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();

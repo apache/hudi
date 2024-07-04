@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createClusterRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCommitMetadata;
@@ -47,10 +48,9 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompactionRequested;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteCompaction;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createCompleteReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
-import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingReplace;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCluster;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRequestedCommit;
 
@@ -293,7 +293,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     createInflightCommit(currentWriterInstant, metaClient);
     // cluster 1 gets scheduled and finishes
     String newInstantTime = metaClient.createNewInstantTime();
-    createReplace(newInstantTime, WriteOperationType.CLUSTER, metaClient);
+    createCluster(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
     SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
@@ -351,7 +351,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
   public void testConcurrentWritesWithPendingInstants() throws Exception {
     // step1: create a pending replace/commit/compact instant: C1,C11,C12
     String newInstantTimeC1 = metaClient.createNewInstantTime();
-    createPendingReplace(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
+    createPendingCluster(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
 
     String newCompactionInstantTimeC11 = metaClient.createNewInstantTime();
     createPendingCompaction(newCompactionInstantTimeC11, metaClient);
@@ -374,7 +374,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     Set<String> pendingInstant = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     pendingInstant.remove(currentWriterInstant);
     // step5: finished pending cluster/compaction/commit operation
-    createCompleteReplace(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
+    createCluster(newInstantTimeC1, WriteOperationType.CLUSTER, metaClient);
     createCompleteCompaction(newCompactionInstantTimeC11, metaClient);
     createCompleteCommit(newCommitInstantTimeC12, metaClient);
     createCompleteCommit(commitC4, metaClient);

@@ -370,7 +370,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // create requested replace commit
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    FileCreateUtils.createRequestedReplaceCommit(basePath,"002", Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
 
     // create file slice 003
     FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);

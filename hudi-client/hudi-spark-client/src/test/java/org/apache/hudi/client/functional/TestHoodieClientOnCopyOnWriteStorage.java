@@ -1088,7 +1088,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedClusterCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), requestedReplaceMetadata);
 
     // trigger clustering again. no new rollback instants should be generated.
     try {
