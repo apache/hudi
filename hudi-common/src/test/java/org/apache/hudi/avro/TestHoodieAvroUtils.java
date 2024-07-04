@@ -657,17 +657,17 @@ public class TestHoodieAvroUtils {
   @Test
   void testHasListOrMapField() {
     Schema nestedList = Schema.createRecord("nestedList", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT)),
+        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
         new Schema.Field("nested", Schema.createRecord("nestedSchema", null, null, false, Collections.singletonList(
-            new Schema.Field("listField", Schema.createArray(Schema.create(Schema.Type.INT)))
-        )))
+            new Schema.Field("listField", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
+        )), null, null)
     ));
     Schema nestedMap = Schema.createRecord("nestedMap", null, null, false, Arrays.asList(
-        new Schema.Field("intField", Schema.create(Schema.Type.INT)),
+        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
         new Schema.Field("nested", Schema.createUnion(Schema.create(Schema.Type.NULL),
             Schema.createRecord("nestedSchema", null, null, false,
-                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.create(Schema.Type.INT)))
-                ))))
+                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.create(Schema.Type.INT)), null, null)
+                ))), null, null)
     ));
     assertTrue(HoodieAvroUtils.hasListOrMapField(nestedList));
     assertTrue(HoodieAvroUtils.hasListOrMapField(nestedMap));
