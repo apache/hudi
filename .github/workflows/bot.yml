@@ -164,6 +164,7 @@ jobs:
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
 #
 #  test-hudi-hadoop-mr-and-hudi-java-client:
 #    runs-on: ubuntu-latest
