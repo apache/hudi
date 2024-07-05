@@ -204,6 +204,12 @@
       <artifactId>hive-metastore</artifactId>
       <version>${hive.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-cli</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Test -->
