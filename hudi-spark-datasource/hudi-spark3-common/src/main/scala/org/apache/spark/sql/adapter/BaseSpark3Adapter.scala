@@ -18,10 +18,13 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
@@ -123,5 +126,10 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
                                 sourceRow: InternalRow,
                                 sourceContainsMetaFields: Boolean): HoodieInternalRow = {
     new Spark3HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createHoodiePartitionFileSliceMapping(values: InternalRow,
+                                                     slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
+    new Spark3HoodiePartitionFileSliceMapping(values, slices)
   }
 }

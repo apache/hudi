@@ -23,7 +23,10 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
+import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.collection.FlatLists
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
@@ -273,4 +276,10 @@ trait SparkAdapter extends Serializable {
   def createInternalRow(metaFields: Array[UTF8String],
                         sourceRow: InternalRow,
                         sourceContainsMetaFields: Boolean): HoodieInternalRow
+
+  def createHoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                               fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping
+
+  def createHoodiePartitionFileSliceMapping(values: InternalRow,
+                                            slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
 }
