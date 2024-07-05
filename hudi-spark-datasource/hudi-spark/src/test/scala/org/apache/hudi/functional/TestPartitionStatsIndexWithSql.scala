@@ -261,41 +261,75 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
              |""".stripMargin
         )
 
-        spark.sql(
-          s"""
-             | insert into $tableName
-             | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
-             | """.stripMargin
-        )
-
-        // Validate partition_stats index exists
-        val metaClient = HoodieTableMetaClient.builder()
-          .setBasePath(tablePath)
-          .setConf(HoodieTestUtils.getDefaultStorageConf)
-          .build()
-        assertResult(tableName)(metaClient.getTableConfig.getTableName)
-        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
-
-        spark.sql("set hoodie.metadata.enable=true")
-        spark.sql("set hoodie.enable.data.skipping=true")
-        spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
-        checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
-          Seq(6, "a6", 4000, 30)
-        )
-
-        // Test price update, assert latest value and ensure file pruning
-        spark.sql(s"update $tableName set price = price + 1 where id = 6")
-        checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
-          Seq(6, "a6", 4001, 30)
-        )
-
-        verifyFilePruning(
-          Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
-          GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
-          HoodieTableMetaClient.reload(metaClient),
-          isDataSkippingExpected = true)
+        writeAndValidatePartitionStats(tableName, tablePath)
       }
     }
+  }
+
+  test(s"Test partition stats index without configuring columns to index") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        // create table and enable partition stats without configuring columns to index
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price int,
+             |  ts long
+             |) using hudi
+             |partitioned by (ts)
+             |tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'price',
+             |  hoodie.metadata.index.partition.stats.enable = 'true'
+             |)
+             |location '$tablePath'
+             |""".stripMargin
+        )
+
+        writeAndValidatePartitionStats(tableName, tablePath)
+      }
+    }
+  }
+
+  private def writeAndValidatePartitionStats(tableName: String, tablePath: String): Unit = {
+    spark.sql(
+      s"""
+         | insert into $tableName
+         | values (1, 'a1', 1000, 10), (2, 'a2', 2000, 20), (3, 'a3', 3000, 30), (4, 'a4', 2000, 10), (5, 'a5', 3000, 20), (6, 'a6', 4000, 30)
+         | """.stripMargin
+    )
+
+    // Validate partition_stats index exists
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .build()
+    assertResult(tableName)(metaClient.getTableConfig.getTableName)
+    assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(PARTITION_STATS.getPartitionPath))
+
+    spark.sql("set hoodie.metadata.enable=true")
+    spark.sql("set hoodie.enable.data.skipping=true")
+    spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+    checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
+      Seq(6, "a6", 4000, 30)
+    )
+
+    // Test price update, assert latest value and ensure file pruning
+    spark.sql(s"update $tableName set price = price + 1 where id = 6")
+    checkAnswer(s"select id, name, price, ts from $tableName where price>3000")(
+      Seq(6, "a6", 4001, 30)
+    )
+
+    verifyFilePruning(
+      Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true"),
+      GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
+      HoodieTableMetaClient.reload(metaClient),
+      isDataSkippingExpected = true)
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {

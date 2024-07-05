@@ -2046,7 +2046,10 @@ public class HoodieTableMetadataUtil {
                                                                              List<DirectoryInfo> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
                                                                              HoodieTableMetaClient dataTableMetaClient) {
-    final List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    final List<String> columnsToIndex = getColumnsToIndex(
+        metadataConfig.isPartitionStatsIndexEnabled(),
+        metadataConfig.getColumnsEnabledForColumnStatsIndex(),
+        Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
     if (columnsToIndex.isEmpty()) {
       return engineContext.emptyHoodieData();
     }
