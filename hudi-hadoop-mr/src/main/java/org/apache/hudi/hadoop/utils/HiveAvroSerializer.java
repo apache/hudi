@@ -41,7 +41,6 @@ import org.apache.hadoop.hive.serde2.objectinspector.PrimitiveObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.UnionObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableDateObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableTimestampObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
@@ -307,11 +306,6 @@ public class HiveAvroSerializer {
       case TIMESTAMP:
         Object timestamp = ((WritableTimestampObjectInspector) fieldOI).getPrimitiveJavaObject(structFieldData);
         return HoodieHiveUtils.getMills(timestamp);
-      case INT:
-        if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
-          return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();
-        }
-        return fieldOI.getPrimitiveJavaObject(structFieldData);
       case UNKNOWN:
         throw new HoodieException("Received UNKNOWN primitive category.");
       case VOID:
