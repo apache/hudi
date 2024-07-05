@@ -182,6 +182,10 @@ public class HoodieHiveUtils {
     return HIVE_SHIM.getDateWriteable(value);
   }
 
+  public static Object getTimestamp(Object fieldData) {
+    return HIVE_SHIM.getPrimitiveJavaObject(fieldData);
+  }
+
   public static int getDays(Object dateWritable) {
     return HIVE_SHIM.getDays(dateWritable);
   }

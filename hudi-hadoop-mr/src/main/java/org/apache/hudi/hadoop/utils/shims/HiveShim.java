@@ -27,6 +27,8 @@ public interface HiveShim {
 
   Writable getTimestampWriteable(long value, boolean timestampMillis);
 
+  Object getPrimitiveJavaObject(Object o);
+
   Writable getDateWriteable(int value);
 
   int getDays(Object dateWritable);
