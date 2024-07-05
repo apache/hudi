@@ -952,7 +952,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     Map<String, List<HoodieRecord<HoodieMetadataPayload>>> resultMap = new HashMap<>();
     if (reader == null) {
       // No base file at all
-      timings.add(timer.endTimer());
       logRecordsMap.forEach((secondaryKey, logRecords) -> {
         List<HoodieRecord<HoodieMetadataPayload>> recordList = new ArrayList<>();
         logRecords.values().forEach(record -> {
@@ -960,13 +959,19 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         });
         resultMap.put(secondaryKey, recordList);
       });
+      timings.add(timer.endTimer());
       return resultMap;
     }
 
     HoodieTimer readTimer = HoodieTimer.start();
-
     Map<String, List<HoodieRecord<HoodieMetadataPayload>>> baseFileRecordsMap =
         fetchBaseFileAllRecordsByKeys(reader, sortedKeys, true, partitionName);
+    if (logRecordsMap.isEmpty() && !baseFileRecordsMap.isEmpty()) {
+      // file slice has only base file
+      timings.add(timer.endTimer());
+      return baseFileRecordsMap;
+    }
+
     logRecordsMap.forEach((secondaryKey, logRecords) -> {
       if (!baseFileRecordsMap.containsKey(secondaryKey)) {
         List<HoodieRecord<HoodieMetadataPayload>> recordList = logRecords
