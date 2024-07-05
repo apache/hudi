@@ -103,7 +103,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     records.addAll(insertRecords);
     records.addAll(updateRecords);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
     assertEquals(0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
         "Update record should have gone to the 1 update partition");
@@ -228,7 +228,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", totalInsertNum);
 
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     float bucket0Weight = 0.2f;
@@ -345,7 +345,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
     assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
@@ -385,7 +385,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     // create UpsertPartitioner
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     // for now we have file slice1 and file slice3 and file slice1 is contained in pending clustering plan
     // So that only file slice3 can be used for ingestion.
@@ -423,7 +423,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
     assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
@@ -463,7 +463,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, reloadedMetaClient);
 
-    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(3, partitioner.numPartitions());
     assertEquals(
