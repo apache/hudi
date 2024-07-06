@@ -28,13 +28,13 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 
-import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS;
@@ -43,22 +43,33 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
 import static org.apache.spark.sql.functions.lit;
 
 public final class ErrorTableUtils {
-  public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieStreamer.Config cfg, SparkSession sparkSession,
-                                                                 TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fs) {
+  public static Option<BaseErrorTableWriter> getErrorTableWriter(HoodieStreamer.Config cfg,
+                                                                 SparkSession sparkSession,
+                                                                 TypedProperties props,
+                                                                 HoodieSparkEngineContext hoodieSparkContext,
+                                                                 FileSystem fs,
+                                                                 Option<HoodieIngestionMetrics> metrics) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
 
-    Class<?>[] argClassArr = new Class[]{HoodieStreamer.Config.class,
+    Class<?>[] legacyArgClass = new Class[]{HoodieStreamer.Config.class,
         SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class};
-    String errMsg = "Unable to instantiate ErrorTableWriter with arguments type " + Arrays.toString(argClassArr);
-    ValidationUtils.checkArgument(ReflectionUtils.hasConstructor(BaseErrorTableWriter.class.getName(), argClassArr, false), errMsg);
+    Class<?>[] argClassV1 = new Class[]{HoodieStreamer.Config.class,
+        SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class, Option.class};
 
     try {
-      return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassArr)
-          .newInstance(cfg, sparkSession, props, hoodieSparkContext, fs));
-    } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException e) {
-      throw new HoodieException(errMsg, e);
+      if (ReflectionUtils.hasConstructor(errorTableWriterClass, argClassV1)) {
+        return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassV1)
+            .newInstance(cfg, sparkSession, props, hoodieSparkContext, fs, metrics));
+      } else if (ReflectionUtils.hasConstructor(errorTableWriterClass, legacyArgClass)) {
+        return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(legacyArgClass)
+            .newInstance(cfg, sparkSession, props, hoodieSparkContext, fs));
+      } else {
+        throw new HoodieException(String.format("The configured Error table class %s does not have the appropriate constructor", errorTableWriterClass));
+      }
+    } catch (Exception exception) {
+      throw new HoodieException("Could not load Error Table class " + BaseErrorTableWriter.class.getName(), exception);
     }
   }
 
