@@ -128,6 +128,11 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     new Spark3HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
   }
 
+  override def createHoodiePartitionCDCFileGroupMapping(partitionValues: InternalRow,
+                                                        fileSplits: List[HoodieCDCFileSplit]): HoodiePartitionCDCFileGroupMapping = {
+    new Spark3HoodiePartitionCDCFileGroupMapping(partitionValues, fileSplits)
+  }
+
   override def createHoodiePartitionFileSliceMapping(values: InternalRow,
                                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
     new Spark3HoodiePartitionFileSliceMapping(values, slices)
