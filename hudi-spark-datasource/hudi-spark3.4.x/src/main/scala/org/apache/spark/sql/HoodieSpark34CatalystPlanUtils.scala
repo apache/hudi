@@ -27,6 +27,7 @@ import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.RepairTableCommand
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -119,7 +120,20 @@ object HoodieSpark34CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
   override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case insert: InsertIntoStatement =>
-        Some((insert.table, insert.userSpecifiedCols, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+        // https://github.com/apache/spark/pull/36077
+        // first: in this pr, spark34 support default value for insert into, it will regenerate the user specified cols
+        //        so, no need deal with it in hudi side
+        // second: in this pr, it will append hoodie meta field with default value, has some bug, it look like be fixed
+        //         in spark35(https://github.com/apache/spark/pull/41262), so if user want specified cols, need disable default feature.
+        if (SQLConf.get.enableDefaultColumns) {
+          if (insert.userSpecifiedCols.nonEmpty) {
+            throw new AnalysisException("hudi not support specified cols when enable default columns, " +
+              "please disable 'spark.sql.defaultColumn.enabled'")
+          }
+          Some((insert.table, Seq.empty, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+        } else {
+          Some((insert.table, insert.userSpecifiedCols, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+        }
       case _ =>
         None
     }

@@ -2832,6 +2832,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       if (HoodieSparkUtils.gteqSpark3_2) {
         val targetTableA = generateTableName
         val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
 
         spark.sql(
           s"""
@@ -2891,6 +2894,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(3, 12.3, "ccc", "02", "01"),
           Seq(4, 12.4, "ddd", "02", "02")
         )
+
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = true")
+          checkExceptionContain(s"insert into $targetTableB (id, day, price, name, hour) " +
+            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+            "hudi not support specified cols when enable default columns")
+        }
       }
     }
   }
@@ -2900,6 +2910,9 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       if (HoodieSparkUtils.gteqSpark3_2) {
         val targetTableA = generateTableName
         val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = false")
+        }
 
         spark.sql(
           s"""
@@ -2962,6 +2975,13 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           Seq(3, 12.3, "ccc", "02", "01"),
           Seq(4, 12.4, "ddd", "02", "02")
         )
+
+        if (HoodieSparkUtils.isSpark3_4) {
+          spark.sql("set spark.sql.defaultColumn.enabled = true")
+          checkExceptionContain(s"insert overwrite $targetTableB (id, day, price, name, hour) " +
+            s"select id, '01' as dt, price, name, '03' as hour from $targetTableA")(
+            "hudi not support specified cols when enable default columns")
+        }
       }
     }
   }
