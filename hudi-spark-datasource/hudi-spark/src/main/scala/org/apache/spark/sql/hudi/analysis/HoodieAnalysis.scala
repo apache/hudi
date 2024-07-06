@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
@@ -37,7 +36,6 @@ import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
-
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis extends SparkAdapterSupport {
@@ -416,7 +414,7 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
           case lr: LogicalRelation =>
             // Create a project if this is an INSERT INTO query with specified cols.
             val projectByUserSpecified = if (userSpecifiedCols.nonEmpty) {
-              assert(lr.catalogTable.isDefined, "Missing catalog table")
+              ValidationUtils.checkState(lr.catalogTable.isDefined, "Missing catalog table")
               sparkAdapter.getCatalystPlanUtils.createProjectForByNameQuery(lr, iis)
             } else {
               None

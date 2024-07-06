@@ -112,6 +112,8 @@ trait HoodieCatalystPlansUtils {
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
    * changes in Spark 3.3
+   * @return a option tuple with (table logical plan, userSpecifiedCols, partitionSpec, query, overwrite, ifPartitionNotExists)
+   *         userSpecifiedCols: only than the version of Spark32 will return, other is empty
    */
   def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
