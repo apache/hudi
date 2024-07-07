@@ -27,6 +27,8 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -45,6 +47,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Utils for Avro Schema.
  */
 public class AvroSchemaUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaUtils.class);
 
   private AvroSchemaUtils() {}
 
@@ -302,9 +306,17 @@ public class AvroSchemaUtils {
    * @return schema with fields from fields, and metadata from schema
    */
   public static Schema createNewSchemaFromFieldsWithReference(Schema schema, List<Schema.Field> fields) {
+    if (schema == null) {
+      throw new IllegalArgumentException("Schema must not be null");
+    }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
-    for (Map.Entry<String, Object> prop : schema.getObjectProps().entrySet()) {
-      newSchema.addProp(prop.getKey(), prop.getValue());
+    Map<String, Object> schemaProps = schema.getObjectProps();
+    if (schemaProps != null) {
+      for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
+        newSchema.addProp(prop.getKey(), prop.getValue());
+      }
+    } else {
+      LOG.warn("Schema.getObjectProps() returned null for schema: {}", schema);
     }
     newSchema.setFields(fields);
     return newSchema;
