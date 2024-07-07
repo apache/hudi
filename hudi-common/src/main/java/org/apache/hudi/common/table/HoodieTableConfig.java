@@ -76,7 +76,6 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
-import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -285,7 +284,6 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
-      TIMESTAMP_TYPE_FIELD,
       INPUT_TIME_UNIT,
       TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX,
       TIMESTAMP_INPUT_DATE_FORMAT,
