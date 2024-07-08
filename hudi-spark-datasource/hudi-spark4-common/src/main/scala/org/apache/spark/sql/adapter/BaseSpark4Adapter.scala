@@ -34,6 +34,8 @@ import org.apache.spark.sql.{HoodieSpark4CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
+import org.apache.spark.sql.catalyst.parser.ParseException
+import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
@@ -140,5 +142,14 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def createHoodiePartitionFileSliceMapping(values: InternalRow,
                                                      slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping = {
     new Spark4HoodiePartitionFileSliceMapping(values, slices)
+  }
+
+  override def newParseException(command: Option[String],
+                                  message: String,
+                                  start: Origin,
+                                  stop: Origin,
+                                  errorClass: String,
+                                  messageParameters: Map[String, String]): ParseException = {
+    new ParseException(command, start, stop, errorClass, messageParameters)
   }
 }
