@@ -154,9 +154,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         this.metadataTableConfig = null;
       }
     }
-    if (metadataFileSystemView == null) {
-      System.out.println("adsfasdf");
-    }
   }
 
   @Override
