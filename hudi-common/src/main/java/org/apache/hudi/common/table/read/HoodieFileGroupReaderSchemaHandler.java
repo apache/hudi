@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
+import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 
 /**
@@ -178,11 +179,6 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       Schema.Field curr = fields.get(i);
       fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
     }
-    Schema newSchema = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
-    for (Map.Entry<String, Object> prop : dataSchema.getObjectProps().entrySet()) {
-      newSchema.addProp(prop.getKey(), prop.getValue());
-    }
-    newSchema.setFields(fields);
-    return newSchema;
+    return createNewSchemaFromFieldsWithReference(dataSchema, fields);
   }
 }
