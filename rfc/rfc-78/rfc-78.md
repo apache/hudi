@@ -48,13 +48,13 @@ For this layout of pipelines, here is how a typical migration might look like(w/
 
 a. Existing pipelines are in 0.15.x. (bronze, silver, gold) 
 b. Migrate gold pipelines to 1.x. 
-- We need to strictly migrate only gold to 1x. Bcoz, a 0.15.0 reader may not be able to read 1.x hudi tables. So, if we migrate any of silver pipelines to 1.x before migrating entire gold layer, we might end up in a situation 
-- where a 0.15.0 reader (gold) might end up reading 1.x table (silver). This might lead to failures. So, we have to follow certain order in which we migrate pipelines. 
+- We need to strictly migrate only gold to 1x. Bcoz, a 0.15.0 reader may not be able to read 1.x hudi tables. So, if we migrate any of silver pipelines to 1.x before migrating entire gold layer, we might end up in a situation, 
+where a 0.15.0 reader (gold) might end up reading 1.x table (silver). This might lead to failures. So, we have to follow certain order in which we migrate pipelines. 
 c. Once all of gold is migrated to 1.x, we can move all of silver to 1.x. 
-d. Once all of gold and silver is migrated to 1.x, finally we can move all of bronze to 1.x.
+d. Once all of gold and silver pipelines are migrated to 1.x, finally we can move all of bronze to 1.x.
 
 In the end, we would have migrated all of existing hudi pipelines from 0.15.0 to 1.x. 
-But as you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes we have not have good control over downstream consumers. 
+But as you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes we may not have good control over downstream consumers. 
 Hence, coordinating entire migration workflow and orchestrating the same might be challenging.
 
 Hence to ease the migration workflow for 1.x, we are introducing 0.16.0 as a bridge release.  
@@ -64,27 +64,27 @@ Here are the objectives with this bridge release:
 - 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in functionality and no data inconsistencies.
 - 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed. 
 But for new features that was introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader. 
-- In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to 1.x.
+- In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to 1.x so as to not break any readers as applicable. 
 
 Connecting back to our example above, lets see how the migration might look like for an existing user. 
 
 a. Existing pipelines are in 0.15.x. (bronze, silver, gold)
 b. Migrate pipelines to 0.16.0 (in any order. we do not have any constraints around which pipeline should be migrated first). 
-c. Ensure all pipelines are in 0.16.0(both readers and writers)
+c. Ensure all pipelines are in 0.16.0 (both readers and writers)
 d. Start migrating pipelines in a rolling fashion to 1.x. At this juncture, we could have few pipelines in 1.x and few pipelines in 0.16.0. but since 0.16.x 
 can read 1.x tables, we should be ok here. Just that do not enable new features like Non blocking concurrency control yet. 
 e. Migrate all of 0.16.0 to 1.x version. 
-f. Once all readers and writers are in 1.x, we are good to enable any new features (like NBCC). 
+f. Once all readers and writers are in 1.x, we are good to enable any new features (like NBCC) with 1.x tables.
 
 As you could see, company/org wide coordination to migrate gold before migrating silver or bronze is relaxed with the bridge release. Only requirement to keep a tab on, 
-is to ensure to migrate all pipelines completely to 0.16.x before starting to migrate to 1.x
+is to ensure to migrate all pipelines completely to 0.16.x before starting to migrate to 1.x.
 
 So, here are the objectives of this RFC with the bridge release. 
 - 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in functionality and no data inconsistencies.
 - 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed.
   But for new features that was introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader.
-- Document upgrade steps from 0.16.x to 1.x with limited user perceived latency. This will be auto upgrade, but document clearly what needs to be done.
-- Downgrade from 1.x to 0.16.x documented with call outs on any functionality.
+- Document steps for rolling upgrade from 0.16.x to 1.x , with minimal downtime.
+- Downgrade from 1.x to 0.16.x documented with call outs on any functionality loss. 
 
 ### Considerations when choosing Migration strategy
 - While migration is happening, we want to allow readers to continue reading data. This means, we cannot employ a stop-the-world strategy when we are migrating. 
@@ -130,14 +130,17 @@ In 1.x, we find completion time for a log file and find the base instant time (p
 - For features introduced in 0.x, and tables written in 1.x, 0.16.0 reader should be able to provide consistent reads w/o any breakage.
 - 
 ### What will not be supported
-- A 0.16 writer cannot write to a table that has been upgraded-to/created using 1.x without downgrading to 0.16.
+- A 0.16 writer cannot write to a table that has been upgraded-to/created using 1.x without downgrading to 0.16. Might be obvious, but calling it out nevertheless.
 - For new features introduced in 1.x, we might call out that 0.16.x reader may not support reads.
-- If deletion vector is enabled, 0.16.0 reader should fallback to key based merges, giving up on the performance optimization. 
-- If partial updates are enabled, 0.16.0 reader should fallback to key based merges, giving up on the performance optimization.
-- 0.16.x reader may not support functional indexes built in 1.x. Read may not break, just that the optimization may not kick in.
-- 0.16.x reader may not support secondary indexes built in 1.x. Read may not break, just that the optimization may not kick in.
-- 0.16.x reader may not support Completion time based log file ordering while reading log files/blocks. Disclaimer: - If we were to make NBCC default with MDT in 1.0, we have to support completion time based ordering in 0.16. For now, we are not covering those details since we are yet to finalize it with 1.x
-  So, if you are looking to enable any of unsupported features like NBCC for your 1.x tables, would recommend to upgrade the readers to 1.x before tuning the feature on.  
+
+| 1.x Features written by 1.x writer        | 1.x reader   | 0.16.x Reader | 
+|----------------|-------------------------------------------|-------|
+| Deletion vector | supported | Falls back to key based merges giving up on perf optimization
+| Partial merges/updates  | supported | Fails with clear error message stating that partial merging |
+| Functional indexes | supported | Not supported. Perf optimization may not kick in|
+| Secondary indexes | supported | Not supported. Perf optimization may not kick in|
+| NBCC OR Completion time based log file ordering in a file slice | supported | Not supported. Will be using log file version and write token based ordering.|  
+
 
 ### Timeline
 - Timeline read of 1.x need to be supported.
@@ -213,10 +216,18 @@ lf1_(3_10) lf2_(3_10) [upgrade] lf3_15_20, lf4_40_100.
 
 With this layout, 1.x reader should be able to read this file slice correctly w/o any issues. So, we should not require a full compaction during upgrade. But need to consult w/ authors to ensure we are not missing anything.
 
-## 1.0 ➝ 0.16.0 downgrade steps
-Users will have to use hudi-cli to do the downgrade. Here are the steps we might need to do during downgrade.
+## 1.0 ➝ 0.16.0 downgrade
+Any new features that was introduced in 1.x may not work after downgrade.
+Here are the ones that might see behavior change: 
+- If deletion vector is enabled, after downgrade we might fallback to key based merges, giving up on the performance optimization.
+- If partial updates are enabled, after downgrade we might fallback to key based merges, giving up on the performance optimization.
+- Any functional indexes built in 1.x might be deleted during downgrade. 
+- Any secondary indexes built in 1.x might be deleted during downgrade. 
+- Completion time based log file ordering within a file slice may not be honored.
+
+### Users will have to use hudi-cli to do the downgrade. Here are the steps we might need to do during downgrade
 - Similar to our upgrade, lets trigger full compaction to latest file slice so that all latest file slices only has base files. We do not want to have any file slices w/ a mix of 1.x log files and 0.x log files. 
-We could afford to have some long compute during downgrade, but upgrade path should be kept to as minimum as possible. So, during upgrade, we are not enforcing this.   
+We could afford to take some downtime during downgrade, but upgrade path should be kept to as minimum as possible. So, during upgrade, we are not enforcing this.   
 - Rewrite LSM based timeline to archived timeline. we have to deduce writer properties and introduce boundaries based on that (i.e. until which commit to archive).
 - We have two options wrt handling active timeline instants(for eg, pending clustering instants):
    A: No changes to active instants. In order to support 1.x tables w/ 0.16.0 reader, already these changes might have been ported to 0.16.0 reader. But we might have to ensure downgrade from 0.16.0 to any older version of hudi does take care of rewriting the active timeline instants.
