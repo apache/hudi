@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.collection.{FlatLists, Spark4FlatLists}
 import org.apache.hudi.spark4.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieSpark4CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieSpark4CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -145,11 +145,9 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   }
 
   override def newParseException(command: Option[String],
-                                  message: String,
-                                  start: Origin,
-                                  stop: Origin,
-                                  errorClass: String,
-                                  messageParameters: Map[String, String]): ParseException = {
-    new ParseException(command, start, stop, errorClass, messageParameters)
+                                 exception: AnalysisException,
+                                 start: Origin,
+                                 stop: Origin): ParseException = {
+    new ParseException(command, start, stop, exception.getErrorClass, exception.getMessageParameters.asScala.toMap)
   }
 }

@@ -285,9 +285,7 @@ trait SparkAdapter extends Serializable {
                                             slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
 
   def newParseException(command: Option[String],
-                        message: String,
+                        exception: AnalysisException,
                         start: Origin,
-                        stop: Origin,
-                        errorClass: String,
-                        messageParameters: Map[String, String]): ParseException
+                        stop: Origin): ParseException
 }

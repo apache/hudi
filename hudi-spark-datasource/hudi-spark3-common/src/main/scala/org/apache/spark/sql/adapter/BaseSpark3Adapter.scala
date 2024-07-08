@@ -29,7 +29,7 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.{AnalysisException, HoodieSpark3CatalogUtils, SQLContext, SparkSession}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
@@ -141,11 +141,9 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def newParseException(command: Option[String],
-                                  message: String,
-                                  start: Origin,
-                                  stop: Origin,
-                                  errorClass: String,
-                                  messageParameters: Map[String, String]): ParseException = {
-    new ParseException(command, message, start, stop)
+                                 exception: AnalysisException,
+                                 start: Origin,
+                                 stop: Origin): ParseException = {
+    new ParseException(command, exception.getMessage, start, stop)
   }
 }
