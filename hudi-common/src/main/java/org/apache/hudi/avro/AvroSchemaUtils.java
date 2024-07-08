@@ -310,13 +310,14 @@ public class AvroSchemaUtils {
       throw new IllegalArgumentException("Schema must not be null");
     }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
-    Map<String, Object> schemaProps = schema.getObjectProps();
-    if (schemaProps != null) {
-      for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
-        newSchema.addProp(prop.getKey(), prop.getValue());
-      }
-    } else {
-      LOG.warn("Schema.getObjectProps() returned null for schema: {}", schema);
+    Map<String, Object> schemaProps = Collections.emptyMap();
+    try {
+      schemaProps = schema.getObjectProps();
+    } catch (Exception e) {
+      LOG.warn("Error while getting object properties from schema: {}", schema, e);
+    }
+    for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
     }
     newSchema.setFields(fields);
     return newSchema;
