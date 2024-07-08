@@ -164,7 +164,7 @@ public class ITTestHoodieFlinkClustering {
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
-      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusterTimeline()
+      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
 
       // generate clustering plan
@@ -175,7 +175,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstantTime);
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
@@ -373,7 +373,7 @@ public class ITTestHoodieFlinkClustering {
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
-      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusterTimeline()
+      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(i -> i.getState() == HoodieInstant.State.REQUESTED);
 
       // generate clustering plan
@@ -384,7 +384,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(firstClusteringInstant);
+      HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(firstClusteringInstant);
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
@@ -426,7 +426,7 @@ public class ITTestHoodieFlinkClustering {
 
       assertTrue(scheduled, "The clustering plan should be scheduled");
       table.getMetaClient().reloadActiveTimeline();
-      timeline = table.getActiveTimeline().filterPendingClusterTimeline()
+      timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(i -> i.getState() == HoodieInstant.State.REQUESTED);
 
       HoodieInstant secondClusteringInstant = timeline.lastInstant().get();
@@ -570,7 +570,7 @@ public class ITTestHoodieFlinkClustering {
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
-      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusterTimeline()
+      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
 
       // generate clustering plan
@@ -581,7 +581,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstantTime);
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       DataStream<ClusteringCommitEvent> dataStream = env.addSource(new ClusteringPlanSourceFunction(clusteringInstantTime, clusteringPlan, conf))
@@ -691,7 +691,7 @@ public class ITTestHoodieFlinkClustering {
 
       // fetch the instant based on the configured execution sequence
       table.getMetaClient().reloadActiveTimeline();
-      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusterTimeline()
+      HoodieTimeline timeline = table.getActiveTimeline().filterPendingClusteringTimeline()
           .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
 
       // generate clustering plan
@@ -702,7 +702,7 @@ public class ITTestHoodieFlinkClustering {
       HoodieClusteringPlan clusteringPlan = clusteringPlanOption.get().getRight();
 
       // Mark instant as clustering inflight
-      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstantTime);
+      HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstantTime);
       table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);

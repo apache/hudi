@@ -122,7 +122,7 @@ public class LegacyArchivedMetaEntryReader {
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
-      case HoodieTimeline.CLUSTER_ACTION:
+      case HoodieTimeline.CLUSTERING_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");

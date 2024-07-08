@@ -66,13 +66,13 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
       throws HoodieIndexException {
     HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
     ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
-    if (!instant.getAction().equals(HoodieTimeline.CLUSTER_ACTION)) {
+    if (!instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       return writeStatuses;
     }
 
     // Double-check if it is a clustering operation by trying to obtain the clustering plan
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPair =
-        ClusteringUtils.getClusteringPlan(hoodieTable.getMetaClient(), HoodieTimeline.getClusterCommitRequestedInstant(instantTime));
+        ClusteringUtils.getClusteringPlan(hoodieTable.getMetaClient(), HoodieTimeline.getClusteringCommitRequestedInstant(instantTime));
     if (!instantPlanPair.isPresent()) {
       return writeStatuses;
     }

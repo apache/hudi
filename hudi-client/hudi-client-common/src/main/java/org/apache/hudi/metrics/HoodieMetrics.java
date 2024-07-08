@@ -120,7 +120,7 @@ public class HoodieMetrics {
       this.archiveTimerName = getMetricsName(TIMER_ACTION, ARCHIVE_ACTION);
       this.commitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMMIT_ACTION);
       this.deltaCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
-      this.clusterCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLUSTER_ACTION);
+      this.clusterCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLUSTERING_ACTION);
       this.finalizeTimerName = getMetricsName(TIMER_ACTION, FINALIZE_ACTION);
       this.compactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMPACTION_ACTION);
       this.logCompactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
@@ -371,7 +371,7 @@ public class HoodieMetrics {
   }
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
-    reportMetrics(HoodieTimeline.CLUSTER_ACTION, "fileCreationTime", durationInMs);
+    reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
   }
 
   /**

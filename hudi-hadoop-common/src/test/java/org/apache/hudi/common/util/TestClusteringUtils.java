@@ -96,7 +96,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4"));
 
     metaClient.reloadActiveTimeline();
-    assertEquals(2, metaClient.getActiveTimeline().filterPendingClusterTimeline().countInstants());
+    assertEquals(2, metaClient.getActiveTimeline().filterPendingClusteringTimeline().countInstants());
 
     Map<HoodieFileGroupId, HoodieInstant> fileGroupToInstantMap =
         ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient);
@@ -254,7 +254,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieClusteringPlan clusteringPlan =
         ClusteringUtils.createClusteringPlan(CLUSTERING_STRATEGY_CLASS, STRATEGY_PARAMS, fileSliceGroups, Collections.emptyMap());
 
-    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTER_ACTION, clusterTime);
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));

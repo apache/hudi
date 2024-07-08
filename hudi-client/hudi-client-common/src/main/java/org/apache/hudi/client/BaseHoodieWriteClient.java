@@ -1016,7 +1016,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public HoodieWriteMetadata<O> cluster(String clusteringInstantTime) {
     // TODO: #CLUSTER_REPLACE - Check if we need to replace here. This will lead to config value change for hoodie.table.service.manager.actions
     // We are supporting older value of replacecommit as well
-    if (shouldDelegateToTableServiceManager(config, ActionType.cluster)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.clustering)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
     return cluster(clusteringInstantTime, true);

@@ -279,7 +279,7 @@ public class HoodieFlinkClusteringJob {
             CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
       }
 
-      HoodieInstant inflightInstant = HoodieTimeline.getClusterCommitInflightInstant(
+      HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(
           clusteringInstant.getTimestamp());
       if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
@@ -308,7 +308,7 @@ public class HoodieFlinkClusteringJob {
         return;
       }
 
-      HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstant.getTimestamp());
+      HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstant.getTimestamp());
 
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 

@@ -88,7 +88,7 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
-      case HoodieTimeline.CLUSTER_ACTION: {
+      case HoodieTimeline.CLUSTERING_ACTION: {
         if (hoodieInstant.isCompleted()) {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata));
@@ -109,7 +109,7 @@ public class MetadataConversionUtils {
           }
         }
         archivedMetaWrapper.setActionType(
-            hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) ? ActionType.replacecommit.name() : ActionType.cluster.name());
+            hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) ? ActionType.replacecommit.name() : ActionType.clustering.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
@@ -160,7 +160,7 @@ public class MetadataConversionUtils {
         break;
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
-      case HoodieTimeline.CLUSTER_ACTION: {
+      case HoodieTimeline.CLUSTERING_ACTION: {
         // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
         // without clustering. However, we should revisit the requested commit file standardization
         activeAction.getRequestedCommitMetadata(metaClient).ifPresent(metadata -> lsmTimelineInstant.setPlan(ByteBuffer.wrap(metadata)));
@@ -206,8 +206,8 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
         break;
       }
-      case HoodieTimeline.CLUSTER_ACTION: {
-        archivedMetaWrapper.setActionType(ActionType.cluster.name());
+      case HoodieTimeline.CLUSTERING_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.clustering.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {

@@ -247,7 +247,7 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     val activeTimeline = metaClient.getActiveTimeline
     assertNotNull(activeTimeline.getInstantDetails(activeTimeline.lastInstant().get()))
     try {
-      activeTimeline.getInstantDetails(new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, metaClient.createNewInstantTime()))
+      activeTimeline.getInstantDetails(new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
     } catch {
       // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
       // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails

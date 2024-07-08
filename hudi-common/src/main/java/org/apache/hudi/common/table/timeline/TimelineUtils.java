@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
@@ -319,7 +319,7 @@ public class TimelineUtils {
       HoodieInstant instant,
       HoodieTimeline timeline) throws IOException {
     byte[] data = timeline.getInstantDetails(instant).get();
-    if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTER_ACTION)) {
+    if (instant.getAction().equals(REPLACE_COMMIT_ACTION) || instant.getAction().equals(CLUSTERING_ACTION)) {
       return HoodieReplaceCommitMetadata.fromBytes(data, HoodieReplaceCommitMetadata.class);
     } else {
       return HoodieCommitMetadata.fromBytes(data, HoodieCommitMetadata.class);
@@ -348,7 +348,7 @@ public class TimelineUtils {
     Option<HoodieInstant> earliestCommit = shouldArchiveBeyondSavepoint
         ? dataTableActiveTimeline.getTimelineOfActions(
             CollectionUtils.createSet(
-                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTER_ACTION, SAVEPOINT_ACTION))
+                COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, SAVEPOINT_ACTION))
         .getFirstNonSavepointCommit()
         : dataTableActiveTimeline.getCommitsTimeline().firstInstant();
     // This is for all instants which are in-flight

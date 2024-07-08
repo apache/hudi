@@ -182,9 +182,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
     HoodieInstant clusteringInstant3 =
-        new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, clusteringInstantTime3);
+        new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime3);
     HoodieInstant clusteringInstant4 =
-        new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, clusteringInstantTime4);
+        new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime4);
     HoodieCommitMetadata commitMetadata =
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds,
             Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
@@ -1861,7 +1861,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   }
 
   private void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
-    assertEquals(HoodieTimeline.CLUSTER_ACTION, inflight.getAction());
+    assertEquals(HoodieTimeline.CLUSTERING_ACTION, inflight.getAction());
     HoodieInstant clusteringInstant = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
     HoodieClusteringPlan plan = new HoodieClusteringPlan();
     plan.setExtraMetadata(new HashMap<>());
@@ -2091,7 +2091,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         fileSliceGroups, Collections.emptyMap());
 
     String clusterTime = "2";
-    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.CLUSTER_ACTION, clusterTime);
+    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingClusterCommit(instant2, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
@@ -2205,7 +2205,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileName3 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId3, BASE_FILE_EXTENSION);
     new File(basePath + "/" + partitionPath + "/" + fileName3).createNewFile();
 
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, commitTime2);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, commitTime2);
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     List<String> replacedFileIds = new ArrayList<>();
     replacedFileIds.add(fileId1);

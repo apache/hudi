@@ -67,7 +67,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETE
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
@@ -116,7 +116,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String ts1 = "1";
     String replacePartition = "2021/01/01";
     String newFilePartition = "2021/01/02";
-    HoodieInstant instant1 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTER_ACTION, ts1);
+    HoodieInstant instant1 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION, ts1);
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
     if (withReplace) {
@@ -135,7 +135,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(replacePartition, partitions.get(0));
 
     String ts2 = "2";
-    HoodieInstant instant2 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTER_ACTION, ts2);
+    HoodieInstant instant2 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     // create replace metadata only with replaced file Ids (no new files created)
     if (withReplace) {
@@ -277,7 +277,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTER_ACTION, ts2);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     String newValueForMetadata = "newValue2";
     extraMetadata.put(extraMetadataKey, newValueForMetadata);
@@ -433,7 +433,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(REQUESTED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
                     new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"),
-                    new HoodieInstant(REQUESTED, CLUSTER_ACTION, "012"))), false));
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012"))), false));
 
     // No inflight instants
     assertEquals(
@@ -446,7 +446,7 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
                     new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"),
-                    new HoodieInstant(REQUESTED, CLUSTER_ACTION, "012"))), false));
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012"))), false));
 
     // Rollbacks only
     assertEquals(

@@ -280,7 +280,7 @@ public class FileCreateUtils {
   public static void createRequestedClusterCommit(String basePath, String instantTime,
                                                   HoodieRequestedReplaceMetadata requestedReplaceMetadata)
       throws IOException {
-    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLUSTER_COMMIT_EXTENSION,
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION,
         serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
   }
 
@@ -288,10 +288,10 @@ public class FileCreateUtils {
                                                  Option<HoodieCommitMetadata> inflightReplaceMetadata)
       throws IOException {
     if (inflightReplaceMetadata.isPresent()) {
-      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTER_COMMIT_EXTENSION,
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION,
           serializeCommitMetadata(inflightReplaceMetadata.get()).get());
     } else {
-      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTER_COMMIT_EXTENSION);
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION);
     }
   }
 

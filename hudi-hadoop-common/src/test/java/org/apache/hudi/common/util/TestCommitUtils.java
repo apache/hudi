@@ -44,7 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTER_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_SCHEMA;
@@ -212,7 +212,7 @@ public class TestCommitUtils {
             .setClusteringPlan(new HoodieClusteringPlan())
             .build();
     timeline.saveToPendingClusterCommit(
-        new HoodieInstant(HoodieInstant.State.REQUESTED, CLUSTER_ACTION, ts),
+        new HoodieInstant(HoodieInstant.State.REQUESTED, CLUSTERING_ACTION, ts),
         TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata)
     );
   }

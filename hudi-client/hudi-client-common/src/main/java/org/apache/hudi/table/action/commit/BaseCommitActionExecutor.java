@@ -265,7 +265,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
     context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
-    HoodieInstant instant = HoodieTimeline.getClusterCommitRequestedInstant(instantTime);
+    HoodieInstant instant = HoodieTimeline.getClusteringCommitRequestedInstant(instantTime);
     // Mark instant as clustering inflight
     table.getActiveTimeline().transitionClusterRequestedToInflight(instant, Option.empty());
     table.getMetaClient().reloadActiveTimeline();

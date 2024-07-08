@@ -70,7 +70,7 @@ public class ClusteringUtils {
   public static Stream<Pair<HoodieInstant, HoodieClusteringPlan>> getAllPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
     List<HoodieInstant> pendingClusterInstants =
-        metaClient.getActiveTimeline().filterPendingClusterTimeline().getInstants();
+        metaClient.getActiveTimeline().filterPendingClusteringTimeline().getInstants();
     return pendingClusterInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
   }
@@ -84,7 +84,7 @@ public class ClusteringUtils {
    * @return whether the action type is a clustering or replace commit action type
    */
   public static boolean isClusteringOrReplaceCommitAction(String actionType) {
-    return actionType.equals(HoodieTimeline.CLUSTER_ACTION) || actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
+    return actionType.equals(HoodieTimeline.CLUSTERING_ACTION) || actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
   }
 
   /**
@@ -96,7 +96,7 @@ public class ClusteringUtils {
    */
   public static boolean isClusteringInstant(HoodieTimeline timeline, HoodieInstant replaceInstant) {
     // TODO: #CLUSTER_REPLACE - Check if we need check only for cluster action
-    return replaceInstant.getAction().equals(HoodieTimeline.CLUSTER_ACTION)
+    return replaceInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
         || (replaceInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && getClusteringPlan(timeline, replaceInstant).isPresent());
   }
 
@@ -118,7 +118,7 @@ public class ClusteringUtils {
     } else if (pendingReplaceOrClusterInstant.isRequested()) {
       requestedInstant = pendingReplaceOrClusterInstant;
     } else {
-      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTER_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
+      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
     }
     Option<byte[]> content;
     try {
@@ -271,7 +271,7 @@ public class ClusteringUtils {
   }
 
   public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().filterPendingClusterTimeline().getInstantsAsStream()
+    return metaClient.getActiveTimeline().filterPendingClusteringTimeline().getInstantsAsStream()
         .collect(Collectors.toList());
   }
 
@@ -286,7 +286,7 @@ public class ClusteringUtils {
   public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
       HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
-    HoodieTimeline replaceOrClusterTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTER_ACTION));
+    HoodieTimeline replaceOrClusterTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     if (!replaceOrClusterTimeline.empty()) {
       Option<HoodieInstant> cleanInstantOpt =
           activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();

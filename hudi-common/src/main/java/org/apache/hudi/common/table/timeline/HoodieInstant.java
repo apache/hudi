@@ -191,7 +191,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     Map<String, String> comparableMap = new HashMap<>();
     comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
     comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
-    comparableMap.put(HoodieTimeline.CLUSTER_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    comparableMap.put(HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
     return comparableMap;
   }
 
@@ -246,11 +246,11 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedReplaceFileName(timestamp);
       }
-    } else if (HoodieTimeline.CLUSTER_ACTION.equals(action)) {
+    } else if (HoodieTimeline.CLUSTERING_ACTION.equals(action)) {
       if (isInflight()) {
-        return HoodieTimeline.makeInflightClusterFileName(timestamp);
+        return HoodieTimeline.makeInflightClusteringFileName(timestamp);
       } else if (isRequested()) {
-        return HoodieTimeline.makeRequestedClusterFileName(timestamp);
+        return HoodieTimeline.makeRequestedClusteringFileName(timestamp);
       }
     } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       if (isInflight()) {

@@ -616,8 +616,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   private static void createPendingClusterFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeInflightClusterFileName(instantTime),
-            HoodieTimeline.makeRequestedClusterFileName(instantTime))
+    Arrays.asList(HoodieTimeline.makeInflightClusteringFileName(instantTime),
+            HoodieTimeline.makeRequestedClusteringFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 

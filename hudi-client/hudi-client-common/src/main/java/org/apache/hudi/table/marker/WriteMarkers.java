@@ -84,10 +84,10 @@ public abstract class WriteMarkers implements Serializable {
     if (writeConfig.getWriteConcurrencyMode().isOptimisticConcurrencyControl() && writeConfig.isEarlyConflictDetectionEnable()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
       // TODO: #CLUSTER_REPLACE - Check if we need check only for cluster action
-      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceOrClusterTimeline();
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
-      // ok to use filterPendingReplaceOrClusterTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
+      // ok to use filterPendingReplaceOrClusteringTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
         return create(partitionPath, fileName, type, false);
       }
@@ -125,10 +125,10 @@ public abstract class WriteMarkers implements Serializable {
     if (writeConfig.isEarlyConflictDetectionEnable()
         && writeConfig.getWriteConcurrencyMode().isOptimisticConcurrencyControl()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
-      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceOrClusterTimeline();
+      HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.
-      // ok to use filterPendingReplaceOrClusterTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
+      // ok to use filterPendingReplaceOrClusteringTimeline().containsInstant because early conflict detection is not relevant for insert overwrite as well
       if (pendingCompactionTimeline.containsInstant(instantTime) || pendingReplaceTimeline.containsInstant(instantTime)) {
         return create(partitionPath, fileName, type, true);
       }

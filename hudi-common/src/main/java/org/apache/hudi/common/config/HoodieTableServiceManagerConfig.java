@@ -172,7 +172,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public boolean isEnabledAndActionSupported(ActionType actionType) {
     boolean isActionSupported = getTableServiceManagerActions().contains(actionType.name());
-    if (actionType.equals(ActionType.cluster)) {
+    if (actionType.equals(ActionType.clustering)) {
       isActionSupported = isActionSupported || getTableServiceManagerActions().contains(ActionType.replacecommit.name());
     }
     return isTableServiceManagerEnabled() && isActionSupported;

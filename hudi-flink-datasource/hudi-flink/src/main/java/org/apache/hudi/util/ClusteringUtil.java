@@ -104,7 +104,7 @@ public class ClusteringUtil {
    * @param instantTime The instant time
    */
   public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient<?> writeClient, String instantTime) {
-    HoodieInstant inflightInstant = HoodieTimeline.getClusterCommitInflightInstant(instantTime);
+    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().isPendingClusterInstant(instantTime)) {
       LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
       table.rollbackInflightClustering(inflightInstant,

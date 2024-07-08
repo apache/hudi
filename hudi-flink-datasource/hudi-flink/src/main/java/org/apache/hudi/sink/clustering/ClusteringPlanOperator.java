@@ -119,7 +119,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
 
     // generate clustering plan
     // should support configurable commit metadata
-    HoodieInstant clusteringInstant = HoodieTimeline.getClusterCommitRequestedInstant(clusteringInstantTime);
+    HoodieInstant clusteringInstant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstantTime);
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
         table.getMetaClient(), clusteringInstant);
 

@@ -58,7 +58,7 @@ public class ConsistentHashingUpdateStrategyUtils {
     // Read all pending/ongoing clustering plans
     List<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPairs =
         table.getMetaClient().getActiveTimeline()
-            .filterPendingReplaceOrClusterTimeline().getInstantsAsStream()
+            .filterPendingReplaceOrClusteringTimeline().getInstantsAsStream()
             .map(instant -> ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant))
             .flatMap(o -> o.isPresent() ? Stream.of(o.get()) : Stream.empty())
             .collect(Collectors.toList());
