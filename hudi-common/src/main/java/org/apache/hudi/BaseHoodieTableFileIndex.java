@@ -19,7 +19,6 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -27,7 +26,6 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -42,7 +40,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
@@ -356,22 +353,13 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private Object[] parsePartitionColumnValues(String[] partitionColumns, String partitionPath) {
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    Object[] partitionColumnValues;
-    if (null != tableConfig.getKeyGeneratorClassName()
-        && tableConfig.getKeyGeneratorClassName().equals(KeyGeneratorType.TIMESTAMP.getClassName())
-        && tableConfig.propsMap().get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key()).matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS")) {
-      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP or EPOCHMILLISECONDS,
-      // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases
-      partitionColumnValues = new Object[partitionColumns.length];
-    } else {
-      partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
-      if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
-        throw new HoodieException("Failed to parse partition column values from the partition-path:"
-            + " likely non-encoded slashes being used in partition column's values. You can try to"
-            + " work this around by switching listing mode to eager");
-      }
+    Object[] partitionColumnValues = doParsePartitionColumnValues(partitionColumns, partitionPath);
+    if (shouldListLazily && partitionColumnValues.length != partitionColumns.length) {
+      throw new HoodieException("Failed to parse partition column values from the partition-path:"
+          + " likely non-encoded slashes being used in partition column's values. You can try to"
+          + " work this around by switching listing mode to eager");
     }
+
     return partitionColumnValues;
   }
 
