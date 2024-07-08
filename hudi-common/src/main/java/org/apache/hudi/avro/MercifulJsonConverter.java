@@ -18,6 +18,8 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -218,9 +220,8 @@ public class MercifulJsonConverter {
         processor = AVRO_TYPE_FIELD_TYPE_PROCESSORS.get(type);
       }
 
-      if (processor == null) {
-        throw new IllegalArgumentException(String.format("JsonConverter cannot handle type: %s", type));
-      }
+      ValidationUtils.checkArgument(
+          processor != null, String.format("JsonConverter cannot handle type: %s", type));
       return processor;
     }
 
@@ -250,18 +251,17 @@ public class MercifulJsonConverter {
     }
 
     private static Map<String, JsonToAvroFieldProcessor> getLogicalFieldTypeProcessors() {
-      Map<String, JsonToAvroFieldProcessor> logicalFieldTypeProcessors = new HashMap<>();
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.DECIMAL.getValue(), new DecimalLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.TIME_MICROS.getValue(), new TimeMicroLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.TIME_MILLIS.getValue(), new TimeMilliLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.DATE.getValue(), new DateLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.LOCAL_TIMESTAMP_MICROS.getValue(), new LocalTimestampMicroLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.LOCAL_TIMESTAMP_MILLIS.getValue(), new LocalTimestampMilliLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.TIMESTAMP_MICROS.getValue(), new TimestampMicroLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.TIMESTAMP_MILLIS.getValue(), new TimestampMilliLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.DURATION.getValue(), new DurationLogicalTypeProcessor());
-      logicalFieldTypeProcessors.put(AvroLogicalTypeEnum.UUID.getValue(), generateStringTypeHandler());
-      return Collections.unmodifiableMap(logicalFieldTypeProcessors);
+      return CollectionUtils.createImmutableMap(
+        Pair.of(AvroLogicalTypeEnum.DECIMAL.getValue(), new DecimalLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.TIME_MICROS.getValue(), new TimeMicroLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.TIME_MILLIS.getValue(), new TimeMilliLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.DATE.getValue(), new DateLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.LOCAL_TIMESTAMP_MICROS.getValue(), new LocalTimestampMicroLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.LOCAL_TIMESTAMP_MILLIS.getValue(), new LocalTimestampMilliLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.TIMESTAMP_MICROS.getValue(), new TimestampMicroLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.TIMESTAMP_MILLIS.getValue(), new TimestampMilliLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.DURATION.getValue(), new DurationLogicalTypeProcessor()),
+        Pair.of(AvroLogicalTypeEnum.UUID.getValue(), generateStringTypeHandler()));
     }
 
     private static class DecimalLogicalTypeProcessor extends JsonToAvroFieldProcessor {
