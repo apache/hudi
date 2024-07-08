@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     # if: false
     env:
-      HUDI_VERSION: 1.0.0-beta2-rc1
-      STAGING_REPO_NUM: 1139
+      HUDI_VERSION: 1.0.0-beta2-rc2
+      STAGING_REPO_NUM: 1141
     strategy:
       matrix:
         include:
