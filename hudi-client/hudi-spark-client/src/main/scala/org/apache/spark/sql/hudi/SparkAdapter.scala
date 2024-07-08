@@ -33,10 +33,9 @@ import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConver
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
-import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
-import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.execution.QueryExecution
@@ -283,11 +282,4 @@ trait SparkAdapter extends Serializable {
 
   def createHoodiePartitionFileSliceMapping(values: InternalRow,
                                             slices: Map[String, FileSlice]): HoodiePartitionFileSliceMapping
-
-  def newParseException(command: Option[String],
-                        message: String,
-                        start: Origin,
-                        stop: Origin,
-                        errorClass: String,
-                        messageParameters: Map[String, String]): ParseException
 }
