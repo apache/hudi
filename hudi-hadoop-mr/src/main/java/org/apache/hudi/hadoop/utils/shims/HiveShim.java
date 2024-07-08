@@ -27,7 +27,7 @@ public interface HiveShim {
 
   Writable getTimestampWriteable(long value, boolean timestampMillis);
 
-  Object getPrimitiveJavaObject(Object o);
+  Object unwrapTimestampAsPrimitive(Object o);
 
   Writable getDateWriteable(int value);
 

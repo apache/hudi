@@ -43,7 +43,7 @@ public class Hive2Shim implements HiveShim {
   }
 
   @Override
-  public Object getPrimitiveJavaObject(Object o) {
+  public Object unwrapTimestampAsPrimitive(Object o) {
     return o == null ? null : ((TimestampWritable) o).getTimestamp();
   }
 

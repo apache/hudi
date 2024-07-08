@@ -97,7 +97,7 @@ public class Hive3Shim implements HiveShim {
   }
 
   @Override
-  public Object getPrimitiveJavaObject(Object o) {
+  public Object unwrapTimestampAsPrimitive(Object o) {
     if (o == null) {
       return null;
     }
