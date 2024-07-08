@@ -2719,6 +2719,7 @@
         <scala13.version>2.13.14</scala13.version>
         <scala.version>${scala13.version}</scala.version>
         <scala.binary.version>2.13</scala.binary.version>
+        <scala-maven-plugin.version>4.9.2</scala-maven-plugin.version>
         <hudi.spark.module>hudi-spark4.0.x</hudi.spark.module>
         <!-- This glob has to include hudi-spark4-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.modules.1>hudi-spark4-common</hudi.spark.common.modules.1>
