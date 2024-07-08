@@ -150,7 +150,7 @@ public final class SchemaTestUtil {
     if (resource.toString().contains("!")) {
       return uriToPath(resource);
     } else {
-      return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
+      return Paths.get(resource);
     }
   }
 
@@ -159,7 +159,7 @@ public final class SchemaTestUtil {
     if (resource.toString().contains("!")) {
       return uriToPath(resource);
     } else {
-      return Paths.get(SchemaTestUtil.class.getResource(path).toURI());
+      return Paths.get(resource);
     }
   }
 
