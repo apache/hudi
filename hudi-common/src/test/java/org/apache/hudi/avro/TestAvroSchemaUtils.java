@@ -116,6 +116,46 @@ public class TestAvroSchemaUtils {
       + "}\n";
 
   @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullSchema() {
+    // This test should throw an IllegalArgumentException
+    assertThrows(IllegalArgumentException.class, () -> AvroSchemaUtils.createNewSchemaFromFieldsWithReference(null, Collections.emptyList()));
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullObjectProps() {
+    // Create a schema without any object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [] }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Ensure getObjectProps returns null by mocking or creating a schema without props
+    Schema newSchema = AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, Collections.emptyList());
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(0, newSchema.getFields().size());
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_WithObjectProps() {
+    // Create a schema with object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [], \"prop1\": \"value1\" }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Add an object property to the schema
+    schema.addProp("prop1", "value1");
+
+    // Create new fields to add
+    Schema.Field newField = new Schema.Field("newField", Schema.create(Schema.Type.STRING), null, (Object) null);
+    Schema newSchema = AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, Collections.singletonList(newField));
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(1, newSchema.getFields().size());
+    assertEquals("value1", newSchema.getProp("prop1"));
+    assertEquals("newField", newSchema.getFields().get(0).name());
+  }
+
+  @Test
   public void testIsStrictProjection() {
     Schema sourceSchema = new Schema.Parser().parse(SOURCE_SCHEMA);
     Schema projectedNestedSchema = new Schema.Parser().parse(PROJECTED_NESTED_SCHEMA_STRICT);
