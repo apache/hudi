@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.{Callable, Executors, TimeUnit}
 import scala.util.Random
 
 class TestCleanProcedure extends HoodieSparkProcedureTestBase {
@@ -233,18 +233,26 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
         spark.sql(s"insert into $tableName values(2, 'a2', 10, 'p0')")
 
         val executor = Executors.newFixedThreadPool(2)
-        executor.submit(() => {
-          spark.sql(s"insert into $tableName values(3, 'a3', 10, 'p1')")
-        })
+        executor.submit(
+          new Callable[Unit] {
+            override def call(): Unit = {
+              spark.sql(s"insert into $tableName values(3, 'a3', 10, 'p1')")
+            }
+          }
+        )
         Thread.sleep(new Random().nextInt(1000))
-        executor.submit(() => {
-          spark.sql(
-            s"""call run_clean(table => '$tableName', options => "
-               | hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS,
-               | hoodie.cleaner.fileversions.retained=1,
-               | hoodie.clean.max.commits=0
-               |")""".stripMargin)
-        })
+        executor.submit(
+          new Callable[Unit] {
+            override def call(): Unit = {
+              spark.sql(
+                s"""call run_clean(table => '$tableName', options => "
+                   | hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS,
+                   | hoodie.cleaner.fileversions.retained=1,
+                   | hoodie.clean.max.commits=0
+                   |")""".stripMargin)
+            }
+          }
+        )
         executor.shutdown()
         assert(executor.awaitTermination(10, TimeUnit.SECONDS))
 
