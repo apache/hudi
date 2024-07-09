@@ -107,19 +107,19 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   }
 
   private void verifyRecordAscendingOrder(List<HoodieRecord<? extends HoodieRecordPayload>> records,
-                                          Option<Comparator<HoodieRecord<? extends HoodieRecordPayload>>> comparator) {
+      Option<Comparator<HoodieRecord<? extends HoodieRecordPayload>>> comparator) {
     List<HoodieRecord<? extends HoodieRecordPayload>> expectedRecords = new ArrayList<>(records);
     Collections.sort(expectedRecords, comparator.orElse(KEY_COMPARATOR));
     assertEquals(expectedRecords, records);
   }
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
-                                                 JavaRDD<HoodieRecord> records,
-                                                 boolean enforceNumOutputPartitions,
-                                                 boolean isGloballySorted,
-                                                 boolean isLocallySorted,
-                                                 Map<String, Long> expectedPartitionNumRecords,
-                                                 boolean populateMetaFields) {
+      JavaRDD<HoodieRecord> records,
+      boolean enforceNumOutputPartitions,
+      boolean isGloballySorted,
+      boolean isLocallySorted,
+      Map<String, Long> expectedPartitionNumRecords,
+      boolean populateMetaFields) {
     testBulkInsertInternalPartitioner(
         partitioner,
         records,
@@ -132,13 +132,13 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   }
 
   private void testBulkInsertInternalPartitioner(BulkInsertPartitioner partitioner,
-                                                 JavaRDD<HoodieRecord> records,
-                                                 boolean enforceNumOutputPartitions,
-                                                 boolean isGloballySorted,
-                                                 boolean isLocallySorted,
-                                                 Map<String, Long> expectedPartitionNumRecords,
-                                                 Option<Comparator<HoodieRecord<? extends HoodieRecordPayload>>> comparator,
-                                                 boolean populateMetaFields) {
+      JavaRDD<HoodieRecord> records,
+      boolean enforceNumOutputPartitions,
+      boolean isGloballySorted,
+      boolean isLocallySorted,
+      Map<String, Long> expectedPartitionNumRecords,
+      Option<Comparator<HoodieRecord<? extends HoodieRecordPayload>>> comparator,
+      boolean populateMetaFields) {
     int numPartitions = 2;
     if (!populateMetaFields) {
       assertThrows(HoodieException.class, () -> partitioner.repartitionRecords(records, numPartitions));
@@ -176,11 +176,11 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   @ParameterizedTest(name = "[{index}] {0} isTablePartitioned={1} enforceNumOutputPartitions={2}")
   @MethodSource("configParams")
   public void testBulkInsertInternalPartitioner(BulkInsertSortMode sortMode,
-                                                boolean isTablePartitioned,
-                                                boolean enforceNumOutputPartitions,
-                                                boolean isGloballySorted,
-                                                boolean isLocallySorted,
-                                                boolean populateMetaFields) {
+      boolean isTablePartitioned,
+      boolean enforceNumOutputPartitions,
+      boolean isGloballySorted,
+      boolean isLocallySorted,
+      boolean populateMetaFields) {
     JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
     JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
 
@@ -253,10 +253,10 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
     }, (o1, o2) -> {
-        FlatLists.ComparableList values1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o1.toArray());
-        FlatLists.ComparableList values2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o2.toArray());
-        return values1.compareTo(values2);
-      });
+      FlatLists.ComparableList values1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o1.toArray());
+      FlatLists.ComparableList values2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o2.toArray());
+      return values1.compareTo(values2);
+    });
 
     return comparator;
   }
