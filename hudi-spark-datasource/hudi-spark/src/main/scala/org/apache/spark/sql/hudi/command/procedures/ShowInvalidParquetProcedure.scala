@@ -31,7 +31,8 @@ import java.util.function.Supplier
 
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "path", DataTypes.StringType, None),
+    ProcedureParameter.optional(1, "needDelete", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,6 +47,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
+    val needDelete = getArgValueOrDefault(args, PARAMETERS(1)).get.asInstanceOf[Boolean]
     val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), srcPath, false, false)
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())
     val serHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration())
@@ -60,6 +62,15 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
           try ParquetFileReader.readFooter(serHadoopConf.get(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
             case e: Exception =>
               isInvalid = e.getMessage.contains("is not a Parquet file")
+              if (isInvalid && needDelete) {
+                val fs = FSUtils.getFs(filePath, serHadoopConf.get())
+                try {
+                  isInvalid = !fs.delete(filePath, false)
+                } catch {
+                  case ex: Exception =>
+                    isInvalid = true
+                }
+              }
           }
         }
         isInvalid
