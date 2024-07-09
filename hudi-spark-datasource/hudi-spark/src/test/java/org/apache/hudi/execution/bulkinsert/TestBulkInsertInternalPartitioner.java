@@ -256,7 +256,8 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         FlatLists.ComparableList values1 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o1.toArray());
         FlatLists.ComparableList values2 = SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(o2.toArray());
         return values1.compareTo(values2);
-    });
+      }
+    );
 
     return comparator;
   }
