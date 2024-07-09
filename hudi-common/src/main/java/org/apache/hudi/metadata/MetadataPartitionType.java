@@ -37,36 +37,45 @@ import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
+import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 
 /**
  * Partition types for metadata table.
  */
 public enum MetadataPartitionType {
-  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-") {
+  FILES(HoodieTableMetadataUtil.PARTITION_NAME_FILES, "files-", 2) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, ENABLE);
     }
+
+    @Override
+    public int getRecordType(String key) {
+      if (nonEmpty(key) && key.equals(RECORDKEY_PARTITION_LIST)) {
+        return 1;
+      }
+      return 2;
+    }
   },
-  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-") {
+  COLUMN_STATS(HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, "col-stats-", 3) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_COLUMN_STATS);
     }
   },
-  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-") {
+  BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_BLOOM_FILTER);
     }
   },
-  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-") {
+  RECORD_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX, "record-index-", 5) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, RECORD_INDEX_ENABLE_PROP);
     }
   },
-  FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-") {
+  FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-", -1) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       // Functional index is created via sql and not via write path.
@@ -83,7 +92,7 @@ public enum MetadataPartitionType {
       return false;
     }
   },
-  SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-") {
+  SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       // Secondary index is created via sql and not via write path.
@@ -100,7 +109,7 @@ public enum MetadataPartitionType {
       return false;
     }
   },
-  PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-") {
+  PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
       return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS) && nonEmpty(getStringWithAltKeys(writeConfig, COLUMN_STATS_INDEX_FOR_COLUMNS, EMPTY_STRING));
@@ -111,6 +120,7 @@ public enum MetadataPartitionType {
   private final String partitionPath;
   // FileId prefix used for all file groups in this partition.
   private final String fileIdPrefix;
+  private final int recordType;
 
   /**
    * Check if the metadata partition is enabled based on the metadata config.
@@ -124,9 +134,10 @@ public enum MetadataPartitionType {
     return metaClient.getTableConfig().isMetadataPartitionAvailable(this);
   }
 
-  MetadataPartitionType(final String partitionPath, final String fileIdPrefix) {
+  MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int recordType) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
+    this.recordType = recordType;
   }
 
   public String getPartitionPath() {
@@ -135,6 +146,10 @@ public enum MetadataPartitionType {
 
   public String getFileIdPrefix() {
     return fileIdPrefix;
+  }
+
+  public int getRecordType(String key) {
+    return recordType;
   }
 
   /**

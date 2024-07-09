@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -170,5 +171,16 @@ public class TestMetadataPartitionType {
     assertEquals(MetadataPartitionType.RECORD_INDEX, MetadataPartitionType.fromPartitionPath("record_index"));
     assertEquals(MetadataPartitionType.PARTITION_STATS, MetadataPartitionType.fromPartitionPath("partition_stats"));
     assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.fromPartitionPath("unknown"));
+  }
+
+  @Test
+  public void testGetMetadataPartitionRecordType() {
+    assertEquals(1, MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST));
+    assertEquals(2, MetadataPartitionType.FILES.getRecordType(""));
+    assertEquals(3, MetadataPartitionType.COLUMN_STATS.getRecordType(""));
+    assertEquals(4, MetadataPartitionType.BLOOM_FILTERS.getRecordType(""));
+    assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType(""));
+    assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType(""));
+    assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType(""));
   }
 }
