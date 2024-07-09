@@ -48,7 +48,6 @@ import java.util.stream.Collectors;
 public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  public static final String SPLIT_REGEX = ":";
   private final List<BaseKeyGenerator> partitionKeyGenerators;
   private final BaseKeyGenerator recordKeyGenerator;
 
@@ -63,10 +62,10 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     super(props);
     this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
         .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
+            Arrays.stream(recordKeyConfigValue.split(FIELD_SEPARATOR))
                 .map(String::trim).collect(Collectors.toList())
         ).orElse(Collections.emptyList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELD_SEPARATOR)).map(String::trim).collect(Collectors.toList());
     this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1 ? new SimpleAvroKeyGenerator(config) : new ComplexAvroKeyGenerator(config);
     this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);
   }
@@ -76,7 +75,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
       return partitionPathFields.stream().map(field -> {
-        String[] fieldWithType = field.split(SPLIT_REGEX);
+        String[] fieldWithType = field.split(CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
         if (fieldWithType.length != 2) {
           throw new HoodieKeyException("Unable to find field names for partition path in proper format");
         }
