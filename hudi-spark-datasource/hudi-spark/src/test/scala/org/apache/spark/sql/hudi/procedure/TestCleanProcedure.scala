@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import java.util.concurrent.{Executors, TimeUnit}
+import scala.util.Random
+
 class TestCleanProcedure extends HoodieSparkProcedureTestBase {
 
   test("Test Call run_clean Procedure by Table") {
@@ -197,6 +200,57 @@ class TestCleanProcedure extends HoodieSparkProcedureTestBase {
         val result2 = spark.sql(
           s"call show_fsview_all(table => '$tableName', path_regex => '', limit => 10)").collect()
         assertResult(3)(result2.length)
+      }
+    }
+  }
+
+  test("Test concurrent write and clean") {
+    withSQLConf("hoodie.clean.automatic" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | ts long,
+             | pt string
+             | ) using hudi
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |   primaryKey = 'id',
+             |   type = 'cow',
+             |   preCombineField = 'ts',
+             |   hoodie.metadata.enable = 'false',
+             |   hoodie.write.concurrency.mode='optimistic_concurrency_control',
+             |   hoodie.cleaner.policy.failed.writes='LAZY',
+             |   hoodie.write.lock.provider='org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider'
+             | )
+             | partitioned by (pt)
+             |""".stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 'p0')")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 'p0')")
+
+        val executor = Executors.newFixedThreadPool(2)
+        executor.submit(() => {
+          spark.sql(s"insert into $tableName values(3, 'a3', 10, 'p1')")
+        })
+        Thread.sleep(new Random().nextInt(1000))
+        executor.submit(() => {
+          spark.sql(
+            s"""call run_clean(table => '$tableName', options => "
+               | hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS,
+               | hoodie.cleaner.fileversions.retained=1,
+               | hoodie.clean.max.commits=0
+               |")""".stripMargin)
+        })
+        executor.shutdown()
+        assert(executor.awaitTermination(10, TimeUnit.SECONDS))
+
+        checkAnswer(s"select id, name, ts, pt from $tableName where pt = 'p1'")(
+          Seq(3, "a3", 10, "p1")
+        )
       }
     }
   }

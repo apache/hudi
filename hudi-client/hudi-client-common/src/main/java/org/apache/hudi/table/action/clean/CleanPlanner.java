@@ -335,7 +335,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // if there are no valid file groups
     // and no pending data files under the partition [IMPORTANT],
     // mark it to be deleted
-    if (fileGroups.isEmpty() && !hasPendingFiles(partitionPath)) {
+    if (fileGroups.isEmpty() && !mayHavePendingFiles(partitionPath)) {
       toDeletePartition = true;
     }
     return Pair.of(toDeletePartition, deletePaths);
@@ -435,7 +435,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // and no subsequent replace commit after the earliest retained commit
       // mark it to be deleted
       if (fileGroups.isEmpty()
-          && !hasPendingFiles(partitionPath)
+          && !mayHavePendingFiles(partitionPath)
           && noSubsequentReplaceCommit(earliestInstant.getTimestamp(), partitionPath)) {
         toDeletePartition = true;
       }
@@ -451,8 +451,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * <p>IMPORTANT: {@code fsView.getAllFileGroups} does not return pending file groups for metadata table,
    * file listing must be used instead.
    */
-  private boolean hasPendingFiles(String partitionPath) {
+  private boolean mayHavePendingFiles(String partitionPath) {
     try {
+      // As long as there are pending commits never delete empty partitions, because they may write files to any partitions.
+      if (!hoodieTable.getMetaClient().getCommitsTimeline().filterInflightsAndRequested().empty()) {
+        return true;
+      }
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
       StoragePath fullPartitionPath = new StoragePath(hoodieTable.getMetaClient().getBasePath(), partitionPath);
       fsView.addFilesToView(partitionPath, FSUtils.getAllDataFilesInPartition(
