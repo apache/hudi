@@ -54,8 +54,6 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
     // assert table version is seven and the partition fields in table config does not have partition type
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.SEVEN, null)
-    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.SEVEN, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.SEVEN, metaClient.getTableConfig.getTableVersion)
     assertEquals("partition", HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
