@@ -112,6 +112,7 @@ public class IncrementalQueryAnalyzer {
   private final boolean skipCompaction;
   private final boolean skipClustering;
   private final boolean skipInsertOverwrite;
+  private final boolean readCdcFromChangelog;
   private final int limit;
 
   private IncrementalQueryAnalyzer(
@@ -122,6 +123,7 @@ public class IncrementalQueryAnalyzer {
       boolean skipCompaction,
       boolean skipClustering,
       boolean skipInsertOverwrite,
+      boolean readCdcFromChangelog,
       int limit) {
     this.metaClient = metaClient;
     this.startTime = Option.ofNullable(startTime);
@@ -130,6 +132,7 @@ public class IncrementalQueryAnalyzer {
     this.skipCompaction = skipCompaction;
     this.skipClustering = skipClustering;
     this.skipInsertOverwrite = skipInsertOverwrite;
+    this.readCdcFromChangelog = readCdcFromChangelog;
     this.limit = limit;
   }
 
@@ -209,13 +212,23 @@ public class IncrementalQueryAnalyzer {
 
   private HoodieTimeline getFilteredTimeline(HoodieTableMetaClient metaClient) {
     HoodieTimeline timeline = metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants();
-    return filterInstantsAsPerUserConfigs(metaClient, timeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
+    return filterInstantsAsPerUserConfigs(metaClient, timeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.readCdcFromChangelog);
   }
 
   private HoodieTimeline getArchivedReadTimeline(HoodieTableMetaClient metaClient, String startInstant) {
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline(startInstant, false);
     HoodieTimeline archivedCompleteTimeline = archivedTimeline.getCommitsTimeline().filterCompletedInstants();
-    return filterInstantsAsPerUserConfigs(metaClient, archivedCompleteTimeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite);
+    return filterInstantsAsPerUserConfigs(metaClient, archivedCompleteTimeline, this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.readCdcFromChangelog);
+  }
+
+  @VisibleForTesting
+  public static HoodieTimeline filterInstantsAsPerUserConfigs(
+      HoodieTableMetaClient metaClient,
+      HoodieTimeline timeline,
+      boolean skipCompaction,
+      boolean skipClustering,
+      boolean skipInsertOverwrite) {
+    return filterInstantsAsPerUserConfigs(metaClient, timeline, skipCompaction, skipClustering, skipInsertOverwrite, false);
   }
 
   /**
@@ -225,12 +238,21 @@ public class IncrementalQueryAnalyzer {
    *
    * @return the filtered timeline
    */
-  @VisibleForTesting
-  public static HoodieTimeline filterInstantsAsPerUserConfigs(HoodieTableMetaClient metaClient, HoodieTimeline timeline, boolean skipCompaction, boolean skipClustering, boolean skipInsertOverwrite) {
+  private static HoodieTimeline filterInstantsAsPerUserConfigs(
+      HoodieTableMetaClient metaClient,
+      HoodieTimeline timeline,
+      boolean skipCompaction,
+      boolean skipClustering,
+      boolean skipInsertOverwrite,
+      boolean readCdcFromChangelog) {
     final HoodieTimeline oriTimeline = timeline;
-    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ & skipCompaction) {
+    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ && skipCompaction) {
       // the compaction commit uses 'commit' as action which is tricky
       timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
+    }
+    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ && metaClient.getTableConfig().isCDCEnabled() && readCdcFromChangelog) {
+      // only compaction yields changelog file
+      timeline = timeline.filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION));
     }
     if (skipClustering) {
       timeline = timeline.filter(instant -> !ClusteringUtils.isCompletedClusteringInstant(instant, oriTimeline));
@@ -261,6 +283,7 @@ public class IncrementalQueryAnalyzer {
     private boolean skipCompaction = false;
     private boolean skipClustering = false;
     private boolean skipInsertOverwrite = false;
+    private boolean readCdcFromChangelog = false;
     /**
      * Maximum number of instants to read per run.
      */
@@ -304,6 +327,11 @@ public class IncrementalQueryAnalyzer {
       return this;
     }
 
+    public Builder readCdcFromChangelog(boolean readCdcFromChangelog) {
+      this.readCdcFromChangelog = readCdcFromChangelog;
+      return this;
+    }
+
     public Builder limit(int limit) {
       this.limit = limit;
       return this;
@@ -311,7 +339,7 @@ public class IncrementalQueryAnalyzer {
 
     public IncrementalQueryAnalyzer build() {
       return new IncrementalQueryAnalyzer(Objects.requireNonNull(this.metaClient), this.startTime, this.endTime,
-          Objects.requireNonNull(this.rangeType), this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.limit);
+          Objects.requireNonNull(this.rangeType), this.skipCompaction, this.skipClustering, this.skipInsertOverwrite, this.readCdcFromChangelog, this.limit);
     }
   }
 
