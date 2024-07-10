@@ -19,8 +19,9 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.util.Functions
+import org.apache.hudi.common.util.hash.BucketIndexUtil
 import org.apache.hudi.index.bucket.BucketIdentifier
-
 import org.apache.spark.Partitioner
 import org.apache.spark.sql.catalyst.InternalRow
 
@@ -39,12 +40,15 @@ object BucketPartitionUtils {
 
     val getPartitionKey = getPartitionKeyExtractor()
     val partitioner = new Partitioner {
+
+      private val partitionIndexFunc: Functions.Function2[String, Integer, Integer] =
+        BucketIndexUtil.getPartitionIndexFunc(bucketNum, partitionNum)
+
       override def numPartitions: Int = partitionNum
 
-      override def getPartition(key: Any): Int = {
-        val t = key.asInstanceOf[(String, Int)]
-        val pw = (t._1.hashCode & Int.MaxValue) % partitionNum
-        BucketIdentifier.mod(t._2 + pw, partitionNum)
+      override def getPartition(value: Any): Int = {
+        val partitionKeyPair = value.asInstanceOf[(String, Int)]
+        partitionIndexFunc.apply(partitionKeyPair._1, partitionKeyPair._2)
       }
     }
     // use internalRow to avoid extra convert.
