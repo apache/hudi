@@ -31,9 +31,9 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
