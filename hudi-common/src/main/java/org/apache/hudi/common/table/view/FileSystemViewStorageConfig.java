@@ -89,13 +89,13 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<Double> SPILLABLE_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.15)
       .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
   public static final ConfigProperty<Double> SPILLABLE_LOG_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.log.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.1)
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Fraction of the file system view memory, to be used for holding log compaction related metadata.");
