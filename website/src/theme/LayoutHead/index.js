@@ -12,10 +12,10 @@ import SearchMetadata from '@theme/SearchMetadata';
 import Seo from '@theme/Seo';
 import {
   DEFAULT_SEARCH_TAG,
-  useTitleFormatter,
   useAlternatePageUtils,
   useThemeConfig,
 } from '@docusaurus/theme-common';
+import { useTitleFormatter } from './useTitleFormatter';
 import {useLocation} from '@docusaurus/router'; // Useful for SEO
 // See https://developers.google.com/search/docs/advanced/crawling/localized-versions
 // See https://github.com/facebook/docusaurus/issues/3317
@@ -82,9 +82,10 @@ export default function LayoutHead(props) {
     i18n: {currentLocale, localeConfigs},
   } = useDocusaurusContext();
   const {metadata, image: defaultImage} = useThemeConfig();
-  const {title, description, image, keywords, searchMetadata} = props;
+  const {title, description, image, keywords, searchMetadata, shouldShowOnlyTitle} = props;
   const faviconUrl = useBaseUrl(favicon);
-  const pageTitle = useTitleFormatter(title); // See https://github.com/facebook/docusaurus/issues/3317#issuecomment-754661855
+  const pageTitle = useTitleFormatter(title, shouldShowOnlyTitle); // See https://github.com/facebook/docusaurus/issues/3317#issuecomment-754661855
+
   // const htmlLang = currentLocale.split('-')[0];
 
   const htmlLang = currentLocale; // should we allow the user to override htmlLang with localeConfig?
