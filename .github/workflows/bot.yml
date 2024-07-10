@@ -782,5 +782,8 @@ jobs:
         run:
           mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version=1.10.0 -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
