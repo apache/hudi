@@ -27,11 +27,9 @@ public interface HiveShim {
 
   Writable getTimestampWriteable(long value, boolean timestampMillis);
 
-  Object unwrapTimestampAsPrimitive(Object o);
-
   Writable getDateWriteable(int value);
 
   int getDays(Object dateWritable);
 
-  long getMills(Object timestamp);
+  long getMills(Object timestampWritable);
 }
