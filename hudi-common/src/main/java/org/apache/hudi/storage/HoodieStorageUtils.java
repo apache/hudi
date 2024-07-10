@@ -91,7 +91,7 @@ public class HoodieStorageUtils {
       throw new HoodieException("Failed to fetch table config");
     }
 
-   return getStorageStrategy(props);
+    return getStorageStrategy(props);
   }
 
   public static StorageStrategy getStorageStrategy(TypedProperties props) {
