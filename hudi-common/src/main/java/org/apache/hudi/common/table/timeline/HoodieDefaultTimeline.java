@@ -63,8 +63,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
   private transient volatile Set<String> instantTimeSet;
-  // for efficient #isPendingClusterInstant queries
-  private transient volatile Set<String> pendingClusterInstants;
+  // for efficient #isPendingClusteringInstant queries
+  private transient volatile Set<String> pendingClusteringInstants;
   // for efficient #isBeforeTimelineStarts check.
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   private String timelineHash;
@@ -197,6 +197,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(
         s -> (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
             && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingReplaceClusteringAndCompactionTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> !s.isCompleted() && (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
+            || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
   }
 
   @Override
@@ -550,19 +558,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
-    HoodieTimeline pendingClusterTimeline = filterPendingClusteringTimeline();
+    HoodieTimeline pendingClusteringTimeline = filterPendingReplaceOrClusteringTimeline();
     Stream<HoodieInstant> clusterStream;
     if (isLast) {
-      clusterStream = pendingClusterTimeline.getReverseOrderedInstants();
+      clusterStream = pendingClusteringTimeline.getReverseOrderedInstants();
     } else {
-      clusterStream = pendingClusterTimeline.getInstantsAsStream();
+      clusterStream = pendingClusteringTimeline.getInstantsAsStream();
     }
     return  Option.fromJavaOptional(clusterStream
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
   }
 
   @Override
-  public boolean isPendingClusterInstant(String instantTime) {
+  public boolean isPendingClusteringInstant(String instantTime) {
     return getOrCreatePendingClusteringInstantSet().contains(instantTime);
   }
 
@@ -593,10 +601,10 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   private Set<String> getOrCreatePendingClusteringInstantSet() {
-    if (this.pendingClusterInstants == null) {
+    if (this.pendingClusteringInstants == null) {
       synchronized (this) {
-        if (this.pendingClusterInstants == null) {
-          List<HoodieInstant> pendingClusterInstants = getCommitsTimeline().filterPendingClusteringTimeline().getInstants();
+        if (this.pendingClusteringInstants == null) {
+          List<HoodieInstant> pendingClusterInstants = getCommitsTimeline().filterPendingReplaceOrClusteringTimeline().getInstants();
           // Validate that there are no instants with same timestamp
           pendingClusterInstants.stream().collect(Collectors.groupingBy(HoodieInstant::getTimestamp)).forEach((timestamp, instants) -> {
             if (instants.size() > 1) {
@@ -604,12 +612,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
             }
           });
           // Filter replace commits down to those that are due to clustering
-          this.pendingClusterInstants = pendingClusterInstants.stream()
+          this.pendingClusteringInstants = pendingClusterInstants.stream()
+              .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant))
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
         }
       }
     }
-    return this.pendingClusterInstants;
+    return this.pendingClusteringInstants;
   }
 
   /**

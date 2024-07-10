@@ -447,11 +447,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstant, boolean shouldComplete) {
     HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
-    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingClusteringTimeline();
-    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(clusteringInstant);
-    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      if (pendingClusteringTimeline.isPendingClusterInstant(inflightInstant.getTimestamp())) {
-        table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
+    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline();
+    Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant, table.getActiveTimeline());
+    if (inflightInstantOpt.isPresent()) {
+      if (pendingClusteringTimeline.isPendingClusteringInstant(inflightInstantOpt.get().getTimestamp())) {
+        table.rollbackInflightClustering(inflightInstantOpt.get(), commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
         table.getMetaClient().reloadActiveTimeline();
       } else {
         throw new HoodieClusteringException("Non clustering replace-commit inflight at timestamp " + clusteringInstant);
@@ -482,10 +482,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   public boolean purgePendingClustering(String clusteringInstant) {
     HoodieTable<?, I, ?, T> table = createTable(config, context.getStorageConf().unwrapAs(Configuration.class));
-    HoodieTimeline pendingClusteringTimeline = table.getActiveTimeline().filterPendingClusteringTimeline();
-    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(clusteringInstant);
-    if (pendingClusteringTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightClustering(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true);
+    Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant, table.getActiveTimeline());
+    if (inflightInstantOpt.isPresent()) {
+      table.rollbackInflightClustering(inflightInstantOpt.get(), commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), true);
       table.getMetaClient().reloadActiveTimeline();
       return true;
     }
@@ -515,7 +514,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
                                   Option<HoodieData<WriteStatus>> writeStatuses) {
     List<HoodieWriteStat> writeStats = metadata.getWriteStats();
     handleWriteErrors(writeStats, TableServiceType.CLUSTER);
-    final HoodieInstant clusteringInstant = HoodieTimeline.getClusteringCommitInflightInstant(clusteringCommitTime);
+    final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline()).get();
     try {
       this.txnManager.beginTransaction(Option.of(clusteringInstant), Option.empty());
 
@@ -531,10 +530,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.info("Committing Clustering {}", clusteringCommitTime);
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
 
-      table.getActiveTimeline().transitionClusterInflightToComplete(
-          false,
-          clusteringInstant,
-          serializeCommitMetadata(metadata));
+      ClusteringUtils.transitionClusterInflightToComplete(false, clusteringInstant, serializeCommitMetadata(metadata), table.getActiveTimeline());
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {
@@ -714,7 +710,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected void runAnyPendingClustering(HoodieTable table) {
-    table.getActiveTimeline().filterPendingClusteringTimeline().getInstants().forEach(instant -> {
+    table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline().getInstants().forEach(instant -> {
       Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlan = ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant);
       if (instantPlan.isPresent()) {
         LOG.info("Running pending clustering at instant {}", instantPlan.get().getLeft());

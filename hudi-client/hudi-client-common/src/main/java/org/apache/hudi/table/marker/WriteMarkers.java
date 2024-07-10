@@ -83,7 +83,6 @@ public abstract class WriteMarkers implements Serializable {
                                     String fileId, HoodieActiveTimeline activeTimeline) {
     if (writeConfig.getWriteConcurrencyMode().isOptimisticConcurrencyControl() && writeConfig.isEarlyConflictDetectionEnable()) {
       HoodieTimeline pendingCompactionTimeline = activeTimeline.filterPendingCompactionTimeline();
-      // TODO: #CLUSTER_REPLACE - Check if we need check only for cluster action
       HoodieTimeline pendingReplaceTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
       // TODO If current is compact or clustering then create marker directly without early conflict detection.
       // Need to support early conflict detection between table service and common writers.

@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieFlinkTable;
 
+import org.apache.flink.calcite.shaded.org.checkerframework.checker.units.qual.C;
 import org.apache.flink.configuration.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,10 +105,10 @@ public class ClusteringUtil {
    * @param instantTime The instant time
    */
   public static void rollbackClustering(HoodieFlinkTable<?> table, HoodieFlinkWriteClient<?> writeClient, String instantTime) {
-    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(instantTime);
-    if (table.getMetaClient().reloadActiveTimeline().isPendingClusterInstant(instantTime)) {
+    Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(instantTime, table.getActiveTimeline());
+    if (inflightInstantOpt.isPresent() && ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), inflightInstantOpt.get())) {
       LOG.warn("Rollback failed clustering instant: [" + instantTime + "]");
-      table.rollbackInflightClustering(inflightInstant,
+      table.rollbackInflightClustering(inflightInstantOpt.get(),
           commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
     }
   }

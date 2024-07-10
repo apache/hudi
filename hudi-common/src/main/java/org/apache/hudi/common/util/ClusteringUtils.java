@@ -70,9 +70,78 @@ public class ClusteringUtils {
   public static Stream<Pair<HoodieInstant, HoodieClusteringPlan>> getAllPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
     List<HoodieInstant> pendingClusterInstants =
-        metaClient.getActiveTimeline().filterPendingClusteringTimeline().getInstants();
+        metaClient.getActiveTimeline().filterPendingReplaceOrClusteringTimeline().getInstants();
     return pendingClusterInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
+  }
+
+  /**
+   * Returns the pending clustering instant. This can be older pending replace commit or a new
+   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
+   * use clustering action instead of replacecommit.
+   */
+  public static Option<HoodieInstant> getInflightClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline) {
+    HoodieTimeline pendingReplaceOrClusterTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(timestamp);
+    if (pendingReplaceOrClusterTimeline.containsInstant(inflightInstant)) {
+      return Option.of(inflightInstant);
+    }
+    inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(timestamp);
+    return Option.ofNullable(pendingReplaceOrClusterTimeline.containsInstant(inflightInstant) ? inflightInstant : null);
+  }
+
+  /**
+   * Returns the pending clustering instant. This can be older pending replace commit or a new
+   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
+   * use clustering action instead of replacecommit.
+   */
+  public static Option<HoodieInstant> getRequestedClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline) {
+    HoodieTimeline pendingReplaceOrClusterTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
+    HoodieInstant requestedInstant = HoodieTimeline.getClusteringCommitRequestedInstant(timestamp);
+    if (pendingReplaceOrClusterTimeline.containsInstant(requestedInstant)) {
+      return Option.of(requestedInstant);
+    }
+    requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(timestamp);
+    return Option.ofNullable(pendingReplaceOrClusterTimeline.containsInstant(requestedInstant) ? requestedInstant : null);
+  }
+
+  /**
+   * Returns the pending clustering instant. This can be older pending replace commit or a new
+   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
+   * use clustering action instead of replacecommit.
+   */
+  public static HoodieInstant getRequestedClusteringInstant(HoodieInstant clusteringInflightInstant) {
+    if (clusteringInflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+      return HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInflightInstant.getTimestamp());
+    } else {
+      return HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInflightInstant.getTimestamp());
+    }
+  }
+
+  /**
+   * Transitions the provided clustering instant fron inflight to complete based on the clustering
+   * action type. After HUDI-7905, the new clustering commits are written with clustering action.
+   */
+  public static void transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                         Option<byte[]> commitMetadata, HoodieActiveTimeline activeTimeline) {
+    if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+    } else {
+      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+    }
+  }
+
+  /**
+   * Transitions the provided clustering instant fron requested to inflight based on the clustering
+   * action type. After HUDI-7905, the new clustering commits are written with clustering action.
+   */
+  public static void transitionClusterRequestedToInflight(HoodieInstant requestedClusteringInstant, Option<byte[]> data,
+                                                          HoodieActiveTimeline activeTimeline) {
+    if (requestedClusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+      activeTimeline.transitionClusterRequestedToInflight(requestedClusteringInstant, data);
+    } else {
+      activeTimeline.transitionReplaceRequestedToInflight(requestedClusteringInstant, data);
+    }
   }
 
   /**
@@ -95,7 +164,6 @@ public class ClusteringUtils {
    * @return whether the instant is a clustering operation.
    */
   public static boolean isClusteringInstant(HoodieTimeline timeline, HoodieInstant replaceInstant) {
-    // TODO: #CLUSTER_REPLACE - Check if we need check only for cluster action
     return replaceInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
         || (replaceInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && getClusteringPlan(timeline, replaceInstant).isPresent());
   }
@@ -271,7 +339,8 @@ public class ClusteringUtils {
   }
 
   public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().filterPendingClusteringTimeline().getInstantsAsStream()
+    return metaClient.getActiveTimeline().filterPendingReplaceOrClusteringTimeline().getInstantsAsStream()
+        .filter(instant -> isClusteringInstant(metaClient.getActiveTimeline(), instant))
         .collect(Collectors.toList());
   }
 

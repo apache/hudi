@@ -235,6 +235,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingReplaceOrClusteringTimeline();
 
   /**
+   * Filter this timeline to just include requested and inflight cluster, replace commit or compaction instants.
+   */
+  HoodieTimeline filterPendingReplaceClusteringAndCompactionTimeline();
+
+  /**
    * Filter this timeline to include pending rollbacks.
    */
   HoodieTimeline filterPendingRollbackTimeline();
@@ -428,7 +433,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * return true if instant is a pending clustering commit, otherwise false
    */
-  public boolean isPendingClusterInstant(String instantTime);
+  public boolean isPendingClusteringInstant(String instantTime);
 
   /**
    * Read the completed instant details.

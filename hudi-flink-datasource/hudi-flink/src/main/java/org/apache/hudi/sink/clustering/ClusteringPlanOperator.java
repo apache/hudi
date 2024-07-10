@@ -119,7 +119,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
 
     // generate clustering plan
     // should support configurable commit metadata
-    HoodieInstant clusteringInstant = HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInstantTime);
+    HoodieInstant clusteringInstant = firstRequested.get();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
         table.getMetaClient(), clusteringInstant);
 
@@ -137,7 +137,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       LOG.info("Empty clustering plan for instant " + clusteringInstantTime);
     } else {
       // Mark instant as clustering inflight
-      table.getActiveTimeline().transitionClusterRequestedToInflight(clusteringInstant, Option.empty());
+      ClusteringUtils.transitionClusterRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());
       table.getMetaClient().reloadActiveTimeline();
 
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
