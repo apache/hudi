@@ -37,6 +37,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.math.BigDecimal
 import java.nio.ByteBuffer
 import java.util.TimeZone
+
 import scala.collection.JavaConverters._
 
 /**

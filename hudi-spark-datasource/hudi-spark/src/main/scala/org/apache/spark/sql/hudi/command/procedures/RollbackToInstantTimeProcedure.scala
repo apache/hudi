@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE

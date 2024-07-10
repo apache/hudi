@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.RowDataToAvroConverters;
+
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.formats.common.TimestampFormat;
 import org.apache.flink.formats.json.JsonToRowDataConverters;
@@ -26,9 +29,6 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.ObjectMap
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.RowDataToAvroConverters;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -37,8 +37,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-import static org.apache.flink.table.api.DataTypes.ROW;
 import static org.apache.flink.table.api.DataTypes.FIELD;
+import static org.apache.flink.table.api.DataTypes.ROW;
 import static org.apache.flink.table.api.DataTypes.TIMESTAMP;
 
 class TestRowDataToAvroConverters {

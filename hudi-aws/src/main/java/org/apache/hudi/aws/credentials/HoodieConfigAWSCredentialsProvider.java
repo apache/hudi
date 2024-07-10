@@ -18,15 +18,15 @@
 
 package org.apache.hudi.aws.credentials;
 
-import org.apache.hudi.config.HoodieAWSConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieAWSConfig;
 
-import software.amazon.awssdk.auth.credentials.AwsCredentials;
-import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
 
 import java.util.Properties;
 

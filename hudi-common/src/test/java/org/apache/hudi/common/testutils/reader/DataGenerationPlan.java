@@ -39,6 +39,7 @@ public class DataGenerationPlan {
   // The operation type of the record.
   private final OperationType operationType;
   private final String instantTime;
+  private final boolean writePositions;
 
   public enum OperationType {
     INSERT,
@@ -50,12 +51,14 @@ public class DataGenerationPlan {
                             String partitionPath,
                             long timestamp,
                             OperationType operationType,
-                            String instantTime) {
+                            String instantTime,
+                            boolean writePositions) {
     this.recordKeys = recordKeys;
     this.partitionPath = partitionPath;
     this.timestamp = timestamp;
     this.operationType = operationType;
     this.instantTime = instantTime;
+    this.writePositions = writePositions;
   }
 
   public List<String> getRecordKeys() {
@@ -78,6 +81,10 @@ public class DataGenerationPlan {
     return instantTime;
   }
 
+  public boolean getWritePositions() {
+    return writePositions;
+  }
+
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -88,6 +95,7 @@ public class DataGenerationPlan {
     private long timestamp;
     private OperationType operationType;
     private String instantTime;
+    private boolean writePositions;
 
     public Builder withRecordKeys(List<String> recordKeys) {
       this.recordKeys = recordKeys;
@@ -114,13 +122,19 @@ public class DataGenerationPlan {
       return this;
     }
 
+    public Builder withWritePositions(boolean writePositions) {
+      this.writePositions = writePositions;
+      return this;
+    }
+
     public DataGenerationPlan build() {
       return new DataGenerationPlan(
           recordKeys,
           partitionPath,
           timestamp,
           operationType,
-          instantTime);
+          instantTime,
+          writePositions);
     }
   }
 }

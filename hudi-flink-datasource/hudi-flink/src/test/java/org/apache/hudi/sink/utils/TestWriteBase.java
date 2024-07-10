@@ -381,9 +381,17 @@ public class TestWriteBase {
     public TestHarness emptyCheckpoint(long checkpointId) {
       String lastPending = lastPendingInstant();
       this.pipeline.checkpointComplete(checkpointId);
-      // last pending instant was reused
-      assertEquals(this.lastPending, lastPending);
-      checkInstantState(HoodieInstant.State.COMPLETED, lastComplete);
+      if (!OptionsResolver.allowCommitOnEmptyBatch(this.conf)) {
+        // last pending instant was reused
+        assertEquals(this.lastPending, lastPending);
+        checkInstantState(HoodieInstant.State.COMPLETED, lastComplete);
+      } else {
+        // started a new instant already
+        String newInflight = checkInflightInstant();
+        checkInstantState(HoodieInstant.State.COMPLETED, lastPending);
+        this.lastComplete = lastPending;
+        this.lastPending = newInflight; // refresh last pending instant
+      }
       return this;
     }
 

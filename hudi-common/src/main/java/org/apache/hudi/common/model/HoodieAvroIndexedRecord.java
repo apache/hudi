@@ -53,6 +53,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     super(key, data);
   }
 
+  public HoodieAvroIndexedRecord(HoodieKey key, IndexedRecord data, HoodieRecordLocation currentLocation) {
+    super(key, data, null, currentLocation, null);
+  }
+
+  public HoodieAvroIndexedRecord(IndexedRecord data, HoodieRecordLocation currentLocation) {
+    super(null, data, null, currentLocation, null);
+  }
+
   public HoodieAvroIndexedRecord(
       HoodieKey key,
       IndexedRecord data,

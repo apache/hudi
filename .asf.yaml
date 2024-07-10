@@ -42,6 +42,8 @@ github:
     master:
       required_pull_request_reviews:
         required_approving_review_count: 1
+  collaborators:
+    - ad1happy2go
 notifications:
   commits:      commits@hudi.apache.org
   issues:       commits@hudi.apache.org

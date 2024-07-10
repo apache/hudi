@@ -65,7 +65,7 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
                                    HoodieTableMetadataWriter writer,
                                    Option<HoodieEngineContext> context) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieMetadataTestTable(metaClient.getBasePath(), metaClient.getRawHoodieStorage(),
+    return new HoodieMetadataTestTable(metaClient.getBasePath().toString(), metaClient.getRawHoodieStorage(),
         metaClient,
         writer, context);
   }

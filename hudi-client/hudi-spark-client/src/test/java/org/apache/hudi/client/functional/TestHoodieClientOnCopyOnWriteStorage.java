@@ -516,7 +516,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -729,7 +729,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
-    JavaRDD<WriteStatus> statuses = insertBatchRecords(client, "005", 1, 1, 1, SparkRDDWriteClient::upsert).getKey();
+    JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
+        insertBatchRecords(client, "005", 1, 1, 1, SparkRDDWriteClient::upsert).getKey();
     fileGroupIds2.removeAll(fileGroupIds1);
     assertEquals(fileGroupIds2.get(0), statuses.collect().get(0).getFileId());
     List<String> firstInsertFileGroupIds4 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
@@ -1012,7 +1013,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertEquals(2, metaClient.getActiveTimeline().getCommitsTimeline().filterInflightsAndRequested().countInstants());
 
     // trigger another commit. this should rollback latest partial commit.
-    JavaRDD<WriteStatus> statuses = insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
+    JavaRDD<WriteStatus> statuses = (JavaRDD<WriteStatus>)
+        insertBatchRecords(client, commitTime1, 200, 1, 2, SparkRDDWriteClient::upsert).getLeft();
     client.commit(commitTime1, statuses);
     metaClient.reloadActiveTimeline();
     // rollback should have succeeded. Essentially, the pending clustering should not hinder the rollback of regular commits.
@@ -1075,7 +1077,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // delete rollback.completed instant to mimic failed rollback of clustering. and then trigger rollback of clustering again. same rollback instant should be used.
     HoodieInstant rollbackInstant = metaClient.getActiveTimeline().getRollbackTimeline().lastInstant().get();
-    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePathV2().toString(), rollbackInstant.getTimestamp());
+    FileCreateUtils.deleteRollbackCommit(metaClient.getBasePath().toString(), rollbackInstant.getTimestamp());
     metaClient.reloadActiveTimeline();
 
     // create replace commit requested meta file so that rollback will not throw FileNotFoundException
@@ -1085,7 +1087,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePathV2().toString(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
 
     // trigger clustering again. no new rollback instants should be generated.
     try {

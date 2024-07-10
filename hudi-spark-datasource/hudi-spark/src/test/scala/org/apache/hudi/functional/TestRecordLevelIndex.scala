@@ -306,13 +306,13 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
 
-    val lastCleanInstant = metaClient.getActiveTimeline.getCleanerTimeline.lastInstant()
+    val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
     assertTrue(lastCleanInstant.isPresent)
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.lastInstant().get().getTimestamp
+    assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().getTimestamp
       .compareTo(lastCleanInstant.get().getTimestamp) > 0)
 
     var rollbackedInstant: Option[HoodieInstant] = Option.empty

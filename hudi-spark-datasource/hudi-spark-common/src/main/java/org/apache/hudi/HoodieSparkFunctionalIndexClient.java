@@ -85,6 +85,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     if (indexExists(metaClient, indexName)) {
       throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
     }
+    checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
@@ -98,7 +99,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     LOG.info("Creating index {} of using {}", indexName, indexType);
     HoodieIndexDefinition functionalIndexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
     try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
-        sparkSession, metaClient.getBasePathV2().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
+        sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, functionalIndexDefinition)), toScalaOption(Option.empty()))) {
       // generate index plan
       Option<String> indexInstantTime = doSchedule(writeClient, metaClient, indexName);
       if (indexInstantTime.isPresent()) {
@@ -127,7 +128,7 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
     Map<String, String> writeConfig = new HashMap<>();
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       writeConfig.put(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
-      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePathV2().toString())).asJava());
+      writeConfig.putAll(JavaConverters.mapAsJavaMapConverter(HoodieCLIUtils.getLockOptions(metaClient.getBasePath().toString())).asJava());
 
       // [HUDI-7472] Ensure write-config contains the existing MDT partition to prevent those from getting deleted
       metaClient.getTableConfig().getMetadataPartitions().forEach(partitionPath -> {

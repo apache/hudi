@@ -211,7 +211,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath(), operation.getPartitionPath());
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
     // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
     // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.

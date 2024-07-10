@@ -30,12 +30,12 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -44,6 +44,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to perform bootstrap action & display bootstrap index.

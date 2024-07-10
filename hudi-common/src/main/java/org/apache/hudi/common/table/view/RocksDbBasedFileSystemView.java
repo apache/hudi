@@ -76,7 +76,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     super(config.isIncrementalTimelineSyncEnabled());
     this.config = config;
     this.schemaHelper = new RocksDBSchemaHelper(metaClient);
-    this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
+    this.rocksDB = new RocksDBDAO(metaClient.getBasePath().toString(), config.getRocksdbBasePath());
     init(metaClient, visibleActiveTimeline);
   }
 
@@ -242,7 +242,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
   protected void resetViewState() {
     LOG.info("Deleting all rocksdb data associated with table filesystem view");
     rocksDB.close();
-    rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
+    rocksDB = new RocksDBDAO(metaClient.getBasePath().toString(), config.getRocksdbBasePath());
     schemaHelper.getAllColumnFamilies().forEach(rocksDB::addColumnFamily);
   }
 

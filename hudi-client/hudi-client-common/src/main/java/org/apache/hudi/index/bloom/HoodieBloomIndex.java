@@ -149,6 +149,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
       }
       // fallback to loading column ranges from files
       if (isNullOrEmpty(fileInfoList)) {
+        LOG.warn("fallback to loading column ranges from files");
         fileInfoList = loadColumnRangesFromFiles(affectedPartitionPathList, context, hoodieTable);
       }
     } else {

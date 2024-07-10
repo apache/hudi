@@ -52,13 +52,14 @@ public class RocksDBSchemaHelper {
   private final String colFamilyForPendingClusteringFileGroups;
 
   public RocksDBSchemaHelper(HoodieTableMetaClient metaClient) {
-    this.colFamilyForBootstrapBaseFile = "hudi_bootstrap_basefile_" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForPendingCompaction = "hudi_pending_compaction_" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForPendingLogCompaction = "hudi_pending_log_compaction_" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForStoredPartitions = "hudi_partitions_" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForView = "hudi_view_" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForReplacedFileGroups = "hudi_replaced_fg" + metaClient.getBasePath().replace("/", "_");
-    this.colFamilyForPendingClusteringFileGroups = "hudi_pending_clustering_fg" + metaClient.getBasePath().replace("/", "_");
+    String fixedBasePathString = metaClient.getBasePath().toString().replace("/", "_");
+    this.colFamilyForBootstrapBaseFile = "hudi_bootstrap_basefile_" + fixedBasePathString;
+    this.colFamilyForPendingCompaction = "hudi_pending_compaction_" + fixedBasePathString;
+    this.colFamilyForPendingLogCompaction = "hudi_pending_log_compaction_" + fixedBasePathString;
+    this.colFamilyForStoredPartitions = "hudi_partitions_" + fixedBasePathString;
+    this.colFamilyForView = "hudi_view_" + fixedBasePathString;
+    this.colFamilyForReplacedFileGroups = "hudi_replaced_fg" + fixedBasePathString;
+    this.colFamilyForPendingClusteringFileGroups = "hudi_pending_clustering_fg" + fixedBasePathString;
   }
 
   public List<String> getAllColumnFamilies() {

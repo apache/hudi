@@ -51,7 +51,7 @@ public class WriteMarkersFactory {
               + "but embedded timeline server is not enabled.  Falling back to direct markers.");
           return new DirectWriteMarkers(table, instantTime);
         }
-        String basePath = table.getMetaClient().getBasePath();
+        String basePath = table.getMetaClient().getBasePath().toString();
         if (StorageSchemes.HDFS.getScheme().equals(
             HadoopFSUtils.getFs(basePath, table.getContext().getStorageConf().unwrapCopyAs(Configuration.class)).getScheme())) {
           LOG.warn("Timeline-server-based markers are not supported for HDFS: "

@@ -18,9 +18,10 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;

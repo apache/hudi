@@ -24,9 +24,9 @@ import org.apache.hudi.connect.transaction.ConnectTransactionParticipant;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.helper.MockKafkaConnect;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 import org.apache.hudi.helper.TestHudiWriterProvider;
-import org.apache.hudi.helper.MockKafkaConnect;
 
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;

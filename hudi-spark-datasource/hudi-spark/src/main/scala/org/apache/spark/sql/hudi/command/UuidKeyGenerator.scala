@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql.hudi.command
 
-import java.util.UUID
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.config.TypedProperties
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
+
+import java.util.UUID
 
 /**
  * A KeyGenerator which use the uuid as the record key.

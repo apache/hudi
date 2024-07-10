@@ -43,6 +43,7 @@ public class Hive3Shim implements HiveShim {
   private static Class<?> TIMESTAMP_CLASS = null;
   private static Method SET_TIME_IN_MILLIS = null;
   private static Method TO_SQL_TIMESTAMP = null;
+  private static Method GET_TIMESTAMP = null;
   private static Constructor<?> TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = null;
 
   private static Class<?> DATE_WRITEABLE_CLASS = null;
@@ -54,6 +55,7 @@ public class Hive3Shim implements HiveShim {
     try {
       TIMESTAMP_CLASS = Class.forName(HIVE_TIMESTAMP_TYPE_CLASS);
       SET_TIME_IN_MILLIS = TIMESTAMP_CLASS.getDeclaredMethod("setTimeInMillis", long.class);
+      GET_TIMESTAMP = TIMESTAMP_CLASS.getDeclaredMethod("getTimestamp");
       TO_SQL_TIMESTAMP = TIMESTAMP_CLASS.getDeclaredMethod("toSqlTimestamp");
       TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR = Class.forName(TIMESTAMP_WRITEABLE_V2_CLASS).getConstructor(TIMESTAMP_CLASS);
     } catch (ClassNotFoundException | NoSuchMethodException e) {
@@ -91,6 +93,19 @@ public class Hive3Shim implements HiveShim {
       return (Writable) TIMESTAMP_WRITEABLE_V2_CONSTRUCTOR.newInstance(timestamp);
     } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
       throw new HoodieException("can not create writable v2 class!", e);
+    }
+  }
+
+  @Override
+  public Object unwrapTimestampAsPrimitive(Object o) {
+    if (o == null) {
+      return null;
+    }
+
+    try {
+      return GET_TIMESTAMP.invoke(o);
+    } catch (IllegalAccessException | InvocationTargetException e) {
+      throw new HoodieException("unable to get timestamp from writable using v2 class!", e);
     }
   }
 

@@ -78,7 +78,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val storage = metaClient.getStorage
 
-  private lazy val basePath = metaClient.getBasePathV2
+  private lazy val basePath = metaClient.getBasePath
 
   private lazy val tableConfig = metaClient.getTableConfig
 

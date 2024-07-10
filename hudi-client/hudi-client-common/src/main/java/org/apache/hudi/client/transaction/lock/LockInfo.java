@@ -19,8 +19,9 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.hudi.common.util.JsonUtils;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 import java.util.ArrayList;
 

@@ -27,6 +27,7 @@ import org.apache.spark.sql.hudi.{DeDupeType, DedupeSparkJob}
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.util.{Failure, Success, Try}
 
 class RepairDeduplicateProcedure extends BaseProcedure with ProcedureBuilder with Logging {

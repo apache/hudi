@@ -25,8 +25,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Record merger that accumulates metadata records.
@@ -37,7 +40,12 @@ public class HoodieMetadataRecordMerger extends HoodiePreCombineAvroRecordMerger
 
   @Override
   public List<Pair<HoodieRecord, Schema>> fullOuterMerge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
-    // TODO: Implement this method for secondary keys. Currently, it just mimics the superclass.
-    return Collections.singletonList(super.merge(older, oldSchema, newer, newSchema, props).get());
+    // If the new record is not a delete record, then combine the two records.
+    if (newer.isDelete(newSchema, props)) {
+      return Collections.singletonList(Pair.of(newer, newSchema));
+    }
+    checkArgument(older.getRecordKey().equals(newer.getRecordKey()), "Record key must be the same for both records");
+    checkArgument(oldSchema.equals(newSchema), "Schema must be the same for both records");
+    return Arrays.asList(Pair.of(older, oldSchema), Pair.of(newer, newSchema));
   }
 }

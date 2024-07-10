@@ -19,14 +19,15 @@
 package org.apache.hudi.connect;
 
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
+
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHdfsConfiguration {
 

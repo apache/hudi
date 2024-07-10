@@ -20,6 +20,7 @@ package org.apache.hudi.hive.util;
 
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.model.FieldSchema;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

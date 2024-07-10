@@ -65,7 +65,6 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Base implementation of the Hive's {@link FileInputFormat} allowing for reading of Hudi's
@@ -274,7 +273,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
         // If hoodie.metadata.enabled is set to false and the table doesn't have the metadata,
         // read the table using fs view cache instead of file index.
         // This is because there's no file index in non-metadata table.
-        String basePath = tableMetaClient.getBasePathV2().toString();
+        String basePath = tableMetaClient.getBasePath().toString();
         Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
         HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
         Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getTimestamp));

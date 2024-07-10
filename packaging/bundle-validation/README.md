@@ -25,7 +25,13 @@ specified in `.github/workflows/bot.yml`) and build profile for Docker images us
 ## Docker Image for Bundle Validation
 
 The base image for bundle validation is pre-built and upload to the Docker Hub:
-https://hub.docker.com/r/apachehudi/hudi-ci-bundle-validation-base.
+https://hub.docker.com/r/apachehudi/hudi-ci-bundle-validation-base. If you only need to run bundle validation then 
+check [running bundle validation](#running-bundle-validation-on-a-release-candidate) section. This step is only 
+necessary when the base image needs to be updated, or when a new bundle version is added. For example, let's say we want 
+to add a new spark bundle for Spark 4.0.0, we need to build a new image with the new version and upload it to the Docker 
+Hub. To do so, create a new shell script like [build_flink1180hive313spark350.sh](base/build_flink1180hive313spark350.sh) 
+and change the Spark (or Flink/Hive/Hadoop) version in the script. Then run the script to build the image and upload it 
+to the Docker Hub.
 
 The `Dockerfile` for the image is under `base/`. To build the image with updated `Dockerfile`, you may use the script in
 the folder. Here are the docker commands to build the image by specifying different versions:

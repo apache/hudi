@@ -61,10 +61,10 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
     Join(left, right, joinType, None)
   }
 
-  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
     plan match {
       case InsertIntoTable(table, partition, query, overwrite, ifPartitionNotExists) =>
-        Some((table, partition, query, overwrite, ifPartitionNotExists))
+        Some((table, Seq.empty, partition, query, overwrite, ifPartitionNotExists))
       case _ => None
     }
   }
@@ -129,4 +129,6 @@ object HoodieSpark2CatalystPlanUtils extends HoodieCatalystPlansUtils {
   override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = None
 
   override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = None
+
+  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = None
 }

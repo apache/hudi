@@ -18,8 +18,9 @@
 
 package org.apache.hudi.table.action.commit;
 
-import java.io.Serializable;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+
+import java.io.Serializable;
 
 /**
  * Helper class for a small file's location and its actual size on disk.

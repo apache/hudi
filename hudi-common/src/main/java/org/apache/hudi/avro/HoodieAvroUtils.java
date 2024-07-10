@@ -99,6 +99,7 @@ import java.util.stream.Collectors;
 import static org.apache.avro.Schema.Type.ARRAY;
 import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
+import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
@@ -338,13 +339,7 @@ public class HoodieAvroUtils {
         parentFields.add(newField);
       }
     }
-
-    Schema mergedSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
-    for (Map.Entry<String, Object> prop : schema.getObjectProps().entrySet()) {
-      mergedSchema.addProp(prop.getKey(), prop.getValue());
-    }
-    mergedSchema.setFields(parentFields);
-    return mergedSchema;
+    return createNewSchemaFromFieldsWithReference(schema, parentFields);
   }
 
   public static boolean isSchemaNull(Schema schema) {
@@ -364,9 +359,8 @@ public class HoodieAvroUtils {
         .filter(field -> !fieldsToRemove.contains(field.name()))
         .map(field -> new Schema.Field(field.name(), field.schema(), field.doc(), field.defaultVal()))
         .collect(Collectors.toList());
-    Schema filteredSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
-    filteredSchema.setFields(filteredFields);
-    return filteredSchema;
+
+    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
@@ -385,9 +379,7 @@ public class HoodieAvroUtils {
           }
         })
         .collect(Collectors.toList());
-    Schema withNonNullField = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), false);
-    withNonNullField.setFields(filteredFields);
-    return withNonNullField;
+    return createNewSchemaFromFieldsWithReference(schema, filteredFields);
   }
 
   private static Schema initRecordKeySchema() {

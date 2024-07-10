@@ -188,7 +188,7 @@ public class BaseRollbackHelper implements Serializable {
    */
   protected List<HoodieRollbackStat> deleteFiles(HoodieTableMetaClient metaClient, List<String> filesToBeDeleted, boolean doDelete) throws IOException {
     return filesToBeDeleted.stream().map(fileToDelete -> {
-      String basePath = metaClient.getBasePath();
+      String basePath = metaClient.getBasePath().toString();
       try {
         Path fullDeletePath = new Path(fileToDelete);
         String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());

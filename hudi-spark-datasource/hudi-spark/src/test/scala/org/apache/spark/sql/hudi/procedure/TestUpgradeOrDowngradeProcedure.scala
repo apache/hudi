@@ -54,10 +54,10 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       var metaClient = createMetaClient(spark, tablePath)
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.SIX.versionCode) {
+      assertResult(HoodieTableVersion.EIGHT.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.SIX.versionCode)
+      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.EIGHT.versionCode)
 
       // downgrade table to ZERO
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
@@ -109,7 +109,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       assertResult(HoodieTableVersion.THREE.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      val metaPathDir = new StoragePath(metaClient.getBasePathV2, HoodieTableMetaClient.METAFOLDER_NAME)
+      val metaPathDir = new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METAFOLDER_NAME)
       // delete checksum from hoodie.properties
       val props = ConfigUtils.fetchConfigs(
         storage,

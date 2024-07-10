@@ -18,17 +18,19 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.BulkInsertPartitioner;
+
+import org.apache.spark.Partitioner;
+import org.apache.spark.api.java.JavaRDD;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.table.BulkInsertPartitioner;
-import org.apache.spark.Partitioner;
-import org.apache.spark.api.java.JavaRDD;
 import scala.Tuple2;
 
 /**

@@ -102,6 +102,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
@@ -112,10 +116,6 @@ import static org.apache.hudi.configuration.FlinkOptions.PATH;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
-import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 
 /**
  * A catalog implementation for Hoodie based on MetaStore.
@@ -357,7 +357,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private Table isHoodieTable(Table hiveTable) {
     if (!hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")
         && !isFlinkHoodieTable(hiveTable)) {
-      throw new HoodieCatalogException(String.format("the %s is not hoodie table", hiveTable.getTableName()));
+      throw new HoodieCatalogException(String.format("Table %s is not a hoodie table", hiveTable.getTableName()));
     }
     return hiveTable;
   }
@@ -374,7 +374,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (NoSuchObjectException e) {
       throw new TableNotExistException(getName(), tablePath);
     } catch (TException e) {
-      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()));
+      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()), e);
     }
   }
 

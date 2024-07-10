@@ -76,6 +76,11 @@ abstract class BaseProcedure extends Procedure {
     }
   }
 
+  protected def isArgDefined(args: ProcedureArgs, parameter: ProcedureParameter): Boolean = {
+    val paramKey = getParamKey(parameter, args.isNamedArgs)
+    args.map.containsKey(paramKey)
+  }
+
   protected def getInternalRowValue(row: InternalRow, index: Int, dataType: DataType): Any = {
     dataType match {
       case StringType => row.getString(index)

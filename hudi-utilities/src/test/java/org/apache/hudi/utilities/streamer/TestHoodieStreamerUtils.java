@@ -32,12 +32,14 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.doNothing;
@@ -56,8 +58,15 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     initTestServices();
   }
 
+  private static Stream<Arguments> validRecordTypes() {
+    Stream.Builder<Arguments> b = Stream.builder();
+    b.add(Arguments.of(HoodieRecordType.SPARK));
+    b.add(Arguments.of(HoodieRecordType.AVRO));
+    return b.build();
+  }
+
   @ParameterizedTest
-  @EnumSource(HoodieRecordType.class)
+  @MethodSource("validRecordTypes")
   public void testCreateHoodieRecordsWithError(HoodieRecordType recordType) {
     Schema schema = new Schema.Parser().parse(SCHEMA_STRING);
     JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {

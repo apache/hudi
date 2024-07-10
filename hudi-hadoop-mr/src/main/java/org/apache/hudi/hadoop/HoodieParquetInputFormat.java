@@ -20,10 +20,15 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
+import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
@@ -35,9 +40,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
-import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.parquet.hadoop.ParquetInputFormat;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +50,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.apache.hudi.common.util.TablePathUtils.getTablePath;
+import static org.apache.hudi.common.util.TablePathUtils.isHoodieTablePath;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
 
 /**
  * HoodieInputFormat which understands the Hoodie File Structure and filters files based on the Hoodie Mode. If paths
@@ -91,9 +99,42 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
     }
   }
 
+  private static boolean checkIfHudiTable(final InputSplit split, final JobConf job) {
+    try {
+      Path inputPath = ((FileSplit) split).getPath();
+      FileSystem fs = inputPath.getFileSystem(job);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      return getTablePath(storage, convertToStoragePath(inputPath))
+          .map(path -> isHoodieTablePath(storage, path)).orElse(false);
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
   @Override
   public RecordReader<NullWritable, ArrayWritable> getRecordReader(final InputSplit split, final JobConf job,
                                                                    final Reporter reporter) throws IOException {
+    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
+    if (shouldUseFilegroupReader(job)) {
+      try {
+        if (!(split instanceof FileSplit) || !checkIfHudiTable(split, job)) {
+          return super.getRecordReader(split, job, reporter);
+        }
+        if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
+          return new HoodieFileGroupReaderBasedRecordReader((s, j, r) -> {
+            try {
+              return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(), s, j, r);
+            } catch (InterruptedException e) {
+              throw new RuntimeException(e);
+            }
+          }, split, job, reporter);
+        } else {
+          return new HoodieFileGroupReaderBasedRecordReader(super::getRecordReader, split, job, reporter);
+        }
+      } catch (final IOException e) {
+        throw new RuntimeException("Cannot create a RecordReaderWrapper", e);
+      }
+    }
     // TODO enable automatic predicate pushdown after fixing issues
     // FileSplit fileSplit = (FileSplit) split;
     // HoodieTableMetadata metadata = getTableMetadata(fileSplit.getPath().getParent());
@@ -117,7 +158,6 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
       LOG.debug("EMPLOYING DEFAULT RECORD READER - " + split);
     }
 
-    HoodieRealtimeInputFormatUtils.addProjectionField(job, job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "").split("/"));
     return getRecordReaderInternal(split, job, reporter);
   }
 

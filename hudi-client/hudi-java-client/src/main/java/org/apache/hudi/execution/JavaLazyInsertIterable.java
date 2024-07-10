@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,6 +27,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
+
+import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;

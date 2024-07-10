@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 import org.apache.hudi.util.StreamerUtil;
@@ -206,6 +208,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -349,7 +352,7 @@ public class ITTestHoodieDataSource {
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
-    String instant = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, HoodieTimeline.DELTA_COMMIT_ACTION);
+    String instant = TestUtils.getNthCompleteInstant(new StoragePath(tempFile.toURI()), 2, HoodieTimeline.DELTA_COMMIT_ACTION);
 
     streamTableEnv.getConfig().getConfiguration()
         .setBoolean("table.dynamic-table-options.enabled", true);
@@ -377,7 +380,7 @@ public class ITTestHoodieDataSource {
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
 
-    String instant = TestUtils.getNthCompleteInstant(tempFile.getAbsolutePath(), 2, HoodieTimeline.COMMIT_ACTION);
+    String instant = TestUtils.getNthCompleteInstant(new StoragePath(tempFile.toURI()), 2, HoodieTimeline.COMMIT_ACTION);
 
     streamTableEnv.getConfig().getConfiguration()
             .setBoolean("table.dynamic-table-options.enabled", true);
@@ -442,6 +445,28 @@ public class ITTestHoodieDataSource {
     assertTrue(timeline.filterCompletedInstants()
             .getInstantsAsStream().anyMatch(instant -> instant.getAction().equals("clean")),
         "some commits should be cleaned");
+  }
+
+  @Test
+  void testBatchWriteWithCleaning() {
+    String hoodieTableDDL = sql("t1")
+            .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+            .option(FlinkOptions.CLEAN_RETAIN_COMMITS, 1)
+            .end();
+    batchTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 values\n"
+            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1')";
+    execInsertSql(batchTableEnv, insertInto);
+    execInsertSql(batchTableEnv, insertInto);
+    execInsertSql(batchTableEnv, insertInto);
+    Configuration defaultConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Map<String, String> options1 = new HashMap<>(defaultConf.toMap());
+    options1.put(FlinkOptions.TABLE_NAME.key(), "t1");
+    Configuration conf = Configuration.fromMap(options1);
+    HoodieTimeline timeline = StreamerUtil.createMetaClient(conf).getActiveTimeline();
+    assertTrue(timeline.filterCompletedInstants()
+            .getInstants().stream().anyMatch(instant -> instant.getAction().equals("clean")),
+            "some commits should be cleaned");
   }
 
   @Test
@@ -798,6 +823,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.INDEX_TYPE, indexType)
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
@@ -1401,6 +1427,46 @@ public class ITTestHoodieDataSource {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_NAME, "t1");
     conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true); // for batch upsert
+    conf.setBoolean(FlinkOptions.CDC_ENABLED, true);
+
+    // write 3 batches of the same data set
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_START_COMMIT, latestCommit)
+        .option(FlinkOptions.CDC_ENABLED, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.dataSetUpsert(2, 1));
+
+    // write another 10 batches of dataset
+    for (int i = 0; i < 10; i++) {
+      TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    }
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    final String query = String.format("select count(*) from t1/*+ options('read.start-commit'='%s')*/", firstCommit);
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query).execute().collect());
+    assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
+  }
+
+  @Test
+  void testReadChangelogIncrementalMor() throws Exception {
+    TableEnvironment tableEnv = streamTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);  // for batch upsert
     conf.setBoolean(FlinkOptions.CDC_ENABLED, true);
 
     // write 3 batches of the same data set

@@ -285,7 +285,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val fsView = getTableFileSystemView(opts)
     fsView.loadAllPartitions()
     fsView.getPartitionPaths.asScala.flatMap { partitionPath =>
-      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePathV2, partitionPath)
+      val relativePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, partitionPath)
       fsView.getLatestMergedFileSlicesBeforeOrOn(relativePath, metaClient.reloadActiveTimeline().lastInstant().get().getTimestamp).iterator().asScala.toSeq
     }.foreach(
       slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)

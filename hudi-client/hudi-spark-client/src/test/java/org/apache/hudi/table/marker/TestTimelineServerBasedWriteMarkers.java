@@ -75,7 +75,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
       throw new RuntimeException(ex);
     }
     this.writeMarkers = new TimelineServerBasedWriteMarkers(
-        metaClient.getBasePath(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
+        metaClient.getBasePath().toString(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
   }
 
   @AfterEach

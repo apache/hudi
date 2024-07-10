@@ -49,7 +49,7 @@ public class TestDirectWriteMarkers extends TestWriteMarkersBase {
     this.storage = metaClient.getStorage();
     this.markerFolderPath = new StoragePath(Paths.get(metaClient.getMarkerFolderPath("000")).toUri());
     this.writeMarkers = new DirectWriteMarkers(
-        storage, metaClient.getBasePathV2().toString(), markerFolderPath.toString(), "000");
+        storage, metaClient.getBasePath().toString(), markerFolderPath.toString(), "000");
   }
 
   @AfterEach

@@ -23,6 +23,10 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
 
+  override protected def beforeAll(): Unit = {
+    initQueryIndexConf()
+  }
+
   test("Test the data skipping query involves conditions " +
     "that cover both columns supported by column stats and those that are not supported.") {
     withTempDir { tmp =>

@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.testutils.PreCombineTestUtils;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.testutils.PreCombineTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;

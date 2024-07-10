@@ -19,6 +19,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.data.HoodieData
+
 import org.apache.spark.sql.Dataset
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._

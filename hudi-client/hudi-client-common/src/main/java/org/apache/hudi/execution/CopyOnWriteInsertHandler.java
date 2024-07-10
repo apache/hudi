@@ -27,6 +27,7 @@ import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenRe
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

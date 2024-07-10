@@ -121,7 +121,7 @@ public class ClusteringTestUtils {
 
   public static HoodieClusteringPlan createClusteringPlan(HoodieTableMetaClient metaClient, String instantTime, String fileId) {
     try {
-      String basePath = metaClient.getBasePath();
+      String basePath = metaClient.getBasePath().toString();
       String partition = DEFAULT_PARTITION_PATHS[0];
       createBaseFile(basePath, partition, instantTime, fileId, 1);
       FileSlice slice = new FileSlice(partition, instantTime, fileId);

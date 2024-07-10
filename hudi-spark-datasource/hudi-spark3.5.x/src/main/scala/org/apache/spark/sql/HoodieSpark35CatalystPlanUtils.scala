@@ -115,4 +115,22 @@ object HoodieSpark35CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
         None
     }
   }
+
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some((insert.table, insert.userSpecifiedCols, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+      case _ =>
+        None
+    }
+  }
+
+  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some(ResolveInsertionBase.createProjectForByNameQuery(lr.catalogTable.get.qualifiedName, insert))
+      case _ =>
+        None
+    }
+  }
 }

@@ -61,4 +61,12 @@ object JavaScalaConverters {
   def convertJavaIteratorToScalaIterator[A](javaIterator: java.util.Iterator[A]): Iterator[A] = {
     javaIterator.asScala
   }
+
+  /**
+   * @param javProperties properties in [[java.util.Properties]]
+   * @return map in Scala [[Map]].
+   */
+  def convertJavaPropertiesToScalaMap(javProperties: java.util.Properties): Map[String, String] = {
+    javProperties.asScala.toMap
+  }
 }

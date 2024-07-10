@@ -178,7 +178,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     //       HUDI-6994 will address this.
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     for (Pair<String, FileSlice> pair : partitionFileSlicePairs) {
       String partition = pair.getKey();
       FileSlice fileSlice = pair.getValue();

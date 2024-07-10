@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -368,7 +369,7 @@ public class TestHoodieParquetInputFormat {
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length,
         "When hoodie.incremental.use.database is true and hoodie.database.name is not null or empty"
-                + " and the incremental database name is not set, then the incremental query will not take effect");
+            + " and the incremental database name is not set, then the incremental query will not take effect");
   }
 
   @Test
@@ -403,7 +404,7 @@ public class TestHoodieParquetInputFormat {
     metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
         baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
-            String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
+        String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
     files = inputFormat.listStatus(jobConf);
     assertEquals(0, files.length,
@@ -414,7 +415,7 @@ public class TestHoodieParquetInputFormat {
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length,
         "When hoodie.incremental.use.database is false and the incremental database name is set, "
-                + "then the incremental query will not take effect");
+            + "then the incremental query will not take effect");
 
     // The configuration with and without database name exists together
     InputFormatTestUtil.setupIncremental(jobConf, "1", 1, true);
@@ -422,13 +423,13 @@ public class TestHoodieParquetInputFormat {
     files = inputFormat.listStatus(jobConf);
     assertEquals(0, files.length,
         "When hoodie.incremental.use.database is true, "
-                + "We should exclude commit 100 because the returning incremental pull with start commit time is 100");
+            + "We should exclude commit 100 because the returning incremental pull with start commit time is 100");
 
     InputFormatTestUtil.setupIncremental(jobConf, "1", 1, false);
     files = inputFormat.listStatus(jobConf);
     assertEquals(10, files.length,
         "When hoodie.incremental.use.database is false, "
-                + "We should include commit 100 because the returning incremental pull with start commit time is 1");
+            + "We should include commit 100 because the returning incremental pull with start commit time is 1");
   }
 
   @Test
@@ -679,13 +680,13 @@ public class TestHoodieParquetInputFormat {
 
     try {
       // Verify that Validate mode throws error with invalid commit time
-      InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "300"); 
+      InputFormatTestUtil.setupSnapshotIncludePendingCommits(jobConf, "300");
       inputFormat.listStatus(jobConf);
       fail("Expected list status to fail when validate is called with unknown timestamp");
     } catch (HoodieIOException e) {
       // expected because validate is called with invalid instantTime
     }
-    
+
     //Creating a new jobCOnf Object because old one has hoodie.%.consume.commit set
     jobConf = new JobConf();
     inputFormat.setConf(jobConf);
@@ -751,7 +752,7 @@ public class TestHoodieParquetInputFormat {
   }
 
   private void ensureRecordsInCommit(String msg, String commit, int expectedNumberOfRecordsInCommit,
-      int totalExpected) throws IOException {
+                                     int totalExpected) throws IOException {
     int actualCount = 0;
     int totalCount = 0;
     InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
@@ -777,59 +778,64 @@ public class TestHoodieParquetInputFormat {
 
   @Test
   public void testHoodieParquetInputFormatReadTimeType() throws IOException {
-    long testTimestampLong = System.currentTimeMillis();
-    int testDate = 19116;// 2022-05-04
+    try {
+      long testTimestampLong = System.currentTimeMillis();
+      int testDate = 19116;// 2022-05-04
 
-    Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
-    String commit = "20160628071126";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
-        HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
-    java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
-    String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
-        HoodieFileFormat.PARQUET.getFileExtension());
-    try (AvroParquetWriter parquetWriter = new AvroParquetWriter(
-        new Path(partitionPath.resolve(fileId).toString()), schema)) {
-      GenericData.Record record = new GenericData.Record(schema);
-      record.put("test_timestamp", testTimestampLong * 1000);
-      record.put("test_long", testTimestampLong * 1000);
-      record.put("test_date", testDate);
-      record.put("_hoodie_commit_time", commit);
-      record.put("_hoodie_commit_seqno", commit + 1);
-      parquetWriter.write(record);
-    }
-
-    jobConf.set(IOConstants.COLUMNS, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
-    jobConf.set(IOConstants.COLUMNS_TYPES, "timestamp,bigint,date,string,string");
-    jobConf.set(READ_COLUMN_NAMES_CONF_STR, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
-    InputFormatTestUtil.setupPartition(basePath, partitionPath);
-    InputFormatTestUtil.commit(basePath, commit);
-    FileInputFormat.setInputPaths(jobConf, partitionPath.toFile().getPath());
-
-    InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
-    for (InputSplit split : splits) {
-      RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat
-          .getRecordReader(split, jobConf, null);
-      NullWritable key = recordReader.createKey();
-      ArrayWritable writable = recordReader.createValue();
-      while (recordReader.next(key, writable)) {
-        // test timestamp
-        if (HiveVersionInfo.getShortVersion().startsWith("3")) {
-          LocalDateTime localDateTime = LocalDateTime.ofInstant(
-              Instant.ofEpochMilli(testTimestampLong), ZoneOffset.UTC);
-          assertEquals(Timestamp.valueOf(localDateTime).toString(), String.valueOf(writable.get()[0]));
-        } else {
-          Date date = new Date();
-          date.setTime(testTimestampLong);
-          Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
-          SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-          assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
-        }
-        // test long
-        assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
-        // test date
-        assertEquals(LocalDate.ofEpochDay(testDate).toString(), String.valueOf(writable.get()[2]));
+      Schema schema = SchemaTestUtil.getSchemaFromResource(getClass(), "/test_timetype.avsc");
+      String commit = "20160628071126";
+      HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+          HoodieTableType.COPY_ON_WRITE, HoodieFileFormat.PARQUET);
+      java.nio.file.Path partitionPath = basePath.resolve(Paths.get("2016", "06", "28"));
+      String fileId = FSUtils.makeBaseFileName(commit, "1-0-1", "fileid1",
+          HoodieFileFormat.PARQUET.getFileExtension());
+      try (AvroParquetWriter parquetWriter = new AvroParquetWriter(
+          new Path(partitionPath.resolve(fileId).toString()), schema)) {
+        GenericData.Record record = new GenericData.Record(schema);
+        record.put("test_timestamp", testTimestampLong * 1000);
+        record.put("test_long", testTimestampLong * 1000);
+        record.put("test_date", testDate);
+        record.put("_hoodie_commit_time", commit);
+        record.put("_hoodie_commit_seqno", commit + 1);
+        parquetWriter.write(record);
       }
-      recordReader.close();
+
+      //this is not a hoodie table!!
+      jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+      jobConf.set(IOConstants.COLUMNS, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
+      jobConf.set(IOConstants.COLUMNS_TYPES, "timestamp,bigint,date,string,string");
+      jobConf.set(READ_COLUMN_NAMES_CONF_STR, "test_timestamp,test_long,test_date,_hoodie_commit_time,_hoodie_commit_seqno");
+      InputFormatTestUtil.setupPartition(basePath, partitionPath);
+      InputFormatTestUtil.commit(basePath, commit);
+      FileInputFormat.setInputPaths(jobConf, partitionPath.toFile().getPath());
+
+      InputSplit[] splits = inputFormat.getSplits(jobConf, 1);
+      for (InputSplit split : splits) {
+        RecordReader<NullWritable, ArrayWritable> recordReader = inputFormat
+            .getRecordReader(split, jobConf, null);
+        NullWritable key = recordReader.createKey();
+        ArrayWritable writable = recordReader.createValue();
+        while (recordReader.next(key, writable)) {
+          // test timestamp
+          if (HiveVersionInfo.getShortVersion().startsWith("3")) {
+            LocalDateTime localDateTime = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(testTimestampLong), ZoneOffset.UTC);
+            assertEquals(Timestamp.valueOf(localDateTime).toString(), String.valueOf(writable.get()[0]));
+          } else {
+            Date date = new Date();
+            date.setTime(testTimestampLong);
+            Timestamp actualTime = ((TimestampWritable) writable.get()[0]).getTimestamp();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+            assertEquals(dateFormat.format(date), dateFormat.format(actualTime));
+          }
+          // test long
+          assertEquals(testTimestampLong * 1000, ((LongWritable) writable.get()[1]).get());
+          // test date
+          assertEquals(LocalDate.ofEpochDay(testDate).toString(), String.valueOf(writable.get()[2]));
+        }
+      }
+    } finally {
+      jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true");
     }
   }
 }

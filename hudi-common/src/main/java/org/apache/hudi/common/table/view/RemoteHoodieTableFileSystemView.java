@@ -157,7 +157,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   }
 
   public RemoteHoodieTableFileSystemView(HoodieTableMetaClient metaClient, FileSystemViewStorageConfig viewConf) {
-    this.basePath = metaClient.getBasePathV2().toString();
+    this.basePath = metaClient.getBasePath().toString();
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     this.serverHost = viewConf.getRemoteViewServerHost();

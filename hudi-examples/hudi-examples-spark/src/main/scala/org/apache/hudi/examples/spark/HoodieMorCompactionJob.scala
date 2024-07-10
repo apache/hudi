@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.examples.common.{HoodieExampleDataGenerator, HoodieExampleSparkUtils}
+
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.SparkSession
 

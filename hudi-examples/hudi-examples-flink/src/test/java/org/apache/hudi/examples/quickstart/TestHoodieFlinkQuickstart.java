@@ -18,9 +18,10 @@
 
 package org.apache.hudi.examples.quickstart;
 
+import org.apache.hudi.common.model.HoodieTableType;
+
 import org.apache.flink.test.util.AbstractTestBase;
 import org.apache.flink.types.Row;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;

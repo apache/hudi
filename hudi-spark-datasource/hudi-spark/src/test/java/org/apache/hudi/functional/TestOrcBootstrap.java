@@ -262,9 +262,9 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
     // Rollback Bootstrap
     if (deltaCommit) {
-      FileCreateUtils.deleteDeltaCommit(metaClient.getBasePath(), bootstrapCommitInstantTs);
+      FileCreateUtils.deleteDeltaCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
     } else {
-      FileCreateUtils.deleteCommit(metaClient.getBasePath(), bootstrapCommitInstantTs);
+      FileCreateUtils.deleteCommit(metaClient.getBasePath().toString(), bootstrapCommitInstantTs);
     }
     client.getTableServiceClient().rollbackFailedBootstrap();
     metaClient.reloadActiveTimeline();

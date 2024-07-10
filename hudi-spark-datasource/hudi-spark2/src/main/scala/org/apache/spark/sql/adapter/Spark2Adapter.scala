@@ -32,6 +32,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat, Spark24ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
@@ -223,5 +224,11 @@ class Spark2Adapter extends SparkAdapter {
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkParquetReader = {
     Spark24ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                                 queryExecution: QueryExecution,
+                                                 name: Option[String])(body: => T): T = {
+    SQLExecution.withNewExecutionId(sparkSession, queryExecution)(body)
   }
 }

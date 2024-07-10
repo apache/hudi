@@ -89,7 +89,7 @@ class HoodieCDCRDD(
 
   private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
 
-  private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty)
+  private val props = HoodieFileIndex.getConfigProperties(spark, Map.empty, metaClient.getTableConfig)
 
   protected val payloadProps: Properties = Option(metaClient.getTableConfig.getPreCombineField)
     .map { preCombineField =>
@@ -119,7 +119,7 @@ class HoodieCDCRDD(
 
     private lazy val conf = confBroadcast.value.value
 
-    private lazy val basePath = metaClient.getBasePathV2
+    private lazy val basePath = metaClient.getBasePath
 
     private lazy val tableConfig = metaClient.getTableConfig
 

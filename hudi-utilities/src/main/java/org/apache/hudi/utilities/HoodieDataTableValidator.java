@@ -297,7 +297,6 @@ public class HoodieDataTableValidator implements Serializable {
   public void doDataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
-    String basePath = metaClient.getBasePath();
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     try {
       HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(
@@ -327,7 +326,7 @@ public class HoodieDataTableValidator implements Serializable {
         // Verify that for every completed commit in active timeline, there are no extra files found apart from what is present in
         // commit metadata.
         Map<String, List<String>> instantToFilesMap = RepairUtils.tagInstantsOfBaseAndLogFiles(
-            metaClient.getBasePath(), allDataFilePaths);
+            metaClient.getBasePath().toString(), allDataFilePaths);
         HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
         List<HoodieInstant> hoodieInstants = activeTimeline.filterCompletedInstants().getInstants();
 

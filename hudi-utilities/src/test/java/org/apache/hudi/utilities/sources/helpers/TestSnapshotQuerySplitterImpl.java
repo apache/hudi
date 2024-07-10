@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+
 import java.util.List;
 
 import static org.apache.spark.sql.functions.col;

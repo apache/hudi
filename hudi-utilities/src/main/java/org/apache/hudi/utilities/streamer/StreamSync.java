@@ -345,9 +345,7 @@ public class StreamSync implements Serializable, Closeable {
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(
-                props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(),
-                    HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
+            .setRecordMergerStrategy(null)
             .build();
         switch (meta.getTableType()) {
           case COPY_ON_WRITE:
@@ -441,7 +439,7 @@ public class StreamSync implements Serializable, Closeable {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
         .setBasePath(cfg.targetBasePath)
-        .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
+        .setRecordMergerStrategy(null)
         .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
         .build();
     String instantTime = metaClient.createNewInstantTime();

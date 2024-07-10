@@ -28,7 +28,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.JobContext;
-
 import org.apache.hive.common.util.HiveVersionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -181,6 +180,10 @@ public class HoodieHiveUtils {
    */
   public static Writable getDateWriteable(int value) {
     return HIVE_SHIM.getDateWriteable(value);
+  }
+
+  public static Object getTimestamp(Object fieldData) {
+    return HIVE_SHIM.unwrapTimestampAsPrimitive(fieldData);
   }
 
   public static int getDays(Object dateWritable) {

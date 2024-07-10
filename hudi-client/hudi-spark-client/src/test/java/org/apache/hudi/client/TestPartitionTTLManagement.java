@@ -72,7 +72,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testKeepByCreationTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePathV2().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)
@@ -104,7 +104,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testKeepByTime() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePathV2().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)
@@ -138,7 +138,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   @Test
   public void testInlinePartitionTTL() {
     final HoodieWriteConfig cfg = getConfigBuilder(true)
-        .withPath(metaClient.getBasePathV2().toString())
+        .withPath(metaClient.getBasePath())
         .withTTLConfig(HoodieTTLConfig
             .newBuilder()
             .withTTLDaysRetain(10)
@@ -182,7 +182,7 @@ public class TestPartitionTTLManagement extends HoodieClientTestBase {
   private List<GenericRecord> readRecords(String[] partitions) {
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(storageConf,
         Arrays.stream(partitions).map(p -> Paths.get(basePath, p).toString()).collect(Collectors.toList()),
-        basePath, new JobConf(storageConf.unwrap()), true, false);
+        basePath, new JobConf(storageConf.unwrap()), true, true);
   }
 
 }

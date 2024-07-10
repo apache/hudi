@@ -156,6 +156,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String RECORD_INDEX_FIELD_FILEID_ENCODING = "fileIdEncoding";
   public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_UUID = 0;
   public static final int RECORD_INDEX_FIELD_FILEID_ENCODING_RAW_STRING = 1;
+  public static final String RECORD_INDEX_FIELD_POSITION = "position";
 
   /**
    * FileIndex value saved in record index record when the fileId has no index (old format of base filename)
@@ -261,13 +262,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
         }
       } else if (type == METADATA_TYPE_RECORD_INDEX) {
         GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
+        Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
         recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_HIGH_BITS).toString()),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_LOW_BITS).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILE_INDEX).toString()),
             recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID).toString(),
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
-            Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()));
+            Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
+            recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
       } else if (type == METADATA_TYPE_SECONDARY_INDEX) {
         GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
         checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + METADATA_TYPE_SECONDARY_INDEX);
@@ -683,10 +686,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
-
       HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
-              .setFileName(null)
+              .setFileName(columnRangeMetadata.getFilePath())
               .setColumnName(columnRangeMetadata.getColumnName())
               .setMinValue(wrapValueIntoAvro(columnRangeMetadata.getMinValue()))
               .setMaxValue(wrapValueIntoAvro(columnRangeMetadata.getMaxValue()))
@@ -710,7 +712,6 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   @SuppressWarnings({"rawtypes", "unchecked"})
   private static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
                                                                    HoodieMetadataColumnStats newColumnStats) {
-    checkArgument(Objects.equals(prevColumnStats.getFileName(), newColumnStats.getFileName()));
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
 
     // We're handling 2 cases in here
@@ -797,7 +798,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               fileIndex,
               "",
               instantTimeMillis,
-              0));
+              0,
+              null));
       return new HoodieAvroRecord<>(key, payload);
     } else {
       HoodieMetadataPayload payload = new HoodieMetadataPayload(recordKey,
@@ -808,7 +810,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               -1,
               fileId,
               instantTimeMillis,
-              1));
+              1,
+              null));
       return new HoodieAvroRecord<>(key, payload);
     }
   }

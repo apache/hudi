@@ -36,20 +36,19 @@ import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
 
@@ -101,7 +100,7 @@ public class HoodieSimpleBucketIndex extends HoodieBucketIndex {
   public List<String> findConflictInstantsInPartition(HoodieTable hoodieTable, String partition, int bucketId, Set<String> pendingInstants) {
     List<String> instants = new ArrayList<>();
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    StoragePath partitionPath = new StoragePath(metaClient.getBasePathV2(), partition);
+    StoragePath partitionPath = new StoragePath(metaClient.getBasePath(), partition);
 
     List<StoragePathInfo> filesInPartition = listFilesFromPartition(metaClient, partitionPath);
 

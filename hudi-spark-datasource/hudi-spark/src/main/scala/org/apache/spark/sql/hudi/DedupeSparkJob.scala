@@ -23,11 +23,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.FileIOUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 

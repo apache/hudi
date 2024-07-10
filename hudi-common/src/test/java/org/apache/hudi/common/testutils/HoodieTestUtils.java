@@ -221,6 +221,12 @@ public class HoodieTestUtils {
         .setConf(storageConf).setBasePath(basePath).build();
   }
 
+  public static HoodieTableMetaClient createMetaClient(StorageConfiguration<?> storageConf,
+                                                       StoragePath basePath) {
+    return HoodieTableMetaClient.builder()
+            .setConf(storageConf).setBasePath(basePath).build();
+  }
+
   /**
    * @param storage  {@link HoodieStorage} instance.
    * @param basePath base path of the Hudi table.

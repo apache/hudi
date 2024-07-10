@@ -24,6 +24,7 @@ import org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelect
 import org.apache.hudi.client.bootstrap.selector.UniformBootstrapModeSelector;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

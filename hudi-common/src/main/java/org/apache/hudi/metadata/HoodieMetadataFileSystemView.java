@@ -53,7 +53,7 @@ public class HoodieMetadataFileSystemView extends HoodieTableFileSystemView {
                                       HoodieTimeline visibleActiveTimeline,
                                       HoodieMetadataConfig metadataConfig) {
     this(metaClient, visibleActiveTimeline, HoodieTableMetadata.create(
-        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath(), true));
+        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true));
   }
 
   /**

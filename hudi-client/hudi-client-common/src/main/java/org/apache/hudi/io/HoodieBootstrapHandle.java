@@ -18,13 +18,14 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.Schema;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.JsonProperties;
+import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.stream.Collectors;

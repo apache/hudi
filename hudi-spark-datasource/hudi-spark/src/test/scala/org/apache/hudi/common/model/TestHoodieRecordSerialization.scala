@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.objects.SerializerSupport
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeRow}

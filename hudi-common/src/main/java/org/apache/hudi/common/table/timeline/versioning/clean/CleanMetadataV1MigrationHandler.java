@@ -56,7 +56,7 @@ public class CleanMetadataV1MigrationHandler extends AbstractMigratorBase<Hoodie
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
     ValidationUtils.checkArgument(input.getVersion() == 2,
         "Input version is " + input.getVersion() + ". Must be 2");
-    final StoragePath basePath = metaClient.getBasePathV2();
+    final StoragePath basePath = metaClient.getBasePath();
 
     final Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input
         .getPartitionMetadata()

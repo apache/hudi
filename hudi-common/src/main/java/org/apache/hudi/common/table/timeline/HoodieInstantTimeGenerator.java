@@ -19,6 +19,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
 import java.text.ParseException;
@@ -149,6 +150,11 @@ public class HoodieInstantTimeGenerator {
 
   public static String getInstantFromTemporalAccessor(TemporalAccessor temporalAccessor) {
     return MILLIS_INSTANT_TIME_FORMATTER.format(temporalAccessor);
+  }
+
+  @VisibleForTesting
+  public static String getLastInstantTime() {
+    return lastInstantTime.get();
   }
 
   /**

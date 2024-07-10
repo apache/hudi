@@ -55,7 +55,7 @@ public class CompactionV1MigrationHandler extends AbstractMigratorBase<HoodieCom
   public HoodieCompactionPlan downgradeFrom(HoodieCompactionPlan input) {
     ValidationUtils.checkArgument(input.getVersion() == 2, "Input version is " + input.getVersion() + ". Must be 2");
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
-    final StoragePath basePath = metaClient.getBasePathV2();
+    final StoragePath basePath = metaClient.getBasePath();
     List<HoodieCompactionOperation> v1CompactionOperationList = new ArrayList<>();
     if (null != input.getOperations()) {
       v1CompactionOperationList = input.getOperations().stream().map(inp ->

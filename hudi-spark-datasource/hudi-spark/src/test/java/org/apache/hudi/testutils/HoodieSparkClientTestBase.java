@@ -19,6 +19,7 @@
 package org.apache.hudi.testutils;
 
 import org.apache.hudi.common.util.Option;
+
 import org.apache.spark.sql.SparkSessionExtensions;
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension;
 

@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_F
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 

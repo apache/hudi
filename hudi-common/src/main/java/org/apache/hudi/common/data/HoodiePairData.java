@@ -129,4 +129,9 @@ public interface HoodiePairData<K, V> extends Serializable {
    * This is a terminal operation
    */
   List<Pair<K, V>> collectAsList();
+
+  /**
+   * @return the deduce number of shuffle partitions
+   */
+  int deduceNumPartitions();
 }

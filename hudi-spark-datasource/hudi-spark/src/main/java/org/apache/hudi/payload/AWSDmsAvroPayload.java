@@ -18,8 +18,9 @@
 
 package org.apache.hudi.payload;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.common.util.Option;
+
+import org.apache.avro.generic.GenericRecord;
 
 /**
  * Provides support for seamlessly applying changes captured via Amazon Database Migration Service onto S3.

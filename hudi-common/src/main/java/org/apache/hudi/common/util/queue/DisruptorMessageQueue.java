@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.util.queue;
 
-import com.lmax.disruptor.TimeoutException;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
 import com.lmax.disruptor.EventTranslator;
 import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.TimeoutException;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;

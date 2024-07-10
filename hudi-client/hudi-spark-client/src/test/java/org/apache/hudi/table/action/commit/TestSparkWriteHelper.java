@@ -30,6 +30,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
 
@@ -72,5 +74,26 @@ public class TestSparkWriteHelper extends TestWriterHelperBase<HoodieData<Hoodie
       this.jsc.stop();
     }
     this.context = null;
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,0", "true,50", "false,0", "false,50"})
+  public void testCombineParallelism(boolean shouldCombine, int configuredShuffleParallelism) {
+    int inputParallelism = 5;
+    int expectDefaultParallelism = 4;
+    inputRecords = getInputRecords(
+        dataGen.generateInserts("20230915000000000", 10), inputParallelism);
+    HoodieData<HoodieRecord> outputRecords = (HoodieData<HoodieRecord>) writeHelper.combineOnCondition(
+        shouldCombine, inputRecords, configuredShuffleParallelism, table);
+
+    if (shouldCombine) {
+      if (configuredShuffleParallelism == 0) {
+        assertEquals(expectDefaultParallelism, outputRecords.getNumPartitions());
+      } else {
+        assertEquals(configuredShuffleParallelism, outputRecords.getNumPartitions());
+      }
+    } else {
+      assertEquals(inputParallelism, outputRecords.getNumPartitions());
+    }
   }
 }

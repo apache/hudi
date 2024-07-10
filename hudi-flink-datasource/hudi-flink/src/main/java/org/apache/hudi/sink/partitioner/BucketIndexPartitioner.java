@@ -21,9 +21,9 @@ package org.apache.hudi.sink.partitioner;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.sink.utils.BucketIndexUtil;
 
 import org.apache.flink.api.common.functions.Partitioner;
-import org.apache.hudi.sink.utils.BucketIndexUtil;
 
 /**
  * Bucket index input partitioner.

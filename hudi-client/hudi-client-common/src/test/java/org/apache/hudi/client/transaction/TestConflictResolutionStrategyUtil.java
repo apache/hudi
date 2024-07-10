@@ -207,7 +207,7 @@ public class TestConflictResolutionStrategyUtil {
     writeStat.setFileId("file-2");
     replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     replaceMetadata.setOperationType(writeOperationType);
-    FileCreateUtils.createReplaceCommit(metaClient.getBasePath(), instantTime, replaceMetadata);
+    FileCreateUtils.createReplaceCommit(metaClient.getBasePath().toString(), instantTime, replaceMetadata);
   }
 
   public static void createPendingCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
@@ -222,7 +222,7 @@ public class TestConflictResolutionStrategyUtil {
     compactionPlan.setOperations(Arrays.asList(operation));
     HoodieTestTable.of(metaClient)
         .addRequestedCompaction(instantTime, compactionPlan);
-    FileCreateUtils.createInflightCompaction(metaClient.getBasePath(), instantTime);
+    FileCreateUtils.createInflightCompaction(metaClient.getBasePath().toString(), instantTime);
   }
 
   public static void createCompleteCompaction(String instantTime, HoodieTableMetaClient metaClient) throws Exception {

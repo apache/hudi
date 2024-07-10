@@ -66,7 +66,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
   private final int bucketNum;
   private transient HoodieFlinkWriteClient writeClient;
   private transient Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
-  private transient String lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
+  private transient String lastRefreshInstant;
   private final int maxRetries = 10;
   private final long maxWaitTimeInMs = 1000;
 
@@ -81,6 +81,7 @@ public class ConsistentBucketAssignFunction extends ProcessFunction<HoodieRecord
     try {
       this.writeClient = FlinkWriteClients.createWriteClient(this.config, getRuntimeContext());
       this.partitionToIdentifier = new HashMap<>();
+      this.lastRefreshInstant = HoodieTimeline.INIT_INSTANT_TS;
     } catch (Throwable e) {
       LOG.error("Fail to initialize consistent bucket assigner", e);
       throw new RuntimeException(e);

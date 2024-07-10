@@ -17,17 +17,13 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.util.AccumulatorV2
-import org.apache.spark.SparkContext
-import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
-import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
+import org.apache.spark.sql._
+import org.apache.spark.util.AccumulatorV2
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 

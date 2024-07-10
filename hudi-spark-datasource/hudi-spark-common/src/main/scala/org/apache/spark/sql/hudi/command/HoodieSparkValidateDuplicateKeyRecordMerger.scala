@@ -21,7 +21,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.HoodieSparkRecordMerger
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, OperationModeAwareness}
-import org.apache.hudi.common.util.{HoodieRecordUtils, collection, Option => HOption}
+import org.apache.hudi.common.util.{collection, HoodieRecordUtils, Option => HOption}
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
 /**

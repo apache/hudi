@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * WriteProfile for MERGE_ON_READ table type, this allows auto correction of small parquet files to larger ones
+ * DeltaWriteProfile for MERGE_ON_READ table type, this allows auto correction of small parquet files to larger ones
  * without the need for an index in the logFile.
  *
  * <p>Note: assumes the index can always index log files for Flink write.

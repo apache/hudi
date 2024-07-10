@@ -42,6 +42,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -133,7 +134,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     HoodieMultiTableServicesMain.Config cfg = getHoodieMultiServiceConfig();
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     cfg.batch = true;
-    cfg.basePath = Collections.singletonList(metaClient1.getBasePath());
+    cfg.basePath = Collections.singletonList(metaClient1.getBasePath().toString());
     HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
     main.startServices();
     // Verify cleans
@@ -178,7 +179,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     cfg.batch = true;
     HoodieTableMetaClient metaClient1 = getMetaClient("table1");
     cfg.configs.add(String.format("%s=%s", TABLES_SKIP_WRONG_PATH, "true"));
-    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePathV2() + ",file:///fakepath"));
+    cfg.configs.add(String.format("%s=%s", TABLES_TO_BE_SERVED_PROP, metaClient1.getBasePath() + ",file:///fakepath"));
     HoodieMultiTableServicesMain main = new HoodieMultiTableServicesMain(jsc, cfg);
     try {
       main.startServices();
@@ -227,7 +228,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     Assertions.assertEquals(0, metaClient2.reloadActiveTimeline().getCleanerTimeline().countInstants());
   }
 
-  private void writeToTable(String basePath, String instant, boolean update) throws IOException {
+  private void writeToTable(StoragePath basePath, String instant, boolean update) throws IOException {
     String tableName = "test";
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath, tableName);
     // enable files and bloom_filters on the regular write client
@@ -246,7 +247,7 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     assertNoWriteErrors(statuses);
   }
 
-  private HoodieWriteConfig.Builder getWriteConfigBuilder(String basePath, String tableName) {
+  private HoodieWriteConfig.Builder getWriteConfigBuilder(StoragePath basePath, String tableName) {
     Properties properties = new Properties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     return HoodieWriteConfig.newBuilder()

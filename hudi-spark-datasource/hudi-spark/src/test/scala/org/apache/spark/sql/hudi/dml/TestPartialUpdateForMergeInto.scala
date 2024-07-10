@@ -389,7 +389,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       new SerializableFunctionUnchecked[HoodieTableMetaClient, HoodieTableMetadata] {
         override def apply(v1: HoodieTableMetaClient): HoodieTableMetadata = {
           HoodieTableMetadata.create(
-            engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePathV2.toString)
+            engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
         }
       }
     )

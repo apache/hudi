@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.{HoodieSparkUtils, ScalaAssertionSupport}
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestMergeIntoTableWithNonRecordKeyField extends HoodieSparkSqlTestBase with ScalaAssertionSupport {

@@ -169,14 +169,18 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(
-      ClosableIterator<IndexedRecord> skeletonFileIterator,
-      ClosableIterator<IndexedRecord> dataFileIterator) {
+  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
+                                                               Schema skeletonRequiredSchema,
+                                                               ClosableIterator<IndexedRecord> dataFileIterator,
+                                                               Schema dataRequiredSchema) {
     return null;
   }
 
   @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to) {
+  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    if (!renamedColumns.isEmpty()) {
+      throw new UnsupportedOperationException("Schema evolution is not supported for the test reader context");
+    }
     Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
         .boxed()
         .collect(Collectors.toMap(

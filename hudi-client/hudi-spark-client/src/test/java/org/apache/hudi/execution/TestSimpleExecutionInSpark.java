@@ -20,8 +20,8 @@ package org.apache.hudi.execution;
 
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.common.util.queue.SimpleExecutor;

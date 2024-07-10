@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.commit;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieListData;
@@ -30,6 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.List;

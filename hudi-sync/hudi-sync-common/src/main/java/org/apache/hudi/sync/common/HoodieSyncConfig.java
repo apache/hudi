@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -199,6 +201,7 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
   private Configuration hadoopConf;
+  private HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
     this(props, HadoopConfigUtils.createHadoopConf(props));
@@ -213,6 +216,11 @@ public class HoodieSyncConfig extends HoodieConfig {
         .collect(Collectors.joining("\n")));
     setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
+    this.metricsConfig = HoodieMetricsConfig.newBuilder().fromProperties(props).build();
+  }
+
+  public String getBasePath() {
+    return getString(BASE_PATH);
   }
 
   public void setHadoopConf(Configuration hadoopConf) {
@@ -221,6 +229,10 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public Configuration getHadoopConf() {
     return hadoopConf;
+  }
+
+  public HoodieMetricsConfig getMetricsConfig() {
+    return metricsConfig;
   }
 
   public FileSystem getHadoopFileSystem() {

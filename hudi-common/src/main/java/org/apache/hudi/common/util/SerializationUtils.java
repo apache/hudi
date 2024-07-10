@@ -18,12 +18,13 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.avro.GenericAvroSerializer;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.generic.GenericData;
-import org.apache.hudi.avro.GenericAvroSerializer;
 import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 

@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.scalatest.BeforeAndAfter
 
 import java.io.File

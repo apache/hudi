@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -86,6 +87,12 @@ public class HoodieMergeHandleFactory {
     LOG.info("Get updateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
+      // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
+      // both of these two cases are already handled in HoodieCDCExtractor.
+      return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,

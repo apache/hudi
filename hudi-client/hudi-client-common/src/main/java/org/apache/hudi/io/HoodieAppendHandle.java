@@ -172,7 +172,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     String prevCommit = instantTime;
     String baseFile = "";
     List<String> logFiles = new ArrayList<>();
-    if (config.isCDCEnabled()) {
+    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
       // the cdc reader needs the base file metadata to have deterministic update sequence.
       TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);
@@ -209,7 +209,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       LOG.error("Error in update task at commit " + instantTime, e);
       writeStatus.setGlobalError(e);
       throw new HoodieUpsertException("Failed to initialize HoodieAppendHandle for FileId: " + fileId + " on commit "
-          + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePathV2() + "/" + partitionPath, e);
+          + instantTime + " on HDFS path " + hoodieTable.getMetaClient().getBasePath() + "/" + partitionPath, e);
     }
     doInit = false;
   }

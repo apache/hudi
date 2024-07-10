@@ -46,13 +46,13 @@ import org.apache.hudi.source.FileIndex;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
 import org.apache.hudi.source.StreamReadOperator;
+import org.apache.hudi.source.prune.DataPruner;
+import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadAppendPartitioner;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadBucketIndexPartitioner;
 import org.apache.hudi.source.rebalance.selector.StreamReadAppendKeySelector;
 import org.apache.hudi.source.rebalance.selector.StreamReadBucketIndexKeySelector;
-import org.apache.hudi.source.prune.DataPruner;
-import org.apache.hudi.source.prune.PartitionPruners;
-import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -401,7 +401,7 @@ public class HoodieTableSource implements
                   .map(logFile -> logFile.getPath().toString())
                   .collect(Collectors.toList()));
               return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+                  metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .collect(Collectors.toList());

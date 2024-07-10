@@ -17,8 +17,9 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
+
+import org.apache.avro.Schema
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 

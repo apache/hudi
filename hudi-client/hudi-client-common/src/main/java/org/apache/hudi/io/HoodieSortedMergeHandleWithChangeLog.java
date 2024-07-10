@@ -30,9 +30,9 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 
 import java.io.IOException;
-import java.util.Properties;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * A sorted merge handle that supports logging change logs.

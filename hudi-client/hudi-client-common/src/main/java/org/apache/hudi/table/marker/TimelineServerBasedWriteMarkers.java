@@ -68,7 +68,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private final HttpRequestClient httpRequestClient;
 
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
-    this(table.getMetaClient().getBasePath(),
+    this(table.getMetaClient().getBasePath().toString(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
         table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
         table.getConfig().getViewStorageConfig().getRemoteViewServerPort(),

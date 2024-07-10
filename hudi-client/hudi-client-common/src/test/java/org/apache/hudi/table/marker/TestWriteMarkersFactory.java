@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -107,7 +108,7 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
     Mockito.when(table.getMetaClient()).thenReturn(metaClient);
     Mockito.when(metaClient.getStorage()).thenReturn(storage);
     Mockito.when(storage.getFileSystem()).thenReturn(fileSystem);
-    Mockito.when(metaClient.getBasePath()).thenReturn(basePath);
+    Mockito.when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     Mockito.when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     Mockito.when(table.getContext()).thenReturn(context);
     StorageConfiguration storageConfToReturn = getDefaultStorageConf();

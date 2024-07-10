@@ -53,52 +53,18 @@ public abstract class FileFormatUtils {
   /**
    * Aggregate column range statistics across files in a partition.
    *
+   * @param relativePartitionPath relative partition path for the column range stats
    * @param fileColumnRanges List of column range statistics for each file in a partition
    */
-  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(@Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> getColumnRangeInPartition(String relativePartitionPath,
+                                                                                                 @Nonnull List<HoodieColumnRangeMetadata<T>> fileColumnRanges) {
     ValidationUtils.checkArgument(!fileColumnRanges.isEmpty(), "fileColumnRanges should not be empty.");
     // There are multiple files. Compute min(file_mins) and max(file_maxs)
     return fileColumnRanges.stream()
-        .reduce(FileFormatUtils::mergeRanges).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
-  }
-
-  private static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> mergeRanges(HoodieColumnRangeMetadata<T> one,
-                                                                                    HoodieColumnRangeMetadata<T> another) {
-    ValidationUtils.checkArgument(one.getColumnName().equals(another.getColumnName()),
-        "Column names should be the same for merging column ranges");
-    final T minValue = getMinValueForColumnRanges(one, another);
-    final T maxValue = getMaxValueForColumnRanges(one, another);
-
-    return HoodieColumnRangeMetadata.create(
-        null, one.getColumnName(), minValue, maxValue,
-        one.getNullCount() + another.getNullCount(),
-        one.getValueCount() + another.getValueCount(),
-        one.getTotalSize() + another.getTotalSize(),
-        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
-  }
-
-  public static <T extends Comparable<T>> T getMaxValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
-    final T maxValue;
-    if (one.getMaxValue() != null && another.getMaxValue() != null) {
-      maxValue = one.getMaxValue().compareTo(another.getMaxValue()) < 0 ? another.getMaxValue() : one.getMaxValue();
-    } else if (one.getMaxValue() == null) {
-      maxValue = another.getMaxValue();
-    } else {
-      maxValue = one.getMaxValue();
-    }
-    return maxValue;
-  }
-
-  public static <T extends Comparable<T>> T getMinValueForColumnRanges(HoodieColumnRangeMetadata<T> one, HoodieColumnRangeMetadata<T> another) {
-    final T minValue;
-    if (one.getMinValue() != null && another.getMinValue() != null) {
-      minValue = one.getMinValue().compareTo(another.getMinValue()) < 0 ? one.getMinValue() : another.getMinValue();
-    } else if (one.getMinValue() == null) {
-      minValue = another.getMinValue();
-    } else {
-      minValue = one.getMinValue();
-    }
-    return minValue;
+        .map(e -> HoodieColumnRangeMetadata.create(
+            relativePartitionPath, e.getColumnName(), e.getMinValue(), e.getMaxValue(),
+            e.getNullCount(), e.getValueCount(), e.getTotalSize(), e.getTotalUncompressedSize()))
+        .reduce(HoodieColumnRangeMetadata::merge).orElseThrow(() -> new HoodieException("MergingColumnRanges failed."));
   }
 
   /**

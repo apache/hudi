@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.UseFileSplitsFromInputFormat;
 import org.apache.hudi.hadoop.UseRecordReaderFromInputFormat;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 
@@ -44,6 +43,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.isLogFile;
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.shouldUseFilegroupReader;
 
 /**
  * Input Format, that provides a real-time view of data in a Hoodie table.
@@ -69,16 +72,20 @@ public class HoodieParquetRealtimeInputFormat extends HoodieParquetInputFormat {
     ValidationUtils.checkArgument(split instanceof RealtimeSplit,
         "HoodieRealtimeRecordReader can only work on RealtimeSplit and not with " + split);
     RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+
+    if (shouldUseFilegroupReader(jobConf)) {
+      return super.getRecordReader(realtimeSplit, jobConf, reporter);
+    }
+
     // add preCombineKey
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(jobConf)).setBasePath(realtimeSplit.getBasePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(getStorageConf(jobConf)).setBasePath(realtimeSplit.getBasePath()).build();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
     addProjectionToJobConf(realtimeSplit, jobConf, tableConfig);
     LOG.info("Creating record reader with readCols :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR)
         + ", Ids :" + jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR));
 
     // for log only split, set the parquet reader as empty.
-    if (HadoopFSUtils.isLogFile(realtimeSplit.getPath())) {
+    if (isLogFile(realtimeSplit.getPath())) {
       return new HoodieRealtimeRecordReader(realtimeSplit, jobConf, new HoodieEmptyRecordReader(realtimeSplit, jobConf));
     }
 

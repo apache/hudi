@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Properties;

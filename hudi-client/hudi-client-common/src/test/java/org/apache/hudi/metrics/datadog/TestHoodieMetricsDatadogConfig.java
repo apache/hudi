@@ -19,8 +19,8 @@
 
 package org.apache.hudi.metrics.datadog;
 
-import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
 
 import org.junit.jupiter.api.Test;
 

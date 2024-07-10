@@ -247,7 +247,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
 
   private void readTableAndValidate(HoodieTableMetaClient metaClient, int[] expectedIds, String expectedPartition, Map<String, Long> expectedTsMap) {
     Dataset<Row> df = spark().read().format("hudi")
-        .load(metaClient.getBasePathV2().toString())
+        .load(metaClient.getBasePath().toString())
         .sort("id")
         .select("_hoodie_record_key", "_hoodie_partition_path", "id", "pt", "ts")
         .cache();

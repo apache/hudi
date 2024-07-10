@@ -19,13 +19,14 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.sync.common.util.Parquet2SparkSchemaUtils;
+
 import org.apache.spark.sql.execution.SparkSqlParser;
 import org.apache.spark.sql.execution.datasources.parquet.SparkToParquetSchemaConverter;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.IntegerType$;
 import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.IntegerType$;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.view;
 
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -72,6 +73,8 @@ public class TestPriorityBasedFileSystemView {
 
   @Mock
   private SyncableFileSystemView secondary;
+  @Mock
+  private SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier;
 
   @InjectMocks
   private PriorityBasedFileSystemView fsView;
@@ -81,7 +84,7 @@ public class TestPriorityBasedFileSystemView {
 
   @BeforeEach
   public void setUp() {
-    fsView = new PriorityBasedFileSystemView(primary, secondary);
+    fsView = new PriorityBasedFileSystemView(primary, secondaryViewSupplier);
     testBaseFileStream = Stream.of(new HoodieBaseFile("test"));
     testFileSliceStream = Stream.of(new FileSlice("2020-01-01", "20:20",
         "file0001" + HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
@@ -106,8 +109,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFiles();
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException());
     when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFiles();
@@ -136,6 +141,7 @@ public class TestPriorityBasedFileSystemView {
       Stream<HoodieBaseFile> expected = testBaseFileStream;
 
       resetMocks();
+      when(secondaryViewSupplier.get()).thenReturn(secondary);
       when(primary.getLatestBaseFiles()).thenThrow(new RuntimeException(new HttpResponseException(400, "Bad Request")));
       when(secondary.getLatestBaseFiles()).thenReturn(testBaseFileStream);
       actual = fsView.getLatestBaseFiles();
@@ -159,8 +165,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestBaseFiles(partitionPath)).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFiles(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestBaseFiles(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getLatestBaseFiles(partitionPath)).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFiles(partitionPath);
@@ -189,8 +197,10 @@ public class TestPriorityBasedFileSystemView {
         .thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime))
         .thenThrow(new RuntimeException());
     when(secondary.getLatestBaseFilesBeforeOrOn(partitionPath, maxCommitTime))
@@ -222,8 +232,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestBaseFile(partitionPath, fileID)).thenReturn(expected);
     actual = fsView.getLatestBaseFile(partitionPath, fileID);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestBaseFile(partitionPath, fileID)).thenThrow(new RuntimeException());
     when(secondary.getLatestBaseFile(partitionPath, fileID)).thenReturn(expected);
     actual = fsView.getLatestBaseFile(partitionPath, fileID);
@@ -252,8 +264,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getBaseFileOn(partitionPath, instantTime, fileID)).thenReturn(expected);
     actual = fsView.getBaseFileOn(partitionPath, instantTime, fileID);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getBaseFileOn(partitionPath, instantTime, fileID))
         .thenThrow(new RuntimeException());
     when(secondary.getBaseFileOn(partitionPath, instantTime, fileID)).thenReturn(expected);
@@ -282,8 +296,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestBaseFilesInRange(commitsToReturn)).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFilesInRange(commitsToReturn);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestBaseFilesInRange(commitsToReturn)).thenThrow(new RuntimeException());
     when(secondary.getLatestBaseFilesInRange(commitsToReturn)).thenReturn(testBaseFileStream);
     actual = fsView.getLatestBaseFilesInRange(commitsToReturn);
@@ -310,8 +326,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getAllBaseFiles(partitionPath)).thenReturn(testBaseFileStream);
     actual = fsView.getAllBaseFiles(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getAllBaseFiles(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getAllBaseFiles(partitionPath)).thenReturn(testBaseFileStream);
     actual = fsView.getAllBaseFiles(partitionPath);
@@ -338,8 +356,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSlices(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestFileSlices(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getLatestFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSlices(partitionPath);
@@ -366,8 +386,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestFileSlicesIncludingInflight(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSlicesIncludingInflight(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestFileSlicesIncludingInflight(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getLatestFileSlicesIncludingInflight(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSlicesIncludingInflight(partitionPath);
@@ -392,8 +414,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestUnCompactedFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestUnCompactedFileSlices(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestUnCompactedFileSlices(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getLatestUnCompactedFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestUnCompactedFileSlices(partitionPath);
@@ -422,8 +446,10 @@ public class TestPriorityBasedFileSystemView {
         .thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
         .thenThrow(new RuntimeException());
     when(secondary.getLatestFileSlicesBeforeOrOn(partitionPath, maxCommitTime, false))
@@ -456,8 +482,10 @@ public class TestPriorityBasedFileSystemView {
         .thenReturn(testFileSliceStream);
     actual = fsView.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime))
         .thenThrow(new RuntimeException());
     when(secondary.getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime))
@@ -488,8 +516,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestFileSliceInRange(commitsToReturn)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSliceInRange(commitsToReturn);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestFileSliceInRange(commitsToReturn)).thenThrow(new RuntimeException());
     when(secondary.getLatestFileSliceInRange(commitsToReturn)).thenReturn(testFileSliceStream);
     actual = fsView.getLatestFileSliceInRange(commitsToReturn);
@@ -516,8 +546,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getAllFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getAllFileSlices(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getAllFileSlices(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getAllFileSlices(partitionPath)).thenReturn(testFileSliceStream);
     actual = fsView.getAllFileSlices(partitionPath);
@@ -546,8 +578,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getAllFileGroups(partitionPath)).thenReturn(expected);
     actual = fsView.getAllFileGroups(partitionPath);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getAllFileGroups(partitionPath)).thenThrow(new RuntimeException());
     when(secondary.getAllFileGroups(partitionPath)).thenReturn(expected);
     actual = fsView.getAllFileGroups(partitionPath);
@@ -575,8 +609,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getPendingCompactionOperations()).thenReturn(expected);
     actual = fsView.getPendingCompactionOperations();
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getPendingCompactionOperations()).thenThrow(new RuntimeException());
     when(secondary.getPendingCompactionOperations()).thenReturn(expected);
     actual = fsView.getPendingCompactionOperations();
@@ -604,8 +640,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getPendingLogCompactionOperations()).thenReturn(expected);
     actual = fsView.getPendingLogCompactionOperations();
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getPendingLogCompactionOperations()).thenThrow(new RuntimeException());
     when(secondary.getPendingLogCompactionOperations()).thenReturn(expected);
     actual = fsView.getPendingLogCompactionOperations();
@@ -624,14 +662,33 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
-  public void testClose() {
+  public void testClose_noSecondaryInitialized() {
+    fsView.close();
+    verify(primary, times(1)).close();
+    verify(secondary, never()).close();
+  }
+
+  @Test
+  public void testClose_withSecondaryInitialized() {
+    // force secondary view to initialize
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
+    fsView.getSecondaryView();
     fsView.close();
     verify(primary, times(1)).close();
     verify(secondary, times(1)).close();
   }
 
   @Test
-  public void testReset() {
+  public void testReset_noSecondaryInitialized() {
+    fsView.reset();
+    verify(primary, times(1)).reset();
+    verify(secondary, never()).reset();
+  }
+
+  @Test
+  public void testReset_withSecondaryInitialized() {
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
+    fsView.getSecondaryView();
     fsView.reset();
     verify(primary, times(1)).reset();
     verify(secondary, times(1)).reset();
@@ -645,8 +702,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLastInstant()).thenReturn(expected);
     actual = fsView.getLastInstant();
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLastInstant()).thenThrow(new RuntimeException());
     when(secondary.getLastInstant()).thenReturn(expected);
     actual = fsView.getLastInstant();
@@ -672,8 +731,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getTimeline()).thenReturn(expected);
     actual = fsView.getTimeline();
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getTimeline()).thenThrow(new RuntimeException());
     when(secondary.getTimeline()).thenReturn(expected);
     actual = fsView.getTimeline();
@@ -692,7 +753,16 @@ public class TestPriorityBasedFileSystemView {
   }
 
   @Test
-  public void testSync() {
+  public void testSync_noSecondaryInitialized() {
+    fsView.sync();
+    verify(primary, times(1)).sync();
+    verify(secondary, never()).sync();
+  }
+
+  @Test
+  public void testSync_withSecondaryInitialized() {
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
+    fsView.getSecondaryView();
     fsView.sync();
     verify(primary, times(1)).sync();
     verify(secondary, times(1)).sync();
@@ -708,8 +778,10 @@ public class TestPriorityBasedFileSystemView {
     when(primary.getLatestFileSlice(partitionPath, fileID)).thenReturn(expected);
     actual = fsView.getLatestFileSlice(partitionPath, fileID);
     assertEquals(expected, actual);
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     when(primary.getLatestFileSlice(partitionPath, fileID)).thenThrow(new RuntimeException());
     when(secondary.getLatestFileSlice(partitionPath, fileID)).thenReturn(expected);
     actual = fsView.getLatestFileSlice(partitionPath, fileID);
@@ -734,8 +806,10 @@ public class TestPriorityBasedFileSystemView {
     fsView.loadPartitions(Collections.singletonList(partitionPath));
     verify(primary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
     verify(secondary, never()).loadPartitions(any());
+    verify(secondaryViewSupplier, never()).get();
 
     resetMocks();
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     doThrow(new RuntimeException()).when(primary).loadPartitions(Collections.singletonList(partitionPath));
     fsView.loadPartitions(Collections.singletonList(partitionPath));
     verify(primary, times(1)).loadPartitions(Collections.singletonList(partitionPath));
@@ -755,6 +829,7 @@ public class TestPriorityBasedFileSystemView {
 
   @Test
   public void testGetSecondaryView() {
+    when(secondaryViewSupplier.get()).thenReturn(secondary);
     assertEquals(secondary, fsView.getSecondaryView());
   }
 

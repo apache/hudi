@@ -63,7 +63,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
 
   // NOTE: Since [[metadataConfig]] is transient this has to be eagerly persisted, before this will be passed
   //       on to the executor
-  private val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
+  protected val inMemoryProjectionThreshold = metadataConfig.getColumnStatsIndexInMemoryProjectionThreshold
 
   private lazy val indexedColumns: Set[String] = {
     val customIndexedColumns = metadataConfig.getColumnsEnabledForColumnStatsIndex
@@ -86,12 +86,6 @@ class ColumnStatsIndexSupport(spark: SparkSession,
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
-      // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
-      //       it's most often preferential to fetch Column Stats Index w/in the same process (usually driver),
-      //       w/o resorting to on-cluster execution.
-      //       For that we use a simple-heuristic to determine whether we should read and process CSI in-memory or
-      //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
-      //       threshold (of 100k records)
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
       val prunedFileNames = getPrunedFileNames(prunedPartitionsAndFileSlices)
       // NOTE: If partition pruning doesn't prune any files, then there's no need to apply file filters
@@ -364,7 +358,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   }
 
   private def loadFullColumnStatsIndexInternal(): DataFrame = {
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePathV2.toString)
+    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath)
     // Read Metadata Table's Column Stats Index into Spark's [[DataFrame]]
     val colStatsDF = spark.read.format("org.apache.hudi")
       .options(metadataConfig.getProps.asScala)

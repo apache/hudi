@@ -17,20 +17,33 @@
  * under the License.
  */
 
-package org.apache.hudi.common.table.read;
+package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
 
+import java.io.IOException;
+
 /**
- * A class holding the state that is needed by {@code HoodieFileGroupReader},
- * e.g., schema, merging strategy, etc.
+ * Avro Merger that always chooses the newer record
  */
-public class HoodieFileGroupReaderState {
-  public String tablePath;
-  public String latestCommitTime;
-  public Schema baseFileAvroSchema;
-  public Schema logRecordAvroSchema;
-  public TypedProperties mergeProps = new TypedProperties();
+public class OverwriteWithLatestMerger implements HoodieRecordMerger {
+
+  @Override
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    return Option.of(Pair.of(newer, newSchema));
+  }
+
+  @Override
+  public HoodieRecord.HoodieRecordType getRecordType() {
+    return HoodieRecord.HoodieRecordType.AVRO;
+  }
+
+  @Override
+  public String getMergingStrategy() {
+    return OVERWRITE_MERGER_STRATEGY_UUID;
+  }
 }

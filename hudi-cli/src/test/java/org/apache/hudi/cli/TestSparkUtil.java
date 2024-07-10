@@ -18,10 +18,10 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.cli.utils.SparkUtil;
-import org.apache.spark.SparkConf;
+import org.apache.hudi.common.util.Option;
 
+import org.apache.spark.SparkConf;
 import org.apache.spark.launcher.SparkLauncher;
 import org.junit.jupiter.api.Test;
 

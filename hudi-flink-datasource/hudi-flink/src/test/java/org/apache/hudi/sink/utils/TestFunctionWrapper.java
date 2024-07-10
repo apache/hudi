@@ -69,6 +69,14 @@ public interface TestFunctionWrapper<I> {
   void checkpointComplete(long checkpointId);
 
   /**
+   * Keep this interface for batch inline compaction job. The batch pipeline triggers the commit of Hudi table
+   * with "endInput" events in the coordinator whereas there is no good chance to plug in the compaction sub-pipeline.
+   */
+  default void inlineCompaction() {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
    * Triggers the job failover, including the coordinator and the write tasks.
    */
   default void jobFailover() throws Exception {

@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -68,6 +67,10 @@ class RepairOverwriteHoodiePropsProcedure extends BaseProcedure with ProcedureBu
     var newProps = new Properties
     loadNewProps(overwriteFilePath, newProps)
     val oldProps = metaClient.getTableConfig.propsMap
+    // Copy Initial Version from old props to new props
+    if (oldProps.containsKey(HoodieTableConfig.INITIAL_VERSION.key)) {
+      newProps.put(HoodieTableConfig.INITIAL_VERSION.key, oldProps.get(HoodieTableConfig.INITIAL_VERSION.key))
+    }
     HoodieTableConfig.create(metaClient.getStorage, metaClient.getMetaPath, newProps)
     // reload new props as checksum would have been added
     newProps = HoodieTableMetaClient.reload(metaClient).getTableConfig.getProps

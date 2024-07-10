@@ -28,7 +28,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.Optional;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.storage.StorageLevel;
 
 import java.util.List;
@@ -145,5 +148,25 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   @Override
   public List<Pair<K, V>> collectAsList() {
     return pairRDDData.map(t -> Pair.of(t._1, t._2)).collect();
+  }
+
+  @Override
+  public int deduceNumPartitions() {
+    // for source rdd, the partitioner is None
+    final Optional<Partitioner> partitioner = pairRDDData.partitioner();
+    if (partitioner.isPresent()) {
+      int partPartitions = partitioner.get().numPartitions();
+      if (partPartitions > 0) {
+        return partPartitions;
+      }
+    }
+
+    if (SQLConf.get().contains(SQLConf.SHUFFLE_PARTITIONS().key())) {
+      return Integer.parseInt(SQLConf.get().getConfString(SQLConf.SHUFFLE_PARTITIONS().key()));
+    } else if (pairRDDData.context().conf().contains("spark.default.parallelism")) {
+      return pairRDDData.context().defaultParallelism();
+    } else {
+      return pairRDDData.getNumPartitions();
+    }
   }
 }

@@ -38,7 +38,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
 
   private HoodieWriteHelper() {
-    super(HoodieData::getNumPartitions);
+    super(HoodieData::deduceNumPartitions);
   }
 
   private static class WriteHelperHolder {

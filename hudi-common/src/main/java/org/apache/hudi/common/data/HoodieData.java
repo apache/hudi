@@ -94,6 +94,11 @@ public interface HoodieData<T> extends Serializable {
   int getNumPartitions();
 
   /**
+   * @return the deduce number of shuffle partitions
+   */
+  int deduceNumPartitions();
+
+  /**
    * Maps every element in the collection using provided mapping {@code func}.
    * <p>
    * This is an intermediate operation

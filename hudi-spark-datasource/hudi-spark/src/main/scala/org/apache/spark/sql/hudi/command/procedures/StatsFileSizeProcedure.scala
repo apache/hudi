@@ -27,6 +27,7 @@ import org.apache.spark.sql.hudi.command.procedures.StatsFileSizeProcedure.MAX_F
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, mapAsScalaMapConverter}
 
 class StatsFileSizeProcedure extends BaseProcedure with ProcedureBuilder {

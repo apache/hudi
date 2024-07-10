@@ -67,7 +67,7 @@ class FileSystemRelation(val sqlContext: SQLContext,
   override def buildScan(): RDD[Row] = {
     val data = collection.mutable.ArrayBuffer[Row]()
     val subPath = optParams.getOrElse(DataSourceReadOptions.FILESYSTEM_RELATION_ARG_SUBPATH.key(), "")
-    val path = String.format("%s/%s/*", metaClient.getBasePathV2, subPath)
+    val path = String.format("%s/%s/*", metaClient.getBasePath, subPath)
     val fileStatusList = FSUtils.getGlobStatusExcludingMetaFolder(metaClient.getStorage, new StoragePath(path))
 
 

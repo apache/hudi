@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.testutils.DataSourceTestUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestMergeIntoLogOnlyTable extends HoodieSparkSqlTestBase {

@@ -38,6 +38,7 @@ import org.apache.parquet.schema.MessageType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,6 +57,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
   protected final HoodieTableMetaClient metaClient;
+  private static final String TEMP_SUFFIX = "_temp";
 
   public HoodieSyncClient(HoodieSyncConfig config) {
     this.config = config;
@@ -76,7 +78,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   }
 
   public String getBasePath() {
-    return metaClient.getBasePathV2().toString();
+    return metaClient.getBasePath().toString();
   }
 
   public boolean isBootstrap() {
@@ -183,7 +185,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       String storagePath = paths.get(storageValue);
       try {
         String relativePath = FSUtils.getRelativePartitionPath(
-            metaClient.getBasePathV2(), new StoragePath(storagePath));
+            metaClient.getBasePath(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
         LOG.error("Cannot parse the path stored in the metastore, ignoring it for "
@@ -242,5 +244,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
       paths.put(String.join(", ", hivePartitionValues), fullTablePartitionPath);
     }
     return paths;
+  }
+
+  protected String generateTempTableName(String tableName) {
+    return tableName + TEMP_SUFFIX + ZonedDateTime.now().toEpochSecond();
   }
 }

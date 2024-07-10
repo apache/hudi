@@ -23,14 +23,18 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.hash.ColumnIndexID
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadataUtil}
 import org.apache.hudi.util.JFunction
-import org.apache.spark.sql.SparkSession
+
+import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.expressions.{And, Expression}
+import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Column, SparkSession}
 
 import scala.collection.JavaConverters._
 
@@ -39,7 +43,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                                  @transient metadataConfig: HoodieMetadataConfig,
                                  @transient metaClient: HoodieTableMetaClient,
                                  allowCaching: Boolean = false)
-  extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) {
+  extends ColumnStatsIndexSupport(spark, tableSchema, metadataConfig, metaClient, allowCaching) with Logging {
 
   override def getIndexName: String = PartitionStatsIndexSupport.INDEX_NAME
 
@@ -48,9 +52,19 @@ class PartitionStatsIndexSupport(spark: SparkSession,
       metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS)
   }
 
+  override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
+                                         queryFilters: Seq[Expression],
+                                         queryReferencedColumns: Seq[String],
+                                         prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                         shouldPushDownFilesFilter: Boolean
+                                        ): Option[Set[String]] = {
+    throw new UnsupportedOperationException("This method is not supported by PartitionStatsIndexSupport")
+  }
+
   override def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     checkState(targetColumns.nonEmpty)
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
+    logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")},  Encoded column names: ${encodedTargetColumnNames.mkString(", ")}")
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
@@ -63,6 +77,40 @@ class PartitionStatsIndexSupport(spark: SparkSession,
         .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords
+  }
+
+  def prunePartitions(fileIndex: HoodieFileIndex,
+                      queryFilters: Seq[Expression],
+                      queryReferencedColumns: Seq[String]): Option[Set[String]] = {
+    if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
+      val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
+      loadTransposed(queryReferencedColumns, readInMemory, Option.empty) {
+        transposedPartitionStatsDF => {
+          val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+            .collect()
+            .map(_.getString(0))
+            .toSet
+          if (allPartitions.nonEmpty) {
+            // PARTITION_STATS index exist for all or some columns in the filters
+            // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
+            //       column in a filter does not have the stats available, by making sure such a
+            //       filter does not prune any partition.
+            val indexSchema = transposedPartitionStatsDF.schema
+            val indexFilter = queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema)).reduce(And)
+            Some(transposedPartitionStatsDF.where(new Column(indexFilter))
+              .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+              .collect()
+              .map(_.getString(0))
+              .toSet)
+          } else {
+            // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+            Option.empty
+          }
+        }
+      }
+    } else {
+      Option.empty
+    }
   }
 }
 

@@ -131,4 +131,14 @@ public class TestStringUtils {
     assertTrue(StringUtils.compareVersions("1.10.1", "1.10") > 0);
     assertTrue(StringUtils.compareVersions("1.10", "1.10") == 0);
   }
+
+  @Test
+  public void testStripEnd() {
+    assertNull(StringUtils.stripEnd(null, "ab"));
+    assertEquals("", StringUtils.stripEnd("", "ab"));
+    assertEquals("abc", StringUtils.stripEnd("abc", null));
+    assertEquals("abc", StringUtils.stripEnd("abc  ", null));
+    assertEquals("abc", StringUtils.stripEnd("abc", ""));
+    assertEquals("abc", StringUtils.stripEnd("abcabab", "ab"));
+  }
 }

@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.transform;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
-import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -72,22 +71,18 @@ public class SqlFileBasedTransformer implements Transformer {
       final TypedProperties props) {
 
     final String sqlFile = getStringWithAltKeys(props, SqlTransformerConfig.TRANSFORMER_SQL_FILE);
-    if (null == sqlFile) {
-      throw new HoodieTransformException(
-          "Missing required configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + ")");
-    }
 
     final FileSystem fs = HadoopFSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
     // tmp table name doesn't like dashes
     final String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    LOG.info("Registering tmp table : " + tmpTable);
+    LOG.info("Registering tmp table: {}", tmpTable);
     rowDataset.createOrReplaceTempView(tmpTable);
 
     try (final Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
       Dataset<Row> rows = null;
       // each sql statement is separated with semicolon hence set that as delimiter.
       scanner.useDelimiter(";");
-      LOG.info("SQL Query for transformation : ");
+      LOG.info("SQL Query for transformation:");
       while (scanner.hasNext()) {
         String sqlStr = scanner.next();
         sqlStr = sqlStr.replaceAll(SRC_PATTERN, tmpTable).trim();

@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIMethod;
+
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;

@@ -205,7 +205,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
         metaClient.getActiveTimeline().readIndexPlanAsBytes(indexingInstant).get());
     String indexUptoInstantTime = indexPlan.getIndexPartitionInfos().get(0).getIndexUptoInstant();
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString());
+        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     String mdtCommitTime = indexingInstant.getTimestamp();
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
@@ -221,7 +221,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metadataMetaClient = reload(metadataMetaClient);
     // Simulate heartbeats for ongoing write from async indexer in the metadata table
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
-        metadataMetaClient.getStorage(), metadataMetaClient.getBasePathV2().toString(),
+        metadataMetaClient.getStorage(), metadataMetaClient.getBasePath().toString(),
         CLIENT_HEARTBEAT_INTERVAL_IN_MS.defaultValue().longValue(),
         CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES.defaultValue());
     heartbeatClient.start(mdtCommitTime);
@@ -270,7 +270,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
-        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePathV2().toString());
+        context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
         .filter(i -> i.getTimestamp().equals(commitTime))
