@@ -142,7 +142,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     HoodieTimeline cleanAndRollbackTimeline = table.getActiveTimeline()
         .getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.CLEAN_ACTION, HoodieTimeline.ROLLBACK_ACTION))
         .filterCompletedInstants();
-    Option<String> lastCleanInstantTimestamp = table.getActiveTimeline().getCleanerTimeline().lastInstant().map(HoodieInstant::getTimestamp);
 
     // Since the commit instants to archive is continuous, we can use the latest commit instant to archive as the
     // right boundary to collect the clean or rollback instants to archive.
@@ -155,9 +154,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     //  CommitInstantsToArchive: commit1, commit2, commit3, commit4, commit5
     //  CleanAndRollbackInstantsToArchive: clean1, clean2, rollback1
 
-    String timestampToNotArchive = HoodieTimeline.minTimestamp(latestCommitInstantToArchive.getTimestamp(), lastCleanInstantTimestamp.orElse(null));
     return cleanAndRollbackTimeline.getInstantsAsStream()
-        .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, timestampToNotArchive))
+        .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, latestCommitInstantToArchive.getTimestamp()))
         .collect(Collectors.toList());
   }
 
@@ -272,6 +270,25 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
 
     // Step2: We cannot archive any commits which are later than EarliestCommitToNotArchive.
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
+
+    // EarliestCommitToNotArchive is required to block archival when savepoint is deleted.
+    // This ensures that archival is blocked until clean has cleaned up files retained due to savepoint.
+    // Since EarliestCommitToNotArchive is advanced by cleaner, it is a way for cleaner to notify the archival
+    // that cleanup has finished and archival can advance further.
+    // If this guard is not present, the archival of commits can lead to duplicates. Here is a scenario
+    // illustrating the same. This scenario considers a case where EarliestCommitToNotArchive guard is not present
+    // c1.dc - f1 (c1 deltacommit creates file with id f1)
+    // c2.dc - f2 (c2 deltacommit creates file with id f2)
+    // c2.sp - Savepoint at c2
+    // c3.rc (replacing f2 -> f3) (Replace commit replacing file id f2 with f3)
+    // c4.dc
+    //
+    // Lets say Incremental cleaner moved past the c3.rc without cleaning f2 since savepoint is created at c2.
+    // Archival is blocked at c2 since there is a savepoint at c2.
+    // Lets say the savepoint at c2 is now deleted, Archival would archive c3.rc since it is unblocked now.
+    // Since c3 is archived and f2 has not been cleaned, the table view would be considering f2 as a valid
+    // file id. This causes duplicates.
+
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
     Option<String> earliestCommitToNotArchiveOpt = getEarliestCommitToNotArchive(table.getActiveTimeline(), table.getMetaClient());
 
@@ -388,6 +405,10 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
                 .getExtraMetadata())
             .map(metadata -> metadata.get(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE));
         earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanerEarliestInstantToNotArchive.orElse(null));
+        // We do not want last clean instant to be archived since that is referred for fetching earliestInstantToNotArchive
+        // earliestInstantToNotArchive should always be greater than last clean instant since
+        // earliestInstantToNotArchive tracks oldest savepoint or commit not yet cleaned by cleaner(which should be less than the clean instant itself)
+        earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanInstant.getTimestamp());
       }
     }
     return Option.ofNullable(earliestInstantToNotArchive);
