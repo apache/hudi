@@ -36,26 +36,10 @@ public class BucketIndexUtil {
    * @return The partition index of this bucket.
    */
   public static Functions.Function2<String, Integer, Integer> getPartitionIndexFunc(int bucketNum, int parallelism) {
-    if (parallelism < bucketNum) {
-      return (partition, curBucket) -> {
-        int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) / parallelism * bucketNum;
-        int globalIndex = partitionIndex + curBucket;
-        return globalIndex % parallelism;
-      };
-    } else {
-      if (parallelism % bucketNum == 0) {
-        return (partition, curBucket) -> {
-          int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) / (parallelism / bucketNum) * bucketNum;
-          int globalIndex = partitionIndex + curBucket;
-          return globalIndex % parallelism;
-        };
-      } else {
-        return (partition, curBucket) -> {
-          int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) / (parallelism / bucketNum + 1) * bucketNum;
-          int globalIndex = partitionIndex + curBucket;
-          return globalIndex % parallelism;
-        };
-      }
-    }
+    return (partition, curBucket) -> {
+      int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism * bucketNum;
+      int globalIndex = partitionIndex + curBucket;
+      return globalIndex % parallelism;
+    };
   }
 }
