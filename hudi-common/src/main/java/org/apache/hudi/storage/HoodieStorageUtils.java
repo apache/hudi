@@ -32,8 +32,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.util.StorageIOUtils;
 import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.storage.strategy.StorageStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 public class HoodieStorageUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieStorageUtils.class);
   public static final String DEFAULT_URI = "file:///";
 
   // TODO: Remove this method and force to pass storage strategy in or use default strategy
@@ -95,10 +100,29 @@ public class HoodieStorageUtils {
   }
 
   public static StorageStrategy getStorageStrategy(TypedProperties props) {
+    String storageStrategyClass = props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key());
+    String basePath = HoodieCommonConfig.BASE_PATH.key();
+    String tableName = HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
+    String storagePrefix = HoodieStorageConfig.STORAGE_PREFIX.key();
+    if (isNullOrEmpty(storageStrategyClass)) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("hoodie.storage.strategy.class is not set in the props, falling back to default strategy");
+      }
+      storageStrategyClass = HoodieStorageConfig.STORAGE_STRATEGY_CLASS.defaultValue();
+    }
+
+    if (isNullOrEmpty(basePath) || isNullOrEmpty(tableName) || isNullOrEmpty(storagePrefix)) {
+      // TODO: Should make sure we always pass required configs in
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("Important configs missing for initializing storage strategy, falling back to use a dummy strategy");
+      }
+      return new DefaultStorageStrategy();
+    }
+
     return StorageIOUtils.createStorageStrategy(
-        props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key(), HoodieStorageConfig.STORAGE_STRATEGY_CLASS.defaultValue()),
-        props.getString(HoodieCommonConfig.BASE_PATH.key()),
-        props.getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY),
-        props.getString(HoodieStorageConfig.STORAGE_PREFIX.key()));
+        storageStrategyClass,
+        basePath,
+        tableName,
+        storagePrefix);
   }
 }
