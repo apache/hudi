@@ -453,8 +453,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private boolean mayHavePendingFiles(String partitionPath) {
     try {
-      // As long as there are pending commits never delete empty partitions, because they may write files to any partitions.
-      if (!hoodieTable.getMetaClient().getCommitsTimeline().filterInflightsAndRequested().empty()) {
+      // For concurrency mode, as long as there are pending commits never delete empty partitions,
+      // because they may write files to any partitions.
+      if (hoodieTable.getConfig().getWriteConcurrencyMode().supportsMultiWriter()
+          && !hoodieTable.getMetaClient().getCommitsTimeline().filterInflightsAndRequested().empty()) {
         return true;
       }
       HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(hoodieTable.getMetaClient(), hoodieTable.getActiveTimeline());
