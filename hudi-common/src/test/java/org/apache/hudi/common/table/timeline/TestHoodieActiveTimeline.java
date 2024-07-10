@@ -563,6 +563,34 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testGetFirstAndLastPendingClusterInstant() {
+    // create timeline with completed commit and pending replcecommit
+    HoodieInstant instant1 = new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "2");
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(instant1);
+    timeline.createNewInstant(instant2);
+    timeline = timeline.reload();
+    timeline.getFirstPendingClusterInstant().ifPresent(instant -> {
+      assertEquals(instant2, instant);
+    });
+    // add a completed replacecommit and then another pending replacecommit
+    HoodieInstant instant3 = new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
+    HoodieInstant instant4 = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
+    timeline.createNewInstant(instant3);
+    timeline.createNewInstant(instant4);
+    timeline = timeline.reload();
+    // first pending instant should be instant2
+    timeline.getFirstPendingClusterInstant().ifPresent(instant -> {
+      assertEquals(instant2, instant);
+    });
+    // last pending instant should be instant4
+    timeline.getLastPendingClusterCommit().ifPresent(instant -> {
+      assertEquals(instant4, instant);
+    });
+  }
+
+  @Test
   public void testCreateNewInstantTime() throws Exception {
     String lastInstantTime = HoodieActiveTimeline.createNewInstantTime();
     for (int i = 0; i < 3; ++i) {
