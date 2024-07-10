@@ -51,13 +51,6 @@ public abstract class HoodieStorage implements Closeable {
   protected final StorageConfiguration<?> storageConf;
   protected StorageStrategy storageStrategy;
 
-  public HoodieStorage(StorageConfiguration<?> storageConf) {
-    /* TODO: Remove this constructor, all storage need to use storage strategy.
-        And storage strategy is supposed to be instantiated outside and passed to HoodieStorage*/
-    this.storageConf = storageConf;
-    this.storageStrategy = null;
-  }
-
   public HoodieStorage(StorageConfiguration<?> storageConf, StorageStrategy storageStrategy) {
     this.storageConf = storageConf;
     this.storageStrategy = storageStrategy;

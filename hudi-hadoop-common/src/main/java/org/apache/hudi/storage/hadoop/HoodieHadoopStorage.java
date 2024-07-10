@@ -59,12 +59,6 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
-  /* TODO: Remove this constructor, this is used to track non-strat usages*/
-  public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
-    super(conf);
-    fs = null;
-  }
-
   public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf, StorageStrategy storageStrategy) {
     super(conf, storageStrategy);
     this.fs = HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class));

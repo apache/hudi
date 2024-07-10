@@ -40,6 +40,8 @@ public class DefaultStorageStrategy implements StorageStrategy {
   public DefaultStorageStrategy() {
     // AVOID USING THIS CONSTRUCTOR IF POSSIBLE
     // can't use @VisibleForTesting for scala test classes like ColumnStatsIndexHelper
+    // TODO: add a TestStrategy for test-use only
+    // TODO: Revisit this for some usages where basePath is not accessible
   }
 
   @Override

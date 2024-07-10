@@ -30,25 +30,31 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.util.StorageIOUtils;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.storage.strategy.StorageStrategy;
 
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
 
+  // TODO: Remove this method and force to pass storage strategy in or use default strategy
   public static HoodieStorage getStorage(StorageConfiguration<?> conf) {
-    return getStorage(DEFAULT_URI, conf);
+    return getStorage(DEFAULT_URI, conf, new DefaultStorageStrategy());
   }
 
+  // TODO: Remove this method and force to pass storage strategy in or use default strategy
   public static HoodieStorage getStorage(String basePath, StorageConfiguration<?> conf) {
     return getStorage(new StoragePath(basePath), conf);
   }
 
+  // TODO: Remove this method and force to pass storage strategy in or use default strategy
   public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
     String storageClass = conf.getString(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key())
         .orElse(HoodieStorageConfig.HOODIE_STORAGE_CLASS.defaultValue());
     try {
       return (HoodieStorage) ReflectionUtils.loadClass(
-          storageClass, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf);
+          storageClass,
+          new Class<?>[] {StoragePath.class, StorageConfiguration.class, StorageStrategy.class},
+          path, conf, new DefaultStorageStrategy());
     } catch (Exception e) {
       throw new HoodieException("Unable to create " + storageClass, e);
     }
@@ -67,7 +73,9 @@ public class HoodieStorageUtils {
         .orElse(HoodieStorageConfig.HOODIE_STORAGE_CLASS.defaultValue());
     try {
       return (HoodieStorage) ReflectionUtils.loadClass(
-          storageClass, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf, storageStrategy);
+          storageClass,
+          new Class<?>[] {StoragePath.class, StorageConfiguration.class, StorageStrategy.class},
+          path, conf, storageStrategy);
     } catch (Exception e) {
       throw new HoodieException("Unable to create " + storageClass, e);
     }
