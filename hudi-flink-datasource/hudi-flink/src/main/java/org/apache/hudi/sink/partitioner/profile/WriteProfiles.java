@@ -103,7 +103,7 @@ public class WriteProfiles {
       Configuration hadoopConf,
       List<HoodieCommitMetadata> metadataList,
       HoodieTableType tableType) {
-    return getFilesFromMetadata(basePath, hadoopConf, metadataList, tableType, true);
+    return getFilesFromMetadata(storageStrategy, basePath, hadoopConf, metadataList, tableType, true);
   }
 
   /**
