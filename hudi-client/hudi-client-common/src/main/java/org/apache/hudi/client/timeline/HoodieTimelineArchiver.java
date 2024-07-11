@@ -393,13 +393,16 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private Option<String> getEarliestCommitToNotArchive(HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
     // if clean policy is based on file versions, earliest commit to not archive may not be set. So, we have to explicitly check the savepoint timeline
     // and guard against the first one.
-    String earliestInstantToNotArchive = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(null);
+    String firstSavepoint = table.getCompletedSavepointTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(null);
+    String earliestInstantToNotArchive = firstSavepoint;
+    Option<String> cleanerEarliestInstantToNotArchive = Option.empty();
+    Option<HoodieInstant> cleanInstantOpt = Option.empty();
     if (config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
-      Option<HoodieInstant> cleanInstantOpt =
+      cleanInstantOpt =
           activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
       if (cleanInstantOpt.isPresent()) {
         HoodieInstant cleanInstant = cleanInstantOpt.get();
-        Option<String> cleanerEarliestInstantToNotArchive = Option.ofNullable(CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
+        cleanerEarliestInstantToNotArchive = Option.ofNullable(CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
                     ? cleanInstant
                     : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
                 .getExtraMetadata())
@@ -411,6 +414,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         earliestInstantToNotArchive = HoodieTimeline.minTimestamp(earliestInstantToNotArchive, cleanInstant.getTimestamp());
       }
     }
+    LOG.info("Using earliestInstantToNotArchive as {}, given first savepoint {}, clean instant {}, cleanerEarliestInstantToNotArchive {}",
+        earliestInstantToNotArchive, firstSavepoint, cleanInstantOpt, cleanerEarliestInstantToNotArchive);
     return Option.ofNullable(earliestInstantToNotArchive);
   }
 

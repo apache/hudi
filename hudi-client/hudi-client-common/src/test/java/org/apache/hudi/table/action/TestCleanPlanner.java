@@ -150,8 +150,8 @@ public class TestCleanPlanner {
   void testPartitionsForIncrCleaning(boolean isPartitioned, HoodieWriteConfig config, String earliestInstant,
                                      String lastCompletedTimeInLastClean, String lastCleanInstant, String earliestInstantsInLastClean, List<String> partitionsInLastClean,
                                      Map<String, List<String>> savepointsTrackedInLastClean, Option<String> expectedEarliestCommitToNotArchiveInLastClean,
-                                     Map<String, List<String>> activeInstantsPartitions, Map<String, List<String>> savepoints, List<String> expectedPartitions,
-                                     boolean areCommitsForSavepointsRemoved) throws IOException, IllegalAccessException {
+                                     Map<String, List<String>> activeInstantsPartitions, List<String> replaceCommits, List<String> expectedPartitions, boolean areCommitsForSavepointsRemoved,
+                                     Map<String, List<String>> savepoints) throws IOException, IllegalAccessException {
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     when(mockHoodieTable.getActiveTimeline()).thenReturn(activeTimeline);
     // setup savepoint mocks
@@ -170,7 +170,7 @@ public class TestCleanPlanner {
         getCleanCommitMetadata(partitionsInLastClean, lastCleanInstant, earliestInstantsInLastClean, lastCompletedTimeInLastClean,
             savepointsTrackedInLastClean.keySet(), expectedEarliestCommitToNotArchiveInLastClean);
     mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadataOptionPair);
-    mockFewActiveInstants(mockHoodieTable, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved);
+    mockFewActiveInstants(mockHoodieTable, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved, replaceCommits);
 
     // mock getAllPartitions
     HoodieStorage storage = mock(HoodieStorage.class);
@@ -402,60 +402,81 @@ public class TestCleanPlanner {
     // earliest commit to not archive is same as earliestInstant here because there are no savepoints in the timeline
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1), Collections.emptyMap(), Option.of(earliestInstant),
-        activeInstantsPartitionsMap3, Collections.emptyMap(), threePartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap3, Collections.emptyList(), threePartitionsInActiveTimeline, false, Collections.emptyMap()));
 
     // a new savepoint is added after last clean. but rest of uncleaned touches all partitions, and so all partitions are expected
     // earliest commit to not archive is same as savepoint2 since savepoint2 was added to the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1), Collections.emptyMap(), Option.of(savepoint2),
-        activeInstantsPartitionsMap3, Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), threePartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap3, Collections.singletonList(earliestInstantMinusThreeDays), threePartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1))));
+
+    // a new savepoint is added after last clean. but rest of uncleaned touches all partitions, and so all partitions are expected
+    // earliest commit to not archive is same as earliestInstant even though savepoint2 was added to the timeline. This is because there
+    // there are no replace commits between the savepoint and earliestInstant which is the earliestInstantToRetain
+    arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
+        earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1), Collections.emptyMap(), Option.of(earliestInstant),
+        activeInstantsPartitionsMap3, Collections.emptyList(), threePartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1))));
 
     // previous clean tracks a savepoint which exists in timeline still. only 2 partitions are touched by uncleaned instants. only 2 partitions are expected
     // earliest commit to not archive is same as savepoint2 since savepoint2 is part of the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.of(savepoint2),
-        activeInstantsPartitionsMap2, Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), twoPartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap2, Collections.singletonList(earliestInstantMinusThreeDays), twoPartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1))));
 
     // savepoint tracked in previous clean was removed(touching partition1). latest uncleaned touched 2 other partitions. But when savepoint is removed, entire list of partitions are expected.
     // earliest commit to not archive is same as earliestInstant since there is no savepoint in the timeline
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.of(earliestInstant),
-        activeInstantsPartitionsMap2, Collections.emptyMap(), threePartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap2, Collections.emptyList(), threePartitionsInActiveTimeline, false, Collections.emptyMap()));
 
     // previous savepoint still exists and touches partition1. uncleaned touches only partition2 and partition3. expected partition2 and partition3.
     // earliest commit to not archive is same as savepoint2 since savepoint2 is part of the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.of(savepoint2),
-        activeInstantsPartitionsMap2, Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), twoPartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap2, Collections.singletonList(earliestInstantMinusThreeDays), twoPartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1))));
 
     // a new savepoint was added compared to previous clean. all 2 partitions are expected since uncleaned commits touched just 2 partitions.
     // earliest commit to not archive is same as savepoint3 since savepoint3 is the oldest savepoint timestamp in the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     Map<String, List<String>> latestSavepoints = new HashMap<>();
     latestSavepoints.put(savepoint3, Collections.singletonList(PARTITION1));
     latestSavepoints.put(savepoint2, Collections.singletonList(PARTITION1));
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION1)), Option.of(savepoint3),
-        activeInstantsPartitionsMap2, latestSavepoints, twoPartitionsInActiveTimeline, false));
+        activeInstantsPartitionsMap2, Collections.singletonList(earliestInstantMinusThreeDays), twoPartitionsInActiveTimeline, false, latestSavepoints));
 
     // 2 savepoints were tracked in previous clean. one of them is removed in latest. When savepoint is removed, entire list of partitions are expected.
     // earliest commit to not archive is same as savepoint3 since savepoint3 is part of the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     Map<String, List<String>> previousSavepoints = new HashMap<>();
     previousSavepoints.put(savepoint2, Collections.singletonList(PARTITION1));
     previousSavepoints.put(savepoint3, Collections.singletonList(PARTITION2));
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
-        previousSavepoints, Option.of(savepoint3), activeInstantsPartitionsMap2, Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION2)), threePartitionsInActiveTimeline, false));
+        previousSavepoints, Option.of(savepoint3), activeInstantsPartitionsMap2, Collections.singletonList(earliestInstantMinusThreeDays), threePartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION2))
+    ));
 
     // 2 savepoints were tracked in previous clean. one of them is removed in latest. But a partition part of removed savepoint is already touched by uncleaned commits.
     // Anyways, when savepoint is removed, entire list of partitions are expected.
     // earliest commit to not archive is same as savepoint3 since savepoint3 is part of the timeline
+    // and there is a replace commit earliestInstantMinusThreeDays after the savepoint but before earliestInstant (earliestInstantToRetain)
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
-        previousSavepoints, Option.of(savepoint3), activeInstantsPartitionsMap3, Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION2)), threePartitionsInActiveTimeline, false));
+        previousSavepoints, Option.of(savepoint3), activeInstantsPartitionsMap3, Collections.singletonList(earliestInstantMinusThreeDays), threePartitionsInActiveTimeline, false,
+        Collections.singletonMap(savepoint3, Collections.singletonList(PARTITION2))
+    ));
 
     // unpartitioned test case. savepoint removed.
     List<String> unPartitionsInActiveTimeline = Arrays.asList(StringUtils.EMPTY_STRING);
@@ -466,7 +487,7 @@ public class TestCleanPlanner {
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(false,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(StringUtils.EMPTY_STRING),
         Collections.singletonMap(savepoint2, Collections.singletonList(StringUtils.EMPTY_STRING)), Option.of(earliestInstant),
-        activeInstantsUnPartitionsMap, Collections.emptyMap(), unPartitionsInActiveTimeline, false));
+        activeInstantsUnPartitionsMap, Collections.emptyList(), unPartitionsInActiveTimeline, false, Collections.emptyMap()));
 
     // savepoint tracked in previous clean was removed(touching partition1). active instants does not have the instant corresponding to the savepoint.
     // latest uncleaned touched 2 other partitions. But when savepoint is removed, entire list of partitions are expected.
@@ -475,7 +496,7 @@ public class TestCleanPlanner {
     arguments.addAll(buildArgumentsForCleanByHoursAndCommitsIncrCleanPartitionsCases(true,
         earliestInstant, lastCompletedInLastClean, lastCleanInstant, earliestInstantInLastClean, Collections.singletonList(PARTITION1),
         Collections.singletonMap(savepoint2, Collections.singletonList(PARTITION1)), Option.of(earliestInstant),
-        activeInstantsPartitionsMap2, Collections.emptyMap(), threePartitionsInActiveTimeline, true));
+        activeInstantsPartitionsMap2, Collections.emptyList(), threePartitionsInActiveTimeline, true, Collections.emptyMap()));
 
     return arguments.stream();
   }
@@ -518,15 +539,16 @@ public class TestCleanPlanner {
                                                                                                  Map<String, List<String>> savepointsTrackedInLastClean,
                                                                                                  Option<String> expectedEarliestCommitToNotArchiveInLastClean,
                                                                                                  Map<String, List<String>> activeInstantsToPartitionsMap,
-                                                                                                 Map<String, List<String>> savepoints,
+                                                                                                 List<String> replaceCommits,
                                                                                                  List<String> expectedPartitions,
-                                                                                                 boolean areCommitsForSavepointsRemoved) {
+                                                                                                 boolean areCommitsForSavepointsRemoved,
+                                                                                                 Map<String, List<String>> savepoints) {
     return Arrays.asList(Arguments.of(isPartitioned, getCleanByHoursConfig(), earliestInstant, latestCompletedInLastClean, lastKnownCleanInstantTime,
             earliestInstantInLastClean, partitionsInLastClean, savepointsTrackedInLastClean, expectedEarliestCommitToNotArchiveInLastClean,
-            activeInstantsToPartitionsMap, savepoints, expectedPartitions, areCommitsForSavepointsRemoved),
+            activeInstantsToPartitionsMap, replaceCommits, expectedPartitions, areCommitsForSavepointsRemoved, savepoints),
         Arguments.of(isPartitioned, getCleanByCommitsConfig(), earliestInstant, latestCompletedInLastClean, lastKnownCleanInstantTime,
             earliestInstantInLastClean, partitionsInLastClean, savepointsTrackedInLastClean, expectedEarliestCommitToNotArchiveInLastClean,
-            activeInstantsToPartitionsMap, savepoints, expectedPartitions, areCommitsForSavepointsRemoved));
+            activeInstantsToPartitionsMap, replaceCommits, expectedPartitions, areCommitsForSavepointsRemoved, savepoints));
   }
 
   private static HoodieFileGroup buildFileGroup(List<String> baseFileCommitTimes) {
@@ -615,7 +637,7 @@ public class TestCleanPlanner {
   }
 
   private static void mockFewActiveInstants(HoodieTable hoodieTable, Map<String, List<String>> activeInstantsToPartitions,
-                                            Map<String, List<String>> savepointedCommitsToAdd, boolean areCommitsForSavepointsRemoved)
+                                            Map<String, List<String>> savepointedCommitsToAdd, boolean areCommitsForSavepointsRemoved, List<String> replaceCommits)
       throws IOException {
     HoodieDefaultTimeline commitsTimeline = new HoodieDefaultTimeline();
     List<HoodieInstant> instants = new ArrayList<>();
@@ -642,6 +664,13 @@ public class TestCleanPlanner {
 
     commitsTimeline.setInstants(instants);
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(commitsTimeline);
+
+    HoodieDefaultTimeline completedReplaceTimeline = new HoodieDefaultTimeline();
+    List<HoodieInstant> completedReplaceInstants = replaceCommits.stream().map(rc -> new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, rc))
+        .collect(Collectors.toList());
+    completedReplaceTimeline.setInstants(completedReplaceInstants);
+
+    when(hoodieTable.getActiveTimeline().getCompletedReplaceTimeline()).thenReturn(completedReplaceTimeline);
     when(hoodieTable.isPartitioned()).thenReturn(true);
     when(hoodieTable.isMetadataTable()).thenReturn(false);
   }

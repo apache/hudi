@@ -90,7 +90,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private transient HoodieEngineContext context;
   private List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
-  private Option<String> earliestCommitToNotArchive = Option.empty();
+  private Option<String> earliestCommitToNotArchiveOpt = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -570,32 +570,44 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   public Option<String> getEarliestCommitToNotArchive() {
     // compute only if not set
-    if (!earliestCommitToNotArchive.isPresent() && config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) { // earliest commit to retain and earliest commit to not archive
+    if (!earliestCommitToNotArchiveOpt.isPresent() && config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) { // earliest commit to retain and earliest commit to not archive
       // makes sense only when clean policy is num commits based or hours based.
       Option<HoodieInstant> earliestToRetain = getEarliestCommitToRetain();
+      String earliestCommitToNotArchive = null;
       if (!savepointedTimestamps.isEmpty()) { // if savepoints are found.
         // find the first savepoint timestamp
-        earliestCommitToNotArchive = Option.fromJavaOptional(savepointedTimestamps.stream().sorted().findFirst());
+        String firstSavepoint = savepointedTimestamps.stream().sorted().findFirst().get();
+        earliestCommitToNotArchive = firstSavepoint;
 
         // earliest commit to not archive = min (earliest commit to retain, earliest commit to not archive)
         if (earliestToRetain.isPresent()) {
-          earliestCommitToNotArchive = Option.of(HoodieTimeline.minTimestamp(earliestToRetain.get().getTimestamp(), earliestCommitToNotArchive.get()));
+          String earliestToRetainTimestamp = earliestToRetain.get().getTimestamp();
+          // When earliestToRetainTimestamp is greater than first savepoint timestamp but there are no
+          // replace commits between the first savepoint and the earliestToRetainTimestamp, we can set the
+          // earliestCommitToNotArchive to earliestToRetainTimestamp
+          if (HoodieTimeline.compareTimestamps(earliestToRetainTimestamp, HoodieTimeline.GREATER_THAN, firstSavepoint)) {
+            HoodieTimeline replaceTimeline = hoodieTable.getActiveTimeline().getCompletedReplaceTimeline().findInstantsInClosedRange(firstSavepoint, earliestToRetainTimestamp);
+            earliestCommitToNotArchive = replaceTimeline.empty() ? earliestToRetainTimestamp : firstSavepoint;
+            LOG.info(String.format("Setting Earliest Commit to Not Archive to %s since replace timeline is empty, earliestCommitToRetain: %s, total list of savepointed timestamps : %s",
+                earliestCommitToNotArchive, earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
+          } else {
+            earliestCommitToNotArchive = earliestToRetainTimestamp;
+            LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive,
+                earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
+          }
         }
-        LOG.info(String.format("Setting Earliest Commit to Not Archive to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s", earliestCommitToNotArchive.get(),
-            earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
       } else {
         // no savepoints found.
         // lets set the value regardless. Would help us differentiate older versions of hudi where this will not be set vs latest version where this will be set to either earliest savepoint
         // or the earliest commit to retain.
         if (earliestToRetain.isPresent()) {
           LOG.info(String.format("Setting Earliest Commit to Not Archive same as Earliest commit to retain to %s", earliestToRetain.get().getTimestamp()));
-          earliestCommitToNotArchive = Option.of(earliestToRetain.get().getTimestamp());
-        } else {
-          earliestCommitToNotArchive = Option.empty();
+          earliestCommitToNotArchive = earliestToRetain.get().getTimestamp();
         }
       }
+      earliestCommitToNotArchiveOpt = Option.ofNullable(earliestCommitToNotArchive);
     }
-    return earliestCommitToNotArchive;
+    return earliestCommitToNotArchiveOpt;
   }
 
   /**
