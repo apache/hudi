@@ -42,23 +42,26 @@ No major changes in this release. Refer to [1.0.0-beta1#timeline](release-1.0.0-
 In addition to the fields in the log file header added in [1.0.0-beta1](release-1.0.0-beta1.md#log-file-format), we also
 store a flag, `IS_PARTIAL` to indicate whether the log block contains [partial updates](TODO: add link) or not.
 
-### Partial Updates
+### Metadata indexes
 
-Partial updates are a new feature in Hudi 1.0.0-beta2. Partial updates allow users to update only a subset of columns in
-a record, without having to write the entire record. This is particularly useful when dealing with large records, where
-only a few columns need to be updated. Partial updates are supported in both Copy-On-Write (COW) and Merge-On-Read (MOR)
-tables? (TODO: confirm this).
+In 1.0.0-beta1, we added support for functional index. In 1.0.0-beta2, we have added support for secondary indexes and
+partition stats index to the [multi-modal indexing](/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) subsystem.
 
-### Secondary Indexes
+#### Secondary Indexes
 
-Secondary indexes are a new feature in Hudi 1.0.0-beta2. Secondary indexes allow users to create indexes on columns that
-are not part of record key columns in Hudi tables (for record key fields, Hudi
-supports [Record-level Index](../blog/2023-11-01-record-level-index.md)). Secondary indexes can be used to speed up
-queries with predicate on columns other than record key columns. Secondary indexes are supported in both Copy-On-Write (
-COW) and Merge-On-Read (MOR) tables.
+Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for 
+record key fields, Hudi supports [Record-level Index](../blog/2023-11-01-record-level-index.md)). Secondary indexes can be used to speed up
+queries with predicate on columns other than record key columns.
 
-### Partition Stats Index
+#### Partition Stats Index
 
-Partition stats index is a new feature in Hudi 1.0.0-beta2. Partition stats index allows users to create indexes on
-partition columns in Hudi tables. Partition stats index can be used to speed up queries with predicate on partition
-columns. Partition stats index is supported in both Copy-On-Write (COW) and Merge-On-Read (MOR) tables.
+Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
+in efficient partition pruning even for non-partition fields.
+
+To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-index).
+
+### API Changes
+
+In 1.0.0-beta1, we added a new [filegroup reader](/releases/release-1.0.0-beta1#new-filegroup-reader) which provides
+position-based merging, in addition to existing key-based merging, and skipping pages based on positions. In this
+release, we have integrated this reader with Hive. Presto and Trino integration are in the works. 

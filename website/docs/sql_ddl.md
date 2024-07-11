@@ -328,6 +328,85 @@ Project [city#2970, fare#2969, rider#2967, driver#2968], Statistics(sizeInBytes=
 ```
 </details>
 
+#### Create Partition Stats and Secondary Index
+
+Hudi supports various [indexes](/docs/next/metadata#metadata-table-indices). Let us see how we can use them in the following example.
+
+```sql
+DROP TABLE IF EXISTS hudi_table;
+-- Let us create a table with multiple partition fields, and enable record index and partition stats index 
+CREATE TABLE hudi_table (
+    ts BIGINT,
+    id STRING,
+    rider STRING,
+    driver STRING,
+    fare DOUBLE,
+    city STRING,
+    state STRING
+) USING hudi
+ OPTIONS(
+    primaryKey ='id',
+    hoodie.metadata.record.index.enable = 'true',
+    hoodie.metadata.index.column.stats.column.list = 'rider',
+    hoodie.metadata.index.partition.stats.enable = 'true'
+)
+PARTITIONED BY (city, state)
+LOCATION 'file:///tmp/hudi_test_table';
+
+INSERT INTO hudi_table VALUES (1695159649,'trip1','rider-A','driver-K',19.10,'san_francisco','california');
+INSERT INTO hudi_table VALUES (1695091554,'trip2','rider-C','driver-M',27.70,'sunnyvale','california');
+INSERT INTO hudi_table VALUES (1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas');
+INSERT INTO hudi_table VALUES (1695516137,'trip4','rider-F','driver-P',34.15,'houston','texas');
+
+-- Enable data skipping for the reader
+set hoodie.metadata.enable=true;
+set hoodie.enable.data.skipping=true;
+    
+-- simple partition predicate --
+select * from hudi_table where city = 'sunnyvale';
+20240710215107477	20240710215107477_0_0	trip2	city=sunnyvale/state=california	1dcb14a9-bc4a-4eac-aab5-015f2254b7ec-0_0-40-75_20240710215107477.parquet	1695091554	trip2	rider-C	driver-M	27.7	sunnyvale	california
+Time taken: 0.58 seconds, Fetched 1 row(s)
+
+-- simple partition predicate on other partition field --
+select * from hudi_table where state = 'texas';
+20240710215119846	20240710215119846_0_0	trip4	city=houston/state=texas	08c6ed2c-a87b-4798-8f70-6d8b16cb1932-0_0-74-133_20240710215119846.parquet	1695516137	trip4	rider-F	driver-P	34.15	houston	texas
+20240710215110584	20240710215110584_0_0	trip3	city=austin/state=texas	0ab2243c-cc08-4da3-8302-4ce0b4c47a08-0_0-57-104_20240710215110584.parquet	1695332066	trip3	rider-E	driver-O	93.5	austin	texas
+Time taken: 0.124 seconds, Fetched 2 row(s)
+
+-- predicate on a column for which partition stats are present --
+select id, rider, city, state from hudi_table where rider > 'rider-D';
+trip4	rider-F	houston	texas
+trip3	rider-E	austin	texas
+Time taken: 0.703 seconds, Fetched 2 row(s)
+      
+-- record key predicate --
+SELECT id, rider, driver FROM hudi_table WHERE id = 'trip1';
+trip1	rider-A	driver-K
+Time taken: 0.368 seconds, Fetched 1 row(s)
+      
+-- create secondary index on driver --
+CREATE INDEX driver_idx ON hudi_table USING secondary_index(driver);
+
+-- secondary key predicate --
+SELECT id, driver, city, state FROM hudi_table WHERE driver IN ('driver-K', 'driver-M');
+trip1	driver-K	san_francisco	california
+trip2	driver-M	sunnyvale	california
+Time taken: 0.83 seconds, Fetched 2 row(s)
+```
+
+**Limitations of using these indexes:**
+
+- Unlike column stats, partition stats index is not created automatically for all columns. Users must specify list of
+  columns for which they want to create partition stats index.
+- Predicate on internal meta fields such as `_hoodie_record_key` or `_hoodie_partition_path` cannot be used in for data
+  skipping.
+- Secondary index is not supported for nested fields.
+- Index update can fail with schema evolution.
+
+Limitations will be addressed before 1.0.0 is made generally available.
+
+#### Create Multiple Indexes on a Table
+
 ### Setting Hudi configs 
 
 There are different ways you can pass the configs for a given hudi table. 
