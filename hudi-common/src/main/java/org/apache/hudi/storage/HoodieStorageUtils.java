@@ -100,10 +100,10 @@ public class HoodieStorageUtils {
   }
 
   public static StorageStrategy getStorageStrategy(TypedProperties props) {
-    String storageStrategyClass = props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key());
-    String basePath = HoodieCommonConfig.BASE_PATH.key();
-    String tableName = HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
-    String storagePrefix = HoodieStorageConfig.STORAGE_PREFIX.key();
+    String storageStrategyClass = props.getString(HoodieStorageConfig.STORAGE_STRATEGY_CLASS.key(), null);
+    String basePath = props.getString(HoodieCommonConfig.BASE_PATH.key(), null);
+    String tableName = props.getString(HoodieCommonConfig.BASE_PATH.key(), null);
+    String storagePrefix = props.getString(HoodieCommonConfig.BASE_PATH.key(), null);
     if (isNullOrEmpty(storageStrategyClass)) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("hoodie.storage.strategy.class is not set in the props, falling back to default strategy");
