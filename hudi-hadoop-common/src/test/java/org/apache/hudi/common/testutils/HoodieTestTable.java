@@ -138,7 +138,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Test Hoodie Table for testing only.
  */
-public class HoodieTestTable {
+public class HoodieTestTable implements AutoCloseable {
 
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
@@ -1334,6 +1334,11 @@ public class HoodieTestTable {
     return writeStats;
   }
 
+  @Override
+  public void close() throws Exception {
+    // no-op
+  }
+
   /**
    * Exception for {@link HoodieTestTable}.
    */
@@ -1440,4 +1445,5 @@ public class HoodieTestTable {
       return this.commitsToPartitionToLogFileInfoStats.get(commitTime);
     }
   }
+
 }
