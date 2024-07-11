@@ -639,13 +639,13 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
-      // make next replacecommit, with 1 clustering operation. logically delete p0. No change to p1
-      // notice that clustering generates empty inflight commit files
-      Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
-      String file2P0C1 = partitionAndFileId002.get(p0);
-      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
-          generateReplaceCommitMetadata("00000000000002", p0, file1P0C0, file2P0C1);
-      testTable.addCluster("00000000000002", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
+    // make next replacecommit, with 1 clustering operation. logically delete p0. No change to p1
+    // notice that clustering generates empty inflight commit files
+    Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+        generateReplaceCommitMetadata("00000000000002", p0, file1P0C0, file2P0C1);
+    testTable.addCluster("00000000000002", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsTwo = runCleanerWithInstantFormat(config, true);
@@ -654,12 +654,12 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
-      // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
-      // notice that clustering generates empty inflight commit files
-      Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
-      String file3P1C2 = partitionAndFileId003.get(p1);
-      replaceMetadata = generateReplaceCommitMetadata("00000000000003", p1, file1P1C0, file3P1C2);
-      testTable.addCluster("00000000000003", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
+    // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
+    // notice that clustering generates empty inflight commit files
+    Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
+    String file3P1C2 = partitionAndFileId003.get(p1);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000003", p1, file1P1C0, file3P1C2);
+    testTable.addCluster("00000000000003", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsThree = runCleanerWithInstantFormat(config, true);
@@ -669,12 +669,12 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertTrue(testTable.baseFileExists(p1, "00000000000003", file3P1C2));
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
-      // make next replacecommit, with 1 clustering operation. Replace data in p0 again
-      // notice that clustering generates empty inflight commit files
-      Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
-      String file4P0C3 = partitionAndFileId004.get(p0);
-      replaceMetadata = generateReplaceCommitMetadata("00000000000004", p0, file2P0C1, file4P0C3);
-      testTable.addCluster("00000000000004", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
+    // make next replacecommit, with 1 clustering operation. Replace data in p0 again
+    // notice that clustering generates empty inflight commit files
+    Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
+    String file4P0C3 = partitionAndFileId004.get(p0);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000004", p0, file2P0C1, file4P0C3);
+    testTable.addCluster("00000000000004", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
     List<HoodieCleanStat> hoodieCleanStatsFour = runCleaner(config, 5, true);
@@ -685,12 +685,12 @@ public class TestCleaner extends HoodieCleanerTestBase {
     //file1P1C0 still stays because its not replaced until 3 and its the only version available
     assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
 
-      // make next replacecommit, with 1 clustering operation. Replace all data in p1. no new files created
-      // notice that clustering generates empty inflight commit files
-      Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000006").getFileIdsWithBaseFilesInPartitions(p1);
-      String file4P1C4 = partitionAndFileId005.get(p1);
-      replaceMetadata = generateReplaceCommitMetadata("00000000000006", p0, file3P1C2, file4P1C4);
-      testTable.addCluster("00000000000006", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
+    // make next replacecommit, with 1 clustering operation. Replace all data in p1. no new files created
+    // notice that clustering generates empty inflight commit files
+    Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000006").getFileIdsWithBaseFilesInPartitions(p1);
+    String file4P1C4 = partitionAndFileId005.get(p1);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000006", p0, file3P1C2, file4P1C4);
+    testTable.addCluster("00000000000006", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 7, true);
     assertTrue(testTable.baseFileExists(p0, "00000000000004", file4P0C3));
