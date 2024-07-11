@@ -48,6 +48,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -97,6 +98,364 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         Arguments.of(false, false, true, false),
         Arguments.of(false, false, false, true)
     );
+  }
+
+  private static Stream<Arguments> argumentsForTestTriggerCleanEveryNCommits() {
+    return Stream.of(
+        Arguments.of(1),
+        Arguments.of(2),
+        Arguments.of(3),
+        Arguments.of(4)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsForTestTriggerCleanEveryNCommits")
+  public void testTriggerCleanEveryNthCommit(int minCommitsToTriggerClean) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(1)
+            .withMaxCommitsBeforeCleaning(minCommitsToTriggerClean)
+            .build()).build();
+
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+
+    // make 1 commit, with 1 file per partition
+    String file1P0C0 = UUID.randomUUID().toString();
+    String file1P1C0 = UUID.randomUUID().toString();
+    testTable.addInflightCommit("00000000000001").withBaseFilesInPartition(p0, file1P0C0);
+    testTable.withBaseFilesInPartition(p1, file1P1C0);
+
+    HoodieCommitMetadata commitMetadata = generateCommitMetadata("00000000000001",
+        Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+          {
+            put(p0, CollectionUtils.createImmutableList(file1P0C0));
+            put(p1, CollectionUtils.createImmutableList(file1P1C0));
+          }
+        })
+    );
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000001"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<HoodieCleanStat> hoodieCleanStatsOne =
+        runCleaner(config, false, false, 2, true);
+    assertEquals(0, hoodieCleanStatsOne.size(), "Must not scan any partitions and clean any files");
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+
+    // make next commit, with 1 insert & 1 update per partition
+    Map<String, String> partitionAndFileId002 = testTable.addInflightCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p0, p1);
+    String file2P0C1 = partitionAndFileId002.get(p0);
+    String file2P1C1 = partitionAndFileId002.get(p1);
+    testTable.forCommit("00000000000003").withBaseFilesInPartition(p0, file1P0C0);
+    testTable.withBaseFilesInPartition(p1, file1P1C0);
+    commitMetadata = generateCommitMetadata("00000000000003", new HashMap<String, List<String>>() {
+      {
+        put(p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1));
+        put(p1, CollectionUtils.createImmutableList(file1P1C0, file2P1C1));
+      }
+    });
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000003"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    List<HoodieCleanStat> hoodieCleanStatsTwo =
+        runCleaner(config, false, false, 4, true);
+    assertEquals(0, hoodieCleanStatsTwo.size(), "Must not clean any file. We have to keep 1 version before the latest commit time");
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000003", file2P1C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    testTable.addInflightCommit("00000000000005").withBaseFilesInPartition(p0, file1P0C0);
+    testTable.withBaseFilesInPartition(p0, file2P0C1);
+    String file3P0C2 = testTable.getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    commitMetadata = generateCommitMetadata("00000000000005",
+        Collections.singletonMap(
+            p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file3P0C2)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000005"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    List<HoodieCleanStat> hoodieCleanStatsThree =
+        runCleaner(config, false, false, 6, true);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+      case 2:
+      case 3:
+        assertEquals(2, hoodieCleanStatsThree.size(), "Must clean at least 1 files");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+        break;
+      case 4:
+        assertEquals(0, hoodieCleanStatsThree.size(),
+            "Must not clean any file. Only 3 commits have occurred, need at least 4 for cleaning to trigger");
+        assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        break;
+      default:
+    }
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    testTable.addInflightCommit("00000000000007").withBaseFilesInPartition(p0, file1P0C0);
+    testTable.withBaseFilesInPartition(p0, file2P0C1);
+    String file4P0C3 = testTable.getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    commitMetadata = generateCommitMetadata("00000000000007",
+        Collections.singletonMap(
+            p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file4P0C3)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000007"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+    List<HoodieCleanStat> hoodieCleanStatsFour =
+        runCleaner(config, false, false, 8, true);
+    HoodieCleanStat partitionZeroCleanStat = getCleanStat(hoodieCleanStatsFour, p0);
+    HoodieCleanStat partitionOneCleanStat = getCleanStat(hoodieCleanStatsFour, p1);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+        assertEquals(2, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        break;
+      case 2:
+      case 3:
+        assertEquals(0, hoodieCleanStatsFour.size(),
+            "Must not clean any file. Only one commit has happened since the last clean!");
+        break;
+      case 4:
+        assertEquals(3, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
+        assertEquals(1, partitionOneCleanStat.getSuccessDeleteFiles().size());
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        break;
+      default:
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    testTable.addInflightCommit("00000000000009").withBaseFilesInPartition(p0, file1P0C0);
+    testTable.withBaseFilesInPartition(p0, file2P0C1);
+    String file5P0C4 = testTable.getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+    commitMetadata = generateCommitMetadata("00000000000009", Collections.singletonMap(
+        p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file5P0C4)));
+    metaClient.getActiveTimeline().saveAsComplete(
+        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000009"),
+        Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+    List<HoodieCleanStat> hoodieCleanStatsFive =
+        runCleaner(config, false, false, 10, true);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+        assertEquals(1, hoodieCleanStatsFive.size(), "Must clean at least one old file");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
+        assertTrue(testTable.baseFileExists(p0, "00000000000007", file1P0C0));
+        break;
+      case 2:
+        assertEquals(1, hoodieCleanStatsFive.size(), "Must clean files written in second and third commits");
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
+        assertTrue(testTable.baseFileExists(p0, "00000000000007", file1P0C0));
+        break;
+      case 3:
+        assertEquals(0, hoodieCleanStatsFive.size(),
+            "Must not clean any file. Only two commits have happened since the last clean!");
+        break;
+      case 4:
+        assertEquals(0, hoodieCleanStatsFive.size(),
+            "Must not clean any file. Only one commit has happened since the last clean!");
+        break;
+      default:
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("argumentsForTestTriggerCleanEveryNCommits")
+  public void testTriggerCleanEveryNthCommitWithMetadataTableEnabled(int minCommitsToTriggerClean) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(1)
+            .withMaxCommitsBeforeCleaning(minCommitsToTriggerClean)
+            .build()).build();
+
+    HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
+    String p0 = "2020/01/01";
+    String p1 = "2020/01/02";
+
+    // make 1 commit, with 1 file per partition
+    String file1P0C0 = UUID.randomUUID().toString();
+    String file1P1C0 = UUID.randomUUID().toString();
+
+    Map<String, List<Pair<String, Integer>>> c1PartitionToFilesNameLengthMap = new HashMap<>();
+    c1PartitionToFilesNameLengthMap.put(p0, Collections.singletonList(Pair.of(file1P0C0, 100)));
+    c1PartitionToFilesNameLengthMap.put(p1, Collections.singletonList(Pair.of(file1P1C0, 200)));
+    testTable.doWriteOperation("00000000000001", WriteOperationType.INSERT, Arrays.asList(p0, p1),
+        c1PartitionToFilesNameLengthMap, false, false);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    List<HoodieCleanStat> hoodieCleanStatsOne =
+        runCleaner(config, false, false, 2, true);
+    assertEquals(0, hoodieCleanStatsOne.size(), "Must not scan any partitions and clean any files");
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+
+    // make next commit, with 1 insert & 1 update per partition
+    final String file2P0C1 = UUID.randomUUID().toString();
+    final String file2P1C1 = UUID.randomUUID().toString();
+    Map<String, List<Pair<String, Integer>>> c2PartitionToFilesNameLengthMap = new HashMap<>();
+    c2PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 101), Pair.of(file2P0C1, 100)));
+    c2PartitionToFilesNameLengthMap.put(p1, Arrays.asList(Pair.of(file1P1C0, 201), Pair.of(file2P1C1, 200)));
+    testTable.doWriteOperation("00000000000003", WriteOperationType.UPSERT, Collections.emptyList(),
+        c2PartitionToFilesNameLengthMap, false, false);
+
+    List<HoodieCleanStat> hoodieCleanStatsTwo =
+        runCleaner(config, false, false, 4, true);
+    assertEquals(0, hoodieCleanStatsTwo.size(), "Must not clean any file. We have to keep 1 version before the latest commit time");
+    assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+    assertTrue(testTable.baseFileExists(p1, "00000000000003", file2P1C1));
+    assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+    assertTrue(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    final String file3P0C2 = UUID.randomUUID().toString();
+    Map<String, List<Pair<String, Integer>>> c3PartitionToFilesNameLengthMap = new HashMap<>();
+    c3PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 102), Pair.of(file2P0C1, 101),
+        Pair.of(file3P0C2, 100)));
+    testTable.doWriteOperation("00000000000005", WriteOperationType.UPSERT, Collections.emptyList(),
+        c3PartitionToFilesNameLengthMap, false, false);
+
+    List<HoodieCleanStat> hoodieCleanStatsThree =
+        runCleaner(config, false, false, 6, true);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+      case 2:
+      case 3:
+        assertEquals(2, hoodieCleanStatsThree.size(), "Must clean at least 1 files");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+        break;
+      case 4:
+        assertEquals(0, hoodieCleanStatsThree.size(),
+            "Must not clean any file. Only 3 commits have occurred, need at least 4 for cleaning to trigger");
+        assertTrue(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        break;
+      default:
+    }
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    final String file4P0C3 = UUID.randomUUID().toString();
+    Map<String, List<Pair<String, Integer>>> c4PartitionToFilesNameLengthMap = new HashMap<>();
+    c4PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 103), Pair.of(file2P0C1, 102),
+        Pair.of(file4P0C3, 100)));
+    testTable.doWriteOperation("00000000000007", WriteOperationType.UPSERT, Collections.emptyList(),
+        c4PartitionToFilesNameLengthMap, false, false);
+
+    assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+    List<HoodieCleanStat> hoodieCleanStatsFour =
+        runCleaner(config, false, false, 8, true);
+    HoodieCleanStat partitionZeroCleanStat = getCleanStat(hoodieCleanStatsFour, p0);
+    HoodieCleanStat partitionOneCleanStat = getCleanStat(hoodieCleanStatsFour, p1);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+        assertEquals(2, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        break;
+      case 2:
+      case 3:
+        assertEquals(0, hoodieCleanStatsFour.size(),
+            "Must not clean any file. Only one commit has happened since the last clean!");
+        break;
+      case 4:
+        assertEquals(3, partitionZeroCleanStat.getSuccessDeleteFiles().size(), "Must clean at least one old file");
+        assertEquals(1, partitionOneCleanStat.getSuccessDeleteFiles().size());
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        break;
+      default:
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // make next commit, with 2 updates to existing files, and 1 insert
+    final String file5P0C4 = UUID.randomUUID().toString();
+    Map<String, List<Pair<String, Integer>>> c5PartitionToFilesNameLengthMap = new HashMap<>();
+    c5PartitionToFilesNameLengthMap.put(p0, Arrays.asList(Pair.of(file1P0C0, 104), Pair.of(file2P0C1, 103),
+        Pair.of(file5P0C4, 100)));
+    testTable.doWriteOperation("00000000000009", WriteOperationType.UPSERT, Collections.emptyList(),
+        c5PartitionToFilesNameLengthMap, false, false);
+
+    List<HoodieCleanStat> hoodieCleanStatsFive =
+        runCleaner(config, false, false, 10, true);
+
+    switch (minCommitsToTriggerClean) {
+      case 1:
+        assertEquals(1, hoodieCleanStatsFive.size(), "Must clean at least one old file");
+        assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
+        assertTrue(testTable.baseFileExists(p0, "00000000000007", file1P0C0));
+        break;
+      case 2:
+        assertEquals(1, hoodieCleanStatsFive.size(), "Must clean files written in second and third commits");
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
+        assertFalse(testTable.baseFileExists(p0, "00000000000005", file2P0C1));
+        assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
+        assertTrue(testTable.baseFileExists(p0, "00000000000007", file1P0C0));
+        break;
+      case 3:
+        assertEquals(0, hoodieCleanStatsFive.size(),
+            "Must not clean any file. Only two commits have happened since the last clean!");
+        break;
+      case 4:
+        assertEquals(0, hoodieCleanStatsFive.size(),
+            "Must not clean any file. Only one commit has happened since the last clean!");
+        break;
+      default:
+    }
   }
 
   /**
@@ -198,6 +557,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
       assertEquals(3, partitionCleanStat.getSuccessDeleteFiles().size());
       assertFalse(testTable.baseFileExists(p0, "00000000000001", file1P0C0));
+      assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
       assertTrue(testTable.baseFileExists(p0, "00000000000003", file1P0C0));
       assertTrue(testTable.baseFileExists(p0, "00000000000005", file1P0C0));
       assertTrue(testTable.baseFileExists(p0, "00000000000003", file2P0C1));
@@ -248,6 +608,24 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       assertNull(cleanStat, "Must not clean any files");
       assertTrue(testTable.baseFileExists(p0, "00000000000005", file3P0C2));
       assertTrue(testTable.baseFileExists(p0, "00000000000007", file4P0C3));
+
+      String file6P0C5 = testTable.addInflightCommit("00000000000013")
+          .withBaseFilesInPartition(p0, file1P0C0)
+          .getKey()
+          .withBaseFilesInPartition(p0, file2P0C1)
+          .getKey()
+          .getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      commitMetadata = generateCommitMetadata("00000000000013", Collections.singletonMap(
+          p0, CollectionUtils.createImmutableList(file1P0C0, file2P0C1, file6P0C5)));
+      metaClient.getActiveTimeline().saveAsComplete(
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "00000000000013"),
+          Option.of(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+
+      List<HoodieCleanStat> hoodieCleanStatsSix =
+          runCleaner(config, simulateFailureRetry, simulateMetadataFailure, 14, true);
+
+      assertEquals(0, hoodieCleanStatsSix.size(), "Must not clean any files since at least 2 commits are needed from last clean operation before "
+          + "clean can be scheduled again");
     }
   }
 
