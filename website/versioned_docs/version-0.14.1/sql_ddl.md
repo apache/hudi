@@ -67,7 +67,10 @@ PARTITIONED BY (dt);
 ```
 
 :::note
-You can also create a table partitioned by multiple fields by supplying comma-separated field names. For, e.g., "partitioned by dt, hh"
+You can also create a table partitioned by multiple fields by supplying comma-separated field names.
+When creating a table partitioned by multiple fields, ensure that you specify the columns in the `PARTITIONED BY` clause
+in the same order as they appear in the `CREATE TABLE` schema. For example, for the above table, the partition fields
+should be specified as `PARTITIONED BY (dt, hh)`.
 :::
 
 ### Create table with record keys and ordering fields

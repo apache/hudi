@@ -296,6 +296,13 @@ partitioned by (dt, hh)
 location '/tmp/hudi/hudi_cow_pt_tbl';
 ```
 
+:::note
+You can also create a table partitioned by multiple fields by supplying comma-separated field names.
+When creating a table partitioned by multiple fields, ensure that you specify the columns in the `PARTITIONED BY` clause
+in the same order as they appear in the `CREATE TABLE` schema. For example, for the above table, the partition fields
+should be specified as `PARTITIONED BY (dt, hh)`.
+:::
+
 **Create Table for an existing Hudi Table**
 
 We can create a table on an existing hudi table(created with spark-shell or deltastreamer). This is useful to
