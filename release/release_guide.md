@@ -422,7 +422,7 @@ Set up a few environment variables to simplify Maven commands that follow. This 
       ./scripts/release/validate_staged_bundles.sh orgapachehudi-<stage_repo_number> ${RELEASE_VERSION}-rc${RC_NUM} 2>&1 | tee -a /tmp/validate_staged_bundles_output.txt
       ```
    9. Run the release candidate bundle validation in GitHub Action by following the instruction in
-      ["Running Bundle Validation on a Release Candidate"](packaging/bundle-validation/README.md).
+      ["Running Bundle Validation on a Release Candidate"](packaging/bundle-validation/README.md#running-bundle-validation-on-a-release-candidate).
 
 ## Checklist to proceed to the next step
 

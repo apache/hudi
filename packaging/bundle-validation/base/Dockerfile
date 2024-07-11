@@ -69,7 +69,7 @@ RUN wget https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent
     && rm $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz
 ENV CONFLUENT_HOME=$WORKDIR/confluent-$CONFLUENT_VERSION
 
-RUN wget https://d1i4a15mxbxib1.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
+RUN wget https://d2p6pa21dvn84.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
     && mkdir $WORKDIR/kafka-connectors \
     && unzip $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -d $WORKDIR/kafka-connectors/ \
     && rm $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip \

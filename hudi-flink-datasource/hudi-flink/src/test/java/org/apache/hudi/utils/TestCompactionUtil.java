@@ -132,6 +132,7 @@ public class TestCompactionUtil {
   void testScheduleCompaction() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_TRIGGER_STRATEGY.key(), FlinkOptions.TIME_ELAPSED);
     options.put(FlinkOptions.COMPACTION_DELTA_SECONDS.key(), "0");
     beforeEach(options);

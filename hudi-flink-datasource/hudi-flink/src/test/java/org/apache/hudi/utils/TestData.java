@@ -560,6 +560,8 @@ public class TestData {
     final OperatorEvent nextEvent = funcWrapper.getNextEvent();
     funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
 
+    funcWrapper.inlineCompaction();
+
     funcWrapper.close();
   }
 

@@ -126,7 +126,7 @@ public enum WriteOperationType {
   /**
    * Whether the operation changes the dataset.
    */
-  public static boolean isDataChange(WriteOperationType operation) {
+  public static boolean yieldChanges(WriteOperationType operation) {
     return operation == WriteOperationType.INSERT
         || operation == WriteOperationType.UPSERT
         || operation == WriteOperationType.UPSERT_PREPPED
@@ -163,5 +163,9 @@ public enum WriteOperationType {
 
   public static boolean isDelete(WriteOperationType operation) {
     return operation == DELETE || operation == DELETE_PREPPED;
+  }
+
+  public static boolean isPreppedWriteOperation(WriteOperationType operationType) {
+    return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
   }
 }

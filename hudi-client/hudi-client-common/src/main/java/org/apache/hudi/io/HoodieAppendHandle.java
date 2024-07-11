@@ -172,7 +172,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     String prevCommit = instantTime;
     String baseFile = "";
     List<String> logFiles = new ArrayList<>();
-    if (config.isCDCEnabled()) {
+    if (hoodieTable.getMetaClient().getTableConfig().isCDCEnabled()) {
       // the cdc reader needs the base file metadata to have deterministic update sequence.
       TableFileSystemView.SliceView rtView = hoodieTable.getSliceView();
       Option<FileSlice> fileSlice = rtView.getLatestFileSlice(partitionPath, fileId);

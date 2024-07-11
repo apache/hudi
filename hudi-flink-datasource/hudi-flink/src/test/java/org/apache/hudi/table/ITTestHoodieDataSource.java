@@ -1459,6 +1459,46 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
   }
 
+  @Test
+  void testReadChangelogIncrementalMor() throws Exception {
+    TableEnvironment tableEnv = streamTableEnv;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString(FlinkOptions.TABLE_NAME, "t1");
+    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.setBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG, false); // calculate the changes on the fly
+    conf.setBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);  // for batch upsert
+    conf.setBoolean(FlinkOptions.CDC_ENABLED, true);
+
+    // write 3 batches of the same data set
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+
+    String latestCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_START_COMMIT, latestCommit)
+        .option(FlinkOptions.CDC_ENABLED, true)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result1, TestData.dataSetUpsert(2, 1));
+
+    // write another 10 batches of dataset
+    for (int i = 0; i < 10; i++) {
+      TestData.writeDataAsBatch(TestData.dataSetInsert(1, 2), conf);
+    }
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    final String query = String.format("select count(*) from t1/*+ options('read.start-commit'='%s')*/", firstCommit);
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery(query).execute().collect());
+    assertRowsEquals(result2.subList(result2.size() - 2, result2.size()), "[-U[1], +U[2]]");
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testIncrementalReadArchivedCommits(HoodieTableType tableType) throws Exception {
