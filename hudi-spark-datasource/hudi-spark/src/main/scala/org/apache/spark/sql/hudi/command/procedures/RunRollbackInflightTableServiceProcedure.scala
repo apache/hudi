@@ -88,7 +88,7 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
       logInfo(s"compaction instant to rollback : ${instant}")
     } else {
       isClustering = true
-      instant = pendingClusteringInstant
+      instant = pendingClusteringInstant.get()
       logInfo(s"clustering instant to rollback : ${instant}")
     }
 

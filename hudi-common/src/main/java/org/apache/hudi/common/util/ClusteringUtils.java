@@ -91,8 +91,8 @@ public class ClusteringUtils {
   }
 
   /**
-   * Returns the pending clustering instant. This can be older pending replace commit or a new
-   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
+   * Returns the pending clustering instant. This can be older requested replace commit or a new
+   * clustering requested commit. After HUDI-7905, all the requested and inflight clustering instants
    * use clustering action instead of replacecommit.
    */
   public static Option<HoodieInstant> getRequestedClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline) {
@@ -103,19 +103,6 @@ public class ClusteringUtils {
     }
     requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(timestamp);
     return Option.ofNullable(pendingReplaceOrClusterTimeline.containsInstant(requestedInstant) ? requestedInstant : null);
-  }
-
-  /**
-   * Returns the pending clustering instant. This can be older pending replace commit or a new
-   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
-   * use clustering action instead of replacecommit.
-   */
-  public static HoodieInstant getRequestedClusteringInstant(HoodieInstant clusteringInflightInstant) {
-    if (clusteringInflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
-      return HoodieTimeline.getClusteringCommitRequestedInstant(clusteringInflightInstant.getTimestamp());
-    } else {
-      return HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInflightInstant.getTimestamp());
-    }
   }
 
   /**
