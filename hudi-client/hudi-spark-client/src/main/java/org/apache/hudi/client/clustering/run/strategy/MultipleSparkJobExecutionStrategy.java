@@ -438,8 +438,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         .toArray(StoragePath[]::new);
 
     HashMap<String, String> params = new HashMap<>();
-    params.put("hoodie.datasource.query.type", "snapshot");
-    params.put(TIMESTAMP_AS_OF.key(), instantTime);
+    if (hasLogFiles) {
+      params.put("hoodie.datasource.query.type", "snapshot");
+    } else {
+      params.put("hoodie.datasource.query.type", "read_optimized");
+    }
 
     StoragePath[] paths;
     if (hasLogFiles) {
