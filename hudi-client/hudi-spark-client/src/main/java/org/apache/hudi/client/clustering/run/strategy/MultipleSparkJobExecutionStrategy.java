@@ -93,7 +93,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.client.utils.SparkPartitionUtils.getPartitionFieldVals;
-import static org.apache.hudi.common.config.HoodieCommonConfig.TIMESTAMP_AS_OF;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFactory;
 
