@@ -1,23 +1,35 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one
+  * or more contributor license agreements.  See the NOTICE file
+  * distributed with this work for additional information
+  * regarding copyright ownership.  The ASF licenses this file
+  * to you under the Apache License, Version 2.0 (the
+  * "License"); you may not use this file except in compliance
+  * with the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package org.apache.hudi.utils;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
@@ -38,112 +50,108 @@ import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * Test cases for {@link ClusteringUtil}.
- */
+/** Test cases for {@link ClusteringUtil}. */
 public class TestClusteringUtil {
 
-  private HoodieFlinkTable<?> table;
-  private HoodieTableMetaClient metaClient;
-  private HoodieFlinkWriteClient<?> writeClient;
-  private Configuration conf;
+    private HoodieFlinkTable<?> table;
+    private HoodieTableMetaClient metaClient;
+    private HoodieFlinkWriteClient<?> writeClient;
+    private Configuration conf;
 
-  @TempDir
-  File tempFile;
+    @TempDir File tempFile;
 
-  void beforeEach() throws IOException {
-    beforeEach(Collections.emptyMap());
-  }
-
-  @AfterEach
-  void afterEach() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
+    void beforeEach() throws IOException {
+        beforeEach(Collections.emptyMap());
     }
-  }
 
-  void beforeEach(Map<String, String> options) throws IOException {
-    this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
-    options.forEach((k, v) -> conf.setString(k, v));
-
-    StreamerUtil.initTableIfNotExists(conf);
-
-    this.table = FlinkTables.createTable(conf);
-    this.metaClient = table.getMetaClient();
-    this.writeClient = FlinkWriteClients.createWriteClient(conf);
-    // init the metadata table if it is enabled
-    if (this.writeClient.getConfig().isMetadataTableEnabled()) {
-      this.writeClient.initMetadataTable();
+    @AfterEach
+    void afterEach() {
+        if (this.writeClient != null) {
+            this.writeClient.close();
+        }
     }
-  }
 
-  @Test
-  void rollbackClustering() throws Exception {
-    beforeEach();
-    List<String> oriInstants = IntStream.range(0, 3)
-        .mapToObj(i -> generateClusteringPlan()).collect(Collectors.toList());
-    List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
-        .stream().filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
-        .collect(Collectors.toList());
-    assertThat("all the instants should be in pending state", instants.size(), is(3));
-    ClusteringUtil.rollbackClustering(table, writeClient);
-    boolean allRolledBack = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
-        .stream().allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
-    assertTrue(allRolledBack, "all the instants should be rolled back");
-    List<String> actualInstants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient())
-        .stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
-    assertThat(actualInstants, is(oriInstants));
-  }
-  
-  @Test
-  void validateClusteringScheduling() throws Exception {
-    beforeEach();
-    ClusteringUtil.validateClusteringScheduling(this.conf);
-    
-    // validate bucket index
-    this.conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
-    ClusteringUtil.validateClusteringScheduling(this.conf);
-  }
+    void beforeEach(Map<String, String> options) throws IOException {
+        this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+        conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+        options.forEach((k, v) -> conf.setString(k, v));
 
-  /**
-   * Generates a clustering plan on the timeline and returns its instant time.
-   */
-  private String generateClusteringPlan() {
-    HoodieClusteringGroup group = new HoodieClusteringGroup();
-    HoodieClusteringPlan plan = new HoodieClusteringPlan(Collections.singletonList(group),
-        HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false);
-    HoodieRequestedReplaceMetadata metadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(),
-        plan, Collections.emptyMap(), 1);
-    String instantTime = table.getMetaClient().createNewInstantTime();
-    HoodieInstant clusteringInstant =
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
-    try {
-      metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
-          TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Exception scheduling clustering", ioe);
+        StreamerUtil.initTableIfNotExists(conf);
+
+        this.table = FlinkTables.createTable(conf);
+        this.metaClient = table.getMetaClient();
+        this.writeClient = FlinkWriteClients.createWriteClient(conf);
+        // init the metadata table if it is enabled
+        if (this.writeClient.getConfig().isMetadataTableEnabled()) {
+            this.writeClient.initMetadataTable();
+        }
     }
-    metaClient.reloadActiveTimeline();
-    return instantTime;
-  }
+
+    @Test
+    void rollbackClustering() throws Exception {
+        beforeEach();
+        List<String> oriInstants =
+                IntStream.range(0, 3).mapToObj(i -> generateClusteringPlan()).collect(Collectors.toList());
+        List<HoodieInstant> instants =
+                ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient()).stream()
+                        .filter(instant -> instant.getState() == HoodieInstant.State.INFLIGHT)
+                        .collect(Collectors.toList());
+        assertThat("all the instants should be in pending state", instants.size(), is(3));
+        ClusteringUtil.rollbackClustering(table, writeClient);
+        boolean allRolledBack =
+                ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient()).stream()
+                        .allMatch(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
+        assertTrue(allRolledBack, "all the instants should be rolled back");
+        List<String> actualInstants =
+                ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient()).stream()
+                        .map(HoodieInstant::getTimestamp)
+                        .collect(Collectors.toList());
+        assertThat(actualInstants, is(oriInstants));
+    }
+
+    @Test
+    void validateClusteringScheduling() throws Exception {
+        beforeEach();
+        ClusteringUtil.validateClusteringScheduling(this.conf);
+
+        // validate bucket index
+        this.conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+        ClusteringUtil.validateClusteringScheduling(this.conf);
+    }
+
+    /** Generates a clustering plan on the timeline and returns its instant time. */
+    private String generateClusteringPlan() {
+        HoodieClusteringGroup group = new HoodieClusteringGroup();
+        HoodieClusteringPlan plan =
+                new HoodieClusteringPlan(
+                        Collections.singletonList(group),
+                        HoodieClusteringStrategy.newBuilder().build(),
+                        Collections.emptyMap(),
+                        1,
+                        false);
+        HoodieRequestedReplaceMetadata metadata =
+                new HoodieRequestedReplaceMetadata(
+                        WriteOperationType.CLUSTER.name(), plan, Collections.emptyMap(), 1);
+        String instantTime = table.getMetaClient().createNewInstantTime();
+        HoodieInstant clusteringInstant =
+                new HoodieInstant(
+                        HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+        try {
+            metaClient
+                    .getActiveTimeline()
+                    .saveToPendingReplaceCommit(
+                            clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));
+            table
+                    .getActiveTimeline()
+                    .transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
+        } catch (IOException ioe) {
+            throw new HoodieIOException("Exception scheduling clustering", ioe);
+        }
+        metaClient.reloadActiveTimeline();
+        return instantTime;
+    }
 }

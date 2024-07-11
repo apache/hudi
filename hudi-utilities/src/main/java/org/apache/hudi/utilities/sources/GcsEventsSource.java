@@ -18,32 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.UtilHelpers;
-import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
-import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
-import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
-import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
-import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
-
-import com.google.pubsub.v1.ReceivedMessage;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Encoders;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -55,6 +29,30 @@ import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.GOOGLE_PROJ
 import static org.apache.hudi.utilities.config.GCSEventsSourceConfig.PUBSUB_SUBSCRIPTION_ID;
 import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.ProcessingDecision.DO_SKIP;
 
+import com.google.pubsub.v1.ReceivedMessage;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
+import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.gcs.MessageBatch;
+import org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity;
+import org.apache.hudi.utilities.sources.helpers.gcs.MetadataMessage;
+import org.apache.hudi.utilities.sources.helpers.gcs.PubsubMessagesFetcher;
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /*
  * An incremental source to fetch from a Google Cloud Pubsub topic (a subscription, to be precise),
  * and download them into a Hudi table. The messages are assumed to be of type Cloud Storage Pubsub Notification.
@@ -63,9 +61,9 @@ import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.Proc
  * look like below WITHOUT THE NEWLINES (or give the equivalent as CLI options if in cluster mode):
  * (mysql-connector at the end is only needed if Hive Sync is enabled and Mysql is used for Hive Metastore).
 
- absolute_path_to/protobuf-java-3.21.1.jar:absolute_path_to/failureaccess-1.0.1.jar:
- absolute_path_to/31.1-jre/guava-31.1-jre.jar:
- absolute_path_to/mysql-connector-java-8.0.30.jar
+absolute_path_to/protobuf-java-3.21.1.jar:absolute_path_to/failureaccess-1.0.1.jar:
+absolute_path_to/31.1-jre/guava-31.1-jre.jar:
+absolute_path_to/mysql-connector-java-8.0.30.jar
 
 This class can be invoked via spark-submit as follows. There's a bunch of optional hive sync flags at the end:
 $ bin/spark-submit \
@@ -112,21 +110,30 @@ public class GcsEventsSource extends RowSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(GcsEventsSource.class);
 
-  public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
-                         SchemaProvider schemaProvider) {
+  public GcsEventsSource(
+      TypedProperties props,
+      JavaSparkContext jsc,
+      SparkSession spark,
+      SchemaProvider schemaProvider) {
     this(
-            props, jsc, spark, schemaProvider,
-            new PubsubMessagesFetcher(
-                getStringWithAltKeys(props, GOOGLE_PROJECT_ID),
-                getStringWithAltKeys(props, PUBSUB_SUBSCRIPTION_ID),
-                getIntWithAltKeys(props, BATCH_SIZE_CONF),
-                getIntWithAltKeys(props, MAX_NUM_MESSAGES_PER_SYNC),
-                getIntWithAltKeys(props, MAX_FETCH_TIME_PER_SYNC_SECS))
-    );
+        props,
+        jsc,
+        spark,
+        schemaProvider,
+        new PubsubMessagesFetcher(
+            getStringWithAltKeys(props, GOOGLE_PROJECT_ID),
+            getStringWithAltKeys(props, PUBSUB_SUBSCRIPTION_ID),
+            getIntWithAltKeys(props, BATCH_SIZE_CONF),
+            getIntWithAltKeys(props, MAX_NUM_MESSAGES_PER_SYNC),
+            getIntWithAltKeys(props, MAX_FETCH_TIME_PER_SYNC_SECS)));
   }
 
-  public GcsEventsSource(TypedProperties props, JavaSparkContext jsc, SparkSession spark,
-                         SchemaProvider schemaProvider, PubsubMessagesFetcher pubsubMessagesFetcher) {
+  public GcsEventsSource(
+      TypedProperties props,
+      JavaSparkContext jsc,
+      SparkSession spark,
+      SchemaProvider schemaProvider,
+      PubsubMessagesFetcher pubsubMessagesFetcher) {
     super(props, jsc, spark, schemaProvider);
 
     this.pubsubMessagesFetcher = pubsubMessagesFetcher;
@@ -137,7 +144,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   @Override
-  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCkptStr, long sourceLimit) {
+  protected Pair<Option<Dataset<Row>>, String> fetchNextBatch(
+      Option<String> lastCkptStr, long sourceLimit) {
     LOG.info("fetchNextBatch(): Input checkpoint: " + lastCkptStr);
     MessageBatch messageBatch;
     try {
@@ -145,21 +153,26 @@ public class GcsEventsSource extends RowSource {
     } catch (HoodieException e) {
       throw e;
     } catch (Exception e) {
-      throw new HoodieReadFromSourceException("Failed to fetch file metadata from GCS events source", e);
+      throw new HoodieReadFromSourceException(
+          "Failed to fetch file metadata from GCS events source", e);
     }
 
     if (messageBatch.isEmpty()) {
-      LOG.info("No new data. Returning empty batch with checkpoint value: " + CHECKPOINT_VALUE_ZERO);
+      LOG.info(
+          "No new data. Returning empty batch with checkpoint value: " + CHECKPOINT_VALUE_ZERO);
       return Pair.of(Option.empty(), CHECKPOINT_VALUE_ZERO);
     }
 
-    Dataset<String> eventRecords = sparkSession.createDataset(messageBatch.getMessages(), Encoders.STRING());
+    Dataset<String> eventRecords =
+        sparkSession.createDataset(messageBatch.getMessages(), Encoders.STRING());
 
     LOG.info("Returning checkpoint value: " + CHECKPOINT_VALUE_ZERO);
 
     StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
     if (sourceSchema != null) {
-      return Pair.of(Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)), CHECKPOINT_VALUE_ZERO);
+      return Pair.of(
+          Option.of(sparkSession.read().schema(sourceSchema).json(eventRecords)),
+          CHECKPOINT_VALUE_ZERO);
     } else {
       return Pair.of(Option.of(sparkSession.read().json(eventRecords)), CHECKPOINT_VALUE_ZERO);
     }
@@ -182,8 +195,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   /**
-   * Convert Pubsub messages into a batch of GCS file MetadataMsg objects, skipping those that
-   * don't need to be processed.
+   * Convert Pubsub messages into a batch of GCS file MetadataMsg objects, skipping those that don't
+   * need to be processed.
    *
    * @param receivedMessages Pubsub messages
    * @return A batch of GCS file metadata messages
@@ -231,5 +244,4 @@ public class GcsEventsSource extends RowSource {
       LOG.debug("msg: " + msgStr);
     }
   }
-
 }

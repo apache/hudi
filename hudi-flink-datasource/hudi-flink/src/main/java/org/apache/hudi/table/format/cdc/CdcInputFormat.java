@@ -1,23 +1,52 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one
+  * or more contributor license agreements.  See the NOTICE file
+  * distributed with this work for additional information
+  * regarding copyright ownership.  The ASF licenses this file
+  * to you under the Apache License, Version 2.0 (the
+  * "License"); you may not use this file except in compliance
+  * with the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package org.apache.hudi.table.format.cdc;
 
+import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
+import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.memory.DataInputView;
+import org.apache.flink.core.memory.DataOutputView;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
+import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
@@ -60,872 +89,925 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.RowDataProjection;
 import org.apache.hudi.util.RowDataToAvroConverters;
 import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.memory.DataInputView;
-import org.apache.flink.core.memory.DataOutputView;
-import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
-import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-
-import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS;
-import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
-
-/**
- * The base InputFormat class to read Hoodie data set as change logs.
- */
+/** The base InputFormat class to read Hoodie data set as change logs. */
 public class CdcInputFormat extends MergeOnReadInputFormat {
-  private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(CdcInputFormat.class);
+    private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(CdcInputFormat.class);
 
-  private CdcInputFormat(
-      Configuration conf,
-      MergeOnReadTableState tableState,
-      List<DataType> fieldTypes,
-      String defaultPartName,
-      List<Predicate> predicates,
-      long limit,
-      boolean emitDelete) {
-    super(conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
-  }
-
-  @Override
-  protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
-    if (split instanceof CdcInputSplit) {
-      HoodieCDCSupplementalLoggingMode mode = OptionsResolver.getCDCSupplementalLoggingMode(conf);
-      ImageManager manager = new ImageManager(conf, tableState.getRowType(), this::getFileSliceIterator);
-      Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc =
-          cdcFileSplit -> getRecordIteratorV2(split.getTablePath(), split.getMaxCompactionMemoryInBytes(), cdcFileSplit, mode, manager);
-      return new CdcFileSplitsIterator((CdcInputSplit) split, manager, recordIteratorFunc);
-    } else {
-      return super.initIterator(split);
-    }
-  }
-
-  /**
-   * Returns the builder for {@link MergeOnReadInputFormat}.
-   */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
-    if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
-      // base file only
-      return getBaseFileIteratorWithMetadata(split.getBasePath().get());
-    } else if (!split.getBasePath().isPresent()) {
-      // log files only
-      return new LogFileOnlyIterator(getFullLogFileIterator(split));
-    } else {
-      Schema tableSchema = new Schema.Parser().parse(this.tableState.getAvroSchema());
-      return new MergeIterator(
-          conf,
-          hadoopConf,
-          split,
-          this.tableState.getRowType(),
-          this.tableState.getRowType(),
-          tableSchema,
-          InternalSchema.getEmptyInternalSchema(),
-          Option.empty(),
-          Option.empty(),
-          false,
-          this.tableState.getOperationPos(),
-          getBaseFileIteratorWithMetadata(split.getBasePath().get()));
-    }
-  }
-
-  private ClosableIterator<RowData> getRecordIteratorV2(
-      String tablePath,
-      long maxCompactionMemoryInBytes,
-      HoodieCDCFileSplit fileSplit,
-      HoodieCDCSupplementalLoggingMode mode,
-      ImageManager imageManager) {
-    try {
-      return getRecordIterator(tablePath, maxCompactionMemoryInBytes, fileSplit, mode, imageManager);
-    } catch (IOException e) {
-      throw new HoodieException("Get record iterator error", e);
-    }
-  }
-
-  private ClosableIterator<RowData> getRecordIterator(
-      String tablePath,
-      long maxCompactionMemoryInBytes,
-      HoodieCDCFileSplit fileSplit,
-      HoodieCDCSupplementalLoggingMode mode,
-      ImageManager imageManager) throws IOException {
-    switch (fileSplit.getCdcInferCase()) {
-      case BASE_FILE_INSERT:
-        ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
-            "CDC file path should exist and be singleton");
-        String path = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        return new AddBaseFileIterator(getBaseFileIterator(path));
-      case BASE_FILE_DELETE:
-        ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
-            "Before file slice should exist");
-        FileSlice fileSlice = fileSplit.getBeforeFileSlice().get();
-        MergeOnReadInputSplit inputSplit = fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
-        return new RemoveBaseFileIterator(tableState, getFileSliceIterator(inputSplit));
-      case AS_IS:
-        Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableState.getAvroSchema()));
-        Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
-        switch (mode) {
-          case DATA_BEFORE_AFTER:
-            return new BeforeAfterImageIterator(tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
-          case DATA_BEFORE:
-            return new BeforeImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          case OP_KEY_ONLY:
-            return new RecordKeyImageIterator(conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-          default:
-            throw new AssertionError("Unexpected mode" + mode);
-        }
-      case LOG_FILE:
-        ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
-            "CDC file path should exist and be singleton");
-        String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        return new DataLogFileIterator(conf, hadoopConf, internalSchemaManager, maxCompactionMemoryInBytes, imageManager, fileSplit,
-            singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes), tableState);
-      case REPLACE_COMMIT:
-        return new ReplaceCommitIterator(conf, tablePath, tableState, fileSplit, this::getFileSliceIterator);
-      default:
-        throw new AssertionError("Unexpected cdc file split infer case: " + fileSplit.getCdcInferCase());
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Inner Class
-  // -------------------------------------------------------------------------
-  static class CdcFileSplitsIterator implements ClosableIterator<RowData> {
-    private ImageManager imageManager; //  keep a reference to release resource
-    private final Iterator<HoodieCDCFileSplit> fileSplitIterator;
-    private final Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc;
-    private ClosableIterator<RowData> recordIterator;
-
-    CdcFileSplitsIterator(
-        CdcInputSplit inputSplit,
-        ImageManager imageManager,
-        Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc) {
-      this.fileSplitIterator = Arrays.asList(inputSplit.getChanges()).iterator();
-      this.imageManager = imageManager;
-      this.recordIteratorFunc = recordIteratorFunc;
+    private CdcInputFormat(
+            Configuration conf,
+            MergeOnReadTableState tableState,
+            List<DataType> fieldTypes,
+            String defaultPartName,
+            List<Predicate> predicates,
+            long limit,
+            boolean emitDelete) {
+        super(
+                conf,
+                tableState,
+                fieldTypes,
+                defaultPartName,
+                predicates,
+                limit,
+                emitDelete,
+                InternalSchemaManager.DISABLED);
     }
 
     @Override
-    public boolean hasNext() {
-      if (recordIterator != null) {
-        if (recordIterator.hasNext()) {
-          return true;
+    protected ClosableIterator<RowData> initIterator(MergeOnReadInputSplit split) throws IOException {
+        if (split instanceof CdcInputSplit) {
+            HoodieCDCSupplementalLoggingMode mode = OptionsResolver.getCDCSupplementalLoggingMode(conf);
+            ImageManager manager =
+                    new ImageManager(conf, tableState.getRowType(), this::getFileSliceIterator);
+            Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc =
+                    cdcFileSplit ->
+                            getRecordIteratorV2(
+                                    split.getTablePath(),
+                                    split.getMaxCompactionMemoryInBytes(),
+                                    cdcFileSplit,
+                                    mode,
+                                    manager);
+            return new CdcFileSplitsIterator((CdcInputSplit) split, manager, recordIteratorFunc);
         } else {
-          recordIterator.close(); // release resource
-          recordIterator = null;
+            return super.initIterator(split);
         }
-      }
-      if (fileSplitIterator.hasNext()) {
-        HoodieCDCFileSplit fileSplit = fileSplitIterator.next();
-        recordIterator = recordIteratorFunc.apply(fileSplit);
-        return recordIterator.hasNext();
-      }
-      return false;
     }
 
-    @Override
-    public RowData next() {
-      return recordIterator.next();
+    /** Returns the builder for {@link MergeOnReadInputFormat}. */
+    public static Builder builder() {
+        return new Builder();
     }
 
-    @Override
-    public void close() {
-      if (recordIterator != null) {
-        recordIterator.close();
-      }
-      if (imageManager != null) {
-        imageManager.close();
-        imageManager = null;
-      }
-    }
-  }
-
-  static class AddBaseFileIterator implements ClosableIterator<RowData> {
-    // base file record iterator
-    private ClosableIterator<RowData> nested;
-
-    private RowData currentRecord;
-
-    AddBaseFileIterator(ClosableIterator<RowData> nested) {
-      this.nested = nested;
-    }
-
-    @Override
-    public boolean hasNext() {
-      if (this.nested.hasNext()) {
-        currentRecord = this.nested.next();
-        currentRecord.setRowKind(RowKind.INSERT);
-        return true;
-      }
-      return false;
-    }
-
-    @Override
-    public RowData next() {
-      return currentRecord;
-    }
-
-    @Override
-    public void close() {
-      if (this.nested != null) {
-        this.nested.close();
-        this.nested = null;
-      }
-    }
-  }
-
-  static class RemoveBaseFileIterator implements ClosableIterator<RowData> {
-    private ClosableIterator<RowData> nested;
-    private final RowDataProjection projection;
-
-    RemoveBaseFileIterator(MergeOnReadTableState tableState, ClosableIterator<RowData> iterator) {
-      this.nested = iterator;
-      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-    }
-
-    @Override
-    public boolean hasNext() {
-      return nested.hasNext();
-    }
-
-    @Override
-    public RowData next() {
-      RowData row = nested.next();
-      row.setRowKind(RowKind.DELETE);
-      return this.projection.project(row);
-    }
-
-    @Override
-    public void close() {
-      if (this.nested != null) {
-        this.nested.close();
-        this.nested = null;
-      }
-    }
-  }
-
-  // accounting to HoodieCDCInferenceCase.LOG_FILE
-  static class DataLogFileIterator implements ClosableIterator<RowData> {
-    private final Schema tableSchema;
-    private final long maxCompactionMemoryInBytes;
-    private final ImageManager imageManager;
-    private final HoodieMergedLogRecordScanner scanner;
-    private final Iterator<String> logRecordsKeyIterator;
-    private final RowDataProjection projection;
-    private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
-    private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
-    private final HoodieRecordMerger recordMerger;
-    private final TypedProperties payloadProps;
-
-    private ExternalSpillableMap<String, byte[]> beforeImages;
-    private RowData currentImage;
-    private RowData sideImage;
-
-    DataLogFileIterator(
-        Configuration flinkConf,
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        InternalSchemaManager schemaManager,
-        long maxCompactionMemoryInBytes,
-        ImageManager imageManager,
-        HoodieCDCFileSplit cdcFileSplit,
-        MergeOnReadInputSplit split,
-        MergeOnReadTableState tableState) throws IOException {
-      this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
-      this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
-      this.imageManager = imageManager;
-      this.scanner = FormatUtils.logScanner(split, tableSchema, schemaManager.getQuerySchema(), flinkConf, hadoopConf);
-      this.logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRowType(), flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-      this.rowDataToAvroConverter = RowDataToAvroConverters.createConverter(tableState.getRowType(), flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
-      this.projection = tableState.getRequiredRowType().equals(tableState.getRowType())
-          ? null
-          : RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-
-      List<String> mergers = Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
-          .map(String::trim)
-          .distinct()
-          .collect(Collectors.toList());
-      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
-      this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
-      initImages(cdcFileSplit);
-    }
-
-    private void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
-      // init before images
-      if (fileSplit.getBeforeFileSlice().isPresent() && !fileSplit.getBeforeFileSlice().get().isEmpty()) {
-        this.beforeImages = this.imageManager.getOrLoadImages(
-            maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
-      } else {
-        // still initializes an empty map
-        this.beforeImages = FormatUtils.spillableMap(this.imageManager.writeConfig, maxCompactionMemoryInBytes);
-      }
-    }
-
-    @Override
-    public boolean hasNext() {
-      if (this.sideImage != null) {
-        this.currentImage = this.sideImage;
-        this.sideImage = null;
-        return true;
-      }
-      while (logRecordsKeyIterator.hasNext()) {
-        String recordKey = logRecordsKeyIterator.next();
-        HoodieAvroRecord<?> record = (HoodieAvroRecord<?>) scanner.getRecords().get(recordKey);
-        Option<IndexedRecord> val = MergeOnReadInputFormat.getInsertVal(record, this.tableSchema);
-        RowData existed = imageManager.removeImageRecord(record.getRecordKey(), beforeImages);
-        if (val.isEmpty()) {
-          // it's a deleted record.
-          if (existed != null) {
-            // there is a real record deleted.
-            existed.setRowKind(RowKind.DELETE);
-            this.currentImage = existed;
-            return true;
-          }
+    private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
+        if (!(split.getLogPaths().isPresent() && split.getLogPaths().get().size() > 0)) {
+            // base file only
+            return getBaseFileIteratorWithMetadata(split.getBasePath().get());
+        } else if (!split.getBasePath().isPresent()) {
+            // log files only
+            return new LogFileOnlyIterator(getFullLogFileIterator(split));
         } else {
-          IndexedRecord newAvroVal = val.get();
-          if (existed == null) {
-            // a new record is inserted.
-            RowData newRow = (RowData) avroToRowDataConverter.convert(newAvroVal);
-            newRow.setRowKind(RowKind.INSERT);
-            this.currentImage = newRow;
-            return true;
-          } else {
-            // an existed record is updated.
-            GenericRecord historyAvroRecord = (GenericRecord) rowDataToAvroConverter.convert(tableSchema, existed);
-            HoodieRecord<IndexedRecord> merged = mergeRowWithLog(historyAvroRecord, record).get();
-            if (merged.getData() != historyAvroRecord) {
-              // update happens
-              existed.setRowKind(RowKind.UPDATE_BEFORE);
-              this.currentImage = existed;
-
-              RowData mergedRow = (RowData) avroToRowDataConverter.convert(merged.getData());
-              mergedRow.setRowKind(RowKind.UPDATE_AFTER);
-              this.imageManager.updateImageRecord(record.getRecordKey(), beforeImages, mergedRow);
-              this.sideImage = mergedRow;
-
-              return true;
-            }
-          }
+            Schema tableSchema = new Schema.Parser().parse(this.tableState.getAvroSchema());
+            return new MergeIterator(
+                    conf,
+                    hadoopConf,
+                    split,
+                    this.tableState.getRowType(),
+                    this.tableState.getRowType(),
+                    tableSchema,
+                    InternalSchema.getEmptyInternalSchema(),
+                    Option.empty(),
+                    Option.empty(),
+                    false,
+                    this.tableState.getOperationPos(),
+                    getBaseFileIteratorWithMetadata(split.getBasePath().get()));
         }
-      }
-      return false;
     }
 
-    @Override
-    public RowData next() {
-      return this.projection != null ? this.projection.project(this.currentImage) : this.currentImage;
-    }
-
-    @Override
-    public void close() {
-      this.scanner.close();
-      this.imageManager.close();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Option<HoodieRecord<IndexedRecord>> mergeRowWithLog(GenericRecord historyAvroRecord, HoodieRecord<?> newRecord) {
-      HoodieAvroIndexedRecord historyAvroIndexedRecord = new HoodieAvroIndexedRecord(historyAvroRecord);
-      try {
-        return recordMerger.merge(historyAvroIndexedRecord, tableSchema, newRecord, tableSchema, payloadProps).map(Pair::getLeft);
-      } catch (IOException e) {
-        throw new HoodieIOException("Merge base and delta payloads exception", e);
-      }
-    }
-  }
-
-  abstract static class BaseImageIterator implements ClosableIterator<RowData> {
-    private final Schema requiredSchema;
-    private final int[] requiredPos;
-    private final GenericRecordBuilder recordBuilder;
-    private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
-
-    // the changelog records iterator
-    private HoodieCDCLogRecordIterator cdcItr;
-
-    private GenericRecord cdcRecord;
-
-    private RowData sideImage;
-
-    private RowData currentImage;
-
-    BaseImageIterator(
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        String tablePath,
-        MergeOnReadTableState tableState,
-        Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit) {
-      this.requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
-      this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
-      this.recordBuilder = new GenericRecordBuilder(requiredSchema);
-      this.avroToRowDataConverter = AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
-      StoragePath hadoopTablePath = new StoragePath(tablePath);
-      HoodieStorage storage = new HoodieHadoopStorage(tablePath, hadoopConf);
-      HoodieLogFile[] cdcLogFiles = fileSplit.getCdcFiles().stream().map(cdcFile -> {
+    private ClosableIterator<RowData> getRecordIteratorV2(
+            String tablePath,
+            long maxCompactionMemoryInBytes,
+            HoodieCDCFileSplit fileSplit,
+            HoodieCDCSupplementalLoggingMode mode,
+            ImageManager imageManager) {
         try {
-          return new HoodieLogFile(
-              storage.getPathInfo(new StoragePath(hadoopTablePath, cdcFile)));
+            return getRecordIterator(
+                    tablePath, maxCompactionMemoryInBytes, fileSplit, mode, imageManager);
         } catch (IOException e) {
-          throw new HoodieIOException("Fail to call getFileStatus", e);
+            throw new HoodieException("Get record iterator error", e);
         }
-      }).toArray(HoodieLogFile[]::new);
-      this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
     }
 
-    private int[] getRequiredPos(String tableSchema, Schema required) {
-      Schema dataSchema = HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableSchema));
-      List<String> fields = dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
-      return required.getFields().stream()
-          .map(f -> fields.indexOf(f.name()))
-          .mapToInt(i -> i)
-          .toArray();
+    private ClosableIterator<RowData> getRecordIterator(
+            String tablePath,
+            long maxCompactionMemoryInBytes,
+            HoodieCDCFileSplit fileSplit,
+            HoodieCDCSupplementalLoggingMode mode,
+            ImageManager imageManager)
+            throws IOException {
+        switch (fileSplit.getCdcInferCase()) {
+            case BASE_FILE_INSERT:
+                ValidationUtils.checkState(
+                        fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
+                        "CDC file path should exist and be singleton");
+                String path = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
+                return new AddBaseFileIterator(getBaseFileIterator(path));
+            case BASE_FILE_DELETE:
+                ValidationUtils.checkState(
+                        fileSplit.getBeforeFileSlice().isPresent(), "Before file slice should exist");
+                FileSlice fileSlice = fileSplit.getBeforeFileSlice().get();
+                MergeOnReadInputSplit inputSplit =
+                        fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
+                return new RemoveBaseFileIterator(tableState, getFileSliceIterator(inputSplit));
+            case AS_IS:
+                Schema dataSchema =
+                        HoodieAvroUtils.removeMetadataFields(
+                                new Schema.Parser().parse(tableState.getAvroSchema()));
+                Schema cdcSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(mode, dataSchema);
+                switch (mode) {
+                    case DATA_BEFORE_AFTER:
+                        return new BeforeAfterImageIterator(
+                                tablePath, tableState, hadoopConf, cdcSchema, fileSplit);
+                    case DATA_BEFORE:
+                        return new BeforeImageIterator(
+                                conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
+                    case OP_KEY_ONLY:
+                        return new RecordKeyImageIterator(
+                                conf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
+                    default:
+                        throw new AssertionError("Unexpected mode" + mode);
+                }
+            case LOG_FILE:
+                ValidationUtils.checkState(
+                        fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
+                        "CDC file path should exist and be singleton");
+                String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
+                return new DataLogFileIterator(
+                        conf,
+                        hadoopConf,
+                        internalSchemaManager,
+                        maxCompactionMemoryInBytes,
+                        imageManager,
+                        fileSplit,
+                        singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes),
+                        tableState);
+            case REPLACE_COMMIT:
+                return new ReplaceCommitIterator(
+                        conf, tablePath, tableState, fileSplit, this::getFileSliceIterator);
+            default:
+                throw new AssertionError(
+                        "Unexpected cdc file split infer case: " + fileSplit.getCdcInferCase());
+        }
     }
 
-    @Override
-    public boolean hasNext() {
-      if (this.sideImage != null) {
-        currentImage = this.sideImage;
-        this.sideImage = null;
-        return true;
-      } else if (this.cdcItr.hasNext()) {
-        cdcRecord = (GenericRecord) this.cdcItr.next();
-        String op = String.valueOf(cdcRecord.get(0));
-        resolveImage(op);
-        return true;
-      }
-      return false;
+    // -------------------------------------------------------------------------
+    //  Inner Class
+    // -------------------------------------------------------------------------
+    static class CdcFileSplitsIterator implements ClosableIterator<RowData> {
+        private ImageManager imageManager; //  keep a reference to release resource
+        private final Iterator<HoodieCDCFileSplit> fileSplitIterator;
+        private final Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc;
+        private ClosableIterator<RowData> recordIterator;
+
+        CdcFileSplitsIterator(
+                CdcInputSplit inputSplit,
+                ImageManager imageManager,
+                Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc) {
+            this.fileSplitIterator = Arrays.asList(inputSplit.getChanges()).iterator();
+            this.imageManager = imageManager;
+            this.recordIteratorFunc = recordIteratorFunc;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (recordIterator != null) {
+                if (recordIterator.hasNext()) {
+                    return true;
+                } else {
+                    recordIterator.close(); // release resource
+                    recordIterator = null;
+                }
+            }
+            if (fileSplitIterator.hasNext()) {
+                HoodieCDCFileSplit fileSplit = fileSplitIterator.next();
+                recordIterator = recordIteratorFunc.apply(fileSplit);
+                return recordIterator.hasNext();
+            }
+            return false;
+        }
+
+        @Override
+        public RowData next() {
+            return recordIterator.next();
+        }
+
+        @Override
+        public void close() {
+            if (recordIterator != null) {
+                recordIterator.close();
+            }
+            if (imageManager != null) {
+                imageManager.close();
+                imageManager = null;
+            }
+        }
     }
 
-    protected abstract RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord);
+    static class AddBaseFileIterator implements ClosableIterator<RowData> {
+        // base file record iterator
+        private ClosableIterator<RowData> nested;
 
-    protected abstract RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord);
+        private RowData currentRecord;
 
-    @Override
-    public RowData next() {
-      return currentImage;
+        AddBaseFileIterator(ClosableIterator<RowData> nested) {
+            this.nested = nested;
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (this.nested.hasNext()) {
+                currentRecord = this.nested.next();
+                currentRecord.setRowKind(RowKind.INSERT);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public RowData next() {
+            return currentRecord;
+        }
+
+        @Override
+        public void close() {
+            if (this.nested != null) {
+                this.nested.close();
+                this.nested = null;
+            }
+        }
     }
 
-    @Override
-    public void close() {
-      if (this.cdcItr != null) {
-        this.cdcItr.close();
-        this.cdcItr = null;
-      }
+    static class RemoveBaseFileIterator implements ClosableIterator<RowData> {
+        private ClosableIterator<RowData> nested;
+        private final RowDataProjection projection;
+
+        RemoveBaseFileIterator(MergeOnReadTableState tableState, ClosableIterator<RowData> iterator) {
+            this.nested = iterator;
+            this.projection =
+                    RowDataProjection.instance(
+                            tableState.getRequiredRowType(), tableState.getRequiredPositions());
+        }
+
+        @Override
+        public boolean hasNext() {
+            return nested.hasNext();
+        }
+
+        @Override
+        public RowData next() {
+            RowData row = nested.next();
+            row.setRowKind(RowKind.DELETE);
+            return this.projection.project(row);
+        }
+
+        @Override
+        public void close() {
+            if (this.nested != null) {
+                this.nested.close();
+                this.nested = null;
+            }
+        }
     }
 
-    private void resolveImage(String op) {
-      switch (op) {
-        case "i":
-          currentImage = getAfterImage(RowKind.INSERT, cdcRecord);
-          break;
-        case "u":
-          currentImage = getBeforeImage(RowKind.UPDATE_BEFORE, cdcRecord);
-          sideImage = getAfterImage(RowKind.UPDATE_AFTER, cdcRecord);
-          break;
-        case "d":
-          currentImage = getBeforeImage(RowKind.DELETE, cdcRecord);
-          break;
-        default:
-          throw new AssertionError("Unexpected");
-      }
+    // accounting to HoodieCDCInferenceCase.LOG_FILE
+    static class DataLogFileIterator implements ClosableIterator<RowData> {
+        private final Schema tableSchema;
+        private final long maxCompactionMemoryInBytes;
+        private final ImageManager imageManager;
+        private final HoodieMergedLogRecordScanner scanner;
+        private final Iterator<String> logRecordsKeyIterator;
+        private final RowDataProjection projection;
+        private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
+        private final RowDataToAvroConverters.RowDataToAvroConverter rowDataToAvroConverter;
+        private final HoodieRecordMerger recordMerger;
+        private final TypedProperties payloadProps;
+
+        private ExternalSpillableMap<String, byte[]> beforeImages;
+        private RowData currentImage;
+        private RowData sideImage;
+
+        DataLogFileIterator(
+                Configuration flinkConf,
+                org.apache.hadoop.conf.Configuration hadoopConf,
+                InternalSchemaManager schemaManager,
+                long maxCompactionMemoryInBytes,
+                ImageManager imageManager,
+                HoodieCDCFileSplit cdcFileSplit,
+                MergeOnReadInputSplit split,
+                MergeOnReadTableState tableState)
+                throws IOException {
+            this.tableSchema = new Schema.Parser().parse(tableState.getAvroSchema());
+            this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
+            this.imageManager = imageManager;
+            this.scanner =
+                    FormatUtils.logScanner(
+                            split, tableSchema, schemaManager.getQuerySchema(), flinkConf, hadoopConf);
+            this.logRecordsKeyIterator = scanner.getRecords().keySet().iterator();
+            this.avroToRowDataConverter =
+                    AvroToRowDataConverters.createRowConverter(
+                            tableState.getRowType(), flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
+            this.rowDataToAvroConverter =
+                    RowDataToAvroConverters.createConverter(
+                            tableState.getRowType(), flinkConf.getBoolean(FlinkOptions.READ_UTC_TIMEZONE));
+            this.projection =
+                    tableState.getRequiredRowType().equals(tableState.getRowType())
+                            ? null
+                            : RowDataProjection.instance(
+                                    tableState.getRequiredRowType(), tableState.getRequiredPositions());
+
+            List<String> mergers =
+                    Arrays.stream(flinkConf.getString(FlinkOptions.RECORD_MERGER_IMPLS).split(","))
+                            .map(String::trim)
+                            .distinct()
+                            .collect(Collectors.toList());
+            this.recordMerger =
+                    HoodieRecordUtils.createRecordMerger(
+                            split.getTablePath(),
+                            EngineType.FLINK,
+                            mergers,
+                            flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
+            this.payloadProps = StreamerUtil.getPayloadConfig(flinkConf).getProps();
+            initImages(cdcFileSplit);
+        }
+
+        private void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
+            // init before images
+            if (fileSplit.getBeforeFileSlice().isPresent()
+                    && !fileSplit.getBeforeFileSlice().get().isEmpty()) {
+                this.beforeImages =
+                        this.imageManager.getOrLoadImages(
+                                maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
+            } else {
+                // still initializes an empty map
+                this.beforeImages =
+                        FormatUtils.spillableMap(this.imageManager.writeConfig, maxCompactionMemoryInBytes);
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (this.sideImage != null) {
+                this.currentImage = this.sideImage;
+                this.sideImage = null;
+                return true;
+            }
+            while (logRecordsKeyIterator.hasNext()) {
+                String recordKey = logRecordsKeyIterator.next();
+                HoodieAvroRecord<?> record = (HoodieAvroRecord<?>) scanner.getRecords().get(recordKey);
+                Option<IndexedRecord> val = MergeOnReadInputFormat.getInsertVal(record, this.tableSchema);
+                RowData existed = imageManager.removeImageRecord(record.getRecordKey(), beforeImages);
+                if (val.isEmpty()) {
+                    // it's a deleted record.
+                    if (existed != null) {
+                        // there is a real record deleted.
+                        existed.setRowKind(RowKind.DELETE);
+                        this.currentImage = existed;
+                        return true;
+                    }
+                } else {
+                    IndexedRecord newAvroVal = val.get();
+                    if (existed == null) {
+                        // a new record is inserted.
+                        RowData newRow = (RowData) avroToRowDataConverter.convert(newAvroVal);
+                        newRow.setRowKind(RowKind.INSERT);
+                        this.currentImage = newRow;
+                        return true;
+                    } else {
+                        // an existed record is updated.
+                        GenericRecord historyAvroRecord =
+                                (GenericRecord) rowDataToAvroConverter.convert(tableSchema, existed);
+                        HoodieRecord<IndexedRecord> merged = mergeRowWithLog(historyAvroRecord, record).get();
+                        if (merged.getData() != historyAvroRecord) {
+                            // update happens
+                            existed.setRowKind(RowKind.UPDATE_BEFORE);
+                            this.currentImage = existed;
+
+                            RowData mergedRow = (RowData) avroToRowDataConverter.convert(merged.getData());
+                            mergedRow.setRowKind(RowKind.UPDATE_AFTER);
+                            this.imageManager.updateImageRecord(record.getRecordKey(), beforeImages, mergedRow);
+                            this.sideImage = mergedRow;
+
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public RowData next() {
+            return this.projection != null
+                    ? this.projection.project(this.currentImage)
+                    : this.currentImage;
+        }
+
+        @Override
+        public void close() {
+            this.scanner.close();
+            this.imageManager.close();
+        }
+
+        @SuppressWarnings("unchecked")
+        private Option<HoodieRecord<IndexedRecord>> mergeRowWithLog(
+                GenericRecord historyAvroRecord, HoodieRecord<?> newRecord) {
+            HoodieAvroIndexedRecord historyAvroIndexedRecord =
+                    new HoodieAvroIndexedRecord(historyAvroRecord);
+            try {
+                return recordMerger
+                        .merge(historyAvroIndexedRecord, tableSchema, newRecord, tableSchema, payloadProps)
+                        .map(Pair::getLeft);
+            } catch (IOException e) {
+                throw new HoodieIOException("Merge base and delta payloads exception", e);
+            }
+        }
     }
 
-    protected RowData resolveAvro(RowKind rowKind, GenericRecord avroRecord) {
-      GenericRecord requiredAvroRecord = buildAvroRecordBySchema(
-          avroRecord,
-          requiredSchema,
-          requiredPos,
-          recordBuilder);
-      RowData resolved = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
-      resolved.setRowKind(rowKind);
-      return resolved;
-    }
-  }
+    abstract static class BaseImageIterator implements ClosableIterator<RowData> {
+        private final Schema requiredSchema;
+        private final int[] requiredPos;
+        private final GenericRecordBuilder recordBuilder;
+        private final AvroToRowDataConverters.AvroToRowDataConverter avroToRowDataConverter;
 
-  // op, ts, before_image, after_image
-  static class BeforeAfterImageIterator extends BaseImageIterator {
-    BeforeAfterImageIterator(
-        String tablePath,
-        MergeOnReadTableState tableState,
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit) {
-      super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
-    }
+        // the changelog records iterator
+        private HoodieCDCLogRecordIterator cdcItr;
 
-    @Override
-    protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(3));
-    }
+        private GenericRecord cdcRecord;
 
-    @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
-    }
-  }
+        private RowData sideImage;
 
-  // op, key, before_image
-  static class BeforeImageIterator extends BaseImageIterator {
-    protected ExternalSpillableMap<String, byte[]> afterImages;
+        private RowData currentImage;
 
-    protected final long maxCompactionMemoryInBytes;
+        BaseImageIterator(
+                org.apache.hadoop.conf.Configuration hadoopConf,
+                String tablePath,
+                MergeOnReadTableState tableState,
+                Schema cdcSchema,
+                HoodieCDCFileSplit fileSplit) {
+            this.requiredSchema = new Schema.Parser().parse(tableState.getRequiredAvroSchema());
+            this.requiredPos = getRequiredPos(tableState.getAvroSchema(), this.requiredSchema);
+            this.recordBuilder = new GenericRecordBuilder(requiredSchema);
+            this.avroToRowDataConverter =
+                    AvroToRowDataConverters.createRowConverter(tableState.getRequiredRowType());
+            StoragePath hadoopTablePath = new StoragePath(tablePath);
+            HoodieStorage storage = new HoodieHadoopStorage(tablePath, hadoopConf);
+            HoodieLogFile[] cdcLogFiles =
+                    fileSplit.getCdcFiles().stream()
+                            .map(
+                                    cdcFile -> {
+                                        try {
+                                            return new HoodieLogFile(
+                                                    storage.getPathInfo(new StoragePath(hadoopTablePath, cdcFile)));
+                                        } catch (IOException e) {
+                                            throw new HoodieIOException("Fail to call getFileStatus", e);
+                                        }
+                                    })
+                            .toArray(HoodieLogFile[]::new);
+            this.cdcItr = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcSchema);
+        }
 
-    protected final RowDataProjection projection;
-    protected final ImageManager imageManager;
+        private int[] getRequiredPos(String tableSchema, Schema required) {
+            Schema dataSchema =
+                    HoodieAvroUtils.removeMetadataFields(new Schema.Parser().parse(tableSchema));
+            List<String> fields =
+                    dataSchema.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+            return required.getFields().stream()
+                    .map(f -> fields.indexOf(f.name()))
+                    .mapToInt(i -> i)
+                    .toArray();
+        }
 
-    BeforeImageIterator(
-        Configuration flinkConf,
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        String tablePath,
-        MergeOnReadTableState tableState,
-        Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit,
-        ImageManager imageManager) throws IOException {
-      super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
-      this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf);
-      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
-      this.imageManager = imageManager;
-      initImages(fileSplit);
-    }
+        @Override
+        public boolean hasNext() {
+            if (this.sideImage != null) {
+                currentImage = this.sideImage;
+                this.sideImage = null;
+                return true;
+            } else if (this.cdcItr.hasNext()) {
+                cdcRecord = (GenericRecord) this.cdcItr.next();
+                String op = String.valueOf(cdcRecord.get(0));
+                resolveImage(op);
+                return true;
+            }
+            return false;
+        }
 
-    protected void initImages(
-        HoodieCDCFileSplit fileSplit) throws IOException {
-      ValidationUtils.checkState(fileSplit.getAfterFileSlice().isPresent(),
-          "Current file slice does not exist for instant: " + fileSplit.getInstant());
-      this.afterImages = this.imageManager.getOrLoadImages(
-          maxCompactionMemoryInBytes, fileSplit.getAfterFileSlice().get());
-    }
+        protected abstract RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord);
 
-    @Override
-    protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
-      String recordKey = cdcRecord.get(1).toString();
-      RowData row = imageManager.getImageRecord(recordKey, this.afterImages, rowKind);
-      row.setRowKind(rowKind);
-      return this.projection.project(row);
-    }
+        protected abstract RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord);
 
-    @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
-    }
-  }
+        @Override
+        public RowData next() {
+            return currentImage;
+        }
 
-  // op, key
-  static class RecordKeyImageIterator extends BeforeImageIterator {
-    protected ExternalSpillableMap<String, byte[]> beforeImages;
+        @Override
+        public void close() {
+            if (this.cdcItr != null) {
+                this.cdcItr.close();
+                this.cdcItr = null;
+            }
+        }
 
-    RecordKeyImageIterator(
-        Configuration flinkConf,
-        org.apache.hadoop.conf.Configuration hadoopConf,
-        String tablePath,
-        MergeOnReadTableState tableState,
-        Schema cdcSchema,
-        HoodieCDCFileSplit fileSplit,
-        ImageManager imageManager) throws IOException {
-      super(flinkConf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
-    }
+        private void resolveImage(String op) {
+            switch (op) {
+                case "i":
+                    currentImage = getAfterImage(RowKind.INSERT, cdcRecord);
+                    break;
+                case "u":
+                    currentImage = getBeforeImage(RowKind.UPDATE_BEFORE, cdcRecord);
+                    sideImage = getAfterImage(RowKind.UPDATE_AFTER, cdcRecord);
+                    break;
+                case "d":
+                    currentImage = getBeforeImage(RowKind.DELETE, cdcRecord);
+                    break;
+                default:
+                    throw new AssertionError("Unexpected");
+            }
+        }
 
-    protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
-      // init after images
-      super.initImages(fileSplit);
-      // init before images
-      ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
-          "Before file slice does not exist for instant: " + fileSplit.getInstant());
-      this.beforeImages = this.imageManager.getOrLoadImages(
-          maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
-    }
-
-    @Override
-    protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
-      String recordKey = cdcRecord.get(1).toString();
-      RowData row = this.imageManager.getImageRecord(recordKey, this.beforeImages, rowKind);
-      row.setRowKind(rowKind);
-      return this.projection.project(row);
-    }
-  }
-
-  static class ReplaceCommitIterator implements ClosableIterator<RowData> {
-    private final ClosableIterator<RowData> itr;
-    private final RowDataProjection projection;
-
-    ReplaceCommitIterator(
-        Configuration flinkConf,
-        String tablePath,
-        MergeOnReadTableState tableState,
-        HoodieCDCFileSplit fileSplit,
-        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
-      this.itr = initIterator(tablePath, StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf), fileSplit, splitIteratorFunc);
-      this.projection = RowDataProjection.instance(tableState.getRequiredRowType(), tableState.getRequiredPositions());
+        protected RowData resolveAvro(RowKind rowKind, GenericRecord avroRecord) {
+            GenericRecord requiredAvroRecord =
+                    buildAvroRecordBySchema(avroRecord, requiredSchema, requiredPos, recordBuilder);
+            RowData resolved = (RowData) avroToRowDataConverter.convert(requiredAvroRecord);
+            resolved.setRowKind(rowKind);
+            return resolved;
+        }
     }
 
-    private ClosableIterator<RowData> initIterator(
-        String tablePath,
-        long maxCompactionMemoryInBytes,
-        HoodieCDCFileSplit fileSplit,
-        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
-      // init before images
+    // op, ts, before_image, after_image
+    static class BeforeAfterImageIterator extends BaseImageIterator {
+        BeforeAfterImageIterator(
+                String tablePath,
+                MergeOnReadTableState tableState,
+                org.apache.hadoop.conf.Configuration hadoopConf,
+                Schema cdcSchema,
+                HoodieCDCFileSplit fileSplit) {
+            super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
+        }
 
-      // the before file slice must exist,
-      // see HoodieCDCExtractor#extractCDCFileSplits for details
-      ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
-          "Before file slice does not exist for instant: " + fileSplit.getInstant());
-      MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(
-          tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
-      return splitIteratorFunc.apply(inputSplit);
+        @Override
+        protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
+            return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(3));
+        }
+
+        @Override
+        protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
+            return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
+        }
     }
 
-    @Override
-    public boolean hasNext() {
-      return this.itr.hasNext();
+    // op, key, before_image
+    static class BeforeImageIterator extends BaseImageIterator {
+        protected ExternalSpillableMap<String, byte[]> afterImages;
+
+        protected final long maxCompactionMemoryInBytes;
+
+        protected final RowDataProjection projection;
+        protected final ImageManager imageManager;
+
+        BeforeImageIterator(
+                Configuration flinkConf,
+                org.apache.hadoop.conf.Configuration hadoopConf,
+                String tablePath,
+                MergeOnReadTableState tableState,
+                Schema cdcSchema,
+                HoodieCDCFileSplit fileSplit,
+                ImageManager imageManager)
+                throws IOException {
+            super(hadoopConf, tablePath, tableState, cdcSchema, fileSplit);
+            this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf);
+            this.projection =
+                    RowDataProjection.instance(
+                            tableState.getRequiredRowType(), tableState.getRequiredPositions());
+            this.imageManager = imageManager;
+            initImages(fileSplit);
+        }
+
+        protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
+            ValidationUtils.checkState(
+                    fileSplit.getAfterFileSlice().isPresent(),
+                    "Current file slice does not exist for instant: " + fileSplit.getInstant());
+            this.afterImages =
+                    this.imageManager.getOrLoadImages(
+                            maxCompactionMemoryInBytes, fileSplit.getAfterFileSlice().get());
+        }
+
+        @Override
+        protected RowData getAfterImage(RowKind rowKind, GenericRecord cdcRecord) {
+            String recordKey = cdcRecord.get(1).toString();
+            RowData row = imageManager.getImageRecord(recordKey, this.afterImages, rowKind);
+            row.setRowKind(rowKind);
+            return this.projection.project(row);
+        }
+
+        @Override
+        protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
+            return resolveAvro(rowKind, (GenericRecord) cdcRecord.get(2));
+        }
     }
 
-    @Override
-    public RowData next() {
-      RowData row = this.itr.next();
-      row.setRowKind(RowKind.DELETE);
-      return this.projection.project(row);
+    // op, key
+    static class RecordKeyImageIterator extends BeforeImageIterator {
+        protected ExternalSpillableMap<String, byte[]> beforeImages;
+
+        RecordKeyImageIterator(
+                Configuration flinkConf,
+                org.apache.hadoop.conf.Configuration hadoopConf,
+                String tablePath,
+                MergeOnReadTableState tableState,
+                Schema cdcSchema,
+                HoodieCDCFileSplit fileSplit,
+                ImageManager imageManager)
+                throws IOException {
+            super(flinkConf, hadoopConf, tablePath, tableState, cdcSchema, fileSplit, imageManager);
+        }
+
+        protected void initImages(HoodieCDCFileSplit fileSplit) throws IOException {
+            // init after images
+            super.initImages(fileSplit);
+            // init before images
+            ValidationUtils.checkState(
+                    fileSplit.getBeforeFileSlice().isPresent(),
+                    "Before file slice does not exist for instant: " + fileSplit.getInstant());
+            this.beforeImages =
+                    this.imageManager.getOrLoadImages(
+                            maxCompactionMemoryInBytes, fileSplit.getBeforeFileSlice().get());
+        }
+
+        @Override
+        protected RowData getBeforeImage(RowKind rowKind, GenericRecord cdcRecord) {
+            String recordKey = cdcRecord.get(1).toString();
+            RowData row = this.imageManager.getImageRecord(recordKey, this.beforeImages, rowKind);
+            row.setRowKind(rowKind);
+            return this.projection.project(row);
+        }
     }
 
-    @Override
-    public void close() {
-      this.itr.close();
-    }
-  }
+    static class ReplaceCommitIterator implements ClosableIterator<RowData> {
+        private final ClosableIterator<RowData> itr;
+        private final RowDataProjection projection;
 
-  public static final class BytesArrayInputView extends DataInputStream implements DataInputView {
-    public BytesArrayInputView(byte[] data) {
-      super(new ByteArrayInputStream(data));
-    }
+        ReplaceCommitIterator(
+                Configuration flinkConf,
+                String tablePath,
+                MergeOnReadTableState tableState,
+                HoodieCDCFileSplit fileSplit,
+                Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
+            this.itr =
+                    initIterator(
+                            tablePath,
+                            StreamerUtil.getMaxCompactionMemoryInBytes(flinkConf),
+                            fileSplit,
+                            splitIteratorFunc);
+            this.projection =
+                    RowDataProjection.instance(
+                            tableState.getRequiredRowType(), tableState.getRequiredPositions());
+        }
 
-    public void skipBytesToRead(int numBytes) throws IOException {
-      while (numBytes > 0) {
-        int skipped = this.skipBytes(numBytes);
-        numBytes -= skipped;
-      }
-    }
-  }
+        private ClosableIterator<RowData> initIterator(
+                String tablePath,
+                long maxCompactionMemoryInBytes,
+                HoodieCDCFileSplit fileSplit,
+                Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
+            // init before images
 
-  public static final class BytesArrayOutputView extends DataOutputStream implements DataOutputView {
-    public BytesArrayOutputView(ByteArrayOutputStream baos) {
-      super(baos);
-    }
+            // the before file slice must exist,
+            // see HoodieCDCExtractor#extractCDCFileSplits for details
+            ValidationUtils.checkState(
+                    fileSplit.getBeforeFileSlice().isPresent(),
+                    "Before file slice does not exist for instant: " + fileSplit.getInstant());
+            MergeOnReadInputSplit inputSplit =
+                    CdcInputFormat.fileSlice2Split(
+                            tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
+            return splitIteratorFunc.apply(inputSplit);
+        }
 
-    public void skipBytesToWrite(int numBytes) throws IOException {
-      for (int i = 0; i < numBytes; ++i) {
-        this.write(0);
-      }
-    }
+        @Override
+        public boolean hasNext() {
+            return this.itr.hasNext();
+        }
 
-    public void write(DataInputView source, int numBytes) throws IOException {
-      byte[] buffer = new byte[numBytes];
-      source.readFully(buffer);
-      this.write(buffer);
-    }
-  }
+        @Override
+        public RowData next() {
+            RowData row = this.itr.next();
+            row.setRowKind(RowKind.DELETE);
+            return this.projection.project(row);
+        }
 
-  /**
-   * A before/after image manager
-   * that caches the image records by versions(file slices).
-   */
-  private static class ImageManager implements AutoCloseable {
-    private final HoodieWriteConfig writeConfig;
-
-    private final RowDataSerializer serializer;
-    private final Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc;
-
-    private final Map<String, ExternalSpillableMap<String, byte[]>> cache;
-
-    public ImageManager(
-        Configuration flinkConf,
-        RowType rowType,
-        Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
-      this.serializer = new RowDataSerializer(rowType);
-      this.splitIteratorFunc = splitIteratorFunc;
-      this.cache = new TreeMap<>();
-      this.writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
+        @Override
+        public void close() {
+            this.itr.close();
+        }
     }
 
-    public ExternalSpillableMap<String, byte[]> getOrLoadImages(
-        long maxCompactionMemoryInBytes,
-        FileSlice fileSlice) throws IOException {
-      final String instant = fileSlice.getBaseInstantTime();
-      if (this.cache.containsKey(instant)) {
-        return cache.get(instant);
-      }
-      // clean the earliest file slice first
-      if (this.cache.size() > 1) {
-        // keep at most 2 versions: before & after
-        String instantToClean = this.cache.keySet().iterator().next();
-        this.cache.remove(instantToClean).close();
-      }
-      ExternalSpillableMap<String, byte[]> images = loadImageRecords(maxCompactionMemoryInBytes, fileSlice);
-      this.cache.put(instant, images);
-      return images;
+    public static final class BytesArrayInputView extends DataInputStream implements DataInputView {
+        public BytesArrayInputView(byte[] data) {
+            super(new ByteArrayInputStream(data));
+        }
+
+        public void skipBytesToRead(int numBytes) throws IOException {
+            while (numBytes > 0) {
+                int skipped = this.skipBytes(numBytes);
+                numBytes -= skipped;
+            }
+        }
     }
 
-    private ExternalSpillableMap<String, byte[]> loadImageRecords(
-        long maxCompactionMemoryInBytes,
-        FileSlice fileSlice) throws IOException {
-      MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(writeConfig.getBasePath(), fileSlice, maxCompactionMemoryInBytes);
-      ClosableIterator<RowData> itr = splitIteratorFunc.apply(inputSplit);
-      // initialize the image records map
-      ExternalSpillableMap<String, byte[]> imageRecordsMap =
-          FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes);
-      while (itr.hasNext()) {
-        RowData row = itr.next();
-        String recordKey = row.getString(HOODIE_RECORD_KEY_COL_POS).toString();
-        ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
-        serializer.serialize(row, new BytesArrayOutputView(baos));
-        imageRecordsMap.put(recordKey, baos.toByteArray());
-      }
-      itr.close(); // release resource
-      return imageRecordsMap;
+    public static final class BytesArrayOutputView extends DataOutputStream
+            implements DataOutputView {
+        public BytesArrayOutputView(ByteArrayOutputStream baos) {
+            super(baos);
+        }
+
+        public void skipBytesToWrite(int numBytes) throws IOException {
+            for (int i = 0; i < numBytes; ++i) {
+                this.write(0);
+            }
+        }
+
+        public void write(DataInputView source, int numBytes) throws IOException {
+            byte[] buffer = new byte[numBytes];
+            source.readFully(buffer);
+            this.write(buffer);
+        }
     }
 
-    public RowData getImageRecord(
-        String recordKey,
-        ExternalSpillableMap<String, byte[]> cache,
-        RowKind rowKind) {
-      byte[] bytes = cache.get(recordKey);
-      ValidationUtils.checkState(bytes != null,
-          "Key " + recordKey + " does not exist in current file group");
-      try {
-        RowData row = serializer.deserialize(new BytesArrayInputView(bytes));
-        row.setRowKind(rowKind);
-        return row;
-      } catch (IOException e) {
-        throw new HoodieException("Deserialize bytes into row data exception", e);
-      }
+    /** A before/after image manager that caches the image records by versions(file slices). */
+    private static class ImageManager implements AutoCloseable {
+        private final HoodieWriteConfig writeConfig;
+
+        private final RowDataSerializer serializer;
+        private final Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc;
+
+        private final Map<String, ExternalSpillableMap<String, byte[]>> cache;
+
+        public ImageManager(
+                Configuration flinkConf,
+                RowType rowType,
+                Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
+            this.serializer = new RowDataSerializer(rowType);
+            this.splitIteratorFunc = splitIteratorFunc;
+            this.cache = new TreeMap<>();
+            this.writeConfig = FlinkWriteClients.getHoodieClientConfig(flinkConf);
+        }
+
+        public ExternalSpillableMap<String, byte[]> getOrLoadImages(
+                long maxCompactionMemoryInBytes, FileSlice fileSlice) throws IOException {
+            final String instant = fileSlice.getBaseInstantTime();
+            if (this.cache.containsKey(instant)) {
+                return cache.get(instant);
+            }
+            // clean the earliest file slice first
+            if (this.cache.size() > 1) {
+                // keep at most 2 versions: before & after
+                String instantToClean = this.cache.keySet().iterator().next();
+                this.cache.remove(instantToClean).close();
+            }
+            ExternalSpillableMap<String, byte[]> images =
+                    loadImageRecords(maxCompactionMemoryInBytes, fileSlice);
+            this.cache.put(instant, images);
+            return images;
+        }
+
+        private ExternalSpillableMap<String, byte[]> loadImageRecords(
+                long maxCompactionMemoryInBytes, FileSlice fileSlice) throws IOException {
+            MergeOnReadInputSplit inputSplit =
+                    CdcInputFormat.fileSlice2Split(
+                            writeConfig.getBasePath(), fileSlice, maxCompactionMemoryInBytes);
+            ClosableIterator<RowData> itr = splitIteratorFunc.apply(inputSplit);
+            // initialize the image records map
+            ExternalSpillableMap<String, byte[]> imageRecordsMap =
+                    FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes);
+            while (itr.hasNext()) {
+                RowData row = itr.next();
+                String recordKey = row.getString(HOODIE_RECORD_KEY_COL_POS).toString();
+                ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
+                serializer.serialize(row, new BytesArrayOutputView(baos));
+                imageRecordsMap.put(recordKey, baos.toByteArray());
+            }
+            itr.close(); // release resource
+            return imageRecordsMap;
+        }
+
+        public RowData getImageRecord(
+                String recordKey, ExternalSpillableMap<String, byte[]> cache, RowKind rowKind) {
+            byte[] bytes = cache.get(recordKey);
+            ValidationUtils.checkState(
+                    bytes != null, "Key " + recordKey + " does not exist in current file group");
+            try {
+                RowData row = serializer.deserialize(new BytesArrayInputView(bytes));
+                row.setRowKind(rowKind);
+                return row;
+            } catch (IOException e) {
+                throw new HoodieException("Deserialize bytes into row data exception", e);
+            }
+        }
+
+        public void updateImageRecord(
+                String recordKey, ExternalSpillableMap<String, byte[]> cache, RowData row) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
+            try {
+                serializer.serialize(row, new BytesArrayOutputView(baos));
+            } catch (IOException e) {
+                throw new HoodieException("Serialize row data into bytes exception", e);
+            }
+            cache.put(recordKey, baos.toByteArray());
+        }
+
+        public RowData removeImageRecord(String recordKey, ExternalSpillableMap<String, byte[]> cache) {
+            byte[] bytes = cache.remove(recordKey);
+            if (bytes == null) {
+                return null;
+            }
+            try {
+                return serializer.deserialize(new BytesArrayInputView(bytes));
+            } catch (IOException e) {
+                throw new HoodieException("Deserialize bytes into row data exception", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            this.cache.values().forEach(ExternalSpillableMap::close);
+            this.cache.clear();
+        }
     }
 
-    public void updateImageRecord(
-        String recordKey,
-        ExternalSpillableMap<String, byte[]> cache,
-        RowData row) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
-      try {
-        serializer.serialize(row, new BytesArrayOutputView(baos));
-      } catch (IOException e) {
-        throw new HoodieException("Serialize row data into bytes exception", e);
-      }
-      cache.put(recordKey, baos.toByteArray());
+    /** Builder for {@link CdcInputFormat}. */
+    public static class Builder extends MergeOnReadInputFormat.Builder {
+
+        public Builder config(Configuration conf) {
+            this.conf = conf;
+            return this;
+        }
+
+        public Builder tableState(MergeOnReadTableState tableState) {
+            this.tableState = tableState;
+            return this;
+        }
+
+        public Builder fieldTypes(List<DataType> fieldTypes) {
+            this.fieldTypes = fieldTypes;
+            return this;
+        }
+
+        public Builder defaultPartName(String defaultPartName) {
+            this.defaultPartName = defaultPartName;
+            return this;
+        }
+
+        public Builder predicates(List<Predicate> predicates) {
+            this.predicates = predicates;
+            return this;
+        }
+
+        public Builder limit(long limit) {
+            this.limit = limit;
+            return this;
+        }
+
+        public Builder emitDelete(boolean emitDelete) {
+            this.emitDelete = emitDelete;
+            return this;
+        }
+
+        public CdcInputFormat build() {
+            return new CdcInputFormat(
+                    conf, tableState, fieldTypes, defaultPartName, predicates, limit, emitDelete);
+        }
     }
 
-    public RowData removeImageRecord(
-        String recordKey,
-        ExternalSpillableMap<String, byte[]> cache) {
-      byte[] bytes = cache.remove(recordKey);
-      if (bytes == null) {
-        return null;
-      }
-      try {
-        return serializer.deserialize(new BytesArrayInputView(bytes));
-      } catch (IOException e) {
-        throw new HoodieException("Deserialize bytes into row data exception", e);
-      }
+    // -------------------------------------------------------------------------
+    //  Utilities
+    // -------------------------------------------------------------------------
+    public static MergeOnReadInputSplit fileSlice2Split(
+            String tablePath, FileSlice fileSlice, long maxCompactionMemoryInBytes) {
+        Option<List<String>> logPaths =
+                Option.ofNullable(
+                        fileSlice
+                                .getLogFiles()
+                                .sorted(HoodieLogFile.getLogFileComparator())
+                                .map(logFile -> logFile.getPath().toString())
+                                // filter out the cdc logs
+                                .filter(path -> !path.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+                                .collect(Collectors.toList()));
+        String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+        return new MergeOnReadInputSplit(
+                0,
+                basePath,
+                logPaths,
+                fileSlice.getLatestInstantTime(),
+                tablePath,
+                maxCompactionMemoryInBytes,
+                FlinkOptions.REALTIME_PAYLOAD_COMBINE,
+                null,
+                fileSlice.getFileId());
     }
 
-    @Override
-    public void close() {
-      this.cache.values().forEach(ExternalSpillableMap::close);
-      this.cache.clear();
+    public static MergeOnReadInputSplit singleLogFile2Split(
+            String tablePath, String filePath, long maxCompactionMemoryInBytes) {
+        return new MergeOnReadInputSplit(
+                0,
+                null,
+                Option.of(Collections.singletonList(filePath)),
+                FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)),
+                tablePath,
+                maxCompactionMemoryInBytes,
+                FlinkOptions.REALTIME_PAYLOAD_COMBINE,
+                null,
+                FSUtils.getFileIdFromLogPath(new StoragePath(filePath)));
     }
-  }
-
-  /**
-   * Builder for {@link CdcInputFormat}.
-   */
-  public static class Builder extends MergeOnReadInputFormat.Builder {
-
-    public Builder config(Configuration conf) {
-      this.conf = conf;
-      return this;
-    }
-
-    public Builder tableState(MergeOnReadTableState tableState) {
-      this.tableState = tableState;
-      return this;
-    }
-
-    public Builder fieldTypes(List<DataType> fieldTypes) {
-      this.fieldTypes = fieldTypes;
-      return this;
-    }
-
-    public Builder defaultPartName(String defaultPartName) {
-      this.defaultPartName = defaultPartName;
-      return this;
-    }
-
-    public Builder predicates(List<Predicate> predicates) {
-      this.predicates = predicates;
-      return this;
-    }
-
-    public Builder limit(long limit) {
-      this.limit = limit;
-      return this;
-    }
-
-    public Builder emitDelete(boolean emitDelete) {
-      this.emitDelete = emitDelete;
-      return this;
-    }
-
-    public CdcInputFormat build() {
-      return new CdcInputFormat(conf, tableState, fieldTypes,
-          defaultPartName, predicates, limit, emitDelete);
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-  public static MergeOnReadInputSplit fileSlice2Split(
-      String tablePath,
-      FileSlice fileSlice,
-      long maxCompactionMemoryInBytes) {
-    Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-        .sorted(HoodieLogFile.getLogFileComparator())
-        .map(logFile -> logFile.getPath().toString())
-        // filter out the cdc logs
-        .filter(path -> !path.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-        .collect(Collectors.toList()));
-    String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-    return new MergeOnReadInputSplit(0, basePath, logPaths,
-        fileSlice.getLatestInstantTime(), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, fileSlice.getFileId());
-  }
-
-  public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
-    return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-        FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)));
-  }
 }

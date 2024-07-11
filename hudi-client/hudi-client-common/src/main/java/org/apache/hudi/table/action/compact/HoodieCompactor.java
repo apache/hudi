@@ -18,6 +18,16 @@
 
 package org.apache.hudi.table.action.compact;
 
+import static java.util.stream.Collectors.toList;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.stream.StreamSupport;
+import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -48,24 +58,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
-
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.stream.StreamSupport;
-
-import static java.util.stream.Collectors.toList;
-
-/**
- * A HoodieCompactor runs compaction on a hoodie table.
- */
+/** A HoodieCompactor runs compaction on a hoodie table. */
 public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
@@ -73,28 +69,37 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
   /**
    * Handles the compaction timeline based on the compaction instant before actual compaction.
    *
-   * @param table                     {@link HoodieTable} instance to use.
+   * @param table {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
-   * @param instantTime     compaction instant
+   * @param instantTime compaction instant
    */
   public abstract void preCompact(
-      HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime);
+      HoodieTable table,
+      HoodieTimeline pendingCompactionTimeline,
+      WriteOperationType operationType,
+      String instantTime);
 
   /**
    * Maybe persist write status.
    *
    * @param writeStatus {@link HoodieData} of {@link WriteStatus}.
    */
-  public abstract void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime);
+  public abstract void maybePersist(
+      HoodieData<WriteStatus> writeStatus,
+      HoodieEngineContext context,
+      HoodieWriteConfig config,
+      String instantTime);
 
-  /**
-   * Execute compaction operations and report back status.
-   */
+  /** Execute compaction operations and report back status. */
   public HoodieData<WriteStatus> compact(
-      HoodieEngineContext context, HoodieCompactionPlan compactionPlan,
-      HoodieTable table, HoodieWriteConfig config, String compactionInstantTime,
+      HoodieEngineContext context,
+      HoodieCompactionPlan compactionPlan,
+      HoodieTable table,
+      HoodieWriteConfig config,
+      String compactionInstantTime,
       HoodieCompactionHandler compactionHandler) {
-    if (compactionPlan == null || (compactionPlan.getOperations() == null)
+    if (compactionPlan == null
+        || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       return context.emptyHoodieData();
     }
@@ -120,47 +125,71 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
 
     // Compacting is very similar to applying updates to existing file
-    List<CompactionOperation> operations = compactionPlan.getOperations().stream()
-        .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
+    List<CompactionOperation> operations =
+        compactionPlan.getOperations().stream()
+            .map(CompactionOperation::convertFromAvroRecordInstance)
+            .collect(toList());
     LOG.info("Compactor compacting " + operations + " files");
 
     String maxInstantTime = getMaxInstantTime(metaClient);
 
-    context.setJobStatus(this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
+    context.setJobStatus(
+        this.getClass().getSimpleName(), "Compacting file slices: " + config.getTableName());
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
-    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
+    // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot
+    // reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
-    return context.parallelize(operations).map(operation -> compact(
-        compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
+    return context
+        .parallelize(operations)
+        .map(
+            operation ->
+                compact(
+                    compactionHandler,
+                    metaClient,
+                    config,
+                    operation,
+                    compactionInstantTime,
+                    maxInstantTime,
+                    instantRange,
+                    taskContextSupplier,
+                    executionHelper))
         .flatMap(List::iterator);
   }
 
-  /**
-   * Execute a single compaction operation and report back status.
-   */
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig config,
-                                   CompactionOperation operation,
-                                   String instantTime,
-                                   String maxInstantTime,
-                                   TaskContextSupplier taskContextSupplier) throws IOException {
-    return compact(compactionHandler, metaClient, config, operation, instantTime, maxInstantTime, Option.empty(),
-        taskContextSupplier, new CompactionExecutionHelper());
+  /** Execute a single compaction operation and report back status. */
+  public List<WriteStatus> compact(
+      HoodieCompactionHandler compactionHandler,
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig config,
+      CompactionOperation operation,
+      String instantTime,
+      String maxInstantTime,
+      TaskContextSupplier taskContextSupplier)
+      throws IOException {
+    return compact(
+        compactionHandler,
+        metaClient,
+        config,
+        operation,
+        instantTime,
+        maxInstantTime,
+        Option.empty(),
+        taskContextSupplier,
+        new CompactionExecutionHelper());
   }
 
-  /**
-   * Execute a single compaction operation and report back status.
-   */
-  public List<WriteStatus> compact(HoodieCompactionHandler compactionHandler,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieWriteConfig config,
-                                   CompactionOperation operation,
-                                   String instantTime,
-                                   String maxInstantTime,
-                                   Option<InstantRange> instantRange,
-                                   TaskContextSupplier taskContextSupplier,
-                                   CompactionExecutionHelper executionHelper) throws IOException {
+  /** Execute a single compaction operation and report back status. */
+  public List<WriteStatus> compact(
+      HoodieCompactionHandler compactionHandler,
+      HoodieTableMetaClient metaClient,
+      HoodieWriteConfig config,
+      CompactionOperation operation,
+      String instantTime,
+      String maxInstantTime,
+      Option<InstantRange> instantRange,
+      TaskContextSupplier taskContextSupplier,
+      CompactionExecutionHelper executionHelper)
+      throws IOException {
     HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -170,11 +199,17 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       // its safe to modify config here, since we are running in task side.
       ((HoodieTable) compactionHandler).getConfig().setDefault(config);
     } else {
-      readerSchema = HoodieAvroUtils.addMetadataFields(
-          new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+      readerSchema =
+          HoodieAvroUtils.addMetadataFields(
+              new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     }
-    LOG.info("Compaction operation started for base file: " + operation.getDataFileName() + " and delta files: " + operation.getDeltaFileNames()
-        + " for commit " + instantTime);
+    LOG.info(
+        "Compaction operation started for base file: "
+            + operation.getDataFileName()
+            + " and delta files: "
+            + operation.getDeltaFileNames()
+            + " for commit "
+            + instantTime);
     // TODO - FIX THIS
     // Reads the entire avro file. Always only specific blocks should be read from the avro file
     // (failure recover).
@@ -185,42 +220,55 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
 
-    List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
-            new StoragePath(FSUtils.constructAbsolutePath(
-                metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
-        .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(storage)
-        .withBasePath(metaClient.getBasePath())
-        .withLogFilePaths(logFiles)
-        .withReaderSchema(readerSchema)
-        .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
-        .withInstantRange(instantRange)
-        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
-        .withReverseReader(config.getCompactionReverseLogReadEnabled())
-        .withBufferSize(config.getMaxDFSStreamBufferSize())
-        .withSpillableMapBasePath(config.getSpillableMapBasePath())
-        .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
-        .withBitCaskDiskMapCompressionEnabled(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
-        .withOperationField(config.allowOperationMetadataField())
-        .withPartition(operation.getPartitionPath())
-        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
-        .withRecordMerger(config.getRecordMerger())
-        .withTableMetaClient(metaClient)
-        .build();
+    List<String> logFiles =
+        operation.getDeltaFileNames().stream()
+            .map(
+                p ->
+                    new StoragePath(
+                            FSUtils.constructAbsolutePath(
+                                metaClient.getBasePath(), operation.getPartitionPath()),
+                            p)
+                        .toString())
+            .collect(toList());
+    HoodieMergedLogRecordScanner scanner =
+        HoodieMergedLogRecordScanner.newBuilder()
+            .withStorage(storage)
+            .withBasePath(metaClient.getBasePath())
+            .withLogFilePaths(logFiles)
+            .withReaderSchema(readerSchema)
+            .withLatestInstantTime(
+                executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+            .withInstantRange(instantRange)
+            .withInternalSchema(
+                internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+            .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+            .withReverseReader(config.getCompactionReverseLogReadEnabled())
+            .withBufferSize(config.getMaxDFSStreamBufferSize())
+            .withSpillableMapBasePath(config.getSpillableMapBasePath())
+            .withDiskMapType(config.getCommonConfig().getSpillableDiskMapType())
+            .withBitCaskDiskMapCompressionEnabled(
+                config.getCommonConfig().isBitCaskDiskMapCompressionEnabled())
+            .withOperationField(config.allowOperationMetadataField())
+            .withPartition(operation.getPartitionPath())
+            .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+            .withRecordMerger(config.getRecordMerger())
+            .withTableMetaClient(metaClient)
+            .build();
 
     Option<HoodieBaseFile> oldDataFileOpt =
         operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
-    // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
-    // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
+    // Considering following scenario: if all log blocks in this fileSlice is rollback, it
+    // returns an empty scanner.
+    // But in this case, we need to give it a base file. Otherwise, it will lose base file in
+    // following fileSlice.
     if (!scanner.iterator().hasNext()) {
       if (!oldDataFileOpt.isPresent()) {
         scanner.close();
         return new ArrayList<>();
       } else {
-        // TODO: we may directly rename original parquet file if there is not evolution/devolution of schema
+        // TODO: we may directly rename original parquet file if there is not
+        // evolution/devolution of schema
         /*
         TaskContextSupplier taskContextSupplier = hoodieCopyOnWriteTable.getTaskContextSupplier();
         String newFileName = FSUtils.makeDataFileName(instantTime,
@@ -235,47 +283,63 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+    result =
+        executionHelper.writeFileAndGetWriteStats(
+            compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
-    return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
-      final HoodieWriteStat stat = s.getStat();
-      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
-      stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
-      stat.setTotalLogRecords(scanner.getTotalLogRecords());
-      stat.setPartitionPath(operation.getPartitionPath());
-      stat
-          .setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
-      stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
-      stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
-      stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
-      RuntimeStats runtimeStats = new RuntimeStats();
-      // scan time has to be obtained from scanner.
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
-      // create and upsert time are obtained from the create or merge handle.
-      if (stat.getRuntimeStats() != null) {
-        runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
-        runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
-      }
-      stat.setRuntimeStats(runtimeStats);
-    }).collect(toList());
+    return StreamSupport.stream(resultIterable.spliterator(), false)
+        .flatMap(Collection::stream)
+        .peek(
+            s -> {
+              final HoodieWriteStat stat = s.getStat();
+              stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+              stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
+              stat.setTotalLogRecords(scanner.getTotalLogRecords());
+              stat.setPartitionPath(operation.getPartitionPath());
+              stat.setTotalLogSizeCompacted(
+                  operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+              stat.setTotalLogBlocks(scanner.getTotalLogBlocks());
+              stat.setTotalCorruptLogBlock(scanner.getTotalCorruptBlocks());
+              stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
+              RuntimeStats runtimeStats = new RuntimeStats();
+              // scan time has to be obtained from scanner.
+              runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+              // create and upsert time are obtained from the create or merge handle.
+              if (stat.getRuntimeStats() != null) {
+                runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());
+                runtimeStats.setTotalUpsertTime(stat.getRuntimeStats().getTotalUpsertTime());
+              }
+              stat.setRuntimeStats(runtimeStats);
+            })
+        .collect(toList());
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
-    String maxInstantTime = metaClient
-        .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
-            HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+    String maxInstantTime =
+        metaClient
+            .getActiveTimeline()
+            .getTimelineOfActions(
+                CollectionUtils.createSet(
+                    HoodieTimeline.COMMIT_ACTION,
+                    HoodieTimeline.ROLLBACK_ACTION,
+                    HoodieTimeline.DELTA_COMMIT_ACTION))
+            .filterCompletedInstants()
+            .lastInstant()
+            .get()
+            .getTimestamp();
     return maxInstantTime;
   }
 
-  public CompactionExecutionHelper getCompactionExecutionStrategy(HoodieCompactionPlan compactionPlan) {
-    if (compactionPlan.getStrategy() == null || StringUtils.isNullOrEmpty(compactionPlan.getStrategy().getCompactorClassName())) {
+  public CompactionExecutionHelper getCompactionExecutionStrategy(
+      HoodieCompactionPlan compactionPlan) {
+    if (compactionPlan.getStrategy() == null
+        || StringUtils.isNullOrEmpty(compactionPlan.getStrategy().getCompactorClassName())) {
       return new CompactionExecutionHelper();
     } else {
-      CompactionExecutionHelper executionStrategy = ReflectionUtils.loadClass(compactionPlan.getStrategy().getCompactorClassName());
+      CompactionExecutionHelper executionStrategy =
+          ReflectionUtils.loadClass(compactionPlan.getStrategy().getCompactorClassName());
       return executionStrategy;
     }
   }
-
 }

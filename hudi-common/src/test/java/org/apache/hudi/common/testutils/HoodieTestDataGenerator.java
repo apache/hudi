@@ -19,37 +19,9 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
-import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
-
-import org.apache.avro.Conversions;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericArray;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericFixed;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -77,22 +49,50 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
+import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Class to be used in tests to keep generating test inserts and updates against a corpus.
- * <p>
- * Test data uses a toy Uber trips, data model.
+ *
+ * <p>Test data uses a toy Uber trips, data model.
  */
 public class HoodieTestDataGenerator implements AutoCloseable {
 
   /**
-   * You may get a different result due to the upgrading of Spark 3.0: reading dates before 1582-10-15 or timestamps before 1900-01-01T00:00:00Z from Parquet INT96 files can be ambiguous,
-   * as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid calendar that is different from Spark 3.0+s Proleptic Gregorian calendar.
-   * See more details in SPARK-31404.
+   * You may get a different result due to the upgrading of Spark 3.0: reading dates before
+   * 1582-10-15 or timestamps before 1900-01-01T00:00:00Z from Parquet INT96 files can be ambiguous,
+   * as the files may be written by Spark 2.x or legacy versions of Hive, which uses a legacy hybrid
+   * calendar that is different from Spark 3.0+s Proleptic Gregorian calendar. See more details in
+   * SPARK-31404.
    */
   private boolean makeDatesAmbiguous = false;
 
@@ -106,72 +106,97 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String DEFAULT_SECOND_PARTITION_PATH = "2015/03/16";
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";
 
-  public static final String[] DEFAULT_PARTITION_PATHS =
-      {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
+  public static final String[] DEFAULT_PARTITION_PATHS = {
+    DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH
+  };
   public static final int DEFAULT_PARTITION_DEPTH = 3;
 
   public static final String TRIP_TYPE_ENUM_TYPE =
       "{\"type\": \"enum\", \"name\": \"TripType\", \"symbols\": [\"UNKNOWN\", \"UBERX\", \"BLACK\"], \"default\": \"UNKNOWN\"}";
   public static final Schema TRIP_TYPE_ENUM_SCHEMA = new Schema.Parser().parse(TRIP_TYPE_ENUM_TYPE);
 
-  public static final String TRIP_SCHEMA_PREFIX = "{\"type\": \"record\"," + "\"name\": \"triprec\"," + "\"fields\": [ "
-      + "{\"name\": \"timestamp\",\"type\": \"long\"}," + "{\"name\": \"_row_key\", \"type\": \"string\"},"
-      + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
-      + "{\"name\": \"trip_type\", \"type\": " + TRIP_TYPE_ENUM_TYPE + "},"
-      + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
-      + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
-      + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
-  public static final String TRIP_SCHEMA_SUFFIX = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
-  public static final String FARE_NESTED_SCHEMA = "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
-      + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
-  public static final String FARE_FLATTENED_SCHEMA = "{\"name\": \"fare\", \"type\": \"double\"},"
-      + "{\"name\": \"currency\", \"type\": \"string\"},";
-  public static final String TIP_NESTED_SCHEMA = "{\"name\": \"tip_history\", \"default\": [], \"type\": {\"type\": "
-      + "\"array\", \"default\": [], \"items\": {\"type\": \"record\", \"default\": null, \"name\": \"tip_history\", \"fields\": ["
-      + "{\"name\": \"amount\", \"type\": \"double\"}, {\"name\": \"currency\", \"type\": \"string\"}]}}},";
-  public static final String MAP_TYPE_SCHEMA = "{\"name\": \"city_to_state\", \"type\": {\"type\": \"map\", \"values\": \"string\"}},";
-  public static final String EXTRA_TYPE_SCHEMA = "{\"name\": \"distance_in_meters\", \"type\": \"int\"},"
-      + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
-      + "{\"name\": \"weight\", \"type\": \"float\"},"
-      + "{\"name\": \"nation\", \"type\": \"bytes\"},"
-      + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
-      + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
-      + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
+  public static final String TRIP_SCHEMA_PREFIX =
+      "{\"type\": \"record\","
+          + "\"name\": \"triprec\","
+          + "\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"long\"},"
+          + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"partition_path\", \"type\": [\"null\", \"string\"], \"default\": null },"
+          + "{\"name\": \"trip_type\", \"type\": "
+          + TRIP_TYPE_ENUM_TYPE
+          + "},"
+          + "{\"name\": \"rider\", \"type\": \"string\"},"
+          + "{\"name\": \"driver\", \"type\": \"string\"},"
+          + "{\"name\": \"begin_lat\", \"type\": \"double\"},"
+          + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
+          + "{\"name\": \"end_lat\", \"type\": \"double\"},"
+          + "{\"name\": \"end_lon\", \"type\": \"double\"},";
+  public static final String TRIP_SCHEMA_SUFFIX =
+      "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
+  public static final String FARE_NESTED_SCHEMA =
+      "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
+          + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
+  public static final String FARE_FLATTENED_SCHEMA =
+      "{\"name\": \"fare\", \"type\": \"double\"},"
+          + "{\"name\": \"currency\", \"type\": \"string\"},";
+  public static final String TIP_NESTED_SCHEMA =
+      "{\"name\": \"tip_history\", \"default\": [], \"type\": {\"type\": "
+          + "\"array\", \"default\": [], \"items\": {\"type\": \"record\", \"default\": null, \"name\": \"tip_history\", \"fields\": ["
+          + "{\"name\": \"amount\", \"type\": \"double\"}, {\"name\": \"currency\", \"type\": \"string\"}]}}},";
+  public static final String MAP_TYPE_SCHEMA =
+      "{\"name\": \"city_to_state\", \"type\": {\"type\": \"map\", \"values\": \"string\"}},";
+  public static final String EXTRA_TYPE_SCHEMA =
+      "{\"name\": \"distance_in_meters\", \"type\": \"int\"},"
+          + "{\"name\": \"seconds_since_epoch\", \"type\": \"long\"},"
+          + "{\"name\": \"weight\", \"type\": \"float\"},"
+          + "{\"name\": \"nation\", \"type\": \"bytes\"},"
+          + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
+          + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
+          + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String TRIP_EXAMPLE_SCHEMA =
-      TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
+      TRIP_SCHEMA_PREFIX
+          + EXTRA_TYPE_SCHEMA
+          + MAP_TYPE_SCHEMA
+          + FARE_NESTED_SCHEMA
+          + TIP_NESTED_SCHEMA
+          + TRIP_SCHEMA_SUFFIX;
   public static final String TRIP_FLATTENED_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_FLATTENED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
   public static final String TRIP_NESTED_EXAMPLE_SCHEMA =
       TRIP_SCHEMA_PREFIX + FARE_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX;
 
-  public static final String TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
-      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
-  public static final String SHORT_TRIP_SCHEMA = "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
-      + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
-      + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+  public static final String TRIP_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"tripUberRec\",\"fields\":["
+          + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+          + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
+  public static final String SHORT_TRIP_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"shortTripRec\",\"fields\":["
+          + "{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"_row_key\",\"type\":\"string\"},{\"name\":\"rider\",\"type\":\"string\"},"
+          + "{\"name\":\"driver\",\"type\":\"string\"},{\"name\":\"fare\",\"type\":\"double\"},{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}]}";
 
   public static final String NULL_SCHEMA = Schema.create(Schema.Type.NULL).toString();
-  public static final String TRIP_HIVE_COLUMN_TYPES = "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
-      + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
-
+  public static final String TRIP_HIVE_COLUMN_TYPES =
+      "bigint,string,string,string,string,string,double,double,double,double,int,bigint,float,binary,int,bigint,decimal(10,6),"
+          + "map<string,string>,struct<amount:double,currency:string>,array<struct<amount:double,currency:string>>,boolean";
 
   public static final Schema AVRO_SCHEMA = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA);
-  public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
+  public static final Schema NESTED_AVRO_SCHEMA =
+      new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
       HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_SCHEMA = new Schema.Parser().parse(TRIP_SCHEMA);
-  public static final Schema FLATTENED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
+  public static final Schema FLATTENED_AVRO_SCHEMA =
+      new Schema.Parser().parse(TRIP_FLATTENED_SCHEMA);
 
   private final Random rand;
 
-  //Maintains all the existing keys schema wise
+  // Maintains all the existing keys schema wise
   private final Map<String, Map<Integer, KeyPartition>> existingKeysBySchema;
   private final String[] partitionPaths;
-  //maintains the count of existing keys schema wise
+  // maintains the count of existing keys schema wise
   private Map<String, Integer> numKeysBySchema;
 
   public HoodieTestDataGenerator(long seed) {
@@ -182,11 +207,16 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     this(schema, seed, DEFAULT_PARTITION_PATHS, new HashMap<>());
   }
 
-  public HoodieTestDataGenerator(long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
+  public HoodieTestDataGenerator(
+      long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
     this(TRIP_EXAMPLE_SCHEMA, seed, partitionPaths, keyPartitionMap);
   }
 
-  public HoodieTestDataGenerator(String schema, long seed, String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
+  public HoodieTestDataGenerator(
+      String schema,
+      long seed,
+      String[] partitionPaths,
+      Map<Integer, KeyPartition> keyPartitionMap) {
     this.rand = new Random(seed);
     this.partitionPaths = Arrays.copyOf(partitionPaths, partitionPaths.length);
     this.existingKeysBySchema = new HashMap<>();
@@ -212,15 +242,15 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public static HoodieTestDataGenerator createTestGeneratorFirstPartition() {
-    return new HoodieTestDataGenerator(new String[]{DEFAULT_FIRST_PARTITION_PATH});
+    return new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
   }
 
   public static HoodieTestDataGenerator createTestGeneratorSecondPartition() {
-    return new HoodieTestDataGenerator(new String[]{DEFAULT_SECOND_PARTITION_PATH});
+    return new HoodieTestDataGenerator(new String[] {DEFAULT_SECOND_PARTITION_PATH});
   }
 
   public static HoodieTestDataGenerator createTestGeneratorThirdPartition() {
-    return new HoodieTestDataGenerator(new String[]{DEFAULT_THIRD_PARTITION_PATH});
+    return new HoodieTestDataGenerator(new String[] {DEFAULT_THIRD_PARTITION_PATH});
   }
 
   public HoodieTestDataGenerator(boolean makeDatesAmbiguous) {
@@ -229,10 +259,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   @Deprecated
-  public HoodieTestDataGenerator(String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
+  public HoodieTestDataGenerator(
+      String[] partitionPaths, Map<Integer, KeyPartition> keyPartitionMap) {
     // NOTE: This used as a workaround to make sure that new instantiations of the generator
     //       always return "new" random values.
-    //       Caveat is that if 2 successive invocations are made w/in the timespan that is smaller
+    //       Caveat is that if 2 successive invocations are made w/in the timespan that is
+    // smaller
     //       than the resolution of {@code nanoTime}, then this will produce identical results
     this(System.nanoTime(), partitionPaths, keyPartitionMap);
   }
@@ -252,30 +284,33 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public static String getCommitTimeAtUTC(long epochSecond) {
-    return HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(Instant.ofEpochSecond(epochSecond).atZone(ZoneOffset.UTC));
+    return HoodieInstantTimeGenerator.getInstantFromTemporalAccessor(
+        Instant.ofEpochSecond(epochSecond).atZone(ZoneOffset.UTC));
   }
 
-  /**
-   * @deprecated please use non-static version
-   */
-  public static void writePartitionMetadataDeprecated(HoodieStorage storage,
-                                                      String[] partitionPaths,
-                                                      String basePath) {
+  /** @deprecated please use non-static version */
+  public static void writePartitionMetadataDeprecated(
+      HoodieStorage storage, String[] partitionPaths, String basePath) {
     new HoodieTestDataGenerator().writePartitionMetadata(storage, partitionPaths, basePath);
   }
 
   //////////////////////////////////////////////////////////////////////////////////
 
   /**
-   * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas. Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
+   * @implNote {@link HoodieTestDataGenerator} is supposed to just generate records with schemas.
+   *     Leave HoodieTable files (metafile, basefile, logfile, etc) to {@link HoodieTestTable}.
    * @deprecated Use {@link HoodieTestTable#withPartitionMetaFiles(java.lang.String...)} instead.
    */
-  public void writePartitionMetadata(HoodieStorage storage,
-                                     String[] partitionPaths,
-                                     String basePath) {
+  public void writePartitionMetadata(
+      HoodieStorage storage, String[] partitionPaths, String basePath) {
     for (String partitionPath : partitionPaths) {
-      new HoodiePartitionMetadata(storage, "000", new StoragePath(basePath),
-          new StoragePath(basePath, partitionPath), Option.empty()).trySave();
+      new HoodiePartitionMetadata(
+              storage,
+              "000",
+              new StoragePath(basePath),
+              new StoragePath(basePath, partitionPath),
+              Option.empty())
+          .trySave();
     }
   }
 
@@ -283,7 +318,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return numOfRecords * BYTES_PER_RECORD + BLOOM_FILTER_BYTES;
   }
 
-  public RawTripTestPayload generateRandomValueAsPerSchema(String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
+  public RawTripTestPayload generateRandomValueAsPerSchema(
+      String schemaStr, HoodieKey key, String commitTime, boolean isFlattened) throws IOException {
     if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
       return generateRandomValue(key, commitTime, isFlattened);
     } else if (TRIP_SCHEMA.equals(schemaStr)) {
@@ -298,24 +334,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates a new avro record of the above nested schema format,
-   * retaining the key if optionally provided.
+   * Generates a new avro record of the above nested schema format, retaining the key if optionally
+   * provided.
    *
    * @param key Hoodie key.
    * @param instantTime Instant time to use.
    * @return Raw paylaod of a test record.
    */
-  public RawTripTestPayload generateRandomValue(HoodieKey key, String instantTime) throws IOException {
+  public RawTripTestPayload generateRandomValue(HoodieKey key, String instantTime)
+      throws IOException {
     return generateRandomValue(key, instantTime, false);
   }
 
   /**
-   * Generates a new avro record with the specified schema (nested or flattened),
-   * retaining the key if optionally provided.
+   * Generates a new avro record with the specified schema (nested or flattened), retaining the key
+   * if optionally provided.
    *
-   * @param key  Hoodie key.
-   * @param instantTime  Commit time to use.
-   * @param isFlattened  whether the schema of the record should be flattened.
+   * @param key Hoodie key.
+   * @param instantTime Commit time to use.
+   * @param isFlattened whether the schema of the record should be flattened.
    * @return Raw paylaod of a test record.
    * @throws IOException
    */
@@ -324,72 +361,116 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateRandomValue(key, instantTime, isFlattened, 0);
   }
 
-  private RawTripTestPayload generateNestedExampleRandomValue(
-      HoodieKey key, String instantTime) throws IOException {
+  private RawTripTestPayload generateNestedExampleRandomValue(HoodieKey key, String instantTime)
+      throws IOException {
     return generateNestedExampleRandomValue(key, instantTime, 0);
   }
 
   private RawTripTestPayload generateRandomValue(
       HoodieKey key, String instantTime, boolean isFlattened, long timestamp) throws IOException {
-    GenericRecord rec = generateGenericRecord(
-        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
-        false, isFlattened);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    GenericRecord rec =
+        generateGenericRecord(
+            key.getRecordKey(),
+            key.getPartitionPath(),
+            "rider-" + instantTime,
+            "driver-" + instantTime,
+            timestamp,
+            false,
+            isFlattened);
+    return new RawTripTestPayload(
+        rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
   }
 
   private RawTripTestPayload generateNestedExampleRandomValue(
       HoodieKey key, String instantTime, int ts) throws IOException {
-    GenericRecord rec = generateNestedExampleGenericRecord(
-        key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, ts,
-        false);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+    GenericRecord rec =
+        generateNestedExampleGenericRecord(
+            key.getRecordKey(),
+            key.getPartitionPath(),
+            "rider-" + instantTime,
+            "driver-" + instantTime,
+            ts,
+            false);
+    return new RawTripTestPayload(
+        rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA);
+  }
+
+  /** Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided. */
+  public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime)
+      throws IOException {
+    GenericRecord rec =
+        generateRecordForTripSchema(
+            key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    return new RawTripTestPayload(
+        rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
+  }
+
+  public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime)
+      throws IOException {
+    GenericRecord rec =
+        generateRecordForShortTripSchema(
+            key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
+    return new RawTripTestPayload(
+        rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
+  }
+
+  /** Generates a new avro record of the above schema format for a delete. */
+  private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime)
+      throws IOException {
+    GenericRecord rec =
+        generateGenericRecord(
+            key.getRecordKey(),
+            key.getPartitionPath(),
+            "rider-" + instantTime,
+            "driver-" + instantTime,
+            0,
+            true,
+            false);
+    return new RawTripTestPayload(
+        Option.of(rec.toString()),
+        key.getRecordKey(),
+        key.getPartitionPath(),
+        TRIP_EXAMPLE_SCHEMA,
+        true,
+        0L);
   }
 
   /**
-   * Generates a new avro record with TRIP_SCHEMA, retaining the key if optionally provided.
-   */
-  public RawTripTestPayload generatePayloadForTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), TRIP_SCHEMA);
-  }
-
-  public RawTripTestPayload generatePayloadForShortTripSchema(HoodieKey key, String commitTime) throws IOException {
-    GenericRecord rec = generateRecordForShortTripSchema(key.getRecordKey(), "rider-" + commitTime, "driver-" + commitTime, 0);
-    return new RawTripTestPayload(rec.toString(), key.getRecordKey(), key.getPartitionPath(), SHORT_TRIP_SCHEMA);
-  }
-
-  /**
-   * Generates a new avro record of the above schema format for a delete.
-   */
-  private RawTripTestPayload generateRandomDeleteValue(HoodieKey key, String instantTime) throws IOException {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0,
-        true, false);
-    return new RawTripTestPayload(Option.of(rec.toString()), key.getRecordKey(), key.getPartitionPath(), TRIP_EXAMPLE_SCHEMA, true, 0L);
-  }
-
-  /**
-   * Generates a new avro record of the above schema format, retaining the key if optionally provided.
+   * Generates a new avro record of the above schema format, retaining the key if optionally
+   * provided.
    */
   private HoodieAvroPayload generateAvroPayload(HoodieKey key, String instantTime) {
-    GenericRecord rec = generateGenericRecord(key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, 0);
+    GenericRecord rec =
+        generateGenericRecord(
+            key.getRecordKey(),
+            key.getPartitionPath(),
+            "rider-" + instantTime,
+            "driver-" + instantTime,
+            0);
     return new HoodieAvroPayload(Option.of(rec));
   }
 
-  public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                             long timestamp) {
-    return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
+  public GenericRecord generateGenericRecord(
+      String rowKey, String partitionPath, String riderName, String driverName, long timestamp) {
+    return generateGenericRecord(
+        rowKey, partitionPath, riderName, driverName, timestamp, false, false);
   }
 
-
-  /**
-   * Populate rec with values for TRIP_SCHEMA_PREFIX
-   */
-  private void generateTripPrefixValues(GenericRecord rec, String rowKey, String partitionPath, String riderName, String driverName, long timestamp) {
+  /** Populate rec with values for TRIP_SCHEMA_PREFIX */
+  private void generateTripPrefixValues(
+      GenericRecord rec,
+      String rowKey,
+      String partitionPath,
+      String riderName,
+      String driverName,
+      long timestamp) {
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
     rec.put("partition_path", partitionPath);
-    rec.put("trip_type", new GenericData.EnumSymbol(
-        TRIP_TYPE_ENUM_SCHEMA, rand.nextInt(2) == 0 ? "UBERX" : "BLACK"));
+    rec.put(
+        "trip_type",
+        new GenericData.EnumSymbol(
+            TRIP_TYPE_ENUM_SCHEMA, rand.nextInt(2) == 0 ? "UBERX" : "BLACK"));
     rec.put("rider", riderName);
     rec.put("driver", driverName);
     rec.put("begin_lat", rand.nextDouble());
@@ -398,17 +479,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("end_lon", rand.nextDouble());
   }
 
-  /**
-   * Populate rec with values for FARE_FLATTENED_SCHEMA
-   */
+  /** Populate rec with values for FARE_FLATTENED_SCHEMA */
   private void generateFareFlattenedValues(GenericRecord rec) {
     rec.put("fare", rand.nextDouble() * 100);
     rec.put("currency", "USD");
   }
 
-  /**
-   * Populate rec with values for EXTRA_TYPE_SCHEMA
-   */
+  /** Populate rec with values for EXTRA_TYPE_SCHEMA */
   private void generateExtraSchemaValues(GenericRecord rec) {
     rec.put("distance_in_meters", rand.nextInt());
     rec.put("seconds_since_epoch", rand.nextLong());
@@ -417,27 +494,27 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("nation", ByteBuffer.wrap(bytes));
     long randomMillis = genRandomTimeMillis(rand);
     Instant instant = Instant.ofEpochMilli(randomMillis);
-    rec.put("current_date", makeDatesAmbiguous ? -1000000 :
-        (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
+    rec.put(
+        "current_date",
+        makeDatesAmbiguous
+            ? -1000000
+            : (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
     rec.put("current_ts", randomMillis);
 
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
     Schema decimalSchema = AVRO_SCHEMA.getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
-    GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
+    GenericFixed genericFixed =
+        decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
     rec.put("height", genericFixed);
   }
 
-  /**
-   * Populate rec with values for MAP_TYPE_SCHEMA
-   */
+  /** Populate rec with values for MAP_TYPE_SCHEMA */
   private void generateMapTypeValues(GenericRecord rec) {
     rec.put("city_to_state", Collections.singletonMap("LA", "CA"));
   }
 
-  /**
-   * Populate rec with values for FARE_NESTED_SCHEMA
-   */
+  /** Populate rec with values for FARE_NESTED_SCHEMA */
   private void generateFareNestedValues(GenericRecord rec) {
     GenericRecord fareRecord = new GenericData.Record(AVRO_SCHEMA.getField("fare").schema());
     fareRecord.put("amount", rand.nextDouble() * 100);
@@ -445,12 +522,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("fare", fareRecord);
   }
 
-  /**
-   * Populate rec with values for TIP_NESTED_SCHEMA
-   */
+  /** Populate rec with values for TIP_NESTED_SCHEMA */
   private void generateTipNestedValues(GenericRecord rec) {
-    GenericArray<GenericRecord> tipHistoryArray = new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
-    Schema tipSchema = new Schema.Parser().parse(AVRO_SCHEMA.getField("tip_history").schema().toString()).getElementType();
+    GenericArray<GenericRecord> tipHistoryArray =
+        new GenericData.Array<>(1, AVRO_SCHEMA.getField("tip_history").schema());
+    Schema tipSchema =
+        new Schema.Parser()
+            .parse(AVRO_SCHEMA.getField("tip_history").schema().toString())
+            .getElementType();
     GenericRecord tipRecord = new GenericData.Record(tipSchema);
     tipRecord.put("amount", rand.nextDouble() * 100);
     tipRecord.put("currency", "USD");
@@ -458,9 +537,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     rec.put("tip_history", tipHistoryArray);
   }
 
-  /**
-   * Populate rec with values for TRIP_SCHEMA_SUFFIX
-   */
+  /** Populate rec with values for TRIP_SCHEMA_SUFFIX */
   private void generateTripSuffixValues(GenericRecord rec, boolean isDeleteRecord) {
     if (isDeleteRecord) {
       rec.put("_hoodie_is_deleted", true);
@@ -469,13 +546,18 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-
   /**
-   * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
+   * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is
+   * true
    */
-  public GenericRecord generateGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                                    long timestamp, boolean isDeleteRecord,
-                                                    boolean isFlattened) {
+  public GenericRecord generateGenericRecord(
+      String rowKey,
+      String partitionPath,
+      String riderName,
+      String driverName,
+      long timestamp,
+      boolean isDeleteRecord,
+      boolean isFlattened) {
     GenericRecord rec = new GenericData.Record(isFlattened ? FLATTENED_AVRO_SCHEMA : AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     if (isFlattened) {
@@ -490,11 +572,14 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  /**
-   * Generate record conforming to TRIP_NESTED_EXAMPLE_SCHEMA
-   */
-  public  GenericRecord generateNestedExampleGenericRecord(String rowKey, String partitionPath, String riderName, String driverName,
-                                                        long timestamp, boolean isDeleteRecord) {
+  /** Generate record conforming to TRIP_NESTED_EXAMPLE_SCHEMA */
+  public GenericRecord generateNestedExampleGenericRecord(
+      String rowKey,
+      String partitionPath,
+      String riderName,
+      String driverName,
+      long timestamp,
+      boolean isDeleteRecord) {
     GenericRecord rec = new GenericData.Record(NESTED_AVRO_SCHEMA);
     generateTripPrefixValues(rec, rowKey, partitionPath, riderName, driverName, timestamp);
     generateFareNestedValues(rec);
@@ -505,7 +590,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   /*
   Generate random record using TRIP_SCHEMA
    */
-  public GenericRecord generateRecordForTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
+  public GenericRecord generateRecordForTripSchema(
+      String rowKey, String riderName, String driverName, long timestamp) {
     GenericRecord rec = new GenericData.Record(AVRO_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -516,7 +602,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  public GenericRecord generateRecordForShortTripSchema(String rowKey, String riderName, String driverName, long timestamp) {
+  public GenericRecord generateRecordForShortTripSchema(
+      String rowKey, String riderName, String driverName, long timestamp) {
     GenericRecord rec = new GenericData.Record(AVRO_SHORT_TRIP_SCHEMA);
     rec.put("_row_key", rowKey);
     rec.put("timestamp", timestamp);
@@ -527,51 +614,90 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return rec;
   }
 
-  public static void createRequestedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
-    Path pendingRequestedFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeRequestedCommitFileName(instantTime));
+  public static void createRequestedCommitFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
+      throws IOException {
+    Path pendingRequestedFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeRequestedCommitFileName(instantTime));
     createEmptyFile(basePath, pendingRequestedFile, configuration);
   }
 
-  public static void createPendingCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) throws IOException {
-    Path pendingCommitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeInflightCommitFileName(instantTime));
+  public static void createPendingCommitFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
+      throws IOException {
+    Path pendingCommitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeInflightCommitFileName(instantTime));
     createEmptyFile(basePath, pendingCommitFile, configuration);
   }
 
-  public static void createCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
+  public static void createCommitFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  private static void createCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()), HoodieTimeline.makeInflightCommitFileName(instantTime),
+  private static void createCommitFile(
+      String basePath,
+      String instantTime,
+      StorageConfiguration<?> configuration,
+      HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(
+            HoodieTimeline.makeCommitFileName(
+                instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+            HoodieTimeline.makeInflightCommitFileName(instantTime),
             HoodieTimeline.makeRequestedCommitFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
+  public static void createOnlyCompletedCommitFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createOnlyCompletedCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  public static void createOnlyCompletedCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    createMetadataFile(HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
+  public static void createOnlyCompletedCommitFile(
+      String basePath,
+      String instantTime,
+      StorageConfiguration<?> configuration,
+      HoodieCommitMetadata commitMetadata) {
+    createMetadataFile(
+        HoodieTimeline.makeCommitFileName(instantTime), basePath, configuration, commitMetadata);
   }
 
-  public static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
+  public static void createDeltaCommitFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createDeltaCommitFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  private static void createDeltaCommitFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeDeltaFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
+  private static void createDeltaCommitFile(
+      String basePath,
+      String instantTime,
+      StorageConfiguration<?> configuration,
+      HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(
+            HoodieTimeline.makeDeltaFileName(
+                instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()),
             HoodieTimeline.makeInflightDeltaFileName(instantTime),
             HoodieTimeline.makeRequestedDeltaFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
+  private static void createMetadataFile(
+      String f,
+      String basePath,
+      StorageConfiguration<?> configuration,
+      HoodieCommitMetadata commitMetadata) {
     try {
       createMetadataFile(f, basePath, configuration, serializeCommitMetadata(commitMetadata).get());
     } catch (IOException e) {
@@ -579,9 +705,9 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  private static void createMetadataFile(String f, String basePath, StorageConfiguration<?> configuration, byte[] content) {
-    Path commitFile = new Path(
-        basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
+  private static void createMetadataFile(
+      String f, String basePath, StorageConfiguration<?> configuration, byte[] content) {
+    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + f);
     OutputStream os = null;
     try {
       HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
@@ -601,55 +727,92 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public static void createReplaceCommitRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
+  public static void createReplaceCommitRequestedFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeRequestedReplaceFileName(instantTime));
+    Path commitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeRequestedReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  public static void createReplaceCommitInflightFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
+  public static void createReplaceCommitInflightFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeInflightReplaceFileName(instantTime));
+    Path commitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeInflightReplaceFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeInflightReplaceFileName(instantTime),
+  private static void createPendingReplaceFile(
+      String basePath,
+      String instantTime,
+      StorageConfiguration<?> configuration,
+      HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(
+            HoodieTimeline.makeInflightReplaceFileName(instantTime),
             HoodieTimeline.makeRequestedReplaceFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  public static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
+  public static void createPendingReplaceFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     createPendingReplaceFile(basePath, instantTime, configuration, commitMetadata);
   }
 
-  public static void createEmptyCleanRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
+  public static void createEmptyCleanRequestedFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
+    Path commitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeRequestedCleanerFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createEmptyFile(String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
+  private static void createEmptyFile(
+      String basePath, Path filePath, StorageConfiguration<?> configuration) throws IOException {
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     OutputStream os = storage.create(new StoragePath(filePath.toUri()), true);
     os.close();
   }
 
-  public static void createCompactionRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
+  public static void createCompactionRequestedFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
+    Path commitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeRequestedCompactionFileName(instantTime));
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  public static void createCompactionAuxiliaryMetadata(String basePath, HoodieInstant instant,
-                                                       StorageConfiguration<?> configuration) throws IOException {
+  public static void createCompactionAuxiliaryMetadata(
+      String basePath, HoodieInstant instant, StorageConfiguration<?> configuration)
+      throws IOException {
     Path commitFile =
-        new Path(basePath + "/" + HoodieTableMetaClient.AUXILIARYFOLDER_NAME + "/" + instant.getFileName());
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.AUXILIARYFOLDER_NAME
+                + "/"
+                + instant.getFileName());
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCompactionPlan workload = HoodieCompactionPlan.newBuilder().setVersion(1).build();
@@ -658,10 +821,17 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public static void createSavepointFile(String basePath, String instantTime, StorageConfiguration<?> configuration)
+  public static void createSavepointFile(
+      String basePath, String instantTime, StorageConfiguration<?> configuration)
       throws IOException {
-    Path commitFile = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/"
-        + HoodieTimeline.makeSavePointFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
+    Path commitFile =
+        new Path(
+            basePath
+                + "/"
+                + HoodieTableMetaClient.METAFOLDER_NAME
+                + "/"
+                + HoodieTimeline.makeSavePointFileName(
+                    instantTime + "_" + InProcessTimeGenerator.createNewInstantTime()));
     HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, configuration);
     try (OutputStream os = storage.create(new StoragePath(commitFile.toUri()), true)) {
       HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
@@ -670,39 +840,44 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public List<HoodieRecord> generateInsertsAsPerSchema(String commitTime, Integer n, String schemaStr) {
+  public List<HoodieRecord> generateInsertsAsPerSchema(
+      String commitTime, Integer n, String schemaStr) {
     return generateInsertsStream(commitTime, n, false, schemaStr).collect(Collectors.toList());
   }
 
   /**
-   * Generates new inserts for TRIP_EXAMPLE_SCHEMA with nested schema, uniformly across the partition paths above.
-   * It also updates the list of existing keys.
+   * Generates new inserts for TRIP_EXAMPLE_SCHEMA with nested schema, uniformly across the
+   * partition paths above. It also updates the list of existing keys.
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n) {
     return generateInserts(instantTime, n, false);
   }
 
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
-    return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA)
+        .collect(Collectors.toList());
   }
 
   /**
-   * Generates new inserts, uniformly across the partition paths above.
-   * It also updates the list of existing keys.
+   * Generates new inserts, uniformly across the partition paths above. It also updates the list of
+   * existing keys.
    *
-   * @param instantTime  Commit time to use.
-   * @param n  Number of records.
-   * @param isFlattened  whether the schema of the generated record is flattened
-   * @return  List of {@link HoodieRecord}s
+   * @param instantTime Commit time to use.
+   * @param n Number of records.
+   * @param isFlattened whether the schema of the generated record is flattened
+   * @return List of {@link HoodieRecord}s
    */
   public List<HoodieRecord> generateInserts(String instantTime, Integer n, boolean isFlattened) {
-    return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, isFlattened, TRIP_EXAMPLE_SCHEMA)
+        .collect(Collectors.toList());
   }
 
   /**
-   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
+   * Generates new inserts, uniformly across the partition paths above. It also updates the list of
+   * existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr) {
+  public Stream<HoodieRecord> generateInsertsStream(
+      String commitTime, Integer n, boolean isFlattened, String schemaStr) {
     return generateInsertsStream(commitTime, n, isFlattened, schemaStr, false);
   }
 
@@ -710,16 +885,36 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     if (n < partitionPaths.length) {
       throw new HoodieIOException("n must greater then partitionPaths length");
     }
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
+    return generateInsertsStream(instantTime, n, false, TRIP_EXAMPLE_SCHEMA, true)
+        .collect(Collectors.toList());
   }
 
-  public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
-    return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
+  public List<HoodieRecord> generateInsertsForPartition(
+      String instantTime, Integer n, String partition) {
+    return generateInsertsStream(
+            instantTime,
+            n,
+            false,
+            TRIP_EXAMPLE_SCHEMA,
+            false,
+            () -> partition,
+            () -> genPseudoRandomUUID(rand).toString())
+        .collect(Collectors.toList());
   }
 
-  public Stream<HoodieRecord> generateInsertsStream(String commitTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions) {
+  public Stream<HoodieRecord> generateInsertsStream(
+      String commitTime,
+      Integer n,
+      boolean isFlattened,
+      String schemaStr,
+      boolean containsAllPartitions) {
     AtomicInteger partitionIndex = new AtomicInteger(0);
-    return generateInsertsStream(commitTime, n, isFlattened, schemaStr, containsAllPartitions,
+    return generateInsertsStream(
+        commitTime,
+        n,
+        isFlattened,
+        schemaStr,
+        containsAllPartitions,
         () -> {
           // round robin to ensure we generate inserts for all partition paths
           String partitionToUse = partitionPaths[partitionIndex.get()];
@@ -730,28 +925,39 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates new inserts, uniformly across the partition paths above. It also updates the list of existing keys.
+   * Generates new inserts, uniformly across the partition paths above. It also updates the list of
+   * existing keys.
    */
-  public Stream<HoodieRecord> generateInsertsStream(String instantTime, Integer n, boolean isFlattened, String schemaStr, boolean containsAllPartitions,
-                                                    Supplier<String> partitionPathSupplier, Supplier<String> recordKeySupplier) {
+  public Stream<HoodieRecord> generateInsertsStream(
+      String instantTime,
+      Integer n,
+      boolean isFlattened,
+      String schemaStr,
+      boolean containsAllPartitions,
+      Supplier<String> partitionPathSupplier,
+      Supplier<String> recordKeySupplier) {
     int currSize = getNumExistingKeys(schemaStr);
-    return IntStream.range(0, n).boxed().map(i -> {
-      String partitionPath = partitionPathSupplier.get();
-      if (containsAllPartitions && i < partitionPaths.length) {
-        partitionPath = partitionPaths[i];
-      }
-      HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
-      KeyPartition kp = new KeyPartition();
-      kp.key = key;
-      kp.partitionPath = partitionPath;
-      populateKeysBySchema(schemaStr, currSize + i, kp);
-      incrementNumExistingKeysBySchema(schemaStr);
-      try {
-        return new HoodieAvroRecord(key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    });
+    return IntStream.range(0, n)
+        .boxed()
+        .map(
+            i -> {
+              String partitionPath = partitionPathSupplier.get();
+              if (containsAllPartitions && i < partitionPaths.length) {
+                partitionPath = partitionPaths[i];
+              }
+              HoodieKey key = new HoodieKey(recordKeySupplier.get(), partitionPath);
+              KeyPartition kp = new KeyPartition();
+              kp.key = key;
+              kp.partitionPath = partitionPath;
+              populateKeysBySchema(schemaStr, currSize + i, kp);
+              incrementNumExistingKeysBySchema(schemaStr);
+              try {
+                return new HoodieAvroRecord(
+                    key, generateRandomValueAsPerSchema(schemaStr, key, instantTime, isFlattened));
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+            });
   }
 
   /*
@@ -774,7 +980,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     }
   }
 
-  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin) throws IOException {
+  public List<HoodieRecord> generateSameKeyInserts(String instantTime, List<HoodieRecord> origin)
+      throws IOException {
     List<HoodieRecord> copy = new ArrayList<>();
     for (HoodieRecord r : origin) {
       HoodieKey key = r.getKey();
@@ -802,10 +1009,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return inserts;
   }
 
-  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(String instantTime, List<HoodieRecord> baseRecords) {
+  public List<HoodieRecord> generateUpdatesWithHoodieAvroPayload(
+      String instantTime, List<HoodieRecord> baseRecords) {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
-      HoodieRecord record = new HoodieAvroRecord(baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
+      HoodieRecord record =
+          new HoodieAvroRecord(
+              baseRecord.getKey(), generateAvroPayload(baseRecord.getKey(), instantTime));
       updates.add(record);
     }
     return updates;
@@ -816,7 +1026,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateDeletesFromExistingRecords(inserts);
   }
 
-  public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords) throws IOException {
+  public List<HoodieRecord> generateDeletesFromExistingRecords(List<HoodieRecord> existingRecords)
+      throws IOException {
     List<HoodieRecord> deletes = new ArrayList<>();
     for (HoodieRecord existingRecord : existingRecords) {
       HoodieRecord record = generateDeleteRecord(existingRecord);
@@ -832,7 +1043,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   public HoodieRecord generateDeleteRecord(HoodieKey key) throws IOException {
     RawTripTestPayload payload =
-        new RawTripTestPayload(Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, 0L);
+        new RawTripTestPayload(
+            Option.empty(), key.getRecordKey(), key.getPartitionPath(), null, true, 0L);
     return new HoodieAvroRecord(key, payload);
   }
 
@@ -840,11 +1052,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime));
   }
 
-  public HoodieRecord generateUpdateRecordWithTimestamp(HoodieKey key, String instantTime, long timestamp) throws IOException {
+  public HoodieRecord generateUpdateRecordWithTimestamp(
+      HoodieKey key, String instantTime, long timestamp) throws IOException {
     return new HoodieAvroRecord(key, generateRandomValue(key, instantTime, false, timestamp));
   }
 
-  public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords) throws IOException {
+  public List<HoodieRecord> generateUpdates(String instantTime, List<HoodieRecord> baseRecords)
+      throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       HoodieRecord record = generateUpdateRecord(baseRecord.getKey(), instantTime);
@@ -853,7 +1067,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesWithTimestamp(String instantTime, List<HoodieRecord> baseRecords, long timestamp) throws IOException {
+  public List<HoodieRecord> generateUpdatesWithTimestamp(
+      String instantTime, List<HoodieRecord> baseRecords, long timestamp) throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       updates.add(generateUpdateRecordWithTimestamp(baseRecord.getKey(), instantTime, timestamp));
@@ -861,12 +1076,15 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesForDifferentPartition(String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition)
+  public List<HoodieRecord> generateUpdatesForDifferentPartition(
+      String instantTime, List<HoodieRecord> baseRecords, long timestamp, String newPartition)
       throws IOException {
     List<HoodieRecord> updates = new ArrayList<>();
     for (HoodieRecord baseRecord : baseRecords) {
       String partition = baseRecord.getPartitionPath();
-      checkState(!partition.equals(newPartition), "newPartition should be different from any given record's current partition.");
+      checkState(
+          !partition.equals(newPartition),
+          "newPartition should be different from any given record's current partition.");
       HoodieKey key = new HoodieKey(baseRecord.getRecordKey(), newPartition);
       HoodieRecord record = generateUpdateRecordWithTimestamp(key, instantTime, timestamp);
       updates.add(record);
@@ -875,11 +1093,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates new updates, randomly distributed across the keys above. There can be duplicates within the returned
-   * list
+   * Generates new updates, randomly distributed across the keys above. There can be duplicates
+   * within the returned list
    *
    * @param instantTime Instant Timestamp
-   * @param n          Number of updates (including dups)
+   * @param n Number of updates (including dups)
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUpdates(String instantTime, Integer n) throws IOException {
@@ -896,6 +1114,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
 
   /**
    * Generate update for each record in the dataset.
+   *
    * @param instantTime
    * @return
    * @throws IOException
@@ -903,42 +1122,51 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public List<HoodieRecord> generateUpdatesForAllRecords(String instantTime) {
     List<HoodieRecord> updates = new ArrayList<>();
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
-    existingKeys.values().forEach(kp -> {
-      try {
-        HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
-        updates.add(record);
-      } catch (IOException ioe) {
-        throw new HoodieIOException(ioe.getMessage(), ioe);
-      }
-    });
+    existingKeys
+        .values()
+        .forEach(
+            kp -> {
+              try {
+                HoodieRecord record = generateUpdateRecord(kp.key, instantTime);
+                updates.add(record);
+              } catch (IOException ioe) {
+                throw new HoodieIOException(ioe.getMessage(), ioe);
+              }
+            });
     return updates;
   }
 
-  public List<HoodieRecord> generateUpdatesAsPerSchema(String commitTime, Integer n, String schemaStr) {
+  public List<HoodieRecord> generateUpdatesAsPerSchema(
+      String commitTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(commitTime, n, schemaStr).collect(Collectors.toList());
   }
 
   /**
-   * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
+   * Generates deduped updates of keys previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param instantTime Instant Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return list of hoodie record updates
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
-    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA)
+        .collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdatesNestedExample(String instantTime, Integer n) {
-    return generateUniqueUpdatesStream(instantTime, n, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
+    return generateUniqueUpdatesStream(instantTime, n, TRIP_NESTED_EXAMPLE_SCHEMA)
+        .collect(Collectors.toList());
   }
 
-  public List<HoodieRecord> generateUniqueUpdatesAsPerSchema(String instantTime, Integer n, String schemaStr) {
+  public List<HoodieRecord> generateUniqueUpdatesAsPerSchema(
+      String instantTime, Integer n, String schemaStr) {
     return generateUniqueUpdatesStream(instantTime, n, schemaStr).collect(Collectors.toList());
   }
 
   /**
-   * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
+   * Generates deduped delete of keys previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param n Number of unique records
    * @return list of hoodie record updates
@@ -948,40 +1176,48 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates deduped updates of keys previously inserted, randomly distributed across the keys above.
+   * Generates deduped updates of keys previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param instantTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return stream of hoodie record updates
    */
-  public Stream<HoodieRecord> generateUniqueUpdatesStream(String instantTime, Integer n, String schemaStr) {
+  public Stream<HoodieRecord> generateUniqueUpdatesStream(
+      String instantTime, Integer n, String schemaStr) {
     final Set<KeyPartition> used = new HashSet<>();
     int numExistingKeys = numKeysBySchema.getOrDefault(schemaStr, 0);
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(schemaStr);
     if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique updates is greater than number of available keys");
+      throw new IllegalArgumentException(
+          "Requested unique updates is greater than number of available keys");
     }
 
-    return IntStream.range(0, n).boxed().map(i -> {
-      int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
-      KeyPartition kp = existingKeys.get(index);
-      // Find the available keyPartition starting from randomly chosen one.
-      while (used.contains(kp)) {
-        index = (index + 1) % numExistingKeys;
-        kp = existingKeys.get(index);
-      }
-      logger.debug("key getting updated: " + kp.key.getRecordKey());
-      used.add(kp);
-      try {
-        return new HoodieAvroRecord(kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
-      } catch (IOException e) {
-        throw new HoodieIOException(e.getMessage(), e);
-      }
-    });
+    return IntStream.range(0, n)
+        .boxed()
+        .map(
+            i -> {
+              int index = numExistingKeys == 1 ? 0 : rand.nextInt(numExistingKeys - 1);
+              KeyPartition kp = existingKeys.get(index);
+              // Find the available keyPartition starting from randomly chosen one.
+              while (used.contains(kp)) {
+                index = (index + 1) % numExistingKeys;
+                kp = existingKeys.get(index);
+              }
+              logger.debug("key getting updated: " + kp.key.getRecordKey());
+              used.add(kp);
+              try {
+                return new HoodieAvroRecord(
+                    kp.key, generateRandomValueAsPerSchema(schemaStr, kp.key, instantTime, false));
+              } catch (IOException e) {
+                throw new HoodieIOException(e.getMessage(), e);
+              }
+            });
   }
 
   /**
-   * Generates deduped delete of keys previously inserted, randomly distributed across the keys above.
+   * Generates deduped delete of keys previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param n Number of unique records
    * @return stream of hoodie record updates
@@ -991,7 +1227,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+      throw new IllegalArgumentException(
+          "Requested unique deletes is greater than number of available keys");
     }
 
     List<HoodieKey> result = new ArrayList<>();
@@ -1012,10 +1249,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates deduped delete records previously inserted, randomly distributed across the keys above.
+   * Generates deduped delete records previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param instantTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return stream of hoodie records for delete
    */
   public Stream<HoodieRecord> generateUniqueDeleteRecordStream(String instantTime, Integer n) {
@@ -1023,7 +1261,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     if (n > numExistingKeys) {
-      throw new IllegalArgumentException("Requested unique deletes is greater than number of available keys");
+      throw new IllegalArgumentException(
+          "Requested unique deletes is greater than number of available keys");
     }
 
     List<HoodieRecord> result = new ArrayList<>();
@@ -1049,10 +1288,11 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   /**
-   * Generates deduped delete records previously inserted, randomly distributed across the keys above.
+   * Generates deduped delete records previously inserted, randomly distributed across the keys
+   * above.
    *
    * @param instantTime Commit Timestamp
-   * @param n          Number of unique records
+   * @param n Number of unique records
    * @return List of hoodie records for delete
    */
   public List<HoodieRecord> generateUniqueDeleteRecords(String instantTime, Integer n) {
@@ -1076,8 +1316,12 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   }
 
   public GenericRecord generateGenericRecord() {
-    return generateGenericRecord(genPseudoRandomUUID(rand).toString(), "0",
-        genPseudoRandomUUID(rand).toString(), genPseudoRandomUUID(rand).toString(), rand.nextLong());
+    return generateGenericRecord(
+        genPseudoRandomUUID(rand).toString(),
+        "0",
+        genPseudoRandomUUID(rand).toString(),
+        genPseudoRandomUUID(rand).toString(),
+        rand.nextLong());
   }
 
   public List<GenericRecord> generateGenericRecords(int numRecords) {
@@ -1094,9 +1338,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return numKeysBySchema.getOrDefault(schemaStr, 0);
   }
 
-  /**
-   * Object containing the key and partition path for testing.
-   */
+  /** Object containing the key and partition path for testing. */
   public static class KeyPartition implements Serializable {
 
     public HoodieKey key;
@@ -1129,7 +1371,10 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       Constructor<UUID> ctor = UUID.class.getDeclaredConstructor(byte[].class);
       ctor.setAccessible(true);
       return ctor.newInstance((Object) bytes);
-    } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
+    } catch (InvocationTargetException
+        | InstantiationException
+        | IllegalAccessException
+        | NoSuchMethodException e) {
       logger.info("Failed to generate pseudo-random UUID!");
       throw new HoodieException(e);
     }

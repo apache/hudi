@@ -18,8 +18,6 @@
 
 package org.apache.hudi.metrics.m3;
 
-import org.apache.hudi.common.util.collection.Pair;
-
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
@@ -31,13 +29,13 @@ import com.codahale.metrics.ScheduledReporter;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.Timer;
 import com.uber.m3.tally.Scope;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
+import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * Implementation of com.codahale.metrics.ScheduledReporter, to emit metrics from
@@ -52,31 +50,28 @@ public class M3ScopeReporterAdaptor extends ScheduledReporter {
   }
 
   @Override
-  public void start(long period, TimeUnit unit) {
-  }
+  public void start(long period, TimeUnit unit) {}
 
   @Override
-  public void stop() {
-  }
+  public void stop() {}
 
   @Override
-  public void report(SortedMap<String, Gauge> gauges, SortedMap<String, Counter> counters,
-      SortedMap<String, Histogram> histograms, SortedMap<String, Meter> meters,
+  public void report(
+      SortedMap<String, Gauge> gauges,
+      SortedMap<String, Counter> counters,
+      SortedMap<String, Histogram> histograms,
+      SortedMap<String, Meter> meters,
       SortedMap<String, Timer> timers) {
     /*
       When reporting, process each com.codahale.metrics metric and add counters & gauges to
       the passed-in com.uber.m3.tally.Scope with the same name and value. This is needed
       for the Scope to register these metrics
     */
-    report(scope,
-        gauges,
-        counters,
-        histograms,
-        meters,
-        timers);
+    report(scope, gauges, counters, histograms, meters, timers);
   }
 
-  private void report(Scope scope,
+  private void report(
+      Scope scope,
       Map<String, Gauge> gauges,
       Map<String, Counter> counters,
       Map<String, Histogram> histograms,
@@ -84,18 +79,15 @@ public class M3ScopeReporterAdaptor extends ScheduledReporter {
       Map<String, Timer> timers) {
 
     for (Entry<String, Gauge> entry : gauges.entrySet()) {
-      scope.gauge(entry.getKey()).update(
-          ((Number) entry.getValue().getValue()).doubleValue());
+      scope.gauge(entry.getKey()).update(((Number) entry.getValue().getValue()).doubleValue());
     }
 
     for (Entry<String, Counter> entry : counters.entrySet()) {
-      scope.counter(entry.getKey()).inc(
-          ((Number) entry.getValue().getCount()).longValue());
+      scope.counter(entry.getKey()).inc(((Number) entry.getValue().getCount()).longValue());
     }
 
     for (Entry<String, Histogram> entry : histograms.entrySet()) {
-      scope.gauge(MetricRegistry.name(entry.getKey(), "count")).update(
-          entry.getValue().getCount());
+      scope.gauge(MetricRegistry.name(entry.getKey(), "count")).update(entry.getValue().getCount());
       reportSnapshot(entry.getKey(), entry.getValue().getSnapshot());
     }
 
@@ -110,30 +102,30 @@ public class M3ScopeReporterAdaptor extends ScheduledReporter {
 
   private void reportMetered(String name, Metered meter) {
     scope.counter(MetricRegistry.name(name, "count")).inc(meter.getCount());
-    List<Pair<String, Double>> meterGauges = Arrays.asList(
-        Pair.of("m1_rate", meter.getOneMinuteRate()),
-        Pair.of("m5_rate", meter.getFiveMinuteRate()),
-        Pair.of("m15_rate", meter.getFifteenMinuteRate()),
-        Pair.of("mean_rate", meter.getMeanRate())
-    );
+    List<Pair<String, Double>> meterGauges =
+        Arrays.asList(
+            Pair.of("m1_rate", meter.getOneMinuteRate()),
+            Pair.of("m5_rate", meter.getFiveMinuteRate()),
+            Pair.of("m15_rate", meter.getFifteenMinuteRate()),
+            Pair.of("mean_rate", meter.getMeanRate()));
     for (Pair<String, Double> pair : meterGauges) {
       scope.gauge(MetricRegistry.name(name, pair.getLeft())).update(pair.getRight());
     }
   }
 
   private void reportSnapshot(String name, Snapshot snapshot) {
-    List<Pair<String, Number>> snapshotGauges = Arrays.asList(
-        Pair.of("max", snapshot.getMax()),
-        Pair.of("mean", snapshot.getMean()),
-        Pair.of("min", snapshot.getMin()),
-        Pair.of("stddev", snapshot.getStdDev()),
-        Pair.of("p50", snapshot.getMedian()),
-        Pair.of("p75", snapshot.get75thPercentile()),
-        Pair.of("p95", snapshot.get95thPercentile()),
-        Pair.of("p98", snapshot.get98thPercentile()),
-        Pair.of("p99", snapshot.get99thPercentile()),
-        Pair.of("p999", snapshot.get999thPercentile())
-    );
+    List<Pair<String, Number>> snapshotGauges =
+        Arrays.asList(
+            Pair.of("max", snapshot.getMax()),
+            Pair.of("mean", snapshot.getMean()),
+            Pair.of("min", snapshot.getMin()),
+            Pair.of("stddev", snapshot.getStdDev()),
+            Pair.of("p50", snapshot.getMedian()),
+            Pair.of("p75", snapshot.get75thPercentile()),
+            Pair.of("p95", snapshot.get95thPercentile()),
+            Pair.of("p98", snapshot.get98thPercentile()),
+            Pair.of("p99", snapshot.get99thPercentile()),
+            Pair.of("p999", snapshot.get999thPercentile()));
     for (Pair<String, Number> pair : snapshotGauges) {
       scope.gauge(MetricRegistry.name(name, pair.getLeft())).update(pair.getRight().doubleValue());
     }
@@ -143,5 +135,4 @@ public class M3ScopeReporterAdaptor extends ScheduledReporter {
     reportMetered(name, timer);
     reportSnapshot(name, timer.getSnapshot());
   }
-
 }
