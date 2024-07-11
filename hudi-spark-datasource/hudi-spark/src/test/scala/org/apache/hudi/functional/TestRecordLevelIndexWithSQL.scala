@@ -17,9 +17,11 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.spark.sql.SaveMode
@@ -138,7 +140,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystenView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
@@ -147,8 +149,10 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystenView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    val writeConfig = getWriteConfig(opts)
+    val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), writeConfig.getMetadataConfig, writeConfig.getBasePath, true)
+    new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {

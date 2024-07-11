@@ -181,7 +181,7 @@ public class HoodieSnapshotExporter {
 
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     context.setJobStatus(this.getClass().getSimpleName(), "Exporting as non-HUDI dataset: " + cfg.targetOutputPath);
-    final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
+    final BaseFileOnlyView fsView = getBaseFileOnlyView(context, sourceFs, cfg);
     Iterator<String> exportingFilePaths = jsc
         .parallelize(partitions, partitions.size())
         .flatMap(partition -> fsView
@@ -199,8 +199,8 @@ public class HoodieSnapshotExporter {
   private void exportAsHudi(JavaSparkContext jsc, FileSystem sourceFs,
                             Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
     final int parallelism = cfg.parallelism == 0 ? jsc.defaultParallelism() : cfg.parallelism;
-    final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
     final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    final BaseFileOnlyView fsView = getBaseFileOnlyView(context, sourceFs, cfg);
     final SerializableConfiguration serConf = context.getHadoopConf();
     context.setJobStatus(this.getClass().getSimpleName(), "Exporting as HUDI dataset");
     List<Pair<String, String>> partitionAndFileList = context.flatMap(partitions, partition -> {
@@ -271,12 +271,12 @@ public class HoodieSnapshotExporter {
     }, parallelism);
   }
 
-  private BaseFileOnlyView getBaseFileOnlyView(FileSystem sourceFs, Config cfg) {
+  private BaseFileOnlyView getBaseFileOnlyView(HoodieEngineContext engineContext, FileSystem sourceFs, Config cfg) {
     HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
         .setConf(sourceFs.getConf())
         .setBasePath(cfg.sourceBasePath)
         .build();
-    return new HoodieTableFileSystemView(tableMetadata, tableMetadata
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, tableMetadata, tableMetadata
         .getActiveTimeline().getWriteTimeline().filterCompletedInstants());
   }
 

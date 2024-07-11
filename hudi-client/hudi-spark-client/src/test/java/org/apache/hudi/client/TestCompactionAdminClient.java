@@ -143,7 +143,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     // Now repair
     List<Pair<HoodieLogFile, HoodieLogFile>> undoFiles =
         result.stream().flatMap(r -> getRenamingActionsToAlignWithCompactionOperation(metaClient,
-            compactionInstant, r.getOperation(), Option.empty()).stream()).map(rn -> {
+            compactionInstant, r.getOperation(), getHoodieTableFileSystemView()).stream()).map(rn -> {
               try {
                 renameLogFile(metaClient, rn.getKey(), rn.getValue());
               } catch (IOException e) {
@@ -239,8 +239,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     // Log files belonging to file-slices created because of compaction request must be renamed
 
     Set<HoodieLogFile> gotLogFilesToBeRenamed = renameFiles.stream().map(Pair::getLeft).collect(Collectors.toSet());
-    final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView fsView = getHoodieTableFileSystemView();
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant)).flatMap(FileSlice::getLogFiles)
         .collect(Collectors.toSet());
@@ -271,8 +270,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     client.unscheduleCompactionPlan(compactionInstant, false, 1, false);
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView newFsView = getHoodieTableFileSystemView();
     // Expect each file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
@@ -295,6 +293,10 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     return renameFiles;
   }
 
+  private HoodieTableFileSystemView getHoodieTableFileSystemView() {
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getCommitsAndCompactionTimeline());
+  }
+
   /**
    * Validate Unschedule operations.
    */
@@ -311,8 +313,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     // Log files belonging to file-slices created because of compaction request must be renamed
 
     Set<HoodieLogFile> gotLogFilesToBeRenamed = renameFiles.stream().map(Pair::getLeft).collect(Collectors.toSet());
-    final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView fsView = getHoodieTableFileSystemView();
     Set<HoodieLogFile> expLogFilesToBeRenamed = fsView.getLatestFileSlices(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0])
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))
         .filter(fs -> fs.getFileId().equals(op.getFileId())).flatMap(FileSlice::getLogFiles)
@@ -332,8 +333,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     client.unscheduleCompactionFileId(op.getFileGroupId(), false, false);
 
     metaClient = HoodieTableMetaClient.builder().setConf(metaClient.getHadoopConf()).setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView newFsView = getHoodieTableFileSystemView();
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))

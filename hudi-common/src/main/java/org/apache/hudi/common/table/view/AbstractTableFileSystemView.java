@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
@@ -54,7 +55,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +88,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.METADATA_BOOT
 public abstract class AbstractTableFileSystemView implements SyncableFileSystemView, Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractTableFileSystemView.class);
+  protected final HoodieTableMetadata tableMetadata;
 
   protected HoodieTableMetaClient metaClient;
 
@@ -105,6 +106,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   protected final WriteLock writeLock = globalLock.writeLock();
 
   private BootstrapIndex bootstrapIndex;
+
+  protected AbstractTableFileSystemView(HoodieTableMetadata tableMetadata) {
+    this.tableMetadata = tableMetadata;
+  }
 
   /**
    * Initialize the view.
@@ -266,7 +271,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       writeLock.lock();
       this.metaClient = null;
       this.visibleCommitsAndCompactionTimeline = null;
+      tableMetadata.close();
       clear();
+    } catch (Exception ex) {
+      throw new HoodieException("Unable to close file system view", ex);
     } finally {
       writeLock.unlock();
     }
@@ -284,6 +292,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       clear();
       // Initialize with new Hoodie timeline.
       init(metaClient, getTimeline());
+      tableMetadata.reset();
     } finally {
       writeLock.unlock();
     }
@@ -311,7 +320,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   private List<String> ensureAllPartitionsLoadedCorrectly() {
     ValidationUtils.checkArgument(!isClosed(), "View is already closed");
     try {
-      List<String> formattedPartitionList = getAllPartitionPaths().stream()
+      List<String> formattedPartitionList = tableMetadata.getAllPartitionPaths().stream()
           .map(this::formatPartitionKey).collect(Collectors.toList());
       ensurePartitionsLoadedCorrectly(formattedPartitionList);
       return formattedPartitionList;
@@ -350,7 +359,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
               .collect(Collectors.toList());
           long beginLsTs = System.currentTimeMillis();
           Map<Pair<String, Path>, FileStatus[]> statusesMap =
-              listPartitions(absolutePartitionPathList);
+              tableMetadata.listPartitions(absolutePartitionPathList);
           long endLsTs = System.currentTimeMillis();
           LOG.debug("Time taken to list partitions " + partitionSet + " =" + (endLsTs - beginLsTs));
           statusesMap.forEach((partitionPair, statuses) -> {
@@ -375,49 +384,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
-   * @return A list of relative partition paths of all partitions.
-   * @throws IOException upon error.
-   */
-  protected List<String> getAllPartitionPaths() throws IOException {
-    throw new HoodieException("Getting all partition paths with file system listing sequentially "
-        + "can be very slow. This should not be invoked.");
-  }
-
-  /**
-   * @param partitionPathList A list of pairs of the relative and absolute paths of the partitions.
-   * @return all the files from the partitions.
-   * @throws IOException upon error.
-   */
-  protected Map<Pair<String, Path>, FileStatus[]> listPartitions(
-      List<Pair<String, Path>> partitionPathList) throws IOException {
-    Map<Pair<String, Path>, FileStatus[]> fileStatusMap = new HashMap<>();
-
-    for (Pair<String, Path> partitionPair : partitionPathList) {
-      Path absolutePartitionPath = partitionPair.getRight();
-      try {
-        fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
-      } catch (IOException e) {
-        // Create the path if it does not exist already
-        if (!metaClient.getFs().exists(absolutePartitionPath)) {
-          metaClient.getFs().mkdirs(absolutePartitionPath);
-          fileStatusMap.put(partitionPair, new FileStatus[0]);
-        } else {
-          // in case the partition path was created by another caller
-          fileStatusMap.put(partitionPair, metaClient.getFs().listStatus(absolutePartitionPath));
-        }
-      }
-    }
-
-    return fileStatusMap;
-  }
-
-  /**
    * Returns all files situated at the given partition.
    */
   private FileStatus[] getAllFilesInPartition(String relativePartitionPath) throws IOException {
     Path partitionPath = FSUtils.getPartitionPath(metaClient.getBasePathV2(), relativePartitionPath);
     long beginLsTs = System.currentTimeMillis();
-    FileStatus[] statuses = listPartition(partitionPath);
+    FileStatus[] statuses = tableMetadata.getAllFilesInPartition(partitionPath);
     long endLsTs = System.currentTimeMillis();
     LOG.debug("#files found in partition (" + relativePartitionPath + ") =" + statuses.length + ", Time taken ="
             + (endLsTs - beginLsTs));
@@ -454,27 +426,6 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       LOG.debug("Time to load partition (" + partitionPathStr + ") =" + (endTs - beginTs));
       return true;
     });
-  }
-
-  /**
-   * Return all the files from the partition.
-   *
-   * @param partitionPath The absolute path of the partition
-   * @throws IOException
-   */
-  protected FileStatus[] listPartition(Path partitionPath) throws IOException {
-    try {
-      return metaClient.getFs().listStatus(partitionPath);
-    } catch (IOException e) {
-      // Create the path if it does not exist already
-      if (!metaClient.getFs().exists(partitionPath)) {
-        metaClient.getFs().mkdirs(partitionPath);
-        return new FileStatus[0];
-      } else {
-        // in case the partition path was created by another caller
-        return metaClient.getFs().listStatus(partitionPath);
-      }
-    }
   }
 
   /**

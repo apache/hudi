@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
@@ -59,9 +60,9 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   private final ExternalSpillableMap.DiskMapType diskMapType;
   private final boolean isBitCaskDiskMapCompressionEnabled;
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
-    super(config.isIncrementalTimelineSyncEnabled());
+  public SpillableMapBasedFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+                                         FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
+    super(tableMetadata, config.isIncrementalTimelineSyncEnabled());
     this.maxMemoryForFileGroupMap = config.getMaxMemoryForFileGroupMap();
     this.maxMemoryForPendingCompaction = config.getMaxMemoryForPendingCompaction();
     this.maxMemoryForPendingLogCompaction = config.getMaxMemoryForPendingLogCompaction();
@@ -74,9 +75,9 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     init(metaClient, visibleActiveTimeline);
   }
 
-  public SpillableMapBasedFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
+  public SpillableMapBasedFileSystemView(HoodieTableMetadata tableMetadata, HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
       FileStatus[] fileStatuses, FileSystemViewStorageConfig config, HoodieCommonConfig commonConfig) {
-    this(metaClient, visibleActiveTimeline, config, commonConfig);
+    this(tableMetadata, metaClient, visibleActiveTimeline, config, commonConfig);
     addFilesToView(fileStatuses);
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -85,10 +86,9 @@ public class HoodieMetadataMetrics implements Serializable {
     this.metricsRegistry = metrics.getRegistry();
   }
 
-  public Map<String, String> getStats(boolean detailed, HoodieTableMetaClient metaClient, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
+  public Map<String, String> getStats(boolean detailed, HoodieTableFileSystemView metadataFileSystemView, HoodieTableMetadata metadata, Set<String> metadataPartitions) {
     try {
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline());
-      return getStats(fsView, detailed, metadata, metadataPartitions);
+      return getStats(metadataFileSystemView, detailed, metadata, metadataPartitions);
     } catch (IOException ioe) {
       throw new HoodieIOException("Unable to get metadata stats.", ioe);
     }
@@ -146,7 +146,9 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   public void updateSizeMetrics(HoodieTableMetaClient metaClient, HoodieBackedTableMetadata metadata, Set<String> metadataPartitions) {
-    Map<String, String> stats = getStats(false, metaClient, metadata, metadataPartitions);
+    HoodieTableFileSystemView fileSystemView =
+        HoodieTableFileSystemView.fileListingBasedFileSystemView(new HoodieLocalEngineContext(metaClient.getHadoopConf()), metaClient, metaClient.getActiveTimeline());
+    Map<String, String> stats = getStats(false, fileSystemView, metadata, metadataPartitions);
     for (Map.Entry<String, String> e : stats.entrySet()) {
       setMetric(e.getKey(), Long.parseLong(e.getValue()));
     }

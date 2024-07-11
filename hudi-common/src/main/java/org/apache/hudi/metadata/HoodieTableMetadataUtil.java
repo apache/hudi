@@ -924,7 +924,7 @@ public class HoodieTableMetadataUtil {
   public static List<FileSlice> getPartitionLatestMergedFileSlices(
       HoodieTableMetaClient metaClient, HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest merged file slices for metadata table partition " + partition);
-    return getPartitionFileSlices(metaClient, Option.of(fsView), partition, true);
+    return getPartitionFileSlices(metaClient, fsView, partition, true);
   }
 
   /**
@@ -937,7 +937,7 @@ public class HoodieTableMetadataUtil {
    * @return List of latest file slices for all file groups in a given partition.
    */
   public static List<FileSlice> getPartitionLatestFileSlices(HoodieTableMetaClient metaClient,
-                                                             Option<HoodieTableFileSystemView> fsView, String partition) {
+                                                             HoodieTableFileSystemView fsView, String partition) {
     LOG.info("Loading latest file slices for metadata table partition " + partition);
     return getPartitionFileSlices(metaClient, fsView, partition, false);
   }
@@ -948,7 +948,7 @@ public class HoodieTableMetadataUtil {
    * @param metaClient - Metadata table meta client
    * @return Filesystem view for the metadata table
    */
-  public static HoodieTableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) {
+  public static HoodieTableFileSystemView getFileSystemView(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient) {
     // If there are no commits on the metadata table then the table's
     // default FileSystemView will not return any file slices even
     // though we may have initialized them.
@@ -958,7 +958,9 @@ public class HoodieTableMetadataUtil {
           HoodieActiveTimeline.createNewInstantTime());
       timeline = new HoodieDefaultTimeline(Stream.of(instant), metaClient.getActiveTimeline()::getInstantDetails);
     }
-    return new HoodieTableFileSystemView(metaClient, timeline);
+    HoodieTableMetadata tableMetadata = new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(),
+        metaClient.getSerializableHadoopConf(), metaClient.getBasePathV2().toString(), false);
+    return new HoodieTableFileSystemView(tableMetadata, metaClient, timeline);
   }
 
   /**
@@ -973,20 +975,19 @@ public class HoodieTableMetadataUtil {
    * @return List of latest file slices for all file groups in a given partition.
    */
   private static List<FileSlice> getPartitionFileSlices(HoodieTableMetaClient metaClient,
-                                                        Option<HoodieTableFileSystemView> fileSystemView,
+                                                        HoodieTableFileSystemView fileSystemView,
                                                         String partition,
                                                         boolean mergeFileSlices) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
     Stream<FileSlice> fileSliceStream;
     if (mergeFileSlices) {
       if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+        fileSliceStream = fileSystemView.getLatestMergedFileSlicesBeforeOrOn(
             partition, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
       } else {
         return Collections.emptyList();
       }
     } else {
-      fileSliceStream = fsView.getLatestFileSlices(partition);
+      fileSliceStream = fileSystemView.getLatestFileSlices(partition);
     }
     return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
   }
@@ -1000,10 +1001,9 @@ public class HoodieTableMetadataUtil {
    * @return
    */
   public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
-                                                                              Option<HoodieTableFileSystemView> fileSystemView,
+                                                                              HoodieTableFileSystemView fileSystemView,
                                                                               String partition) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream = fsView.fetchLatestFileSlicesIncludingInflight(partition);
+    Stream<FileSlice> fileSliceStream = fileSystemView.fetchLatestFileSlicesIncludingInflight(partition);
     return fileSliceStream
         .sorted(Comparator.comparing(FileSlice::getFileId))
         .collect(Collectors.toList());

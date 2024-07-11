@@ -84,9 +84,9 @@ public class HoodieSnapshotCopier implements Serializable {
     FileSystem fs = FSUtils.getFs(baseDir, jsc.hadoopConfiguration());
     final SerializableConfiguration serConf = new SerializableConfiguration(jsc.hadoopConfiguration());
     final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(baseDir).build();
-    final BaseFileOnlyView fsView = new HoodieTableFileSystemView(tableMetadata,
-        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants());
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
+    final BaseFileOnlyView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, tableMetadata,
+        tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants());
     // Get the latest commit
     Option<HoodieInstant> latestCommit =
         tableMetadata.getActiveTimeline().getWriteTimeline().filterCompletedInstants().lastInstant();

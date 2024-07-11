@@ -260,7 +260,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
   }
 
   protected List<FileSlice> getCurrentLatestFileSlices(HoodieTable table) {
-    HoodieTableFileSystemView view = new HoodieTableFileSystemView(table.getMetaClient(),
+    HoodieTableFileSystemView view = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, table.getMetaClient(),
         table.getMetaClient().getActiveTimeline().reload().getWriteTimeline());
     return Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS)
         .flatMap(view::getLatestFileSlices).collect(Collectors.toList());

@@ -20,13 +20,14 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.config.HoodieCompactionConfig
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -126,9 +127,11 @@ class TestSixToFiveDowngradeHandler extends RecordLevelIndexTestBase {
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
     if (metaClient.getTableConfig.isMetadataTableAvailable) {
-      new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+      val writeConfig = getWriteConfig(opts)
+      val metadataTable = new HoodieBackedTableMetadata(context, writeConfig.getMetadataConfig, writeConfig.getBasePath, true)
+      new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
     } else {
-      new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline)
+      HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline)
     }
   }
 

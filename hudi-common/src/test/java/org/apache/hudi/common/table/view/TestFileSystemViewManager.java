@@ -54,17 +54,17 @@ class TestFileSystemViewManager extends HoodieCommonTestHarness {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
     try (HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString(), true)) {
-      FileSystemViewManager.SecondaryViewSupplier inMemorySupplier = new FileSystemViewManager.SecondaryViewSupplier(getViewConfig(FileSystemViewStorageType.MEMORY),
-          metaClient, config, unused -> metadata);
-      Assertions.assertTrue(inMemorySupplier.get() instanceof HoodieTableFileSystemView);
-      FileSystemViewManager.SecondaryViewSupplier spillableSupplier = new FileSystemViewManager.SecondaryViewSupplier(getViewConfig(FileSystemViewStorageType.SPILLABLE_DISK),
-          metaClient, config, unused -> metadata);
-      Assertions.assertTrue(spillableSupplier.get() instanceof SpillableMapBasedFileSystemView);
-      FileSystemViewManager.SecondaryViewSupplier embeddedSupplier = new FileSystemViewManager.SecondaryViewSupplier(getViewConfig(FileSystemViewStorageType.EMBEDDED_KV_STORE),
-          metaClient, config, unused -> metadata);
-      Assertions.assertTrue(embeddedSupplier.get() instanceof RocksDbBasedFileSystemView);
-      Assertions.assertThrows(IllegalArgumentException.class, () -> new FileSystemViewManager.SecondaryViewSupplier(getViewConfig(FileSystemViewStorageType.REMOTE_FIRST),
-          metaClient, config, unused -> metadata).get());
+      FileSystemViewManager.SecondaryViewCreator inMemorySupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.MEMORY),
+          metaClient, config, true, unused -> metadata);
+      Assertions.assertTrue(inMemorySupplier.apply(engineContext) instanceof HoodieTableFileSystemView);
+      FileSystemViewManager.SecondaryViewCreator spillableSupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.SPILLABLE_DISK),
+          metaClient, config, true, unused -> metadata);
+      Assertions.assertTrue(spillableSupplier.apply(engineContext) instanceof SpillableMapBasedFileSystemView);
+      FileSystemViewManager.SecondaryViewCreator embeddedSupplier = new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.EMBEDDED_KV_STORE),
+          metaClient, config, true, unused -> metadata);
+      Assertions.assertTrue(embeddedSupplier.apply(engineContext) instanceof RocksDbBasedFileSystemView);
+      Assertions.assertThrows(IllegalArgumentException.class, () -> new FileSystemViewManager.SecondaryViewCreator(getViewConfig(FileSystemViewStorageType.REMOTE_FIRST),
+          metaClient, config, true, unused -> metadata).apply(engineContext));
     }
   }
 

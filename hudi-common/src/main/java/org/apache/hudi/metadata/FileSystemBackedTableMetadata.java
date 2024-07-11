@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -67,6 +68,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
+  private transient FileSystem fs;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        SerializableConfiguration conf, String datasetBasePath,
@@ -83,13 +85,19 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                                        boolean assumeDatePartitioning) {
     super(engineContext, conf, datasetBasePath);
 
-    FileSystem fs = FSUtils.getFs(dataBasePath.get(), conf.get());
     Path metaPath = new Path(dataBasePath.get(), HoodieTableMetaClient.METAFOLDER_NAME);
-    TableNotFoundException.checkTableValidity(fs, this.dataBasePath.get(), metaPath);
-    HoodieTableConfig tableConfig = new HoodieTableConfig(fs, metaPath.toString(), null, null);
+    TableNotFoundException.checkTableValidity(getFs(), this.dataBasePath.get(), metaPath);
+    HoodieTableConfig tableConfig = new HoodieTableConfig(getFs(), metaPath.toString(), null, null);
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
     this.assumeDatePartitioning = assumeDatePartitioning;
+  }
+
+  private FileSystem getFs() {
+    if (fs == null) {
+      fs = FSUtils.getFs(dataBasePath.toString(), hadoopConf.get());
+    }
+    return fs;
   }
 
   @Override
@@ -304,5 +312,28 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   @Override
   public int getNumFileGroupsForPartition(MetadataPartitionType partition) {
     throw new HoodieMetadataException("Unsupported operation: getNumFileGroupsForPartition");
+  }
+
+  @Override
+  public Map<Pair<String, Path>, FileStatus[]> listPartitions(List<Pair<String, Path>> partitionPathList) throws IOException {
+    Map<Pair<String, Path>, FileStatus[]> fileStatusMap = new HashMap<>();
+
+    for (Pair<String, Path> partitionPair : partitionPathList) {
+      Path absolutePartitionPath = partitionPair.getRight();
+      try {
+        fileStatusMap.put(partitionPair, getFs().listStatus(absolutePartitionPath));
+      } catch (IOException e) {
+        // Create the path if it does not exist already
+        if (!getFs().exists(absolutePartitionPath)) {
+          getFs().mkdirs(absolutePartitionPath);
+          fileStatusMap.put(partitionPair, new FileStatus[0]);
+        } else {
+          // in case the partition path was created by another caller
+          fileStatusMap.put(partitionPair, getFs().listStatus(absolutePartitionPath));
+        }
+      }
+    }
+
+    return fileStatusMap;
   }
 }
