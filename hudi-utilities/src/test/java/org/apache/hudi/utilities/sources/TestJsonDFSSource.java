@@ -35,7 +35,6 @@ import org.apache.hadoop.hive.ql.io.ProxyLocalFileSystem;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -97,7 +96,7 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
   protected void corruptFile(Path path) throws IOException {
     PrintStream os;
     try {
-       os = new PrintStream(fs.appendFile(path).build());
+      os = new PrintStream(fs.appendFile(path).build());
     } catch (UnsupportedOperationException uoe) {
       if (fs instanceof ProxyLocalFileSystem) {
         os =  new PrintStream(((ProxyLocalFileSystem) fs).getRawFileSystem().appendFile(path).build());
