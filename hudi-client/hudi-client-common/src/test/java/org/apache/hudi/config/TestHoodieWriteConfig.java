@@ -557,15 +557,21 @@ public class TestHoodieWriteConfig {
   @Test
   public void testFileSystemViewStorageConfigDefaults() {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
-    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.BOOTSTRAP_BASE_FILE_MEM_FRACTION.defaultValue(), writeConfig.getViewStorageConfig().getMaxMemoryForBootstrapBaseFile());
-    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_COMPACTION_MEM_FRACTION.defaultValue(), writeConfig.getViewStorageConfig().getMaxMemoryForPendingCompaction());
-    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_LOG_COMPACTION_MEM_FRACTION.defaultValue(), writeConfig.getViewStorageConfig().getMaxMemoryForPendingLogCompaction());
-    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_CLUSTERING_MEM_FRACTION.defaultValue(), writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups());
-    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_REPLACED_MEM_FRACTION.defaultValue(), writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.BOOTSTRAP_BASE_FILE_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForBootstrapBaseFile());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_COMPACTION_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingCompaction());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_LOG_COMPACTION_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingLogCompaction());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_CLUSTERING_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_REPLACED_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups());
     assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() - writeConfig.getViewStorageConfig().getMaxMemoryForBootstrapBaseFile()
         - writeConfig.getViewStorageConfig().getMaxMemoryForPendingCompaction() - writeConfig.getViewStorageConfig().getMaxMemoryForPendingLogCompaction()
         - writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups()
-        - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(), writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
+        - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
