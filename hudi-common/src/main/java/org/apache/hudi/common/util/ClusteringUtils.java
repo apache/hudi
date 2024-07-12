@@ -175,7 +175,7 @@ public class ClusteringUtils {
     } else {
       requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
     }
-    Option<byte[]> content;
+    Option<byte[]> content = Option.empty();
     try {
       content = timeline.getInstantDetails(requestedInstant);
     } catch (HoodieIOException e) {
@@ -184,8 +184,6 @@ public class ClusteringUtils {
         // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
         requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
         content = timeline.getInstantDetails(requestedInstant);
-      } else {
-        throw e;
       }
     }
     if (!content.isPresent() || content.get().length == 0) {

@@ -208,9 +208,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     boolean deleteReplaceCommit = metaClient.getStorage().deleteDirectory(completeInstantPath);
     boolean deleteClusterCommitRequested = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".cluster.requested").delete();
+        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.requested").delete();
     boolean deleteClusterCommitInflight = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".cluster.inflight").delete();
+        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.inflight").delete();
 
     // confirm deleted
     assertTrue(deleteReplaceCommit && deleteClusterCommitInflight && deleteClusterCommitRequested);
