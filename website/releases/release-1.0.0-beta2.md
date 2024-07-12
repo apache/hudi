@@ -1,6 +1,6 @@
 ---
 title: "Release 1.0.0-beta2"
-sidebar_position: 3
+sidebar_position: 1
 layout: releases
 toc: true
 ---
@@ -18,7 +18,6 @@ This release contains major format changes as we will see in highlights below. W
 **1.0.0-beta2** features on new tables. The 1.0 general availability (GA) release will support automatic table upgrades
 from 0.x versions, while also ensuring full backward compatibility when reading 0.x Hudi tables using 1.0, ensuring a
 seamless migration experience.
-
 
 :::caution
 Given that timeline format and log file format has changed in this **beta release**, it is recommended not to attempt to do
@@ -40,7 +39,7 @@ No major changes in this release. Refer to [1.0.0-beta1#timeline](release-1.0.0-
 #### Log File Format
 
 In addition to the fields in the log file header added in [1.0.0-beta1](release-1.0.0-beta1.md#log-file-format), we also
-store a flag, `IS_PARTIAL` to indicate whether the log block contains [partial updates](TODO: add link) or not.
+store a flag, `IS_PARTIAL` to indicate whether the log block contains partial updates or not.
 
 ### Metadata indexes
 
@@ -62,6 +61,20 @@ To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-pa
 
 ### API Changes
 
-In 1.0.0-beta1, we added a new [filegroup reader](/releases/release-1.0.0-beta1#new-filegroup-reader) which provides
-position-based merging, in addition to existing key-based merging, and skipping pages based on positions. In this
-release, we have integrated this reader with Hive. Presto and Trino integration are in the works. 
+#### Positional Merging
+
+In 1.0.0-beta1, we added a new [filegroup reader](/releases/release-1.0.0-beta1#new-filegroup-reader). The reader now
+provides position-based merging, as an alternative to existing key-based merging, and skipping pages based on record
+positions. The new filegroup reader is integrated with Spark and Hive, and enabled by default. To enable positional
+merging set below configs:
+
+```properties
+hoodie.merge.use.record.positions=true
+```
+
+### Hudi-Flink Enhancements
+
+This release comes with the support for [lookup joins](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql/queries/joins/#lookup-join).
+A lookup join is typically used to enrich a table with data that is queried from an external system. The join requires
+one table to have a processing time attribute and the other table to be backed by a lookup source connector. Head over 
+to the [FLink SQL guide](/docs/next/flink-quick-start-guide) to try out this feature.

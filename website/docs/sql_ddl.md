@@ -217,7 +217,13 @@ DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
 - Both index and column on which the index is created can be qualified with some options in the form of key-value pairs.
   We will see this with an example of functional index below. 
 
-#### Create Functional Index
+:::note
+Except for the `files`, `column_stats`, `bloom_filters` and `record_index`, all other indexes are experimental. We
+encourage users to try out these features on new tables and provide feedback. Below, we have also listed current
+limitations of these indexes.
+:::
+
+#### Create Functional Index (Experimental)
 
 A [functional index](https://github.com/apache/hudi/blob/00ece7bce0a4a8d0019721a28049723821e01842/rfc/rfc-63/rfc-63.md) 
 is an index on a function of a column. It is a new addition to Hudi's [multi-modal indexing](https://hudi.apache.org/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) 
@@ -328,7 +334,7 @@ Project [city#2970, fare#2969, rider#2967, driver#2968], Statistics(sizeInBytes=
 ```
 </details>
 
-#### Create Partition Stats and Secondary Index
+#### Create Partition Stats and Secondary Index (Experimental)
 
 Hudi supports various [indexes](/docs/next/metadata#metadata-table-indices). Let us see how we can use them in the following example.
 
@@ -346,9 +352,9 @@ CREATE TABLE hudi_table (
 ) USING hudi
  OPTIONS(
     primaryKey ='id',
-    hoodie.metadata.record.index.enable = 'true',
-    hoodie.metadata.index.column.stats.column.list = 'rider',
-    hoodie.metadata.index.partition.stats.enable = 'true'
+    hoodie.metadata.record.index.enable = 'true', -- enable record index
+    hoodie.metadata.index.partition.stats.enable = 'true', -- enable partition stats index
+    hoodie.metadata.index.column.stats.column.list = 'rider' -- create partition stats index on rider column
 )
 PARTITIONED BY (city, state)
 LOCATION 'file:///tmp/hudi_test_table';
@@ -398,10 +404,13 @@ Time taken: 0.83 seconds, Fetched 2 row(s)
 
 - Unlike column stats, partition stats index is not created automatically for all columns. Users must specify list of
   columns for which they want to create partition stats index.
-- Predicate on internal meta fields such as `_hoodie_record_key` or `_hoodie_partition_path` cannot be used in for data
-  skipping.
+- Predicate on internal meta fields such as `_hoodie_record_key` or `_hoodie_partition_path` cannot be used for data
+  skipping. Queries with such predicates cannot leverage the indexes.
 - Secondary index is not supported for nested fields.
 - Index update can fail with schema evolution.
+- If there are multiple indexes present, then secondary index and functional index update can fail.
+- Only one index can be created at a time using [async indexer](/docs/next/metadata_indexing).
+- Ensure native HFile reader is disabled (`_hoodie.hfile.use.native.reader`) to leverage the secondary index. Default value for this config is `false`.
 
 Limitations will be addressed before 1.0.0 is made generally available.
 
