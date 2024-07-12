@@ -111,7 +111,7 @@ Following are the different indices currently available under the metadata table
   
 - ***Secondary Index***:
   Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
-  record key fields, Hudi supports [Record-level Index](../blog/2023-11-01-record-level-index.md)). Secondary indexes
+  record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
   can be used to speed up queries with predicate on columns other than record key columns. 
 
 To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-index).

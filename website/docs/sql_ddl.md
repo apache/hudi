@@ -405,8 +405,6 @@ Time taken: 0.83 seconds, Fetched 2 row(s)
 
 Limitations will be addressed before 1.0.0 is made generally available.
 
-#### Create Multiple Indexes on a Table
-
 ### Setting Hudi configs 
 
 There are different ways you can pass the configs for a given hudi table. 

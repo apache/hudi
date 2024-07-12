@@ -50,7 +50,7 @@ partition stats index to the [multi-modal indexing](/blog/2022/05/17/Introducing
 #### Secondary Indexes
 
 Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for 
-record key fields, Hudi supports [Record-level Index](../blog/2023-11-01-record-level-index.md)). Secondary indexes can be used to speed up
+record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes can be used to speed up
 queries with predicate on columns other than record key columns.
 
 #### Partition Stats Index
