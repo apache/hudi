@@ -66,7 +66,9 @@ public class HoodieIndexingConfig extends HoodieConfig {
       .withValidValues(
           MetadataPartitionType.COLUMN_STATS.name(),
           MetadataPartitionType.BLOOM_FILTERS.name(),
-          MetadataPartitionType.SECONDARY_INDEX.name()
+          MetadataPartitionType.SECONDARY_INDEX.name(),
+          MetadataPartitionType.RECORD_INDEX.name(),
+          MetadataPartitionType.PARTITION_STATS.name()
       )
       .sinceVersion("1.0.0")
       .withDocumentation("Type of the functional index. Default is `column_stats` if there are no functions and expressions in the command. "

@@ -144,7 +144,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_COLUMN_STATS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "
@@ -237,7 +237,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> RECORD_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".record.index.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Create the HUDI Record Index within the Metadata Table");
@@ -353,7 +353,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
-      .defaultValue(false)
+      .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable secondary index within the Metadata Table.");
 
