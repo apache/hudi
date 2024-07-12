@@ -1209,35 +1209,35 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(engineContext, metadataMetaClient)) {
+      for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
+        final String partitionName = entry.getKey().getPartitionPath();
+        HoodieData<HoodieRecord> records = entry.getValue();
 
-    HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(engineContext, metadataMetaClient);
-    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = entry.getKey().getPartitionPath();
-      HoodieData<HoodieRecord> records = entry.getValue();
+        List<FileSlice> fileSlices =
+            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, partitionName);
+        if (fileSlices.isEmpty()) {
+          // scheduling of INDEX only initializes the file group and not add commit
+          // so if there are no committed file slices, look for inflight slices
+          fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, fsView, partitionName);
+        }
+        final int fileGroupCount = fileSlices.size();
+        ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionName + " should be >0");
 
-      List<FileSlice> fileSlices =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, partitionName);
-      if (fileSlices.isEmpty()) {
-        // scheduling of INDEX only initializes the file group and not add commit
-        // so if there are no committed file slices, look for inflight slices
-        fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, fsView, partitionName);
+        List<FileSlice> finalFileSlices = fileSlices;
+        HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
+          FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+              fileGroupCount));
+          r.unseal();
+          r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+          r.seal();
+          return r;
+        });
+
+        allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
       }
-      final int fileGroupCount = fileSlices.size();
-      ValidationUtils.checkArgument(fileGroupCount > 0, "FileGroup count for MDT partition " + partitionName + " should be >0");
-
-      List<FileSlice> finalFileSlices = fileSlices;
-      HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
-        FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-            fileGroupCount));
-        r.unseal();
-        r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-        r.seal();
-        return r;
-      });
-
-      allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
+      return allPartitionRecords;
     }
-    return allPartitionRecords;
   }
 
   /**

@@ -172,4 +172,10 @@ public class HoodieMetadataTestTable extends HoodieTestTable {
     return this;
   }
 
+  @Override
+  public void close() throws Exception {
+    if (writer != null) {
+      this.writer.close();
+    }
+  }
 }
