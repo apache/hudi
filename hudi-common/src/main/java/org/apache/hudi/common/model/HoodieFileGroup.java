@@ -21,6 +21,8 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.exception.HoodieException;
 
 import java.io.Serializable;
 import java.util.Comparator;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
@@ -103,11 +106,29 @@ public class HoodieFileGroup implements Serializable {
    * Add a new log file into the group.
    */
   public void addLogFile(HoodieLogFile logFile) {
-    if (!fileSlices.containsKey(logFile.getBaseCommitTime())) {
-      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(fileGroupId, logFile.getBaseCommitTime()));
+    String baseInstantTime = getBaseInstantTime(logFile);
+    if (!fileSlices.containsKey(baseInstantTime)) {
+      fileSlices.put(logFile.getBaseCommitTime(), new FileSlice(fileGroupId, baseInstantTime));
     }
-    fileSlices.get(logFile.getBaseCommitTime()).addLogFile(logFile);
+    fileSlices.get(baseInstantTime).addLogFile(logFile);
   }
+
+  @VisibleForTesting
+  String getBaseInstantTime(HoodieLogFile logFile) {
+    if (fileSlices.isEmpty()) {
+      // no base file in the file group, use the log file delta commit time.
+      return logFile.getBaseCommitTime();
+    }
+    String instantTime = logFile.getBaseCommitTime();
+    for (String commitTime : fileSlices.keySet()) {
+      // find the largest commit time that is smaller than the log delta commit completion time
+      if (HoodieTimeline.compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, commitTime)) {
+        return commitTime;
+      }
+    }
+    throw new HoodieException("Could not find any base file who instant time < " + instantTime);
+  }
+
 
   public String getPartitionPath() {
     return fileGroupId.getPartitionPath();
@@ -183,13 +204,13 @@ public class HoodieFileGroup implements Serializable {
 
   /**
    * Obtain the latest file slice, upto an instantTime i.e < maxInstantTime.
-   * 
+   *
    * @param maxInstantTime Max Instant Time
    * @return the latest file slice
    */
   public Option<FileSlice> getLatestFileSliceBefore(String maxInstantTime) {
     return Option.fromJavaOptional(getAllFileSlices().filter(
-        slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN, maxInstantTime))
+            slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN, maxInstantTime))
         .findFirst());
   }
 

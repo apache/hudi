@@ -117,14 +117,6 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
     return result;
   }
 
-  /*public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
-    try {
-      return fromJsonString(fromUTF8Bytes(bytes), clazz);
-    } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
-    }
-  }*/
-
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
       if (bytes.length == 0) {

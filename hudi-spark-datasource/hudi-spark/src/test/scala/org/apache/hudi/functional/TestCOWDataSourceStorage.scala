@@ -239,11 +239,11 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
   @Test
   def testRead0XTables(): Unit = {
-    val path = "/tmp/hudi_trips_mor_1_x/"
+    /*val path = "/tmp/hudi_trips_mor_1_x/"
     val df = spark.read.format("hudi").load(path)
     df.registerTempTable("tbl1")
     spark.sql("select * from tbl1 limit 4").show(false)
-    println("Completed")
+    println("Completed")*/
 
     val path1 = "/tmp/hudi_trips_cow/"
     val df1 = spark.read.format("hudi").load(path1)
