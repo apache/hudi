@@ -41,8 +41,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZonedDateTime;
+import java.time.chrono.IsoChronology;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -55,6 +59,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE;
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 
 /**
  * Converts Json record to Avro Generic Record.
@@ -552,29 +559,67 @@ public class MercifulJsonConverter {
       private static final Map<AvroLogicalTypeEnum, DateTimeParseContext> DATE_TIME_PARSE_CONTEXT_MAP = getParseContext();
 
       private static Map<AvroLogicalTypeEnum, DateTimeParseContext> getParseContext() {
-        // Formatter for parsing local timestamp. It ignores the time zone info of the timestamp.
-        // No pattern is defined as ISO_INSTANT format internal is not clear.
+        // The pattern is derived from ISO_LOCAL_DATE_TIME definition with the relaxation on the separator.
+        DateTimeFormatter localDateTimeFormatter = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .append(ISO_LOCAL_DATE)
+            .optionalStart()
+            .appendLiteral('T')
+            .optionalEnd()
+            .optionalStart()
+            .appendLiteral(' ')
+            .optionalEnd()
+            .append(ISO_LOCAL_TIME)
+            .toFormatter()
+            .withResolverStyle(ResolverStyle.STRICT)
+            .withChronology(IsoChronology.INSTANCE);
+        // Formatter for parsing timestamp.
+        // The pattern is derived from ISO_OFFSET_DATE_TIME definition with the relaxation on the separator.
+        // Pattern asserts the string is
+        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + zone offset
+        // <separator> is 'T' or ' '
+        // For example, "2024-07-13T11:36:01.951Z", "2024-07-13T11:36:01.951+01:00",
+        // "2024-07-13T11:36:01Z", "2024-07-13T11:36:01+01:00",
+        // "2024-07-13 11:36:01.951Z", "2024-07-13 11:36:01.951+01:00".
+        // See TestMercifulJsonConverter#timestampLogicalTypeGoodCaseTest
+        // and #timestampLogicalTypeBadTest for supported and unsupported cases.
         DateTimeParseContext dateTimestampParseContext = new DateTimeParseContext(
-            DateTimeFormatter.ISO_INSTANT,
+            new DateTimeFormatterBuilder()
+                .parseCaseInsensitive()
+                .append(localDateTimeFormatter)
+                .appendOffsetId()
+                .toFormatter()
+                .withResolverStyle(ResolverStyle.STRICT)
+                .withChronology(IsoChronology.INSTANCE),
             null /* match everything*/);
-        // Formatter for parsing timestamp with time zone. The pattern is derived from ISO_LOCAL_TIME definition.
+        // Formatter for parsing time of day. The pattern is derived from ISO_LOCAL_TIME definition.
         // Pattern asserts the string is
         // <optional sign><Hour>:<Minute> + optional <second> + optional <fractional second>
+        // For example, "11:36:01.951".
+        // See TestMercifulJsonConverter#timeLogicalTypeTest
+        // and #timeLogicalTypeBadCaseTest for supported and unsupported cases.
         DateTimeParseContext dateTimeParseContext = new DateTimeParseContext(
-            DateTimeFormatter.ISO_LOCAL_TIME,
+            ISO_LOCAL_TIME,
             Pattern.compile("^[+-]?\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,9})?)?"));
-        // Formatter for parsing local time. The pattern is derived from ISO_LOCAL_TIME definition.
+        // Formatter for parsing local timestamp.
+        // The pattern is derived from ISO_LOCAL_DATE_TIME definition with the relaxation on the separator.
         // Pattern asserts the string is
-        // <optional sign><Year>-<Month>-<Day>T<Hour>:<Minute> + optional <second> + optional <fractional second>
+        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second>
+        // <separator> is 'T' or ' '
+        // For example, "2024-07-13T11:36:01.951", "2024-07-13 11:36:01.951".
+        // See TestMercifulJsonConverter#localTimestampLogicalTypeGoodCaseTest
+        // and #localTimestampLogicalTypeBadTest for supported and unsupported cases.
         DateTimeParseContext localTimestampParseContext = new DateTimeParseContext(
-            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-            Pattern.compile("^[+-]?\\d{4,10}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,9})?)?")
+            localDateTimeFormatter,
+            Pattern.compile("^[+-]?\\d{4,10}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,9})?)?")
         );
         // Formatter for parsing local date. The pattern is derived from ISO_LOCAL_DATE definition.
         // Pattern asserts the string is
         // <optional sign><Year>-<Month>-<Day>
+        // For example, "2024-07-13".
+        // See TestMercifulJsonConverter#dateLogicalTypeTest for supported and unsupported cases.
         DateTimeParseContext localDateParseContext = new DateTimeParseContext(
-            DateTimeFormatter.ISO_LOCAL_DATE,
+            ISO_LOCAL_DATE,
             Pattern.compile("^[+-]?\\d{4,10}-\\d{2}-\\d{2}?")
         );
 
@@ -603,10 +648,14 @@ public class MercifulJsonConverter {
       }
 
       protected Pair<Boolean, Instant> convertToInstantTime(String input) {
-        // Parse the input timestamp, DateTimeFormatter.ISO_INSTANT is implied here
+        // Parse the input timestamp
+        // The input string is assumed in the format:
+        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + zone offset
+        // <separator> is 'T' or ' '
         Instant time = null;
         try {
-          time = Instant.parse(input);
+          ZonedDateTime dateTime = ZonedDateTime.parse(input, getDateTimeFormatter());
+          time = dateTime.toInstant();
         } catch (DateTimeParseException ignore) {
           /* ignore */
         }

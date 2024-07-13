@@ -305,7 +305,6 @@ public class TestMercifulJsonConverter {
     });
   }
 
-
   private static final String DATE_AVRO_FILE_PATH = "/date-type.avsc";
   private static final String DATE_AVRO_INVALID_FILE_PATH = "/date-type-invalid.avsc";
   /**
@@ -393,6 +392,7 @@ public class TestMercifulJsonConverter {
 
   static Stream<Object> localTimestampGoodCaseProvider() {
     return Stream.of(
+        // Test cases with 'T' as the separator
         Arguments.of(
             (long)(1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
             "2024-05-13T23:53:36.004", // Timestamp equivalence
@@ -401,6 +401,15 @@ public class TestMercifulJsonConverter {
             (long)(1715644416 * 1e6), // Num of micro sec since unix epoch
             "2024-05-13T23:53:36", // Timestamp equivalence
             "2024-05-13T23:53:36"),
+        // Test cases with ' ' as the separator
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
+            "2024-05-13 23:53:36.004", // Timestamp equivalence
+            "2024-05-13 23:53:36.004"),
+        Arguments.of(
+            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
+            "2024-05-13 23:53:36", // Timestamp equivalence
+            "2024-05-13 23:53:36"),
         Arguments.of(
             2024L, "2", "2024"),
         Arguments.of(
@@ -416,15 +425,27 @@ public class TestMercifulJsonConverter {
             (long)(1715644416 * 1e6 + 4000000 / 1e6),
             "2024-05-13T23:53:36.000", // Timestamp equivalence
             "2024-05-13T23:53:36.000004"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e6),
+            "2024-05-13 23:53:36.000", // Timestamp equivalence
+            "2024-05-13 23:53:36.000004"),
         // Test full range of time
         Arguments.of(
             0L,
             "1970-01-01T00:00:00.000", // Timestamp equivalence
             "1970-01-01T00:00:00.000000"),
         Arguments.of(
+            0L,
+            "1970-01-01 00:00:00.000", // Timestamp equivalence
+            "1970-01-01 00:00:00.000000"),
+        Arguments.of(
             Long.MAX_VALUE,
             "+294247-01-10T04:00:54.775", // Timestamp in far future must be prefixed with '+'
             "+294247-01-10T04:00:54.775807"),
+        Arguments.of(
+            Long.MAX_VALUE,
+            "+294247-01-10 04:00:54.775", // Timestamp in far future must be prefixed with '+'
+            "+294247-01-10 04:00:54.775807"),
         Arguments.of(
             0L, 0L, 0L),
         Arguments.of(
@@ -436,6 +457,10 @@ public class TestMercifulJsonConverter {
         Arguments.of(
             -62167219200000000L, "0000-01-01T00:00:00.00000", "0000-01-01T00:00:00.00000"),
             Arguments.of(
+                -62167219200000000L, -62167219200000000L / 1000, -62167219200000000L),
+        Arguments.of(
+            -62167219200000000L, "0000-01-01 00:00:00.00000", "0000-01-01 00:00:00.00000"),
+        Arguments.of(
             -62167219200000000L, -62167219200000000L / 1000, -62167219200000000L)
     );
   }
@@ -461,23 +486,38 @@ public class TestMercifulJsonConverter {
     return Stream.of(
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1323:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-0-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-0-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "20242-05-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "20242-05-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13T23:53:36.0000000"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13 23:53:36.0000000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-13T23:53:36.000Z"),
+        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-13 23:53:36.000Z"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1323:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-0-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-0-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "20242-05-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "20242-05-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13T23:53:36.0000000"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13 23:53:36.0000000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13T23:53:36.000"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13 23:53:36.000"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-13T23:53:36.000Z"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-13 23:53:36.000Z"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "Not a timestamp at all!"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024 05 13T23:00"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024 05 13 23:00"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05"),
         Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03T10:15:30+01:00"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03T10:15:30[Europe/ Paris]")
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03 10:15:30+01:00"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03T10:15:30[Europe/ Paris]"),
+        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03 10:15:30[Europe/ Paris]")
     );
   }
 
@@ -518,9 +558,58 @@ public class TestMercifulJsonConverter {
             "2024-05-13T23:53:36.004Z", // Timestamp equivalence
             "2024-05-13T23:53:36.004Z"),
         Arguments.of(
-            (long)(1715644416 * 1e6), // Num of micro sec since unix epoch
+            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
+            "2024-05-13 23:53:36.004Z", // Timestamp equivalence
+            "2024-05-13 23:53:36.004Z"),
+        Arguments.of(
+            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
             "2024-05-13T23:53:36Z", // Timestamp equivalence
             "2024-05-13T23:53:36Z"),
+        Arguments.of(
+            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
+            "2024-05-13 23:53:36Z", // Timestamp equivalence
+            "2024-05-13 23:53:36Z"),
+        // Test timestamps with different zone offsets
+        Arguments.of(
+            (long) (1715644416 * 1e6 - 2 * 3600 * 1e6),
+            "2024-05-13T23:53:36+02:00",
+            "2024-05-13T23:53:36+02:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 - 2 * 3600 * 1e6),
+            "2024-05-13 23:53:36+02:00",
+            "2024-05-13 23:53:36+02:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e3),
+            "2024-05-13T23:53:36.004+00:00",
+            "2024-05-13T23:53:36.004+00:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e3),
+            "2024-05-13 23:53:36.004+00:00",
+            "2024-05-13 23:53:36.004+00:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 - 3 * 3600 * 1e6 + 4000000 / 1e3),
+            "2024-05-13T23:53:36.004+03:00",
+            "2024-05-13T23:53:36.004+03:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 - 3 * 3600 * 1e6 + 4000000 / 1e3),
+            "2024-05-13 23:53:36.004+03:00",
+            "2024-05-13 23:53:36.004+03:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 6 * 3600 * 1e6 + 4000000 / 1e3),
+            "2024-05-13T23:53:36.004-06:00",
+            "2024-05-13T23:53:36.004-06:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 6 * 3600 * 1e6 + 4000000 / 1e3),
+            "2024-05-13 23:53:36.004-06:00",
+            "2024-05-13 23:53:36.004-06:00"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + (8 * 3600 + 1800) * 1e6 + 4000000 / 1e3),
+            "2024-05-13T23:53:36.004-08:30",
+            "2024-05-13T23:53:36.004-08:30"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + (8 * 3600 + 1800) * 1e6 + 4000000 / 1e3),
+            "2024-05-13 23:53:36.004-08:30",
+            "2024-05-13 23:53:36.004-08:30"),
         Arguments.of(
             2024L, "2", "2024"),
         Arguments.of(
@@ -536,11 +625,27 @@ public class TestMercifulJsonConverter {
             (long)(1715644416 * 1e6 + 4000000 / 1e6),
             "2024-05-13T23:53:36.000Z", // Timestamp equivalence
             "2024-05-13T23:53:36.000004Z"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e6),
+            "2024-05-13 23:53:36.000Z",
+            "2024-05-13 23:53:36.000004Z"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + (2 * 3600 + 1800) * 1e6 + 4000000 / 1e6),
+            "2024-05-13T23:53:36.000-02:30",
+            "2024-05-13T23:53:36.000004-02:30"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + (2 * 3600 + 1800) * 1e6 + 4000000 / 1e6),
+            "2024-05-13 23:53:36.000-02:30",
+            "2024-05-13 23:53:36.000004-02:30"),
         // Test full range of time
         Arguments.of(
             0L,
             "1970-01-01T00:00:00.000Z", // Timestamp equivalence
             "1970-01-01T00:00:00.000000Z"),
+        Arguments.of(
+            (long) (-3600 * 1e6),
+            "1970-01-01T00:00:00.000+01:00",
+            "1970-01-01T00:00:00.000000+01:00"),
         // The test case leads to long overflow due to how java calculate duration between 2 timestamps
         // Arguments.of(
         //  Long.MAX_VALUE,
