@@ -18,6 +18,9 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.types.DataType;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -48,6 +51,7 @@ import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
+import org.apache.flink.table.data.GenericArrayData;
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
@@ -412,6 +416,69 @@ public class TestData {
         insertRow(TestConfigurations.ROW_TYPE_HOODIE_KEY_SPECIAL_DATA_TYPE,
             TimestampData.fromEpochMillis(i), i, DecimalData.fromBigDecimal(new BigDecimal(String.format("%d.%d%d", i, i, i)), 3, 2))));
   }
+
+  public static final DataType ARRAY_OF_ROWS_DATA_TYPE = DataTypes.ROW(
+                  DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+                  DataTypes.FIELD("partition", DataTypes.VARCHAR(10)),
+                  DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+                  DataTypes.FIELD("data", DataTypes.ARRAY( DataTypes.ROW(
+                    DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+                    DataTypes.FIELD("age", DataTypes.INT())
+                  ))))
+                 .notNull();
+
+  public static final RowType ARRAY_OF_ROWS_TYPE = (RowType) ARRAY_OF_ROWS_DATA_TYPE.getLogicalType();
+
+  public static List<RowData> DATA_SET_ARRAY_OF_ROWS = Arrays.asList(
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id1"), StringData.fromString("par1"),
+                  TimestampData.fromEpochMillis(3),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Danny"), 23),
+                          GenericRowData.of(StringData.fromString("Danny2"), 223)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id2"), StringData.fromString("par1"),
+                  TimestampData.fromEpochMillis(2),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Stephen"), 33),
+                          GenericRowData.of(StringData.fromString("Stephen2"), 233)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id3"), StringData.fromString("par2"),
+                  TimestampData.fromEpochMillis(3),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Julian"), 53),
+                          GenericRowData.of(StringData.fromString("Julian2"), 253)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id4"), StringData.fromString("par2"),
+                  TimestampData.fromEpochMillis(4),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Fabian"), 31),
+                          GenericRowData.of(StringData.fromString("Fabian2"), 231)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id5"), StringData.fromString("par3"),
+                  TimestampData.fromEpochMillis(5),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Sophia"), 18),
+                          GenericRowData.of(StringData.fromString("Sophia2"), 218)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id6"), StringData.fromString("par3"),
+                  TimestampData.fromEpochMillis(6),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Emma"), 20),
+                          GenericRowData.of(StringData.fromString("Emma2"), 220)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id7"), StringData.fromString("par4"),
+                  TimestampData.fromEpochMillis(7),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Bob"), 44),
+                          GenericRowData.of(StringData.fromString("Bob2"), 244)
+                  })),
+          insertRow(ARRAY_OF_ROWS_TYPE, StringData.fromString("id8"), StringData.fromString("par4"),
+                  TimestampData.fromEpochMillis(8),
+                  new GenericArrayData(new Object[]{
+                          GenericRowData.of(StringData.fromString("Han"), 56),
+                          GenericRowData.of(StringData.fromString("Han2"), 256)
+                  }))
+  );
 
   public static List<RowData> dataSetInsert(int... ids) {
     List<RowData> inserts = new ArrayList<>();

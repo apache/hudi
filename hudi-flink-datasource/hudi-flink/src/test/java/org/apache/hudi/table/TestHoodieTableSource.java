@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -25,8 +26,10 @@ import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.SerializableSchema;
+import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -62,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
@@ -149,6 +153,36 @@ public class TestHoodieTableSource {
         + "_hoodie_file_name,"
         + "uuid,name,age,ts,partition";
     assertThat(schemaFields, is(expected));
+  }
+
+  @Test
+  void readArrayOfRows() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+            Objects.requireNonNull(Thread.currentThread()
+                    .getContextClassLoader().getResource("test_read_array_of_rows_schema.avsc")).toString());
+    TestData.writeDataAsBatch(TestData.DATA_SET_ARRAY_OF_ROWS, conf);
+    HoodieTableSource tableSource = new HoodieTableSource(
+            SerializableSchema.create( SchemaBuilder.instance()
+            .fields(TestData.ARRAY_OF_ROWS_TYPE.getFieldNames(), TestData.ARRAY_OF_ROWS_DATA_TYPE.getChildren())
+            .build()),
+            new StoragePath(conf.getString(FlinkOptions.PATH)),
+            Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
+            "default-par",
+            conf);
+    List<StoragePathInfo> fileList = tableSource.getReadFiles();
+    assertNotNull(fileList);
+    assertThat(fileList.size(), is(4));
+    CopyOnWriteInputFormat inputFormat = (CopyOnWriteInputFormat) tableSource.getInputFormat();
+    //tableSource.getScanRuntimeProvider(null).produceDataStream();
+    inputFormat.open(inputFormat.createInputSplits(1)[0]);
+    while (!inputFormat.reachedEnd()) {
+      RowData row = inputFormat.nextRecord(null);
+      assertNotNull(row);
+      row.getArray(3);
+    }
   }
 
   @Test
