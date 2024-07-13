@@ -132,7 +132,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   protected final HoodieIndex<?, ?> index;
   private SerializableConfiguration hadoopConfiguration;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
+  private transient HoodieTableMetadata metadata;
   private final HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
 
@@ -144,12 +144,6 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     this.hadoopConfiguration = context.getHadoopConf();
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
-
-    this.viewManager = FileSystemViewManager.createViewManager(context, config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
     this.metaClient = metaClient;
     this.index = getIndex(config, context);
     this.storageLayout = getStorageLayout(config);
@@ -168,13 +162,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getMetadataConfig(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
     return viewManager;
-  }
-
-  public HoodieTableMetadata getMetadata() {
-    return metadata;
   }
 
   /**
@@ -1089,7 +1079,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
+    if (null == metadata) {
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
+          .build();
+      metadata = HoodieTableMetadata.create(getContext(), metadataConfig, config.getBasePath());
+    }
+    return metadata;
   }
 
   /**
