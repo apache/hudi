@@ -48,6 +48,7 @@ import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.Strings;
 import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.FlatMapFunction;
@@ -99,7 +100,8 @@ public class HoodieStreamerUtils {
                 try {
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
                   GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
-                  HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+                  boolean shouldUseOrderingCol = shouldCombine && Strings.isNullOrEmpty(cfg.sourceOrderingField);
+                  HoodieRecordPayload payload = shouldUseOrderingCol ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
                       (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, useConsistentLogicalTimestamp))
                       : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
                   return Either.left(new HoodieAvroRecord<>(hoodieKey, payload));
