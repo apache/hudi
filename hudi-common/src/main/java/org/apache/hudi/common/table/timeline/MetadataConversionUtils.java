@@ -16,17 +16,27 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.common.table.timeline;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericDatumWriter;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.apache.avro.specific.SpecificRecord;
+import org.apache.avro.specific.SpecificRecordBase;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+
+import org.apache.hudi.avro.JsonEncoder;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
-import org.apache.hudi.client.ReplaceArchivalHelper;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -39,7 +49,9 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 
 /**
  * Helper class to convert between different action related payloads and {@link HoodieArchivedMetaEntry}.
@@ -56,7 +68,8 @@ public class MetadataConversionUtils {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    //archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.CLEAN_ACTION: {
         if (hoodieInstant.isCompleted()) {
@@ -82,7 +95,8 @@ public class MetadataConversionUtils {
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
         if (hoodieInstant.isCompleted()) {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
-          archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
+          // TODO
+          // archivedMetaWrapper.setHoodieReplaceCommitMetadata(ReplaceArchivalHelper.convertReplaceCommitMetadata(replaceCommitMetadata));
         } else if (hoodieInstant.isInflight()) {
           // inflight replacecommit files have the same metadata body as HoodieCommitMetadata
           // so we could re-use it without further creating an inflight extension.
@@ -141,7 +155,8 @@ public class MetadataConversionUtils {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
     archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
-    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    //archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getStateTransitionTime());
+    archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {
       case HoodieTimeline.CLEAN_ACTION: {
         archivedMetaWrapper.setActionType(ActionType.clean.name());
@@ -202,7 +217,31 @@ public class MetadataConversionUtils {
     return Option.of(TimelineUtils.getCommitMetadata(hoodieInstant, timeline));
   }
 
-  public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
+  /**
+   * Convert commit metadata from json to avro.
+   */
+  public static <T extends SpecificRecordBase> T convertCommitMetadata(HoodieCommitMetadata hoodieCommitMetadata) {
+    if (hoodieCommitMetadata instanceof HoodieReplaceCommitMetadata) {
+      return (T) convertReplaceCommitMetadata((HoodieReplaceCommitMetadata) hoodieCommitMetadata);
+    }
+    hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
+    org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
+    if (hoodieCommitMetadata.getCompacted()) {
+      avroMetaData.setOperationType(WriteOperationType.COMPACT.name());
+    }
+    return (T) avroMetaData;
+  }
+
+  /**
+   * Convert replacecommit metadata from json to avro.
+   */
+  private static org.apache.hudi.avro.model.HoodieReplaceCommitMetadata convertReplaceCommitMetadata(HoodieReplaceCommitMetadata replaceCommitMetadata) {
+    replaceCommitMetadata.getPartitionToWriteStats().remove(null);
+    replaceCommitMetadata.getPartitionToReplaceFileIds().remove(null);
+    return JsonUtils.getObjectMapper().convertValue(replaceCommitMetadata, org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class);
+  }
+
+  /*public static org.apache.hudi.avro.model.HoodieCommitMetadata convertCommitMetadata(
           HoodieCommitMetadata hoodieCommitMetadata) {
     ObjectMapper mapper = new ObjectMapper();
     // Need this to ignore other public get() methods
@@ -215,5 +254,22 @@ public class MetadataConversionUtils {
     // Do not archive Rolling Stats, cannot set to null since AVRO will throw null pointer
     avroMetaData.getExtraMetadata().put(HoodieRollingStatMetadata.ROLLING_STAT_METADATA_KEY, "");
     return avroMetaData;
+  }*/
+
+  /**
+   * Convert commit metadata from avro to json.
+   */
+  public static <T extends SpecificRecordBase> byte[] convertCommitMetadataToJsonBytes(T avroMetaData, Class<T> clazz) {
+    Schema avroSchema = clazz == org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class ? org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.getClassSchema() :
+        org.apache.hudi.avro.model.HoodieCommitMetadata.getClassSchema();
+    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      JsonEncoder jsonEncoder = new JsonEncoder(avroSchema, outputStream);
+      DatumWriter<GenericRecord> writer = avroMetaData instanceof SpecificRecord ? new SpecificDatumWriter<>(avroSchema) : new GenericDatumWriter<>(avroSchema);
+      writer.write(avroMetaData, jsonEncoder);
+      jsonEncoder.flush();
+      return outputStream.toByteArray();
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to convert to JSON.", e);
+    }
   }
 }

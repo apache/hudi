@@ -19,7 +19,7 @@
 package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
-import org.apache.hudi.client.utils.MetadataConversionUtils;
+import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieMetadataWrapper;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;

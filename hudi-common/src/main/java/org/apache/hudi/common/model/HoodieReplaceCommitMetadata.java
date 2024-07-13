@@ -30,6 +30,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.convertCommitMetadataToJsonBytes;
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeReplaceCommitMetadata;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
@@ -117,9 +119,21 @@ public class HoodieReplaceCommitMetadata extends HoodieCommitMetadata {
 
   public static <T> T fromBytes(byte[] bytes, Class<T> clazz) throws IOException {
     try {
-      return fromJsonString(fromUTF8Bytes(bytes), clazz);
+      if (bytes.length == 0) {
+        return clazz.newInstance();
+      }
+      return fromJsonString(
+          fromUTF8Bytes(
+              convertCommitMetadataToJsonBytes(deserializeReplaceCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieReplaceCommitMetadata.class)),
+          clazz);
     } catch (Exception e) {
-      throw new IOException("unable to read commit metadata", e);
+      LOG.info("Failed to deserialize replace commit metadata as avro, trying json ");
+      try {
+        return fromJsonString(fromUTF8Bytes(bytes), clazz);
+      } catch (Exception e2) {
+        throw new IOException("unable to read commit metadata", e2);
+      }
+      // throw new IOException("unable to read commit metadata for bytes length: " + bytes.length, e);
     }
   }
 

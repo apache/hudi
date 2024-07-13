@@ -55,7 +55,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.client.utils.MetadataConversionUtils.getHoodieCommitMetadata;
+import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;

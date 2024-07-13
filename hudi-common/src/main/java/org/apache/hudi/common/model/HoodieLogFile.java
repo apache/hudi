@@ -116,6 +116,7 @@ public class HoodieLogFile implements Serializable {
     return fileId;
   }
 
+  // this could be either base instant time (if log file is written w/ 0.x) or it could refer to a delta commit time (if log file is written in 1.x)
   public String getBaseCommitTime() {
     if (baseCommitTime == null) {
       parseFieldsFromPath();
