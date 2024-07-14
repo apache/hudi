@@ -97,7 +97,7 @@ Following are the different indices currently available under the metadata table
   is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
   be used to speed up the query. Functional index is stored in *func_index_* prefixed partitions (one for each
   function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
-  docs [here](/docs/next/sql_ddl#create-functional-index) for more details.
+  docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
 
 - ***Partition Stats Index***
   Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
@@ -114,7 +114,7 @@ Following are the different indices currently available under the metadata table
   record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
   can be used to speed up queries with predicate on columns other than record key columns. 
 
-To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-index).
+To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
 
 ## Enable Hudi Metadata Table and Multi-Modal Index in write side
 

@@ -7,7 +7,7 @@ last_modified_at: 2022-12-27T15:59:57-04:00
 ---
 
 ### Release 1.0.0-beta2
-* Source Release : [Apache Hudi 1.0.0-beta2 Source Release](TODO: add link) ([asc](TODO: add link), [sha512](TODO: add link))
+* Source Release : [Apache Hudi 1.0.0-beta2 Source Release](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz) ([asc](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.asc), [sha512](https://downloads.apache.org/hudi/1.0.0-beta2/hudi-1.0.0-beta2.src.tgz.sha512))
 * Release Note : ([Release Note for Apache Hudi 1.0.0-beta2](/releases/release-1.0.0-beta2))
 
 ### Release 0.15.0

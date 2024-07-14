@@ -46,7 +46,7 @@ store a flag, `IS_PARTIAL` to indicate whether the log block contains partial up
 In 1.0.0-beta1, we added support for functional index. In 1.0.0-beta2, we have added support for secondary indexes and
 partition stats index to the [multi-modal indexing](/blog/2022/05/17/Introducing-Multi-Modal-Index-for-the-Lakehouse-in-Apache-Hudi) subsystem.
 
-#### Secondary Indexes
+#### Secondary Index
 
 Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for 
 record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes can be used to speed up
@@ -57,13 +57,14 @@ queries with predicate on columns other than record key columns.
 Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
 in efficient partition pruning even for non-partition fields.
 
-To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-index).
+To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
 
 ### API Changes
 
-#### Positional Merging
+#### Positional Merging with Filegroup Reader
 
-In 1.0.0-beta1, we added a new [filegroup reader](/releases/release-1.0.0-beta1#new-filegroup-reader). The reader now
+In 1.0.0-beta1, we added a new [filegroup reader](/releases/release-1.0.0-beta1#new-filegroup-reader), which provides
+5.7x performance benefits for snapshot queries on Merge-on-Read tables with updates. The reader now
 provides position-based merging, as an alternative to existing key-based merging, and skipping pages based on record
 positions. The new filegroup reader is integrated with Spark and Hive, and enabled by default. To enable positional
 merging set below configs:
@@ -77,4 +78,8 @@ hoodie.merge.use.record.positions=true
 This release comes with the support for [lookup joins](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/table/sql/queries/joins/#lookup-join).
 A lookup join is typically used to enrich a table with data that is queried from an external system. The join requires
 one table to have a processing time attribute and the other table to be backed by a lookup source connector. Head over 
-to the [FLink SQL guide](/docs/next/flink-quick-start-guide) to try out this feature.
+to the [FLink SQL guide](/docs/next/sql_dml#lookup-joins) to try out this feature.
+
+## Raw Release Notes
+
+The raw release notes are available [here](https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12322822&version=12354810).
