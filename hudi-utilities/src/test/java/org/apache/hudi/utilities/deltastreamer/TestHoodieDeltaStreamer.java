@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import joptsimple.internal.Strings;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.DefaultSparkRecordMerger;
@@ -1836,6 +1837,43 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
   }
 
+  private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
+    return Stream.of(
+            Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", Strings.EMPTY),
+            Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", "timestamp"),
+            Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", Strings.EMPTY),
+            Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", "timestamp"),
+            Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", Strings.EMPTY),
+            Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", "timestamp"),
+            Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", Strings.EMPTY),
+            Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getArgumentsForFilterDupesWithPrecombineTest")
+  public void testFilterDupesWithPrecombine(
+          HoodieRecordType recordType, String tableType, String sourceOrderingField) throws Exception {
+    String tableBasePath = basePath + "/test_dupes_tables_with_precombine";
+    HoodieDeltaStreamer.Config cfg =
+            TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType;
+    cfg.filterDupes = true;
+    cfg.sourceOrderingField = Strings.EMPTY;
+    addRecordMerger(recordType, cfg.configs);
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
+
+    // Generate the same 1000 records + 1000 new ones
+    // We use TestDataSource to assist w/ generating input data. for every subquent batches, it produces 50% inserts and 50% updates.
+    runDeltaSync(cfg, true, 2000, WriteOperationType.INSERT);
+    assertRecordCount(2000, tableBasePath, sqlContext); // if filter dupes is not enabled, we should be expecting 3000 records here.
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
   @ParameterizedTest
   @MethodSource("getArgumentsForFilterDupesWithPrecombineTest")
   public void testFilterDupesWithPrecombine(
@@ -1865,7 +1903,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testFilterDupes() throws Exception {
     String tableBasePath = basePath + "/test_dupes_table";
 
-    // Initial bulk insert
+    // Initial bulk insert of 1000 records
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1000, tableBasePath, sqlContext);
@@ -1895,8 +1933,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata = new DefaultCommitMetadataSerDe()
         .deserialize(newLastFinished, mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
-    System.out.println("New Commit Metadata=" + commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
+
 
     // Try UPSERT with filterDupes true. Expect exception
     cfg2.filterDupes = true;
@@ -1906,6 +1944,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     }
+
+    runDeltaSync(cfg2, true, 2000, WriteOperationType.INSERT);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
