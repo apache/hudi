@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
@@ -82,6 +83,7 @@ public class HoodieStreamerUtils {
                                                                   SchemaProvider schemaProvider, HoodieRecord.HoodieRecordType recordType, boolean autoGenerateRecordKeys,
                                                                   String instantTime, Option<BaseErrorTableWriter> errorTableWriter) {
     boolean shouldCombine = cfg.filterDupes || cfg.operation.equals(WriteOperationType.UPSERT);
+    boolean shouldUseOrderingCol = shouldCombine && !StringUtils.isNullOrEmpty(cfg.sourceOrderingField);
     boolean shouldErrorTable = errorTableWriter.isPresent() && props.getBoolean(ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), ERROR_ENABLE_VALIDATE_RECORD_CREATION.defaultValue());
     Set<String> partitionColumns = getPartitionColumns(props);
     return avroRDDOptional.map(avroRDD -> {
@@ -107,9 +109,9 @@ public class HoodieStreamerUtils {
                 try {
                   HoodieKey hoodieKey = new HoodieKey(builtinKeyGenerator.getRecordKey(genRec), builtinKeyGenerator.getPartitionPath(genRec));
                   GenericRecord gr = isDropPartitionColumns(props) ? HoodieAvroUtils.removeFields(genRec, partitionColumns) : genRec;
-                  HoodieRecordPayload payload = shouldCombine ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
+                  HoodieRecordPayload payload = (shouldUseOrderingCol  ? DataSourceUtils.createPayload(cfg.payloadClassName, gr,
                       (Comparable) HoodieAvroUtils.getNestedFieldVal(gr, cfg.sourceOrderingField, false, useConsistentLogicalTimestamp))
-                      : DataSourceUtils.createPayload(cfg.payloadClassName, gr);
+                      : DataSourceUtils.createPayload(cfg.payloadClassName, gr));
                   return Either.left(new HoodieAvroRecord<>(hoodieKey, payload));
                 } catch (Exception e) {
                   return generateErrorRecordOrThrowException(genRec, e, shouldErrorTable);

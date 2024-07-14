@@ -1383,6 +1383,55 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(inputRows, readRows)
   }
 
+  @Test
+  def testEmptyPrecombine() : Unit  = {
+      val readType = HoodieRecordType.AVRO
+      val writeType = HoodieRecordType.AVRO
+      val (_, readOpts) = getWriterReaderOpts(readType)
+      var (writeOpts, _) = getWriterReaderOpts(writeType)
+      writeOpts = writeOpts ++ Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()
+        -> classOf[OverwriteWithLatestAvroPayload].getName.toString) ++
+        Map(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key() -> "") ++
+        Map(DataSourceWriteOptions.TABLE_TYPE.key() -> "MERGE_ON_READ")
+
+      val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala
+      val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      inputDF1.write.format("org.apache.hudi")
+        .options(writeOpts)
+        .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+      assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+      val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
+        .options(readOpts)
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+        .load(basePath)
+      assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
+
+      // Second Operation:
+      // SNAPSHOT view should read the log files only with the latest commit time.
+      val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala
+      val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+      inputDF2.write.format("org.apache.hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(basePath)
+      val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
+        .options(readOpts)
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+        .load(basePath)
+      assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
+      val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
+      val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
+      assertEquals(hudiSnapshotDF2.select("_hoodie_commit_time").distinct().count(), 1)
+      assertTrue(commit2Time > commit1Time)
+      assertEquals(100, hudiSnapshotDF2.join(hudiSnapshotDF1, Seq("_hoodie_record_key"), "left").count())
+      val hudiWithoutMeta = hudiSnapshotDF2.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+      assertEquals(inputDF2.except(hudiWithoutMeta).count(), 0)
+  }
+
   def getWriterReaderOpts(recordType: HoodieRecordType,
                           opt: Map[String, String] = commonOpts,
                           enableFileIndex: Boolean = DataSourceReadOptions.ENABLE_HOODIE_FILE_INDEX.defaultValue()):
