@@ -182,15 +182,11 @@ public class HoodieHiveUtils {
     return HIVE_SHIM.getDateWriteable(value);
   }
 
-  public static Object getTimestamp(Object fieldData) {
-    return HIVE_SHIM.unwrapTimestampAsPrimitive(fieldData);
-  }
-
   public static int getDays(Object dateWritable) {
     return HIVE_SHIM.getDays(dateWritable);
   }
 
-  public static long getMills(Object timestamp) {
-    return HIVE_SHIM.getMills(timestamp);
+  public static long getMills(Object timestampWritable) {
+    return HIVE_SHIM.getMills(timestampWritable);
   }
 }
