@@ -138,7 +138,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
-      ClusteringUtils.transitionClusterInflightToComplete(
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
           clusteringInstant,
           serializeCommitMetadata(metadata),

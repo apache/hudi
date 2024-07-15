@@ -109,8 +109,8 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static void transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                         Option<byte[]> commitMetadata, HoodieActiveTimeline activeTimeline) {
+  public static void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                     Option<byte[]> commitMetadata, HoodieActiveTimeline activeTimeline) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
     } else {
@@ -122,8 +122,8 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron requested to inflight based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static void transitionClusterRequestedToInflight(HoodieInstant requestedClusteringInstant, Option<byte[]> data,
-                                                          HoodieActiveTimeline activeTimeline) {
+  public static void transitionClusteringOrReplaceRequestedToInflight(HoodieInstant requestedClusteringInstant, Option<byte[]> data,
+                                                                      HoodieActiveTimeline activeTimeline) {
     if (requestedClusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterRequestedToInflight(requestedClusteringInstant, data);
     } else {

@@ -266,7 +266,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
     HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline()).get();
     // Mark instant as clustering inflight
-    ClusteringUtils.transitionClusterRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
+    ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
     table.getMetaClient().reloadActiveTimeline();
 
     // Disable auto commit. Strategy is only expected to write data in new files.

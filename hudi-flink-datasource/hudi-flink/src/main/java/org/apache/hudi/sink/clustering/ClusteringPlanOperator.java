@@ -136,7 +136,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       LOG.info("Empty clustering plan for instant " + clusteringInstantTime);
     } else {
       // Mark instant as clustering inflight
-      ClusteringUtils.transitionClusterRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());
+      ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());
       table.getMetaClient().reloadActiveTimeline();
 
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {

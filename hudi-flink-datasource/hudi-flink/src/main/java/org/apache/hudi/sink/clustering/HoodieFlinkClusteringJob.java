@@ -316,7 +316,7 @@ public class HoodieFlinkClusteringJob {
           : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
-      ClusteringUtils.transitionClusterRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
+      ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);
