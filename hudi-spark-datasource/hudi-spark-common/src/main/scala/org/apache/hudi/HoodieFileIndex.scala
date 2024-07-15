@@ -220,17 +220,20 @@ case class HoodieFileIndex(spark: SparkSession,
    *
    * @param dataFilters data columns filters
    * @param partitionFilters partition column filters
+   * @param partitionPrune for HoodiePruneFileSourcePartitions rule only prune partitions
    * @return A sequence of pruned partitions and corresponding filtered file slices
    */
-  def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression])
+  def filterFileSlices(dataFilters: Seq[Expression], partitionFilters: Seq[Expression], isPartitionPruned: Boolean = false)
   : Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])] = {
 
     val (isPruned, prunedPartitionsAndFileSlices) =
       prunePartitionsAndGetFileSlices(dataFilters, partitionFilters)
+    hasPushedDownPartitionPredicates = true
 
     // If there are no data filters, return all the file slices.
+    // If isPartitionPurge is true, this fun is trigger by HoodiePruneFileSourcePartitions, don't look up candidate files
     // If there are no file slices, return empty list.
-    if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty) {
+    if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
       prunedPartitionsAndFileSlices
     } else {
       // Look up candidate files names in the col-stats or record level index, if all of the following conditions are true
@@ -283,8 +286,6 @@ case class HoodieFileIndex(spark: SparkSession,
       logInfo(s"Total file slices: $totalFileSliceSize; " +
         s"candidate file slices after data skipping: $candidateFileSliceSize; " +
         s"skipping percentage $skippingRatio")
-
-      hasPushedDownPartitionPredicates = true
 
       prunedPartitionsAndFilteredFileSlices
     }
