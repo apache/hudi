@@ -20,6 +20,7 @@ package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -75,7 +76,7 @@ public class TestHoodieDataSourceInternalWriter extends
       throws Exception {
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
-    String instantTime = "001";
+    String instantTime = HoodieActiveTimeline.createNewInstantTime();
     // init writer
     HoodieDataSourceInternalWriter dataSourceInternalWriter =
         new HoodieDataSourceInternalWriter(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, new DataSourceOptions(extraMetadata), populateMetaFields, false);
@@ -163,7 +164,7 @@ public class TestHoodieDataSourceInternalWriter extends
 
     // execute N rounds
     for (int i = 0; i < 2; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieDataSourceInternalWriter dataSourceInternalWriter =
           new HoodieDataSourceInternalWriter(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, new DataSourceOptions(Collections.EMPTY_MAP), populateMetaFields, false);
@@ -210,7 +211,7 @@ public class TestHoodieDataSourceInternalWriter extends
 
     // execute N rounds
     for (int i = 0; i < 3; i++) {
-      String instantTime = "00" + i;
+      String instantTime = HoodieActiveTimeline.createNewInstantTime();
       // init writer
       HoodieDataSourceInternalWriter dataSourceInternalWriter =
           new HoodieDataSourceInternalWriter(instantTime, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, new DataSourceOptions(Collections.EMPTY_MAP), populateMetaFields, false);
@@ -258,7 +259,7 @@ public class TestHoodieDataSourceInternalWriter extends
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
 
-    String instantTime0 = "00" + 0;
+    String instantTime0 = HoodieActiveTimeline.createNewInstantTime();
     // init writer
     HoodieDataSourceInternalWriter dataSourceInternalWriter =
         new HoodieDataSourceInternalWriter(instantTime0, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf, new DataSourceOptions(Collections.EMPTY_MAP), populateMetaFields, false);
@@ -298,7 +299,7 @@ public class TestHoodieDataSourceInternalWriter extends
     assertWriteStatuses(commitMessages.get(0).getWriteStatuses(), batches, size, Option.empty(), Option.empty());
 
     // 2nd batch. abort in the end
-    String instantTime1 = "00" + 1;
+    String instantTime1 = HoodieActiveTimeline.createNewInstantTime();
     dataSourceInternalWriter =
         new HoodieDataSourceInternalWriter(instantTime1, cfg, STRUCT_TYPE, sqlContext.sparkSession(), storageConf,
             new DataSourceOptions(Collections.EMPTY_MAP), populateMetaFields, false);

@@ -932,7 +932,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
             .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, instantTime, actionType);
+    this.txnManager.beginTransaction(Option.of(requestedInstant),
+        lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+    try {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    } finally {
+      txnManager.endTransaction(Option.of(requestedInstant));
+    }
 
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
