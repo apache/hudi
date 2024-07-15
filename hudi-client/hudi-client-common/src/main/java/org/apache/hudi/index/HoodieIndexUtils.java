@@ -395,7 +395,7 @@ public class HoodieIndexUtils {
    * The actual partition name is contained in the index definition.
    */
   public static String getPartitionNameFromPartitionType(MetadataPartitionType partitionType, HoodieTableMetaClient metaClient, String indexName) {
-    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType)) {
+    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
       checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
       return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }

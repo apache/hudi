@@ -343,12 +343,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   /**
    * Returns a map of (record-key -> secondary-key) for the provided record keys.
    */
-  public Map<String, String> getSecondaryKeys(List<String> recordKeys) {
+  public Map<String, String> getSecondaryKeys(List<String> recordKeys, String secondaryIndexName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().getMetadataPartitions().contains(secondaryIndexName),
         "Secondary index is not initialized in MDT");
-    return getSecondaryKeysForRecordKeys(recordKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName);
   }
 
   /**
