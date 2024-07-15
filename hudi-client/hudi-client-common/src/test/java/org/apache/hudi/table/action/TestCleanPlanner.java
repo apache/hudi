@@ -74,8 +74,8 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.util.CleanerUtils.CLEAN_METADATA_VERSION_2;
-import static org.apache.hudi.table.action.clean.CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
-import static org.apache.hudi.table.action.clean.CleanPlanner.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
+import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;

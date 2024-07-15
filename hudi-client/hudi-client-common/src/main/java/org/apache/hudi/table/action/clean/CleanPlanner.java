@@ -78,8 +78,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public static final Integer CLEAN_PLAN_VERSION_1 = CleanPlanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_2;
-  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
-  public static final String EARLIEST_COMMIT_TO_NOT_ARCHIVE = "earliest_commit_to_not_archive";
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -221,7 +219,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
   private boolean isAnySavepointDeleted(HoodieCleanMetadata cleanMetadata) {
     List<String> savepointedTimestampsFromLastClean = cleanMetadata.getExtraMetadata() == null ? Collections.emptyList()
-        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
+        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(CleanerUtils.SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
         .filter(partition -> !StringUtils.isNullOrEmpty(partition)).collect(Collectors.toList());
     if (savepointedTimestampsFromLastClean.isEmpty()) {
       return false;

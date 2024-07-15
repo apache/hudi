@@ -48,6 +48,7 @@ import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
@@ -67,7 +68,6 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.junit.jupiter.api.AfterEach;
@@ -545,7 +545,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     cleanStats.put("p1", 1);
     cleanStats.put("p2", 2);
     testTable.doClean(String.format("%08d", 8), cleanStats,
-        Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, "00000003"));
+        Collections.singletonMap(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE, "00000003"));
 
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
@@ -597,7 +597,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     // add a clean commit with earliest commit to not archive set as c7
-    testTable.doClean(String.format("%08d", 9), cleanStats, Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, "00000007"));
+    testTable.doClean(String.format("%08d", 9), cleanStats, Collections.singletonMap(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE, "00000007"));
 
     // trigger archival
     commitsList = archiveAndGetCommitsList(writeConfig);
@@ -1205,7 +1205,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           // 1 and 2 should be archived.
           commitToNotArchive = "00000010";
         }
-        testTable.doClean(String.format("%08d", i), cleanStats, Collections.singletonMap(CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE, commitToNotArchive));
+        testTable.doClean(String.format("%08d", i), cleanStats, Collections.singletonMap(CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE, commitToNotArchive));
       }
       // trigger archival
       Pair<List<HoodieInstant>, List<HoodieInstant>> commitsList = archiveAndGetCommitsList(writeConfig);

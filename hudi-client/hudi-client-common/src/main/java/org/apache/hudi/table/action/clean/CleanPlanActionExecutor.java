@@ -50,8 +50,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
-import static org.apache.hudi.table.action.clean.CleanPlanner.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
-import static org.apache.hudi.table.action.clean.CleanPlanner.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
+import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
