@@ -20,13 +20,10 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.util.TableConfigUtils
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.metadata.HoodieTableMetadata
-import org.apache.hudi.util.SparkKeyGenUtils
+import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
@@ -36,7 +33,7 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testDowngradeWithMDTAndLogFiles(tableType: HoodieTableType): Unit = {
+  def testPartitionFieldsWithUpgrade(tableType: HoodieTableType): Unit = {
     val partitionFields = "partition:simple"
     val hudiOpts = commonOpts + (
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
@@ -49,15 +46,22 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
     metaClient = getLatestMetaClient(true)
 
+    // assert table version is eight and the partition fields in table config has partition type 
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
-    // downgrade table props
-    downgradeTableConfigsFromEightToSix(getWriteConfig(hudiOpts))
+    // downgrade table props to version six
+    // assert table version is six and the partition fields in table config does not have partition type 
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.SEVEN, null)
+    new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
+      .run(HoodieTableVersion.SIX, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
     assertEquals("partition", TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
+    // auto upgrade the table
+    // assert table version is eight and the partition fields in table config has partition type 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
@@ -65,19 +69,5 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
-  }
-
-  private def downgradeTableConfigsFromEightToSix(cfg: HoodieWriteConfig): Unit = {
-    val properties = metaClient.getTableConfig.getProps
-    properties.setProperty(HoodieTableConfig.VERSION.key, "6")
-    properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key, SparkKeyGenUtils.getPartitionColumns(cfg.getProps))
-    metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType, properties)
-    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, properties)
-    val metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath)
-    if (metaClient.getStorage.exists(metadataTablePath)) {
-      val mdtMetaClient = HoodieTableMetaClient.builder.setConf(metaClient.getStorageConf.newInstance).setBasePath(metadataTablePath).build
-      metaClient.getTableConfig.setTableVersion(HoodieTableVersion.SIX)
-      HoodieTableConfig.update(mdtMetaClient.getStorage, mdtMetaClient.getMetaPath, metaClient.getTableConfig.getProps)
-    }
   }
 }
