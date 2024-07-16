@@ -84,6 +84,10 @@ public class ClusteringUtils {
    * @return whether the instant is a clustering operation.
    */
   public static boolean isClusteringInstant(HoodieTimeline timeline, HoodieInstant replaceInstant) {
+    if (replaceInstant == null
+        || !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(replaceInstant.getAction())) {
+      return false;
+    }
     return getClusteringPlan(timeline, replaceInstant).isPresent();
   }
 
