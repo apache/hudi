@@ -98,7 +98,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
 
     // there is 1 requested clustering
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
-    assertEquals(1, timeline.filterPendingReplaceTimeline().countInstants());
+    assertEquals(1, timeline.filterPendingClusteringTimeline().countInstants());
   }
 
   /**
@@ -115,7 +115,7 @@ public class ITTestClusteringCommand extends HoodieCLIIntegrationTestBase {
     // get clustering instance
     HoodieActiveTimeline timeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
     Option<String> instanceOpt =
-        timeline.filterPendingReplaceTimeline().firstInstant().map(HoodieInstant::getTimestamp);
+        timeline.filterPendingClusteringTimeline().firstInstant().map(HoodieInstant::getTimestamp);
     assertTrue(instanceOpt.isPresent(), "Must have pending clustering.");
     final String instance = instanceOpt.get();
 

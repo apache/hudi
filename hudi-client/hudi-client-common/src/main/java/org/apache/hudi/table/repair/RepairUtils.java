@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -98,6 +99,7 @@ public final class RepairUtils {
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       case REPLACE_COMMIT_ACTION:
+      case CLUSTERING_ACTION:
         final HoodieReplaceCommitMetadata replaceCommitMetadata =
             HoodieReplaceCommitMetadata.fromBytes(
                 timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);

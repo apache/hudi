@@ -19,16 +19,18 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers}
-
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.slf4j.LoggerFactory
 
+import java.io.FileNotFoundException
 import scala.collection.JavaConverters._
 
 /**
@@ -227,5 +229,30 @@ class TestHoodieActiveTimeline extends HoodieSparkClientTestBase {
     // deltacommit: .log file should contain the timestamp of it's instant time.
     assert(relativePath4.contains(commit4Time))
     assert(relativePath4.contains(HoodieFileFormat.HOODIE_LOG.getFileExtension))
+  }
+
+  @Test
+  def testGetInstantDetails(): Unit = {
+    // First Operation:
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(commonOpts)
+      .option("hoodie.compact.inline", "false")
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val metaClient: HoodieTableMetaClient = createMetaClient(basePath)
+    val activeTimeline = metaClient.getActiveTimeline
+    assertNotNull(activeTimeline.getInstantDetails(activeTimeline.lastInstant().get()))
+    try {
+      activeTimeline.getInstantDetails(new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, metaClient.createNewInstantTime()))
+    } catch {
+      // org.apache.hudi.common.util.ClusteringUtils.getRequestedReplaceMetadata depends upon this behaviour
+      // where FileNotFoundException is the cause of exception thrown by the API getInstantDetails
+      case e: HoodieIOException => assertTrue(classOf[FileNotFoundException].equals(e.getCause.getClass))
+      case _ => fail("Should have failed with FileNotFoundException")
+    }
   }
 }

@@ -109,7 +109,7 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceRequested(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterRequested(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
@@ -126,11 +126,11 @@ public class TestConflictResolutionStrategyUtil {
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addRequestedReplace(instantTime, Option.of(requestedReplaceMetadata))
+        .addRequestedCluster(instantTime, requestedReplaceMetadata)
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterInflight(String instantTime, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
 
@@ -140,7 +140,7 @@ public class TestConflictResolutionStrategyUtil {
     writeStat.setFileId("file-1");
     inflightReplaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
     HoodieTestTable.of(metaClient)
-        .addInflightReplace(instantTime, Option.of(inflightReplaceMetadata))
+        .addInflightCluster(instantTime, Option.of(inflightReplaceMetadata))
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -174,7 +174,37 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createPendingReplace(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createCluster(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
+    String fileId1 = "file-1";
+    String fileId2 = "file-2";
+
+    // create replace instant to mark fileId1 as deleted
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+    Map<String, List<String>> partitionFileIds = new HashMap<>();
+    partitionFileIds.put(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, Arrays.asList(fileId2));
+    replaceMetadata.setPartitionToReplaceFileIds(partitionFileIds);
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setFileId("file-1");
+    replaceMetadata.addWriteStat(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, writeStat);
+    replaceMetadata.setOperationType(writeOperationType);
+    // create replace instant to mark fileId1 as deleted
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.name());
+    HoodieClusteringPlan clusteringPlan = new HoodieClusteringPlan();
+    HoodieClusteringGroup clusteringGroup = new HoodieClusteringGroup();
+    HoodieSliceInfo sliceInfo = new HoodieSliceInfo();
+    sliceInfo.setFileId(fileId1);
+    sliceInfo.setPartitionPath(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH);
+    clusteringGroup.setSlices(Arrays.asList(sliceInfo));
+    clusteringPlan.setInputGroups(Arrays.asList(clusteringGroup));
+    requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
+    requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
+    HoodieTestTable.of(metaClient)
+        .addCluster(instantTime, requestedReplaceMetadata, Option.empty(), replaceMetadata)
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
+  public static void createPendingCluster(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";
     // create replace instant to mark fileId2 as deleted
@@ -190,7 +220,7 @@ public class TestConflictResolutionStrategyUtil {
     requestedReplaceMetadata.setClusteringPlan(clusteringPlan);
     requestedReplaceMetadata.setVersion(TimelineLayoutVersion.CURR_VERSION);
     HoodieTestTable.of(metaClient)
-        .addPendingReplace(instantTime, Option.of(requestedReplaceMetadata), Option.empty())
+        .addPendingCluster(instantTime, requestedReplaceMetadata, Option.empty())
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
@@ -261,13 +291,13 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
-  public static void createReplaceInflight(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
+  public static void createClusterInflight(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
     Option<HoodieCommitMetadata> inflightReplaceMetadata = Option.empty();
     if (WriteOperationType.INSERT_OVERWRITE.equals(writeOperationType)) {
       inflightReplaceMetadata = Option.of(createReplaceCommitMetadata(WriteOperationType.INSERT_OVERWRITE));
     }
     HoodieTestTable.of(metaClient)
-        .addInflightReplace(instantTime, inflightReplaceMetadata);
+        .addInflightCluster(instantTime, inflightReplaceMetadata);
   }
 
   private static HoodieReplaceCommitMetadata createReplaceCommitMetadata(WriteOperationType writeOperationType) {
