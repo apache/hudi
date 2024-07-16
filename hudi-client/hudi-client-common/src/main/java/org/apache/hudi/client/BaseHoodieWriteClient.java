@@ -30,6 +30,7 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
+import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -932,6 +933,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
             .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
 
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, instantTime, actionType);
+    this.txnManager.beginTransaction(Option.of(requestedInstant),
+        lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
+    try {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    } finally {
+      txnManager.endTransaction(Option.of(requestedInstant));
+    }
+
     // if there are pending compactions, their instantTime must not be greater than that of this instant time
     metaClient.getActiveTimeline().filterPendingCompactionTimeline().lastInstant().ifPresent(latestPending ->
         ValidationUtils.checkArgument(
@@ -941,7 +951,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
     }
-
     if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
     } else {

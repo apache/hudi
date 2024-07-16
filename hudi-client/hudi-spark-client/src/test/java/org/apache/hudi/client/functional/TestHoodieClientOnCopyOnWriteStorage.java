@@ -946,6 +946,28 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   }
 
   @Test
+  public void testOutOfOrderCommitTimestamps() {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String commit1 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit1);
+      String commit2 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit2);
+      String commit3 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit3);
+
+      // create commit4 after commit5. commit4 creation should fail.
+      String commit4 = HoodieActiveTimeline.createNewInstantTime();
+      String commit5 = HoodieActiveTimeline.createNewInstantTime();
+      client.startCommitWithTime(commit5);
+      assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commit4));
+    }
+  }
+
+  @Test
   public void testPendingRestore() throws IOException {
     HoodieWriteConfig config = getConfigBuilder().withMetadataConfig(
         HoodieMetadataConfig.newBuilder().enable(false).build()).build();
