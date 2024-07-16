@@ -135,7 +135,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.partition.fields")
       .noDefaultValue()
       .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
-          + "the partition path, by invoking toString()");
+          + "the partition path, by invoking toString(). These fields also include the partition type which is used by custom key generators");
 
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")

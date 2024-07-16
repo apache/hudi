@@ -233,9 +233,9 @@ public class BootstrapExecutor implements Serializable {
         .setPartitionMetafileUseBaseFormat(props.getBoolean(
             PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()));
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
-    if (!StringUtils.isNullOrEmpty(partitionColumns)) {
-      builder.setPartitionFields(partitionColumns).setKeyGeneratorClassProp(
+    String partitionColumnsWithType = SparkKeyGenUtils.getPartitionColumnsWithType(props);
+    if (!StringUtils.isNullOrEmpty(partitionColumnsWithType)) {
+      builder.setPartitionFields(partitionColumnsWithType).setKeyGeneratorClassProp(
           props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), SimpleKeyGenerator.class.getName()));
     } else {
       builder.setKeyGeneratorClassProp(props.getString(
