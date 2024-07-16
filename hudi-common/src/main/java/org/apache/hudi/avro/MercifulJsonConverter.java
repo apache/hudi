@@ -23,13 +23,17 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.DECIMAL_CONVERSION;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -301,6 +306,14 @@ public class MercifulJsonConverter {
     return new JsonToAvroFieldProcessor() {
       @Override
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
+        // the value can be Number
+        if (value instanceof Number) {
+          LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
+          BigDecimal bigDecimal = new java.math.BigDecimal(value.toString()).setScale(decimalType.getScale(), RoundingMode.HALF_UP);
+          GenericFixed genericFixed = DECIMAL_CONVERSION.toFixed(bigDecimal, schema, schema.getLogicalType());
+          return Pair.of(true, new GenericData.Fixed(schema, genericFixed.bytes()));
+        }
+
         // The ObjectMapper use List to represent FixedType
         // eg: "decimal_val": [0, 0, 14, -63, -52] will convert to ArrayList<Integer>
         List<Integer> converval = (List<Integer>) value;
