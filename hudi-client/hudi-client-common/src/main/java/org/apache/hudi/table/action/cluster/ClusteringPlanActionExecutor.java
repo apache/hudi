@@ -91,14 +91,14 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
     Option<HoodieClusteringPlan> planOption = createClusteringPlan();
     if (planOption.isPresent()) {
       HoodieInstant clusteringInstant =
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
       try {
         HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setOperationType(WriteOperationType.CLUSTER.name())
             .setExtraMetadata(extraMetadata.orElse(Collections.emptyMap()))
             .setClusteringPlan(planOption.get())
             .build();
-        table.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+        table.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant,
             TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
       } catch (IOException ioe) {
         throw new HoodieIOException("Exception scheduling clustering", ioe);

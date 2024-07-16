@@ -26,7 +26,6 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -66,13 +65,13 @@ public class HoodieSparkConsistentBucketIndex extends HoodieConsistentBucketInde
       throws HoodieIndexException {
     HoodieInstant instant = hoodieTable.getMetaClient().getActiveTimeline().findInstantsAfterOrEquals(instantTime, 1).firstInstant().get();
     ValidationUtils.checkState(instant.getTimestamp().equals(instantTime), "Cannot get the same instant, instantTime: " + instantTime);
-    if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
+    if (!ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction())) {
       return writeStatuses;
     }
 
     // Double-check if it is a clustering operation by trying to obtain the clustering plan
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPair =
-        ClusteringUtils.getClusteringPlan(hoodieTable.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime));
+        ClusteringUtils.getClusteringPlan(hoodieTable.getMetaClient(), instant);
     if (!instantPlanPair.isPresent()) {
       return writeStatuses;
     }

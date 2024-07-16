@@ -474,7 +474,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     assertThrows(HoodieRollbackException.class, copyOnWriteRollbackActionExecutor::execute);
 
     // Schedule rollback for incomplete clustering instant.
-    needRollBackInstant = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant1);
+    needRollBackInstant = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant1);
     rollbackInstant = writeClient.createNewInstantTime();
     copyOnWriteRollbackPlanActionExecutor =
         new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, rollbackInstant, needRollBackInstant, false,

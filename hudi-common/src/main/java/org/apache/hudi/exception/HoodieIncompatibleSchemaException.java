@@ -16,20 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop.utils.shims;
-
-import org.apache.hadoop.io.Writable;
+package org.apache.hudi.exception;
 
 /**
- * Shim class to resolve Hive version compatibility.
+ * Exception for incompatible schema.
  */
-public interface HiveShim {
+public class HoodieIncompatibleSchemaException extends RuntimeException {
 
-  Writable getTimestampWriteable(long value, boolean timestampMillis);
+  public HoodieIncompatibleSchemaException(String msg, Throwable e) {
+    super(msg, e);
+  }
 
-  Writable getDateWriteable(int value);
-
-  int getDays(Object dateWritable);
-
-  long getMills(Object timestampWritable);
+  public HoodieIncompatibleSchemaException(String msg) {
+    super(msg);
+  }
 }

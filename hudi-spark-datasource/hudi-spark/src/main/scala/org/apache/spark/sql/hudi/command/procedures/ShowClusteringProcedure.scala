@@ -59,7 +59,7 @@ class ShowClusteringProcedure extends BaseProcedure with ProcedureBuilder with S
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
     val clusteringInstants = metaClient.getActiveTimeline.getInstants.iterator().asScala
-      .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION)
+      .filter(p => ClusteringUtils.isClusteringOrReplaceCommitAction(p.getAction))
       .toSeq
       .sortBy(f => f.getTimestamp)
       .reverse

@@ -76,7 +76,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     fileIds1.add(UUID.randomUUID().toString());
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
-    createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
+    createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
 
     List<String> fileIds2 = new ArrayList<>();
     fileIds2.add(UUID.randomUUID().toString());
@@ -87,7 +87,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     fileIds3.add(UUID.randomUUID().toString());
 
     String clusterTime = "2";
-    createRequestedReplaceInstant(partitionPath1, clusterTime, fileIds2, fileIds3);
+    createRequestedClusterInstant(partitionPath1, clusterTime, fileIds2, fileIds3);
 
     // create replace.requested without clustering plan. this instant should be ignored by ClusteringUtils
     createRequestedReplaceInstantNotClustering("3");
@@ -96,7 +96,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4"));
 
     metaClient.reloadActiveTimeline();
-    assertEquals(4, metaClient.getActiveTimeline().filterPendingReplaceTimeline().countInstants());
+    assertEquals(2, metaClient.getActiveTimeline().filterPendingClusteringTimeline().countInstants());
 
     Map<HoodieFileGroupId, HoodieInstant> fileGroupToInstantMap =
         ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(metaClient);
@@ -109,13 +109,13 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     assertEquals("2", lastPendingClustering.get().getTimestamp());
 
     //check that it still gets picked if it is inflight
-    HoodieInstant inflight = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(lastPendingClustering.get(), Option.empty());
+    HoodieInstant inflight = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(lastPendingClustering.get(), Option.empty());
     assertEquals(HoodieInstant.State.INFLIGHT, inflight.getState());
     lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterInstant();
     assertEquals("2", lastPendingClustering.get().getTimestamp());
 
     //now that it is complete, the first instant should be picked
-    HoodieInstant complete = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(false, inflight, Option.empty());
+    HoodieInstant complete = metaClient.getActiveTimeline().transitionClusterInflightToComplete(false, inflight, Option.empty());
     assertEquals(HoodieInstant.State.COMPLETED, complete.getState());
     lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterInstant();
     assertEquals("1", lastPendingClustering.get().getTimestamp());
@@ -131,7 +131,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     fileIds1.add(UUID.randomUUID().toString());
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
-    HoodieInstant requestedInstant = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
+    HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
     HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
     assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant));
     HoodieClusteringPlan requestedClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).get().getRight();
@@ -146,24 +146,24 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
-    HoodieInstant requestedInstant1 = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
-    HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant1, Option.empty());
-    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(true, inflightInstant1, Option.empty());
+    HoodieInstant requestedInstant1 = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
+    HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant1, Option.empty());
+    metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant1, Option.empty());
     List<String> fileIds2 = new ArrayList<>();
     fileIds2.add(UUID.randomUUID().toString());
     fileIds2.add(UUID.randomUUID().toString());
     String clusterTime2 = "2";
-    HoodieInstant requestedInstant2 = createRequestedReplaceInstant(partitionPath1, clusterTime2, fileIds2);
-    HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant2, Option.empty());
-    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(true, inflightInstant2, Option.empty());
+    HoodieInstant requestedInstant2 = createRequestedClusterInstant(partitionPath1, clusterTime2, fileIds2);
+    HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant2, Option.empty());
+    metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant2, Option.empty());
     List<String> fileIds3 = new ArrayList<>();
     fileIds3.add(UUID.randomUUID().toString());
     fileIds3.add(UUID.randomUUID().toString());
     fileIds3.add(UUID.randomUUID().toString());
     String clusterTime3 = "3";
-    HoodieInstant requestedInstant3 = createRequestedReplaceInstant(partitionPath1, clusterTime3, fileIds3);
-    HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant3, Option.empty());
-    HoodieInstant completedInstant3 = metaClient.getActiveTimeline().transitionReplaceInflightToComplete(true, inflightInstant3, Option.empty());
+    HoodieInstant requestedInstant3 = createRequestedClusterInstant(partitionPath1, clusterTime3, fileIds3);
+    HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant3, Option.empty());
+    HoodieInstant completedInstant3 = metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
     Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
     assertTrue(actual.isPresent());
@@ -199,9 +199,9 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
-    HoodieInstant requestedInstant1 = createRequestedReplaceInstant(partitionPath1, clusterTime1, fileIds1);
-    HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant1, Option.empty());
-    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(true, inflightInstant1, Option.empty());
+    HoodieInstant requestedInstant1 = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
+    HoodieInstant inflightInstant1 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant1, Option.empty());
+    metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant1, Option.empty());
 
     String cleanTime1 = "2";
     HoodieInstant requestedInstant2 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime1);
@@ -220,9 +220,9 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     fileIds2.add(UUID.randomUUID().toString());
     fileIds2.add(UUID.randomUUID().toString());
     String clusterTime2 = "3";
-    HoodieInstant requestedInstant3 = createRequestedReplaceInstant(partitionPath1, clusterTime2, fileIds2);
-    HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant3, Option.empty());
-    metaClient.getActiveTimeline().transitionReplaceInflightToComplete(true, inflightInstant3, Option.empty());
+    HoodieInstant requestedInstant3 = createRequestedClusterInstant(partitionPath1, clusterTime2, fileIds2);
+    HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant3, Option.empty());
+    metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
 
     Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
@@ -245,7 +245,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     return newRequestedInstant;
   }
 
-  private HoodieInstant createRequestedReplaceInstant(String partitionPath1, String clusterTime, List<String>... fileIds) throws IOException {
+  private HoodieInstant createRequestedClusterInstant(String partitionPath1, String clusterTime, List<String>... fileIds) throws IOException {
     List<FileSlice>[] fileSliceGroups = new List[fileIds.length];
     for (int i = 0; i < fileIds.length; i++) {
       fileSliceGroups[i] = fileIds[i].stream().map(fileId -> generateFileSlice(partitionPath1, fileId, "0")).collect(Collectors.toList());
@@ -254,10 +254,10 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieClusteringPlan clusteringPlan =
         ClusteringUtils.createClusteringPlan(CLUSTERING_STRATEGY_CLASS, STRATEGY_PARAMS, fileSliceGroups, Collections.emptyMap());
 
-    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusterTime);
+    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
     return clusteringInstant;
   }
 

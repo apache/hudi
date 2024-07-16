@@ -16,20 +16,33 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop.utils.shims;
-
-import org.apache.hadoop.io.Writable;
+package org.apache.hudi.exception;
 
 /**
- * Shim class to resolve Hive version compatibility.
+ * <p>
+ * Exception thrown for Hoodie failures. The root of the exception hierarchy.
+ * </p>
+ * <p>
+ * Hoodie Write/Read clients will throw this exception if any of its operations fail. This is a runtime (unchecked)
+ * exception.
+ * </p>
  */
-public interface HiveShim {
+public class HoodieException extends RuntimeException {
 
-  Writable getTimestampWriteable(long value, boolean timestampMillis);
+  public HoodieException() {
+    super();
+  }
 
-  Writable getDateWriteable(int value);
+  public HoodieException(String message) {
+    super(message);
+  }
 
-  int getDays(Object dateWritable);
+  public HoodieException(String message, Throwable t) {
+    super(message, t);
+  }
 
-  long getMills(Object timestampWritable);
+  public HoodieException(Throwable t) {
+    super(t);
+  }
+
 }

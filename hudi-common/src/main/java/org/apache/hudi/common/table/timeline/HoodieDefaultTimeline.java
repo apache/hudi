@@ -63,8 +63,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private List<HoodieInstant> instants;
   // for efficient #contains queries.
   private transient volatile Set<String> instantTimeSet;
-  // for efficient #isPendingClusterInstant queries
-  private transient volatile Set<String> pendingReplaceClusteringInstants;
+  // for efficient #isPendingClusteringInstant queries
+  private transient volatile Set<String> pendingClusteringInstants;
   // for efficient #isBeforeTimelineStarts check.
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
   private String timelineHash;
@@ -160,7 +160,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public HoodieDefaultTimeline getWriteTimeline() {
-    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION);
+    Set<String> validActions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(s -> validActions.contains(s.getAction())), details);
   }
 
@@ -184,6 +184,27 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   public HoodieTimeline filterPendingReplaceTimeline() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(
         s -> s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingClusteringTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingReplaceOrClusteringTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION) || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
+            && !s.isCompleted()), details);
+  }
+
+  @Override
+  public HoodieTimeline filterPendingReplaceClusteringAndCompactionTimeline() {
+    return new HoodieDefaultTimeline(getInstantsAsStream().filter(
+        s -> !s.isCompleted() && (s.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
+            || s.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            || s.getAction().equals(HoodieTimeline.COMPACTION_ACTION))), details);
   }
 
   @Override
@@ -309,14 +330,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * Get all instants (commits, delta commits) that produce new data, in the active timeline.
    */
   public HoodieTimeline getCommitsTimeline() {
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
   }
 
   /**
    * Get all instants (commits, delta commits, replace, compaction) that produce new data or merge file, in the active timeline.
    */
   public HoodieTimeline getCommitsAndCompactionTimeline() {
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, COMPACTION_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, COMPACTION_ACTION));
   }
 
   /**
@@ -325,8 +346,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getAllCommitsTimeline() {
     return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION,
-        CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION,
-        LOG_COMPACTION_ACTION));
+        CLEAN_ACTION, COMPACTION_ACTION, SAVEPOINT_ACTION, ROLLBACK_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION,
+        INDEXING_ACTION, LOG_COMPACTION_ACTION));
   }
 
   /**
@@ -334,7 +355,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    */
   public HoodieTimeline getCommitAndReplaceTimeline() {
     //TODO: Make sure this change does not break existing functionality.
-    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+    return getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
   }
 
   /**
@@ -519,7 +540,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public Option<HoodieInstant> getLastClusteringInstant() {
-    return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION))
+    return Option.fromJavaOptional(getCommitsTimeline().filter(s -> s.getAction().equalsIgnoreCase(HoodieTimeline.REPLACE_COMMIT_ACTION)
+            || s.getAction().equalsIgnoreCase(HoodieTimeline.CLUSTERING_ACTION))
         .getReverseOrderedInstants()
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i))
         .findFirst());
@@ -536,19 +558,19 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   private Option<HoodieInstant> getLastOrFirstPendingClusterInstant(boolean isLast) {
-    HoodieTimeline replaceTimeline = filterPendingReplaceTimeline();
-    Stream<HoodieInstant> replaceStream;
+    HoodieTimeline pendingClusteringTimeline = filterPendingReplaceOrClusteringTimeline();
+    Stream<HoodieInstant> clusterStream;
     if (isLast) {
-      replaceStream = replaceTimeline.getReverseOrderedInstants();
+      clusterStream = pendingClusteringTimeline.getReverseOrderedInstants();
     } else {
-      replaceStream = replaceTimeline.getInstantsAsStream();
+      clusterStream = pendingClusteringTimeline.getInstantsAsStream();
     }
-    return  Option.fromJavaOptional(replaceStream
+    return  Option.fromJavaOptional(clusterStream
         .filter(i -> ClusteringUtils.isClusteringInstant(this, i)).findFirst());
   }
 
   @Override
-  public boolean isPendingClusterInstant(String instantTime) {
+  public boolean isPendingClusteringInstant(String instantTime) {
     return getOrCreatePendingClusteringInstantSet().contains(instantTime);
   }
 
@@ -579,24 +601,24 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   }
 
   private Set<String> getOrCreatePendingClusteringInstantSet() {
-    if (this.pendingReplaceClusteringInstants == null) {
+    if (this.pendingClusteringInstants == null) {
       synchronized (this) {
-        if (this.pendingReplaceClusteringInstants == null) {
-          List<HoodieInstant> pendingReplaceInstants = getCommitsTimeline().filterPendingReplaceTimeline().getInstants();
+        if (this.pendingClusteringInstants == null) {
+          List<HoodieInstant> pendingClusterInstants = getCommitsTimeline().filterPendingReplaceOrClusteringTimeline().getInstants();
           // Validate that there are no instants with same timestamp
-          pendingReplaceInstants.stream().collect(Collectors.groupingBy(HoodieInstant::getTimestamp)).forEach((timestamp, instants) -> {
+          pendingClusterInstants.stream().collect(Collectors.groupingBy(HoodieInstant::getTimestamp)).forEach((timestamp, instants) -> {
             if (instants.size() > 1) {
               throw new IllegalStateException("Multiple instants with same timestamp: " + timestamp + " instants: " + instants);
             }
           });
           // Filter replace commits down to those that are due to clustering
-          this.pendingReplaceClusteringInstants = pendingReplaceInstants.stream()
+          this.pendingClusteringInstants = pendingClusterInstants.stream()
               .filter(instant -> ClusteringUtils.isClusteringInstant(this, instant))
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
         }
       }
     }
-    return this.pendingReplaceClusteringInstants;
+    return this.pendingClusteringInstants;
   }
 
   /**

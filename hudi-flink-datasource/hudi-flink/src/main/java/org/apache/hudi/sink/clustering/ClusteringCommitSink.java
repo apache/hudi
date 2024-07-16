@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
@@ -127,13 +127,20 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   private void commitIfNecessary(String instant, Collection<ClusteringCommitEvent> events) {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
-        Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
-            this.writeClient.getHoodieTable().getMetaClient(), HoodieTimeline.getReplaceCommitInflightInstant(instant));
-        return clusteringPlanOption.get().getRight();
+        HoodieTableMetaClient metaClient = this.writeClient.getHoodieTable().getMetaClient();
+        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline())
+            .flatMap(pendingInstant -> ClusteringUtils.getClusteringPlan(
+            metaClient, pendingInstant))
+            .map(Pair::getRight)
+            .orElse(null);
       } catch (Exception e) {
         throw new HoodieException(e);
       }
     });
+
+    if (clusteringPlan == null) {
+      return;
+    }
 
     boolean isReady = clusteringPlan.getInputGroups().size() == events.size();
     if (!isReady) {

@@ -16,20 +16,29 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.hadoop.utils.shims;
+package org.apache.hudi.exception;
 
-import org.apache.hadoop.io.Writable;
+import java.io.IOException;
 
 /**
- * Shim class to resolve Hive version compatibility.
+ * <p>
+ * Exception thrown for table IO-related failures.
+ * </p>
  */
-public interface HiveShim {
+public class HoodieIOException extends HoodieException {
 
-  Writable getTimestampWriteable(long value, boolean timestampMillis);
+  private IOException ioException;
 
-  Writable getDateWriteable(int value);
+  public HoodieIOException(String msg, IOException t) {
+    super(msg, t);
+    this.ioException = t;
+  }
 
-  int getDays(Object dateWritable);
+  public HoodieIOException(String msg) {
+    super(msg);
+  }
 
-  long getMills(Object timestampWritable);
+  public IOException getIOException() {
+    return ioException;
+  }
 }

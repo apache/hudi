@@ -130,9 +130,11 @@ public class HoodieDataSourceHelpers {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(basePath).setLoadActiveTimelineOnLoad(true).build();
-    HoodieInstant hoodieInstant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
+    Option<HoodieInstant> hoodieInstant = metaClient.getActiveTimeline().filter(instant -> instant.getTimestamp().equals(instantTime)
+            && ClusteringUtils.isClusteringOrReplaceCommitAction(instant.getAction()))
+        .firstInstant();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlan =
-        ClusteringUtils.getClusteringPlan(metaClient, hoodieInstant);
+        hoodieInstant.flatMap(instant -> ClusteringUtils.getClusteringPlan(metaClient, instant));
     if (clusteringPlan.isPresent()) {
       return Option.of(clusteringPlan.get().getValue());
     } else {

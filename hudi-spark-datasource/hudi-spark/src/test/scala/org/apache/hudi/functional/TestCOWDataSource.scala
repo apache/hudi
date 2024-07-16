@@ -1857,7 +1857,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         // Last instant is clustering
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.CLUSTER))
-        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant))
+        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, lastInstant.getTimestamp)))
         lastClustering = lastInstant
         assertEquals(
           lastClustering,
