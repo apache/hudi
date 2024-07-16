@@ -1391,7 +1391,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * records and hence is more suited to bulkInsert for write performance.
    *
    * @param instantTime    - Action instant time for this commit
-   * @param partitionType  - The MDT partition to which records are to be committed
+   * @param partitionName  - The MDT partition to which records are to be committed
    * @param records        - records to be bulk inserted
    * @param fileGroupCount - The maximum number of file groups to which the records will be written.
    */
@@ -1412,7 +1412,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         final String partitionName = entry.getKey();
         // filter only the entries whose partition path are in partitionsToUpdate
         if (!partitionsToUpdate.contains(partitionName)) {
-          LOG.debug("Skipping partition {} as it is not part of the partitions to update", partitionName);
+          continue;
         }
         HoodieData<HoodieRecord> records = entry.getValue();
 
@@ -1424,7 +1424,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
         }
         final int fileGroupCount = fileSlices.size();
-        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be >0", partitionName));
+        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
 
         List<FileSlice> finalFileSlices = fileSlices;
         HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
