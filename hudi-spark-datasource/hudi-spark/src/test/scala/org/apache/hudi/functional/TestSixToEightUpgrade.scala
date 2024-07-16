@@ -46,12 +46,12 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
     metaClient = getLatestMetaClient(true)
 
-    // assert table version is eight and the partition fields in table config has partition type 
+    // assert table version is eight and the partition fields in table config has partition type
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
     assertEquals(partitionFields, TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
     // downgrade table props to version six
-    // assert table version is six and the partition fields in table config does not have partition type 
+    // assert table version is six and the partition fields in table config does not have partition type
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.SEVEN, null)
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
@@ -61,7 +61,7 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
     assertEquals("partition", TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
     // auto upgrade the table
-    // assert table version is eight and the partition fields in table config has partition type 
+    // assert table version is eight and the partition fields in table config has partition type
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
