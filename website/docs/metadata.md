@@ -90,6 +90,32 @@ Following are the different indices currently available under the metadata table
   Hudi release, this index aids in locating records faster than other existing indices and can provide a speedup orders of magnitude 
   faster in large deployments where index lookup dominates write latencies.
 
+#### New Indexes in 1.0.0
+
+- ***Functional Index***:
+  A [functional index](https://github.com/apache/hudi/blob/3789840be3d041cbcfc6b24786740210e4e6d6ac/rfc/rfc-63/rfc-63.md)
+  is an index on a function of a column. If a query has a predicate on a function of a column, the functional index can
+  be used to speed up the query. Functional index is stored in *func_index_* prefixed partitions (one for each
+  function) under metadata table. Functional index can be created using SQL syntax. Please checkout SQL DDL
+  docs [here](/docs/next/sql_ddl#create-functional-index-experimental) for more details.
+
+- ***Partition Stats Index***
+  Partition stats index aggregates statistics at the partition level for the columns for which it is enabled. This helps
+  in efficient partition pruning even for non-partition fields. The partition stats index is stored in *partition_stats*
+  partition under metadata table. Partition stats index can be enabled using the following configs (note it is required
+  to specify the columns for which stats should be aggregated):
+  ```properties
+    hoodie.metadata.index.partition.stats.enable=true
+    hoodie.metadata.index.column.stats.columns=<comma-separated-column-names>
+  ```
+  
+- ***Secondary Index***:
+  Secondary indexes allow users to create indexes on columns that are not part of record key columns in Hudi tables (for
+  record key fields, Hudi supports [Record-level Index](/blog/2023/11/01/record-level-index). Secondary indexes
+  can be used to speed up queries with predicate on columns other than record key columns. 
+
+To try out these features, refer to the [SQL guide](/docs/next/sql_ddl#create-partition-stats-and-secondary-index-experimental).
+
 ## Enable Hudi Metadata Table and Multi-Modal Index in write side
 
 Following are the Spark based basic configs that are needed to enable metadata and multi-modal indices. For advanced configs please refer 

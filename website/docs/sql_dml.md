@@ -266,6 +266,30 @@ DELETE FROM hudi_table WHERE price < 100;
 Delete query only work with batch excution mode.
 :::
 
+### Lookup Joins
+
+A lookup join is typically used to enrich a table with data that is queried from an external system. The join requires
+one table to have a processing time attribute and the other table to be backed by a lookup source connector.
+
+```sql
+CREATE TABLE datagen_source(
+    id int,
+    name STRING,
+    proctime as PROCTIME()
+) WITH (
+'connector' = 'datagen',
+'rows-per-second'='1',
+'number-of-rows' = '2',
+'fields.id.kind'='sequence',
+'fields.id.start'='1',
+'fields.id.end'='2'
+);
+
+SELECT o.id,o.name,b.id as id2
+FROM datagen_source AS o
+JOIN hudi_table/*+ OPTIONS('lookup.join.cache.ttl'= '2 day') */ FOR SYSTEM_TIME AS OF o.proctime AS b on o.id = b.id; 
+```
+
 ### Setting Writer/Reader Configs
 With Flink SQL, you can additionally set the writer/reader writer configs along with the query.
 
