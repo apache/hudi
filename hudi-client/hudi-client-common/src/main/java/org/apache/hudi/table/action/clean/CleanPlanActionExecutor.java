@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
-import static org.apache.hudi.common.util.CleanerUtils.EARLIEST_COMMIT_TO_NOT_ARCHIVE;
+import static org.apache.hudi.common.util.CleanerUtils.EARLIEST_SAVEPOINT;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
@@ -150,22 +150,22 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           .map(x -> new HoodieActionInstant(x.getTimestamp(), x.getAction(), x.getState().name())).orElse(null),
           planner.getLastCompletedCommitTimestamp(),
           config.getCleanerPolicy().name(), Collections.emptyMap(),
-          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete, prepareExtraMetadata(planner.getSavepointedTimestamps(), planner.getEarliestCommitToNotArchive()));
+          CleanPlanner.LATEST_CLEAN_PLAN_VERSION, cleanOps, partitionsToDelete, prepareExtraMetadata(planner.getSavepointedTimestamps(), planner.getEarliestSavepoint()));
     } catch (IOException e) {
       throw new HoodieIOException("Failed to schedule clean operation", e);
     }
   }
 
-  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps, Option<String> earliestCommitToNotArchive) {
-    if (savepointedTimestamps.isEmpty() && !earliestCommitToNotArchive.isPresent()) {
+  private Map<String, String> prepareExtraMetadata(List<String> savepointedTimestamps, Option<String> earliestSavepoint) {
+    if (savepointedTimestamps.isEmpty() && !earliestSavepoint.isPresent()) {
       return Collections.emptyMap();
     } else {
       Map<String, String> extraMetadata = new HashMap<>();
       if (!savepointedTimestamps.isEmpty()) {
         extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
       }
-      if (earliestCommitToNotArchive.isPresent()) {
-        extraMetadata.put(EARLIEST_COMMIT_TO_NOT_ARCHIVE, earliestCommitToNotArchive.get());
+      if (earliestSavepoint.isPresent()) {
+        extraMetadata.put(EARLIEST_SAVEPOINT, earliestSavepoint.get());
       }
       return extraMetadata;
     }

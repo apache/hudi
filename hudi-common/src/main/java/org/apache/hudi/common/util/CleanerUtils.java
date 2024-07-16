@@ -56,7 +56,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
  */
 public class CleanerUtils {
 
-  public static final String EARLIEST_COMMIT_TO_NOT_ARCHIVE = "earliest_commit_to_not_archive";
+  // With incremental cleaning, it tracks the earliest savepoint which has a following replace commit and the
+  // replace commit has been cleaned.
+  public static final String EARLIEST_SAVEPOINT = "earliest_savepoint";
   public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
 
