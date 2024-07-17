@@ -1,4 +1,3 @@
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -15,17 +14,20 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=3.3.5
-ARG HIVE_VERSION=2.3.3
-ARG SPARK_VERSION=3.5.1
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}:latest
+FROM scratch
+MAINTAINER Hoodie
+USER root
 
-COPY master.sh /opt/spark
+ARG TARGETARCH
 
-ENV SPARK_MASTER_PORT 7077
-ENV SPARK_MASTER_WEBUI_PORT 8080
-ENV SPARK_MASTER_LOG /opt/spark/logs
+# Default to UTF-8 file.encoding
+ENV LANG C.UTF-8
 
-EXPOSE 8080 7077 6066
 
-CMD ["/bin/bash", "/opt/spark/master.sh"]
+FROM arm64v8/zookeeper:3.4.12 AS platform-arm64
+
+FROM bitnami/zookeeper:3.4.12-r68 AS platform-amd64
+
+FROM platform-${TARGETARCH} AS final
+
+

@@ -47,7 +47,11 @@ if [ -z "${HIVE_JDBC}" ]; then
   HIVE_JDBC=`ls ${HIVE_HOME}/lib/hive-jdbc-*.jar | grep -v handler | tr '\n' ':'`
 fi
 HIVE_JACKSON=`ls ${HIVE_HOME}/lib/jackson-*.jar | tr '\n' ':'`
-HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_JDBC:$HIVE_JACKSON
+HIVE_CALCITE=`ls ${HIVE_HOME}/lib/calcite-core-*.jar | tr '\n' ':'`
+HIVE_LIB_FB=`ls ${HIVE_HOME}/lib/libfb303-*.jar | tr '\n' ':'`
+##PARQUET_COLUMN=`ls ${SPARK_HOME}/jars/parquet-column-*.jar | tr '\n' ':'`
+
+HIVE_JARS=$HIVE_METASTORE:$HIVE_SERVICE:$HIVE_EXEC:$HIVE_JDBC:$HIVE_JACKSON:$HIVE_CALCITE:$HIVE_LIB_FB
 
 HADOOP_HIVE_JARS=${HIVE_JARS}:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/mapreduce/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/lib/*
 

@@ -1,4 +1,3 @@
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -14,18 +13,20 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
+FROM scratch
+MAINTAINER Hoodie
+USER root
 
-ARG HADOOP_VERSION=3.3.5
-ARG HIVE_VERSION=2.3.3
-ARG SPARK_VERSION=3.5.1
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}:latest
+ARG TARGETARCH
 
-COPY master.sh /opt/spark
+# Default to UTF-8 file.encoding
+ENV LANG C.UTF-8
 
-ENV SPARK_MASTER_PORT 7077
-ENV SPARK_MASTER_WEBUI_PORT 8080
-ENV SPARK_MASTER_LOG /opt/spark/logs
 
-EXPOSE 8080 7077 6066
+FROM menorah84/hive-metastore-postgresql:2.3.0 AS platform-arm64
 
-CMD ["/bin/bash", "/opt/spark/master.sh"]
+FROM bde2020/hive-metastore-postgresql:2.3.0 AS platform-amd64
+
+FROM platform-${TARGETARCH} AS final
+
+
