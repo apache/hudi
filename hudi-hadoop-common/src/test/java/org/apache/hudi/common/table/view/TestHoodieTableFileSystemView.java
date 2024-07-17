@@ -182,18 +182,18 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime1);
     HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.COMMIT_ACTION, instantTime2);
     HoodieInstant clusteringInstant3 =
-        new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime3);
+        new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime3);
     HoodieInstant clusteringInstant4 =
-        new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime4);
+        new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime4);
     HoodieCommitMetadata commitMetadata =
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds,
             Option.empty(), WriteOperationType.CLUSTER, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     saveAsComplete(commitTimeline, instant1, Option.empty());
     saveAsComplete(commitTimeline, instant2, Option.empty());
-    saveAsComplete(commitTimeline, clusteringInstant3,
+    saveAsCompleteCluster(commitTimeline, clusteringInstant3,
         serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));
-    saveAsComplete(
+    saveAsCompleteCluster(
         commitTimeline,
         clusteringInstant4,
         serializeCommitMetadata((HoodieReplaceCommitMetadata) commitMetadata));
@@ -207,13 +207,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     boolean deleteReplaceCommit = metaClient.getStorage().deleteDirectory(completeInstantPath);
-    boolean deleteReplaceCommitRequested = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.requested").delete();
-    boolean deleteReplaceCommitInflight = new File(
-        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".replacecommit.inflight").delete();
+    boolean deleteClusterCommitRequested = new File(
+        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.requested").delete();
+    boolean deleteClusterCommitInflight = new File(
+        this.basePath + "/.hoodie/" + clusteringInstantTime3 + ".clustering.inflight").delete();
 
     // confirm deleted
-    assertTrue(deleteReplaceCommit && deleteReplaceCommitInflight && deleteReplaceCommitRequested);
+    assertTrue(deleteReplaceCommit && deleteClusterCommitInflight && deleteClusterCommitRequested);
     assertDoesNotThrow(() -> fsView.close());
 
   }
@@ -1861,7 +1861,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
   }
 
   private void saveAsCompleteCluster(HoodieActiveTimeline timeline, HoodieInstant inflight, Option<byte[]> data) {
-    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, inflight.getAction());
+    assertEquals(HoodieTimeline.CLUSTERING_ACTION, inflight.getAction());
     HoodieInstant clusteringInstant = new HoodieInstant(State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
     HoodieClusteringPlan plan = new HoodieClusteringPlan();
     plan.setExtraMetadata(new HashMap<>());
@@ -1875,13 +1875,13 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
           .setExtraMetadata(Collections.emptyMap())
           .setClusteringPlan(plan)
           .build();
-      timeline.saveToPendingReplaceCommit(clusteringInstant,
+      timeline.saveToPendingClusterCommit(clusteringInstant,
           TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
     } catch (IOException ioe) {
       throw new HoodieIOException("Exception scheduling clustering", ioe);
     }
     timeline.transitionRequestedToInflight(clusteringInstant, Option.empty());
-    timeline.saveAsComplete(inflight, data);
+    timeline.transitionClusterInflightToComplete(true, inflight, data);
   }
 
   @Test
@@ -2091,10 +2091,10 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         fileSliceGroups, Collections.emptyMap());
 
     String clusterTime = "2";
-    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusterTime);
+    HoodieInstant instant2 = new HoodieInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(plan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(instant2, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(instant2, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
 
     //make sure view doesn't include fileId1
     refreshFsView();
@@ -2205,7 +2205,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fileName3 = FSUtils.makeBaseFileName(commitTime2, TEST_WRITE_TOKEN, fileId3, BASE_FILE_EXTENSION);
     new File(basePath + "/" + partitionPath + "/" + fileName3).createNewFile();
 
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime2);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, commitTime2);
     Map<String, List<String>> partitionToReplaceFileIds = new HashMap<>();
     List<String> replacedFileIds = new ArrayList<>();
     replacedFileIds.add(fileId1);

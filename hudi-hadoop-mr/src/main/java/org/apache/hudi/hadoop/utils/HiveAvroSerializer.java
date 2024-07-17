@@ -42,7 +42,6 @@ import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.UnionObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableDateObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableTimestampObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
@@ -305,8 +304,7 @@ public class HiveAvroSerializer {
       case DATE:
         return HoodieHiveUtils.getDays(structFieldData);
       case TIMESTAMP:
-        Object timestamp = ((WritableTimestampObjectInspector) fieldOI).getPrimitiveJavaObject(structFieldData);
-        return HoodieHiveUtils.getMills(timestamp);
+        return HoodieHiveUtils.getMills(structFieldData);
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();

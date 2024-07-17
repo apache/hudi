@@ -89,13 +89,13 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<Double> SPILLABLE_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.1)
       .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding compaction related metadata.");
 
   public static final ConfigProperty<Double> SPILLABLE_LOG_COMPACTION_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.log.compaction.mem.fraction")
-      .defaultValue(0.8)
+      .defaultValue(0.02)
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Fraction of the file system view memory, to be used for holding log compaction related metadata.");
@@ -108,13 +108,13 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<Double> SPILLABLE_REPLACED_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.replaced.mem.fraction")
-      .defaultValue(0.01)
+      .defaultValue(0.05)
       .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding replace commit related metadata.");
 
   public static final ConfigProperty<Double> SPILLABLE_CLUSTERING_MEM_FRACTION = ConfigProperty
       .key("hoodie.filesystem.view.spillable.clustering.mem.fraction")
-      .defaultValue(0.01)
+      .defaultValue(0.02)
       .markAdvanced()
       .withDocumentation("Fraction of the file system view memory, to be used for holding clustering related metadata.");
 
@@ -223,7 +223,8 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public long getMaxMemoryForFileGroupMap() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForBootstrapBaseFile();
+    return totalMemory - getMaxMemoryForPendingCompaction() - getMaxMemoryForBootstrapBaseFile() - getMaxMemoryForPendingLogCompaction()
+        - getMaxMemoryForPendingClusteringFileGroups() - getMaxMemoryForReplacedFileGroups();
   }
 
   public long getMaxMemoryForPendingCompaction() {

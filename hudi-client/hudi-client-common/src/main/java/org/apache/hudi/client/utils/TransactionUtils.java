@@ -136,7 +136,7 @@ public class TransactionUtils {
   public static Set<String> getInflightAndRequestedInstants(HoodieTableMetaClient metaClient) {
     // collect InflightAndRequest instants for deltaCommit/commit/compaction/clustering
     Set<String> timelineActions = CollectionUtils
-        .createImmutableSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMMIT_ACTION);
+        .createImmutableSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMMIT_ACTION);
     return metaClient
         .getActiveTimeline()
         .getTimelineOfActions(timelineActions)

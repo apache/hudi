@@ -22,7 +22,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.HoodiePendingRollbackInfo
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.internal.Logging
@@ -78,9 +78,9 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
     var isClustering: Boolean = true
     var instant: HoodieInstant = null
     val pendingCompactionInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, pendingInstant)
-    val pendingClusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingInstant)
+    val pendingClusteringInstant = ClusteringUtils.getInflightClusteringInstant(pendingInstant, metaClient.getActiveTimeline)
     val timeline = metaClient.getActiveTimeline.getWriteTimeline
-    if (!timeline.containsInstant(pendingCompactionInstant) && !timeline.containsInstant(pendingClusteringInstant)) {
+    if (!timeline.containsInstant(pendingCompactionInstant) && !pendingClusteringInstant.isPresent) {
       throw new RuntimeException(s"there is no pending instant : [$pendingClusteringInstant | $pendingCompactionInstant]")
     } else if (timeline.containsInstant(pendingCompactionInstant)) {
       isClustering = false
@@ -88,7 +88,7 @@ class RunRollbackInflightTableServiceProcedure extends BaseProcedure
       logInfo(s"compaction instant to rollback : ${instant}")
     } else {
       isClustering = true
-      instant = pendingClusteringInstant
+      instant = pendingClusteringInstant.get()
       logInfo(s"clustering instant to rollback : ${instant}")
     }
 

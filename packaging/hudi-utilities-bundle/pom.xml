@@ -116,7 +116,6 @@
                   <include>org.rocksdb:rocksdbjni</include>
                   <include>org.antlr:stringtemplate</include>
                   <include>org.apache.parquet:parquet-avro</include>
-                  <include>org.roaringbitmap:RoaringBitmap</include>
                   <!-- Bundle Jackson JSR310 library since it is not present in spark 2.x. For spark 3.x this will
                        bundle the same JSR310 version that is included in spark runtime -->
                   <include>com.fasterxml.jackson.datatype:jackson-datatype-jsr310</include>
@@ -235,10 +234,6 @@
                 <relocation>
                   <pattern>com.google.protobuf.</pattern>
                   <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.roaringbitmap.</pattern>
-                  <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.uber.m3.</pattern>

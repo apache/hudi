@@ -18,8 +18,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithTimestampKeyGenerator._
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.slf4j.LoggerFactory
 
@@ -85,25 +85,45 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
 
               val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM ${tableName} ORDER BY id").collect().mkString("; ")
               LOG.warn(s"Query result: ${queryResult}")
-              if (!keyGeneratorSettings.contains("DATE_STRING"))
-                // TODO: use `shouldExtractPartitionValuesFromPartitionPath` uniformly, and get `expectedQueryResult` for all cases instead of `expectedQueryResultWithNull` for some cases
-                //   Fix for [HUDI-3896] overwrites `shouldExtractPartitionValuesFromPartitionPath` in `BaseFileOnlyRelation`, therefore for COW we extracting from partition paths and get nulls
-                //   [HUDI-7925] Currently there is no logic for `shouldExtractPartitionValuesFromPartitionPath` in `HoodieBaseHadoopFsRelationFactory` (used when shouldUseFileGroupReader = true)
-                if (tableType == "COPY_ON_WRITE" || shouldUseFileGroupReader.toBoolean)
-                  assertResult(expectedQueryResultWithNull)(queryResult)
-                else
-                  assertResult(expectedQueryResult)(queryResult)
-              else {
-                // for DATE_STRING type values are reconstructed from partition path even loosing data
-                if (!(tableType == "COPY_ON_WRITE" || shouldUseFileGroupReader.toBoolean))
-                  assertResult(expectedQueryResult)(queryResult)
-                else
-                  assertResult(expectedQueryResultWithLossyString)(queryResult)
-              }
+              // TODO: use `shouldExtractPartitionValuesFromPartitionPath` uniformly, and get `expectedQueryResult` for all cases instead of `expectedQueryResultWithLossyString` for some cases
+              //   After it we could properly process filters like "WHERE ts BETWEEN 1078016000 and 1718953003" and add tests with partition pruning.
+              //   COW: Fix for [HUDI-3896] overwrites `shouldExtractPartitionValuesFromPartitionPath` in `BaseFileOnlyRelation`, therefore for COW we extracting from partition paths and get nulls
+              //   shouldUseFileGroupReader: [HUDI-7925] Currently there is no logic for `shouldExtractPartitionValuesFromPartitionPath` in `HoodieBaseHadoopFsRelationFactory`
+              if (tableType == "COPY_ON_WRITE" || shouldUseFileGroupReader.toBoolean)
+                assertResult(expectedQueryResultWithLossyString)(queryResult)
+              else
+                assertResult(expectedQueryResult)(queryResult)
             }
           }
         }
       }
+    }
+  }
+
+  test("Test mandatory partitioning for timestamp key generator") {
+    withTempDir { tmp =>
+      spark.sql(
+        s"""
+           | CREATE TABLE should_fail (
+           |   id int,
+           |   name string,
+           |   precomb long,
+           |   ts long
+           | ) USING HUDI
+           | LOCATION '${tmp.getCanonicalPath + "/should_fail"}'
+           | TBLPROPERTIES (
+           |   type = 'COPY_ON_WRITE',
+           |   primaryKey = 'id',
+           |   preCombineField = 'precomb',
+           |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
+           |   ${timestampKeyGeneratorSettings.head}
+           | )
+           |""".stripMargin)
+      // should fail due to absent partitioning
+      assertThrows[HoodieException] {
+        spark.sql(s"INSERT INTO should_fail VALUES ${dataBatchesWithLongOfSeconds(0)}")
+      }
+
     }
   }
 }
@@ -144,5 +164,4 @@ object TestSparkSqlWithTimestampKeyGenerator {
   val queryResultWithLongOfMilliseconds: String = "[1,a1,1,1078016523000]; [2,a3,1,1718952603000]"
   val queryResultWithString: String = "[1,a1,1,2004-02-29 01:02:03]; [2,a3,1,2024-06-21 06:50:03]"
   val expectedQueryResultWithLossyString: String = "[1,a1,1,2004-02-29 01]; [2,a3,1,2024-06-21 06]"
-  val expectedQueryResultWithNull: String = "[1,a1,1,null]; [2,a3,1,null]"
 }

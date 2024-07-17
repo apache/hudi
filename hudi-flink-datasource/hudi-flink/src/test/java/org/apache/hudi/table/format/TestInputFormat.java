@@ -101,7 +101,9 @@ public class TestInputFormat {
   void beforeEach(HoodieTableType tableType, Map<String, String> options) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.TABLE_TYPE, tableType.name());
-    conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // close the async compaction
+    if (!conf.contains(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+      conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
+    }
     options.forEach((key, value) -> conf.setString(key, value));
 
     StreamerUtil.initTableIfNotExists(conf);
@@ -875,6 +877,64 @@ public class TestInputFormat {
 
     assertThat(commits.size(), is(3));
 
+    testReadChangelogInternal(commits);
+  }
+
+  @Test
+  void testReadChangelogIncrementallyForMor() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    options.put(FlinkOptions.CDC_ENABLED.key(), "true");
+    options.put(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true");  // for batch update
+    options.put(FlinkOptions.READ_CDC_FROM_CHANGELOG.key(), "false"); // infers the data changes on the fly
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write 3 commits first
+    // write the same dataset 3 times to generate changelog
+    for (int i = 0; i < 3; i++) {
+      List<RowData> dataset = TestData.dataSetInsert(1, 2);
+      TestData.writeDataAsBatch(dataset, conf);
+    }
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
+
+    assertThat(commits.size(), is(3));
+
+    testReadChangelogInternal(commits);
+  }
+
+  @Test
+  void testReadChangelogIncrementallyForMorWithCompaction() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    options.put(FlinkOptions.CDC_ENABLED.key(), "true");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
+    options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");   // compact for every commit
+    options.put(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true"); // for batch update
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // write 3 commits first
+    // write the same dataset 3 times to generate changelog
+    for (int i = 0; i < 3; i++) {
+      List<RowData> dataset = TestData.dataSetInsert(1, 2);
+      TestData.writeDataAsBatch(dataset, conf);
+    }
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), tempFile.getAbsolutePath());
+    List<String> commits = metaClient.getCommitsTimeline().filterCompletedInstants()
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
+
+    assertThat(commits.size(), is(3));
+
+    testReadChangelogInternal(commits);
+  }
+
+  private void testReadChangelogInternal(List<String> commits) throws IOException {
     // only the start commit
     conf.setString(FlinkOptions.READ_START_COMMIT, commits.get(1));
     this.tableSource = getTableSource(conf);
@@ -884,7 +944,6 @@ public class TestInputFormat {
     List<RowData> actual1 = readData(inputFormat1);
     final List<RowData> expected1 = TestData.dataSetUpsert(2, 1, 2, 1);
     TestData.assertRowDataEquals(actual1, expected1);
-
     // only the start commit: earliest
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     this.tableSource = getTableSource(conf);

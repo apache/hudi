@@ -370,7 +370,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    return new UpsertPartitioner<>(profile, context, table, config);
+    return new UpsertPartitioner<>(profile, context, table, config, operationType);
   }
 
   public Partitioner getInsertPartitioner(WorkloadProfile profile) {

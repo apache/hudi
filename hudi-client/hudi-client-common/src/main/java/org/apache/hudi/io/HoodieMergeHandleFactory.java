@@ -88,6 +88,12 @@ public class HoodieMergeHandleFactory {
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
+      // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
+      // both of these two cases are already handled in HoodieCDCExtractor.
+      return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);

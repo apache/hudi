@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
@@ -37,7 +36,6 @@ import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
-
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis extends SparkAdapterSupport {
@@ -252,7 +250,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
           // NOTE: In case of [[InsertIntoStatement]] Hudi tables could be on both sides -- receiving and providing
           //       the data, as such we have to make sure that we handle both of these cases
-          case iis @ MatchInsertIntoStatement(targetTable, _, query, _, _) =>
+          case iis @ MatchInsertIntoStatement(targetTable, _, _, query, _, _) =>
             val updatedTargetTable = targetTable match {
               // In the receiving side of the IIS, we can't project meta-field attributes out,
               // and instead have to explicitly remove them
@@ -355,7 +353,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
   }
 
   private[sql] object MatchInsertIntoStatement {
-    def unapply(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] =
+    def unapply(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] =
       sparkAdapter.getCatalystPlanUtils.unapplyInsertIntoStatement(plan)
   }
 
@@ -408,12 +406,20 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
       // Convert to InsertIntoHoodieTableCommand
-      case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), partition, query, overwrite, _) if query.resolved =>
+      case iis @ MatchInsertIntoStatement(relation @ ResolvesToHudiTable(_), userSpecifiedCols, partition, query, overwrite, _) if query.resolved =>
         relation match {
           // NOTE: In Spark >= 3.2, Hudi relations will be resolved as [[DataSourceV2Relation]]s by default;
           //       However, currently, fallback will be applied downgrading them to V1 relations, hence
           //       we need to check whether we could proceed here, or has to wait until fallback rule kicks in
-          case lr: LogicalRelation => new InsertIntoHoodieTableCommand(lr, query, partition, overwrite)
+          case lr: LogicalRelation =>
+            // Create a project if this is an INSERT INTO query with specified cols.
+            val projectByUserSpecified = if (userSpecifiedCols.nonEmpty) {
+              ValidationUtils.checkState(lr.catalogTable.isDefined, "Missing catalog table")
+              sparkAdapter.getCatalystPlanUtils.createProjectForByNameQuery(lr, iis)
+            } else {
+              None
+            }
+            new InsertIntoHoodieTableCommand(lr, projectByUserSpecified.getOrElse(query), partition, overwrite)
           case _ => iis
         }
 
@@ -564,6 +570,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
       case AlterTableAddColumnsCommand(tableId, colsToAdd)
         if sparkAdapter.isHoodieTable(tableId, sparkSession) =>
           AlterHoodieTableAddColumnsCommand(tableId, colsToAdd)
+      case s: ShowCreateTableCommand
+        if sparkAdapter.isHoodieTable(s.table, sparkSession) =>
+        ShowHoodieCreateTableCommand(s.table)
       // Rewrite the AlterTableRenameCommand to AlterHoodieTableRenameCommand
       case AlterTableRenameCommand(oldName, newName, isView)
         if !isView && sparkAdapter.isHoodieTable(oldName, sparkSession) =>
