@@ -56,12 +56,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
  */
 public class CleanerUtils {
 
-  // With incremental cleaning, it tracks the earliest savepoint which has a following replace commit and the
-  // replace commit has been cleaned.
-  public static final String EARLIEST_SAVEPOINT = "earliest_savepoint";
-  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
-
+  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;

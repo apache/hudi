@@ -265,29 +265,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .map(Option::get)
         .min(HoodieInstant.COMPARATOR);
 
-    // Step2: We cannot archive any commits which are later than EarliestCommitToNotArchive.
-    // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
-
-    // EarliestCommitToNotArchive is required to block archival when savepoint is deleted.
-    // This ensures that archival is blocked until clean has cleaned up files retained due to savepoint.
-    // Since EarliestCommitToNotArchive is advanced by cleaner, it is a way for cleaner to notify the archival
-    // that cleanup has finished and archival can advance further.
-    // If this guard is not present, the archival of commits can lead to duplicates. Here is a scenario
-    // illustrating the same. This scenario considers a case where EarliestCommitToNotArchive guard is not present
-    // c1.dc - f1 (c1 deltacommit creates file with id f1)
-    // c2.dc - f2 (c2 deltacommit creates file with id f2)
-    // c2.sp - Savepoint at c2
-    // c3.rc (replacing f2 -> f3) (Replace commit replacing file id f2 with f3)
-    // c4.dc
-    //
-    // Lets say Incremental cleaner moved past the c3.rc without cleaning f2 since savepoint is created at c2.
-    // Archival is blocked at c2 since there is a savepoint at c2.
-    // Lets say the savepoint at c2 is now deleted, Archival would archive c3.rc since it is unblocked now.
-    // Since c3 is archived and f2 has not been cleaned, the table view would be considering f2 as a valid
-    // file id. This causes duplicates.
-
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
-
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
         .filter(s -> {
           if (config.shouldArchiveBeyondSavepoint()) {

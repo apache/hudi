@@ -225,7 +225,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
 
-    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient, null, false);
+    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient, HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS, false);
     assertEquals(clusterTime2, actual.get().getTimestamp(),
         "retain the first replace commit after the last complete clean ");
   }

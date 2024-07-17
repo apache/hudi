@@ -88,7 +88,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private transient HoodieEngineContext context;
   private List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
-  private Option<String> earliestSavepointOpt = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -560,39 +559,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
     }
     return earliestCommitToRetain;
-  }
-
-  /**
-   * Returns earliest savepoint which could have caused retention of file slices
-   */
-  public Option<String> getEarliestSavepoint() {
-    // compute only if not set
-    if (!earliestSavepointOpt.isPresent() && config.getCleanerPolicy() != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) { // earliest commit to retain and earliest commit to not archive
-      // makes sense only when clean policy is num commits based or hours based.
-      if (!savepointedTimestamps.isEmpty()) { // if savepoints are found.
-        Option<HoodieInstant> earliestToRetain = getEarliestCommitToRetain();
-        // find the first savepoint timestamp
-        String firstSavepoint = savepointedTimestamps.stream().sorted().findFirst().get();
-
-        earliestSavepointOpt = Option.of(firstSavepoint);
-        // earliest commit to not archive = min (earliest commit to retain, earliest commit to not archive)
-        if (earliestToRetain.isPresent()) {
-          String earliestToRetainTimestamp = earliestToRetain.get().getTimestamp();
-          // When earliestToRetainTimestamp is greater than first savepoint timestamp and there are no
-          // replace commits between the first savepoint and the earliestToRetainTimestamp, we can set the
-          // earliestSavepointOpt to empty as there was no cleaning blocked due to savepoint
-          if (HoodieTimeline.compareTimestamps(earliestToRetainTimestamp, HoodieTimeline.GREATER_THAN, firstSavepoint)) {
-            HoodieTimeline replaceTimeline = hoodieTable.getActiveTimeline().getCompletedReplaceTimeline().findInstantsInClosedRange(firstSavepoint, earliestToRetainTimestamp);
-            if (replaceTimeline.empty()) {
-              earliestSavepointOpt = Option.empty();
-            }
-          }
-        }
-        LOG.info(String.format("Setting Earliest savepoint to %s, earliestCommitToRetain: %s, total list of savepointed timestamps : %s",
-            earliestSavepointOpt, earliestToRetain, Arrays.toString(savepointedTimestamps.toArray())));
-      }
-    }
-    return earliestSavepointOpt;
   }
 
   /**
