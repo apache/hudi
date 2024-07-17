@@ -267,14 +267,14 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
     command: http://trino-coordinator-1:8091 trino-worker-1
 
-    graphite:
-      container_name: graphite
-      hostname: graphite
-      image: graphiteapp/graphite-statsd
-      ports:
-        - 80:80
-        - 2003-2004:2003-2004
-        - 8126:8126
+  graphite:
+    container_name: graphite
+    hostname: graphite
+    image: graphiteapp/graphite-statsd
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 8126:8126
 
   adhoc-1:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest
