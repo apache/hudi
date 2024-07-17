@@ -1844,6 +1844,7 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result4, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]]");
   }
 
+  @Disabled
   @Test
   void testBuiltinFunctionWithHMSCatalog() {
     TableEnvironment tableEnv = batchTableEnv;

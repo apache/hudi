@@ -142,8 +142,6 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     super(catalogName, options.getString(CatalogOptions.DEFAULT_DATABASE));
     // fallback to hive.metastore.warehouse.dir if catalog path is not specified
     this.hiveConf = hiveConf;
-    hiveConf.set("datanucleus.schema.autoCreateTables", "true");
-    hiveConf.set("datanucleus.autoCreateSchema", "true");
     this.catalogPath = options.getString(CatalogOptions.CATALOG_PATH, hiveConf.getVar(HiveConf.ConfVars.METASTOREWAREHOUSE));
     this.external = options.getBoolean(CatalogOptions.TABLE_EXTERNAL);
     if (!allowEmbedded) {

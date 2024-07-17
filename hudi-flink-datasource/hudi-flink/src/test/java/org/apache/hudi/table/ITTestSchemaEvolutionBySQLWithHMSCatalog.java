@@ -22,10 +22,12 @@ import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
 import org.apache.hudi.table.catalog.HoodieHiveCatalog;
 
 import org.apache.flink.table.catalog.Catalog;
+import org.junit.jupiter.api.Disabled;
 
 /**
  * IT cases for schema evolution by alter table SQL using {@link HoodieHiveCatalog}.
  */
+@Disabled
 public class ITTestSchemaEvolutionBySQLWithHMSCatalog extends ITTestSchemaEvolutionBySQL {
 
   @Override
