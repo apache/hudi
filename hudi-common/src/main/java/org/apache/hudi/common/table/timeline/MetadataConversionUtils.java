@@ -29,7 +29,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -262,9 +261,6 @@ public class MetadataConversionUtils {
     }
     hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
     org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-    if (hoodieCommitMetadata.getCompacted()) {
-      avroMetaData.setOperationType(WriteOperationType.COMPACT.name());
-    }
     return (T) avroMetaData;
   }
 
