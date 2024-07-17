@@ -40,7 +40,7 @@
 #docker buildx create --name mybuilder --use
 docker buildx use mybuilder
 
-#docker buildx build base --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-base:latest --push
+docker buildx build base --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-base:latest --push
 docker buildx build namenode --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-namenode:latest --push
 docker buildx build datanode --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-datanode:latest --push
 docker buildx build historyserver --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-history:latest --push
@@ -60,5 +60,5 @@ docker buildx build trinobase --platform linux/arm64,linux/amd64 -t apachehudi/h
 docker buildx build trinocoordinator --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-trinocoordinator_368:latest --push
 docker buildx build trinoworker --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-trinoworker_368:latest --push
 
-docker buildx build hive_metastore_postgresql --platform linux/arm64,linux/amd64 -t apachehudi/hive-metastore-postgresql:2.3.0 --push
-docker buildx build zookeeper --platform linux/arm64,linux/amd64 -t apachehudi/zookeeper:3.4.12 --push
+#docker buildx build hive_metastore_postgresql --platform linux/arm64,linux/amd64 -t apachehudi/hive-metastore-postgresql:2.3.0 --push
+#docker buildx build zookeeper --platform linux/arm64,linux/amd64 -t apachehudi/zookeeper:3.4.12 --push
