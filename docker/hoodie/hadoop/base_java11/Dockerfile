@@ -37,16 +37,18 @@ ENV HADOOP_VERSION ${HADOOP_VERSION}
 ENV HADOOP_URL ${HADOOP_URL}
 
 FROM platform-${TARGETARCH} AS final
-RUN set -x
-RUN DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat-traditional procps
-RUN echo "Fetch URL2 is : ${HADOOP_URL}"
-RUN curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz
-RUN curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc
-RUN mkdir -p /opt/hadoop-$HADOOP_VERSION/logs
-RUN tar -xvf /tmp/hadoop.tar.gz -C /opt/
-RUN rm /tmp/hadoop.tar.gz*
-RUN ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop
-RUN mkdir /hadoop-data
+# need to do this all in one step because it will double the image size to download and extract the hadoop.tar.gz in
+# separate commands
+RUN set -x \
+    && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat-traditional procps \
+    && echo "Fetch URL2 is : ${HADOOP_URL}" \
+    && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
+    && curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc \
+    && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
+    && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
+    && rm /tmp/hadoop.tar.gz* \
+    && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
+    && mkdir /hadoop-data
 
 ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION
 ENV HADOOP_CONF_DIR=/etc/hadoop

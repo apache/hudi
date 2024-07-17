@@ -33,12 +33,14 @@ COPY wait-for-step.sh /
 COPY execute-step.sh /
 COPY finish-step.sh /
 
-RUN echo "Installing Spark-version (${SPARK_VERSION})"
-RUN  wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
-RUN tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
-RUN mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark
-RUN rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
-RUN cd /
+# need to do this all in one step because it will double the image size to download and extract the tar.gz in
+# separate commands
+RUN echo "Installing Spark-version (${SPARK_VERSION})" \
+      &&  wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+      && tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+      && mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark \
+      && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+      && cd /
 
 # Install python3 to enable and use pyspark shell
 RUN apt-get update \

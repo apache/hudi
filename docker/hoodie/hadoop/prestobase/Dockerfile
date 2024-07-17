@@ -34,6 +34,8 @@ ENV PRESTO_QUERY_MAX_MEMORY_PER_NODE 512MB
 ENV PRESTO_DISCOVERY_URI  http://presto-coordinator-1:8090
 ENV PATH        $PATH:${PRESTO_HOME}/bin
 
+# need to do this all in one step because it will double the image size to download and extract the tar.gz in
+# separate commands
 RUN set -x \
     && DEBIAN_FRONTEND=noninteractive apt-get -yq update \
     && apt-get -yq install \
@@ -51,15 +53,13 @@ RUN set -x \
         cron \
         gosu \
         python-is-python3 \
-    && rm -rf /var/lib/apt/lists/*
-
-## presto-server
-RUN wget -q -O - https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/presto-server-${PRESTO_VERSION}.tar.gz \
+    && rm -rf /var/lib/apt/lists/* \
+    ## presto-server
+    && wget -q -O - https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/presto-server-${PRESTO_VERSION}.tar.gz \
         | tar -xzf - -C /opt/  \
-    && mkdir -p /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/
-
-## presto-client
-RUN wget -q -O /usr/local/bin/presto https://repo1.maven.org/maven2/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
+    && mkdir -p /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/ \
+    ## presto-client
+    && wget -q -O /usr/local/bin/presto https://repo1.maven.org/maven2/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
     && chmod +x /usr/local/bin/presto \
     ## user/dir/permmsion
     && adduser --shell /sbin/nologin --uid 1000 docker \
