@@ -197,8 +197,6 @@ services:
     container_name: presto-coordinator-1
     hostname: presto-coordinator-1
     image: apachehudi/hudi-hadoop_3.3.5-prestobase_0.288:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     ports:
       - "8090:8090"
       # JVM debugging port (will be mapped to a random port on host)
@@ -220,8 +218,6 @@ services:
     container_name: presto-worker-1
     hostname: presto-worker-1
     image: apachehudi/hudi-hadoop_3.3.5-prestobase_0.288:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     depends_on: [ "presto-coordinator-1" ]
     environment:
       - PRESTO_JVM_MAX_HEAP=512M
@@ -243,8 +239,6 @@ services:
     container_name: trino-coordinator-1
     hostname: trino-coordinator-1
     image: apachehudi/hudi-hadoop_3.3.5-trinocoordinator_368:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     ports:
       - "8091:8091"
       # JVM debugging port (will be mapped to a random port on host)
@@ -259,8 +253,6 @@ services:
     container_name: trino-worker-1
     hostname: trino-worker-1
     image: apachehudi/hudi-hadoop_3.3.5-trinoworker_368:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     depends_on: [ "trino-coordinator-1" ]
     ports:
       - "8092:8092"
@@ -286,8 +278,6 @@ services:
 
   adhoc-1:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -312,8 +302,6 @@ services:
 
   adhoc-2:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest
-    pull_policy: if_not_present
-    platform: linux/arm64
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
