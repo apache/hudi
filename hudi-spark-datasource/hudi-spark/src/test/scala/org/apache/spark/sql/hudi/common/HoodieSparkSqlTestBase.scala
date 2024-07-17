@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
@@ -248,6 +249,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 }
 
 object HoodieSparkSqlTestBase {
+
+  // the naming format of 0.x version
+  final val NAME_FORMAT_0_X: Pattern = Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$")
 
   def getLastCommitMetadata(spark: SparkSession, tablePath: String) = {
     val metaClient = createMetaClient(spark, tablePath)

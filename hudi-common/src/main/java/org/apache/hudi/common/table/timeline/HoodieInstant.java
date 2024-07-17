@@ -44,7 +44,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private static final String DELIMITER = ".";
 
-  private static final String UNDERSCORE = "_";
+  public static final String UNDERSCORE = "_";
 
   private static final String FILE_NAME_FORMAT_ERROR =
       "The provided file name %s does not conform to the required format";
