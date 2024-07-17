@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -15,17 +13,20 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 # limitations under the License.
+FROM scratch
+MAINTAINER Hoodie
+USER root
 
-SCRIPT_PATH=$(cd `dirname $0`; pwd)
-HUDI_DEMO_ENV=$1
-# set up root directory
-WS_ROOT=`dirname $SCRIPT_PATH`
-#PLATFORM_TYPE_ARG=$(uname -m)
-#COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351_$PLATFORM_TYPE_ARG.yml"
-COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351.yml"
-# shut down cluster
-HUDI_WS=${WS_ROOT} docker compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
+ARG TARGETARCH
 
-# remove houst mount directory
-rm -rf /tmp/hadoop_data
-rm -rf /tmp/hadoop_name
+# Default to UTF-8 file.encoding
+ENV LANG C.UTF-8
+
+
+FROM menorah84/hive-metastore-postgresql:2.3.0 AS platform-arm64
+
+FROM bde2020/hive-metastore-postgresql:2.3.0 AS platform-amd64
+
+FROM platform-${TARGETARCH} AS final
+
+

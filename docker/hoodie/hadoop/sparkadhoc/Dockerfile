@@ -15,10 +15,10 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=3.3.5
 ARG HIVE_VERSION=2.3.3
-ARG SPARK_VERSION=2.4.4
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}
+ARG SPARK_VERSION=3.5.1
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkbase_${SPARK_VERSION}:latest
 
 ARG PRESTO_VERSION=0.268
 ARG TRINO_VERSION=368
@@ -37,10 +37,10 @@ RUN apt-get install -y \
     tar \
     sudo \
     rsync \
-    python \
+    python3 \
     wget \
     python3-pip \
-    python-dev \
+    python3-dev \
     build-essential \
     uuid-runtime \
     less

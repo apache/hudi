@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -16,16 +14,20 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-SCRIPT_PATH=$(cd `dirname $0`; pwd)
-HUDI_DEMO_ENV=$1
-# set up root directory
-WS_ROOT=`dirname $SCRIPT_PATH`
-#PLATFORM_TYPE_ARG=$(uname -m)
-#COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351_$PLATFORM_TYPE_ARG.yml"
-COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351.yml"
-# shut down cluster
-HUDI_WS=${WS_ROOT} docker compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
+FROM scratch
+MAINTAINER Hoodie
+USER root
 
-# remove houst mount directory
-rm -rf /tmp/hadoop_data
-rm -rf /tmp/hadoop_name
+ARG TARGETARCH
+
+# Default to UTF-8 file.encoding
+ENV LANG C.UTF-8
+
+
+FROM arm64v8/zookeeper:3.4.12 AS platform-arm64
+
+FROM bitnami/zookeeper:3.4.12-r68 AS platform-amd64
+
+FROM platform-${TARGETARCH} AS final
+
+
