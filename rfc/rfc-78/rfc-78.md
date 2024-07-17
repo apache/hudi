@@ -41,27 +41,29 @@ interested developers/users to give a spin on some of the  advanced features. Bu
 a bridge release (0.16.0) for smoother migration for existing hudi users. 
 
 ## Objectives 
-Goal is to have a smooth migration experience for the users from 0.x to 1.0. We plan to have a 0.16.0 bridge release asking everyone to first migrate to 0.16.0 before they can upgrade to 1.x. 
+Goal is to have a smooth migration experience for the users from 0.x to 1.0. We plan to have a 0.16.0 bridge release asking users to first migrate writers (spark, flink, kafka connect sinks) and readers (Spark, Flink, Hive, Presto, Trino, ...) to 0.16.0 before they can upgrade to 1.x. 
 
-A typical organization might have a medallion architecture deployed to run 1000s of Hudi pipelines i.e. bronze, silver and gold layer. 
-For this layout of pipelines, here is how a typical migration might look like(w/o a bridge release)
+A typical organization might have a medallion architecture deployed with 1000s of Hudi pipelines spread across bronze, silver and gold layer, where most pipelines can be both readers and writers and a few reader only pipelines (gold).
+For this layout of pipelines, here are some challenges faced during migration without a bridge release.\
 
-a. Existing pipelines are in 0.15.x. (bronze, silver, gold) 
-b. Migrate gold pipelines to 1.x. 
-- We need to strictly migrate only gold to 1x. Bcoz, a 0.15.0 reader may not be able to read 1.x hudi tables. So, if we migrate any of silver pipelines to 1.x before migrating entire gold layer, we might end up in a situation, 
-where a 0.15.0 reader (gold) might end up reading 1.x table (silver). This might lead to failures. So, we have to follow certain order in which we migrate pipelines. 
-c. Once all of gold is migrated to 1.x, we can move all of silver to 1.x. 
-d. Once all of gold and silver pipelines are migrated to 1.x, finally we can move all of bronze to 1.x.
+1. Existing pipelines are in 0.15.x. (bronze, silver, gold) 
+2. Migrate gold pipelines to 1.x.\
+&emsp; We need to strictly migrate only gold pipelines to 1.x. Because, a 0.15.x reader may not be able to read 1.x Hudi tables. So, if we migrate any of silver pipelines to 
+1.x before migrating entire gold layer, we might end up in a situation, where a 0.15.x reader (gold) might end up reading 1.x table (silver). This might lead to failures. 
+So, we have to follow certain order in which we migrate pipelines. 
+3. Once all of gold is migrated to 1.x, we can move all of silver to 1.x. 
+4. Once all of gold and silver pipelines are migrated to 1.x, finally we can move all of bronze to 1.x.
 
-In the end, we would have migrated all of existing hudi pipelines from 0.15.0 to 1.x. 
-But as you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes we may not have good control over downstream consumers. 
-Hence, coordinating entire migration workflow and orchestrating the same might be challenging.
+As you could see, we need some coordination with which we need to migrate. And in a very large organization, sometimes we may not have good control over downstream consumers.
+Hence, coordinating entire migration workflow and orchestrating the same might be challenging. And here we just spoke about happy paths. But there are failure scenarios which 
+could make it even more challenging. For instance, after upgrade, if users prefer to downgrade, then downgrade should ensure to completely revert all changes 
+done in 1.x so that a 0.15.x reader and writer can continue without any issues. 
+Hence, the bridge release is a key for smoother migration to 1.x in all aspects. And since this is going to be a major bump from any of 0.x to 1.x, we are meticulously designing this bridge release to ease migrations for our users.  
 
-Hence to ease the migration workflow for 1.x, we are introducing 0.16.0 as a bridge release.  
 
-Here are the objectives with this bridge release:
+#### Here are the objectives with this bridge release
 
-- 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in functionality and no data inconsistencies.
+- 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in 0.x functionality and guaranteeing no data inconsistencies. By no data inconsistencies, we mean, the queries results ff
 - 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed. 
 But for new features that was introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader. 
 - In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to 1.x so as to not break any readers as applicable. 
