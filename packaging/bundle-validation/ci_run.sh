@@ -153,23 +153,7 @@ else
   HUDI_METASERVER_SERVER_BUNDLE_NAME=hudi-metaserver-server-bundle
 
   if [[ ${SPARK_PROFILE} == 'spark' ]]; then
-    HUDI_SPARK_BUNDLE_NAME=hudi-spark-bundle_2.11
-    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
-    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
-  elif [[ ${SPARK_PROFILE} == 'spark2.4' ]]; then
-    HUDI_SPARK_BUNDLE_NAME=hudi-spark2.4-bundle_2.11
-    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.11
-    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.11
-  elif [[ ${SPARK_PROFILE} == 'spark3.0' ]]; then
-    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.0-bundle_2.12
-    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-  elif [[ ${SPARK_PROFILE} == 'spark3.1' ]]; then
-    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.1-bundle_2.12
-    HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
-    HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
-  elif [[ ${SPARK_PROFILE} == 'spark3.2' ]]; then
-    HUDI_SPARK_BUNDLE_NAME=hudi-spark3.2-bundle_2.12
+    HUDI_SPARK_BUNDLE_NAME=hudi-spark-bundle_2.12
     HUDI_UTILITIES_BUNDLE_NAME=hudi-utilities-bundle_2.12
     HUDI_UTILITIES_SLIM_BUNDLE_NAME=hudi-utilities-slim-bundle_2.12
   elif [[ ${SPARK_PROFILE} == 'spark3.3' ]]; then
