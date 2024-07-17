@@ -32,7 +32,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -71,7 +70,6 @@ public class TestHiveAvroSerializer {
       + "{\"name\":\"lastname\",\"type\":[\"null\",\"string\"],\"default\":null}]}}}"
       + "]}";
 
-  @Disabled
   @Test
   public void testSerialize() {
     Schema avroSchema = new Schema.Parser().parse(SIMPLE_SCHEMA);

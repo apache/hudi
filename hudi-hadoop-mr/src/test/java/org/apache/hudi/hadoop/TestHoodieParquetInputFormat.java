@@ -776,7 +776,6 @@ public class TestHoodieParquetInputFormat {
     assertEquals(totalExpected, totalCount, msg);
   }
 
-  @Disabled
   @Test
   public void testHoodieParquetInputFormatReadTimeType() throws IOException {
     try {
