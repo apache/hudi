@@ -17,7 +17,6 @@ services:
 
   namenode:
     image: apachehudi/hudi-hadoop_3.3.5-namenode:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: namenode
     container_name: namenode
@@ -38,7 +37,6 @@ services:
 
   datanode1:
     image: apachehudi/hudi-hadoop_3.3.5-datanode:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     container_name: datanode1
     hostname: datanode1
@@ -64,7 +62,6 @@ services:
 
   historyserver:
     image: apachehudi/hudi-hadoop_3.3.5-history:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: historyserver
     container_name: historyserver
@@ -95,7 +92,6 @@ services:
 
   hivemetastore:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: hivemetastore
     container_name: hivemetastore
@@ -122,7 +118,6 @@ services:
 
   hiveserver:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: hiveserver
     container_name: hiveserver
@@ -145,7 +140,6 @@ services:
 
   sparkmaster:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkmaster_3.5.1:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: sparkmaster
     container_name: sparkmaster
@@ -166,7 +160,6 @@ services:
 
   spark-worker-1:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkworker_3.5.1:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: spark-worker-1
     container_name: spark-worker-1
@@ -196,7 +189,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'bitnami/kafka:2.0.0'
+    image: 'bitnami/kafka:3.4.1'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
@@ -209,7 +202,6 @@ services:
     container_name: presto-coordinator-1
     hostname: presto-coordinator-1
     image: apachehudi/hudi-hadoop_3.3.5-prestobase_0.288:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     ports:
       - "8090:8090"
@@ -232,7 +224,6 @@ services:
     container_name: presto-worker-1
     hostname: presto-worker-1
     image: apachehudi/hudi-hadoop_3.3.5-prestobase_0.288:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     depends_on: [ "presto-coordinator-1" ]
     environment:
@@ -255,7 +246,6 @@ services:
     container_name: trino-coordinator-1
     hostname: trino-coordinator-1
     image: apachehudi/hudi-hadoop_3.3.5-trinocoordinator_368:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     ports:
       - "8091:8091"
@@ -271,7 +261,6 @@ services:
     container_name: trino-worker-1
     hostname: trino-worker-1
     image: apachehudi/hudi-hadoop_3.3.5-trinoworker_368:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     depends_on: [ "trino-coordinator-1" ]
     ports:
@@ -298,7 +287,6 @@ services:
 
   adhoc-1:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: adhoc-1
     container_name: adhoc-1
@@ -324,7 +312,6 @@ services:
 
   adhoc-2:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest
-    pull_policy: if_not_present
     platform: linux/amd64
     hostname: adhoc-2
     container_name: adhoc-2
