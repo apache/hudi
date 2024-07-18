@@ -171,7 +171,7 @@ public class TestCleanPlanner {
     Pair<HoodieCleanMetadata, Option<byte[]>> cleanMetadataOptionPair =
         getCleanCommitMetadata(partitionsInLastClean, lastCleanInstant, earliestInstantsInLastClean, lastCompletedTimeInLastClean,
             savepointsTrackedInLastClean.keySet(), expectedEarliestSavepointInLastClean);
-    mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadataOptionPair, savepointsTrackedInLastClean.keySet());
+    HoodieCleanerPlan cleanerPlan = mockLastCleanCommit(mockHoodieTable, lastCleanInstant, earliestInstantsInLastClean, activeTimeline, cleanMetadataOptionPair, savepointsTrackedInLastClean.keySet());
     mockFewActiveInstants(mockHoodieTable, activeInstantsPartitions, savepointsTrackedInLastClean, areCommitsForSavepointsRemoved, replaceCommits);
 
     // mock getAllPartitions
@@ -187,9 +187,8 @@ public class TestCleanPlanner {
     List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
-    assertEquals(expectedEarliestSavepointInLastClean, ClusteringUtils.getEarliestSavepointInClean(activeTimeline, metaClient, config.getCleanerPolicy(),
-        activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant(), false)
-        .map(HoodieInstant::getTimestamp));
+    assertEquals(expectedEarliestSavepointInLastClean, ClusteringUtils.getEarliestReplacedSavepointInClean(activeTimeline, config.getCleanerPolicy(),
+        cleanerPlan, false));
 
     Collections.sort(expectedPartitions);
     Collections.sort(partitionsToClean);
@@ -587,9 +586,7 @@ public class TestCleanPlanner {
       partitions.forEach(partition -> partitionMetadata.put(partition, new HoodieCleanPartitionMetadata(partition, HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(),
           Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false)));
       Map<String, String> extraMetadata = new HashMap<>();
-      if (!savepointsToTrack.isEmpty()) {
-        extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
-      }
+      extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointsToTrack.stream().collect(Collectors.joining(",")));
       HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(instantTime, 100L, 10, earliestCommitToRetain, lastCompletedTime, partitionMetadata,
           CLEAN_METADATA_VERSION_2, Collections.EMPTY_MAP, extraMetadata.isEmpty() ? null : extraMetadata);
       return Pair.of(cleanMetadata, TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
@@ -610,8 +607,8 @@ public class TestCleanPlanner {
     }
   }
 
-  private static void mockLastCleanCommit(HoodieTable hoodieTable, String timestamp, String earliestCommitToRetain, HoodieActiveTimeline activeTimeline,
-                                          Pair<HoodieCleanMetadata, Option<byte[]>> cleanMetadata, Set<String> savepointsTrackedInLastClean)
+  private static HoodieCleanerPlan mockLastCleanCommit(HoodieTable hoodieTable, String timestamp, String earliestCommitToRetain, HoodieActiveTimeline activeTimeline,
+                                                       Pair<HoodieCleanMetadata, Option<byte[]>> cleanMetadata, Set<String> savepointsTrackedInLastClean)
       throws IOException {
     HoodieDefaultTimeline cleanTimeline = mock(HoodieDefaultTimeline.class);
     when(activeTimeline.getCleanerTimeline()).thenReturn(cleanTimeline);
@@ -634,6 +631,7 @@ public class TestCleanPlanner {
 
     when(hoodieTable.isPartitioned()).thenReturn(true);
     when(hoodieTable.isMetadataTable()).thenReturn(false);
+    return cleanerPlan;
   }
 
   private static void mockFewActiveInstants(HoodieTable hoodieTable, Map<String, List<String>> activeInstantsToPartitions,
