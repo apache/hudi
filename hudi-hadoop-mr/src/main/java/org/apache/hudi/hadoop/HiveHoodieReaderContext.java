@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
-import org.apache.hudi.hadoop.utils.OverwriteWithLatestHiveRecordMerger;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
