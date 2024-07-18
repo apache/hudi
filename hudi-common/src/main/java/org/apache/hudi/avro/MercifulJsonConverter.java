@@ -303,14 +303,10 @@ public class MercifulJsonConverter {
       public Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
         // The ObjectMapper use List to represent FixedType
         // eg: "decimal_val": [0, 0, 14, -63, -52] will convert to ArrayList<Integer>
-        List<Integer> converval = (List<Integer>) value;
-        byte[] src = new byte[converval.size()];
-        for (int i = 0; i < converval.size(); i++) {
-          src[i] = converval.get(i).byteValue();
-        }
+        byte[] src = value.toString().getBytes();
         byte[] dst = new byte[schema.getFixedSize()];
         System.arraycopy(src, 0, dst, 0, Math.min(schema.getFixedSize(), src.length));
-        return Pair.of(true, new GenericData.Fixed(schema, dst));
+        return Pair.of(true, dst);
       }
     };
   }
