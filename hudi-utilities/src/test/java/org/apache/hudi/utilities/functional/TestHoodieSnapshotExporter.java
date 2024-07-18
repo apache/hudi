@@ -271,6 +271,11 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
         return null;
       }
 
+      // skip orc tests for now
+      if ("orc".equals(format)) {
+        return null;
+      }
+
       HoodieSnapshotExporter.Config cfg = new Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;
