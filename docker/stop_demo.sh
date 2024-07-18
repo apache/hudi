@@ -20,9 +20,11 @@ SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 # set up root directory
 WS_ROOT=`dirname $SCRIPT_PATH`
-#PLATFORM_TYPE_ARG=$(uname -m)
-#COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351_$PLATFORM_TYPE_ARG.yml"
-COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351.yml"
+PLATFORM_TYPE_ARG=$(uname -m)
+if [ "$PLATFORM_TYPE_ARG" = "aarch64" ]; then
+  PLATFORM_TYPE_ARG="arm64"
+fi
+COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351_$PLATFORM_TYPE_ARG.yml"
 # shut down cluster
 HUDI_WS=${WS_ROOT} docker compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
 

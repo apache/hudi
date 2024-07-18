@@ -62,7 +62,6 @@ services:
 
   historyserver:
     image: apachehudi/hudi-hadoop_3.3.5-history:latest
-    pull_policy: if_not_present
     platform: linux/arm64
     hostname: historyserver
     container_name: historyserver
@@ -129,10 +128,11 @@ services:
       - ./hadoop.env
     environment:
       SERVICE_PRECONDITION: "hivemetastore:9083"
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
     ports:
       - "10000:10000"
       # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
+      - "64757:5005"
     depends_on:
       - "hivemetastore"
     links:
@@ -282,14 +282,14 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
     command: http://trino-coordinator-1:8091 trino-worker-1
 
-#  graphite:
-#    container_name: graphite
-#    hostname: graphite
-#    image: graphiteapp/graphite-statsd
-#    ports:
-#      - 80:80
-#      - 2003-2004:2003-2004
-#      - 8126:8126
+  graphite:
+    container_name: graphite
+    hostname: graphite
+    image: graphiteapp/graphite-statsd
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 8126:8126
 
   adhoc-1:
     image: apachehudi/hudi-hadoop_3.3.5-hive_2.3.3-sparkadhoc_3.5.1:latest

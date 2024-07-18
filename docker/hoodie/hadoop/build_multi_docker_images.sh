@@ -59,6 +59,3 @@ docker buildx build base_java11 --platform linux/arm64,linux/amd64 -t apachehudi
 docker buildx build trinobase --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-trinobase_368:latest --push
 docker buildx build trinocoordinator --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-trinocoordinator_368:latest --push
 docker buildx build trinoworker --platform linux/arm64,linux/amd64 -t apachehudi/hudi-hadoop_3.3.5-trinoworker_368:latest --push
-
-#docker buildx build hive_metastore_postgresql --platform linux/arm64,linux/amd64 -t apachehudi/hive-metastore-postgresql:2.3.0 --push
-#docker buildx build zookeeper --platform linux/arm64,linux/amd64 -t apachehudi/zookeeper:3.4.12 --push
