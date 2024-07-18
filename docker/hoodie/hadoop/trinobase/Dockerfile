@@ -50,11 +50,17 @@ RUN chmod +x trino-cli-${TRINO_VERSION}-executable.jar
 RUN mv trino-cli-${TRINO_VERSION}-executable.jar trino-cli
 
 WORKDIR /usr/local
-RUN wget -q ${BASE_URL}/io/trino/trino-server/${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz
-RUN tar xvzf trino-server-${TRINO_VERSION}.tar.gz -C /usr/local/
-RUN ln -s /usr/local/trino-server-${TRINO_VERSION} $TRINO_HOME
-
 ENV TRINO_BASE_WS /var/hoodie/ws/docker/hoodie/hadoop/trinobase
+RUN wget -q ${BASE_URL}/io/trino/trino-server/${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz \
+    && tar xvzf trino-server-${TRINO_VERSION}.tar.gz -C /usr/local/ \
+    && rm trino-server-${TRINO_VERSION}.tar.gz \
+    && ln -s /usr/local/trino-server-${TRINO_VERSION} $TRINO_HOME \
+    && mkdir /usr/local/tmptrinospace \
+    && mv ${TRINO_HOME}/plugin/hive/ /usr/local/tmptrinospace/hive/ \
+    && rm -rf ${TRINO_HOME}/plugin/ \
+    && mkdir ${TRINO_HOME}/plugin/ \
+    && mv /usr/local/tmptrinospace/hive/ ${TRINO_HOME}/plugin/hive/
+
 RUN mkdir -p ${TRINO_BASE_WS}/target/
 ADD target/ ${TRINO_BASE_WS}/target/
 ENV HUDI_TRINO_BUNDLE ${TRINO_BASE_WS}/target/hudi-trino-bundle.jar

@@ -57,6 +57,16 @@ RUN set -x \
     ## presto-server
     && wget -q -O - https://repo1.maven.org/maven2/com/facebook/presto/presto-server/${PRESTO_VERSION}/presto-server-${PRESTO_VERSION}.tar.gz \
         | tar -xzf - -C /opt/  \
+    && mkdir /usr/local/tmpprestospace \
+    ##prevent hive-hadoop2,jmx,localfile from being deleted
+    && mv ${PRESTO_HOME}/plugin/hive-hadoop2/ /usr/local/tmpprestospace/hive-hadoop2/ \
+    && mv ${PRESTO_HOME}/plugin/jmx/ /usr/local/tmpprestospace/jmx/ \
+    && mv ${PRESTO_HOME}/plugin/localfile/ /usr/local/tmpprestospace/localfile/ \
+    && rm -rf ${PRESTO_HOME}/plugin/ \
+    && mkdir ${PRESTO_HOME}/plugin/ \
+    && mv /usr/local/tmpprestospace/hive-hadoop2/ ${PRESTO_HOME}/plugin/hive-hadoop2/ \
+    && mv /usr/local/tmpprestospace/jmx/ ${PRESTO_HOME}/plugin/jmx/ \
+    && mv /usr/local/tmpprestospace/localfile/ ${PRESTO_HOME}/plugin/localfile/ \
     && mkdir -p /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/ \
     ## presto-client
     && wget -q -O /usr/local/bin/presto https://repo1.maven.org/maven2/com/facebook/presto/presto-cli/${PRESTO_VERSION}/presto-cli-${PRESTO_VERSION}-executable.jar \
