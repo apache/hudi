@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
@@ -427,6 +427,12 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
         CreateHoodieTableAsSelectCommand(table, mode, query)
+
+      case ct: CreateTable =>
+        // NOTE: In case of CreateTable with schema and multiple partition fields,
+        // we have to make sure that partition fields are ordered in the same way as they are in the schema.
+        HoodieSchemaUtils.checkPartitionSchemaOrder(ct.tableDesc.schema, ct.tableDesc.partitionColumnNames)
+        plan
 
       case _ => plan
     }
