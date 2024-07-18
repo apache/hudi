@@ -51,120 +51,120 @@ import java.util.concurrent.TimeUnit;
  */
 public class HudiDataStreamWriter {
 
-     public static DataType ROW_DATA_TYPE = DataTypes.ROW(
-            DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
-            DataTypes.FIELD("uuid", DataTypes.VARCHAR(40)),// record key
-            DataTypes.FIELD("rider", DataTypes.VARCHAR(20)),
-            DataTypes.FIELD("driver", DataTypes.VARCHAR(20)),
-            DataTypes.FIELD("fare", DataTypes.DOUBLE()),
-            DataTypes.FIELD("city", DataTypes.VARCHAR(20))).notNull();
+  public static DataType ROW_DATA_TYPE = DataTypes.ROW(
+      DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+      DataTypes.FIELD("uuid", DataTypes.VARCHAR(40)),// record key
+      DataTypes.FIELD("rider", DataTypes.VARCHAR(20)),
+      DataTypes.FIELD("driver", DataTypes.VARCHAR(20)),
+      DataTypes.FIELD("fare", DataTypes.DOUBLE()),
+      DataTypes.FIELD("city", DataTypes.VARCHAR(20))).notNull();
 
-    /**
-     * Main Entry point takes two parameters.
-     * It can be run with Flink cli.
-     * Sample Command - bin/flink run -c com.hudi.flink.quickstart.HudiDataStreamWriter ${HUDI_FLINK_QUICKSTART_REPO}/target/hudi-examples-0.1.jar hudi_table "file:///tmp/hudi_table"
-     *
-     * @param args
-     * @throws Exception
-     */
-    public static void main(String[] args) throws Exception {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+  /**
+   * Main Entry point takes two parameters.
+   * It can be run with Flink cli.
+   * Sample Command - bin/flink run -c com.hudi.flink.quickstart.HudiDataStreamWriter ${HUDI_FLINK_QUICKSTART_REPO}/target/hudi-examples-0.1.jar hudi_table "file:///tmp/hudi_table"
+   *
+   * @param args
+   * @throws Exception
+   */
+  public static void main(String[] args) throws Exception {
+    StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        // Enable checkpointing
-        configureCheckpointing(env);
+    // Enable checkpointing
+    configureCheckpointing(env);
 
-        DataStreamSource<RowData> dataStream = env.addSource(new SampleDataSource());
+    DataStreamSource<RowData> dataStream = env.addSource(new SampleDataSource());
 
-        final String targetS3Path = System.getenv("TARGET_S3_PATH");
-        HoodiePipeline.Builder builder = createHudiPipeline("hudi_table", createHudiOptions(targetS3Path));
-        builder.sink(dataStream, false);
+    final String targetS3Path = System.getenv("TARGET_S3_PATH");
+    HoodiePipeline.Builder builder = createHudiPipeline("hudi_table", createHudiOptions(targetS3Path));
+    builder.sink(dataStream, false);
 
-        env.execute("Api_Sink");
-    }
+    env.execute("Api_Sink");
+  }
 
-    /**
-     * Configure Flink checkpointing settings.
-     *
-     * @param env The Flink StreamExecutionEnvironment.
-     */
-    private static void configureCheckpointing(StreamExecutionEnvironment env) {
-        env.enableCheckpointing(5000); // Checkpoint every 5 seconds
-        CheckpointConfig checkpointConfig = env.getCheckpointConfig();
-        checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-        checkpointConfig.setMinPauseBetweenCheckpoints(10000); // Minimum time between checkpoints
-        checkpointConfig.setCheckpointTimeout(60000); // Checkpoint timeout in milliseconds
-    }
+  /**
+   * Configure Flink checkpointing settings.
+   *
+   * @param env The Flink StreamExecutionEnvironment.
+   */
+  private static void configureCheckpointing(StreamExecutionEnvironment env) {
+    env.enableCheckpointing(5000); // Checkpoint every 5 seconds
+    CheckpointConfig checkpointConfig = env.getCheckpointConfig();
+    checkpointConfig.setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+    checkpointConfig.setMinPauseBetweenCheckpoints(10000); // Minimum time between checkpoints
+    checkpointConfig.setCheckpointTimeout(60000); // Checkpoint timeout in milliseconds
+  }
 
-    /**
-     * Create Hudi options for the data sink.
-     *
-     * @param basePath The base path for Hudi data.
-     * @return A Map containing Hudi options.
-     */
-    private static Map<String, String> createHudiOptions(String basePath) {
-        Map<String, String> options = new HashMap<>();
-        options.put(FlinkOptions.PATH.key(), basePath);
-        options.put(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
-        options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
-        options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
-        options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
-        options.put(FlinkOptions.IGNORE_FAILED.key(), "true");
-        return options;
-    }
+  /**
+   * Create Hudi options for the data sink.
+   *
+   * @param basePath The base path for Hudi data.
+   * @return A Map containing Hudi options.
+   */
+  private static Map<String, String> createHudiOptions(String basePath) {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), basePath);
+    options.put(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), "s3a");
+    options.put(FlinkOptions.TABLE_TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+    options.put(FlinkOptions.PRECOMBINE_FIELD.key(), "ts");
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.IGNORE_FAILED.key(), "true");
+    return options;
+  }
 
-    /**
-     * Create a HudiPipeline.Builder with the specified target table and options.
-     *
-     * @param targetTable The name of the Hudi table.
-     * @param options     The Hudi options for the data sink.
-     * @return A HudiPipeline.Builder.
-     */
-    private static HoodiePipeline.Builder createHudiPipeline(String targetTable, Map<String, String> options) {
-        return HoodiePipeline.builder(targetTable)
-                .column("ts TIMESTAMP(3)")
-                .column("uuid VARCHAR(40)")
-                .column("rider VARCHAR(20)")
-                .column("driver VARCHAR(20)")
-                .column("fare DOUBLE")
-                .column("city VARCHAR(20)")
-                .pk("uuid")
-                .partition("city")
-                .options(options);
-    }
+  /**
+   * Create a HudiPipeline.Builder with the specified target table and options.
+   *
+   * @param targetTable The name of the Hudi table.
+   * @param options     The Hudi options for the data sink.
+   * @return A HudiPipeline.Builder.
+   */
+  private static HoodiePipeline.Builder createHudiPipeline(String targetTable, Map<String, String> options) {
+    return HoodiePipeline.builder(targetTable)
+        .column("ts TIMESTAMP(3)")
+        .column("uuid VARCHAR(40)")
+        .column("rider VARCHAR(20)")
+        .column("driver VARCHAR(20)")
+        .column("fare DOUBLE")
+        .column("city VARCHAR(20)")
+        .pk("uuid")
+        .partition("city")
+        .options(options);
+  }
 
-    /**
-     * Sample data source for generating RowData objects.
-     */
-    static class SampleDataSource implements SourceFunction<RowData> {
-        private volatile boolean isRunning = true;
+  /**
+   * Sample data source for generating RowData objects.
+   */
+  static class SampleDataSource implements SourceFunction<RowData> {
+    private volatile boolean isRunning = true;
 
-        @Override
-        public void run(SourceContext<RowData> ctx) throws Exception {
-            int batchNum = 0;
-            while (isRunning) {
-                batchNum ++;
-                List<RowData> DATA_SET_INSERT = DataGenerator.generateRandomRowData(ROW_DATA_TYPE);
-                if(batchNum < 11) {
-                    // For first 10 batches, inserting 4 records. 2 with random id (INSERTS) and 2 with hardcoded UUID(UPDATE)
-                    for (RowData row : DATA_SET_INSERT) {
-                        ctx.collect(row);
-                    }
-                }else{
-                    // For 11th Batch, inserting only one record with row kind delete.
-                    RowData rowToBeDeleted = DATA_SET_INSERT.get(2);
-                    rowToBeDeleted.setRowKind(RowKind.DELETE);
-                    ctx.collect(rowToBeDeleted);
-                    TimeUnit.MILLISECONDS.sleep(10000);
-                    // Stop the stream once deleted
-                    isRunning = false;
-                }
-                TimeUnit.MILLISECONDS.sleep(10000); // Simulate a delay
-            }
+    @Override
+    public void run(SourceContext<RowData> ctx) throws Exception {
+      int batchNum = 0;
+      while (isRunning) {
+        batchNum++;
+        List<RowData> dataSetInsert = DataGenerator.generateRandomRowData(ROW_DATA_TYPE);
+        if (batchNum < 11) {
+          // For first 10 batches, inserting 4 records. 2 with random id (INSERTS) and 2 with hardcoded UUID(UPDATE)
+          for (RowData row : dataSetInsert) {
+            ctx.collect(row);
+          }
+        } else {
+          // For 11th Batch, inserting only one record with row kind delete.
+          RowData rowToBeDeleted = dataSetInsert.get(2);
+          rowToBeDeleted.setRowKind(RowKind.DELETE);
+          ctx.collect(rowToBeDeleted);
+          TimeUnit.MILLISECONDS.sleep(10000);
+          // Stop the stream once deleted
+          isRunning = false;
         }
-
-        @Override
-        public void cancel() {
-            isRunning = false;
-        }
+        TimeUnit.MILLISECONDS.sleep(10000); // Simulate a delay
+      }
     }
+
+    @Override
+    public void cancel() {
+      isRunning = false;
+    }
+  }
 }
