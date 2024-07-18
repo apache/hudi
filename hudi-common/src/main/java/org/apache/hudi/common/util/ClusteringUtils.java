@@ -401,18 +401,18 @@ public class ClusteringUtils {
     // Since c3 is archived and f2 has not been cleaned, the table view would be considering f2 as a valid
     // file id. This causes duplicates.
 
-    Option<String> earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp);
+    String earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp).orElse(null);
     Option<String[]> savepoints = Option.ofNullable(cleanerPlan.getExtraMetadata()).map(metadata -> metadata.getOrDefault(CleanerUtils.SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","));
-    Option<String> earliestSavepoint = savepoints.flatMap(arr -> Option.fromJavaOptional(Arrays.stream(arr).sorted().findFirst()));
+    String earliestSavepoint = savepoints.flatMap(arr -> Option.fromJavaOptional(Arrays.stream(arr).sorted().findFirst())).orElse(null);
     if (cleanerPolicy != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
-      if (earliestInstantToRetain.isPresent() && !StringUtils.isNullOrEmpty(earliestInstantToRetain.get()) && earliestSavepoint.isPresent()) {
+      if (!StringUtils.isNullOrEmpty(earliestInstantToRetain) && !StringUtils.isNullOrEmpty(earliestSavepoint)) {
         // When earliestToRetainTs is greater than first savepoint timestamp and there are no
         // replace commits between the first savepoint and the earliestToRetainTs, we can set the
         // earliestSavepointOpt to empty as there was no cleaning blocked due to savepoint
-        if (HoodieTimeline.compareTimestamps(earliestInstantToRetain.get(), HoodieTimeline.GREATER_THAN, earliestSavepoint.get())) {
-          HoodieTimeline replaceTimeline = activeTimeline.getCompletedReplaceTimeline().findInstantsInClosedRange(earliestSavepoint.get(), earliestInstantToRetain.get());
+        if (HoodieTimeline.compareTimestamps(earliestInstantToRetain, HoodieTimeline.GREATER_THAN, earliestSavepoint)) {
+          HoodieTimeline replaceTimeline = activeTimeline.getCompletedReplaceTimeline().findInstantsInClosedRange(earliestSavepoint, earliestInstantToRetain);
           if (!replaceTimeline.empty()) {
-            return earliestSavepoint;
+            return Option.of(earliestSavepoint);
           }
         }
       }
