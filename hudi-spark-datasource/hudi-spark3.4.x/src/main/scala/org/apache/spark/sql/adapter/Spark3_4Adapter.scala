@@ -30,10 +30,12 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
+import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark34LegacyHoodieParquetFileFormat, Spark34ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.jdbc.JdbcDialect
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_4ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
@@ -41,6 +43,8 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+
+import java.sql.{Connection, ResultSet}
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.4.x branch
@@ -141,5 +145,13 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkParquetReader = {
     Spark34ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def getSchema(conn: Connection,
+                         resultSet: ResultSet,
+                         dialect: JdbcDialect,
+                         alwaysNullable: Boolean = false,
+                         isTimestampNTZ: Boolean = false): StructType = {
+    JdbcUtils.getSchema(resultSet, dialect, alwaysNullable)
   }
 }

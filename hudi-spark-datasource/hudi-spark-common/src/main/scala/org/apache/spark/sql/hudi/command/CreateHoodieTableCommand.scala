@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.spark.{SPARK_VERSION, SparkConf}
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
@@ -33,6 +33,7 @@ import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
+import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
 
@@ -68,10 +69,10 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       hoodieCatalogTable.initHoodieTable()
     } else {
       if (!hoodieCatalogTable.hoodieTableExists) {
-        throw new AnalysisException("Creating ro/rt table need the existence of the base table.")
+        throw new HoodieAnalysisException("Creating ro/rt table need the existence of the base table.")
       }
       if (HoodieTableType.MERGE_ON_READ != hoodieCatalogTable.tableType) {
-        throw new AnalysisException("Creating ro/rt table should only apply to a mor table.")
+        throw new HoodieAnalysisException("Creating ro/rt table should only apply to a mor table.")
       }
     }
 

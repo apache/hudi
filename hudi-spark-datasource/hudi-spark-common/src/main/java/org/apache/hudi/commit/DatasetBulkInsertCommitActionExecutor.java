@@ -65,8 +65,12 @@ public class DatasetBulkInsertCommitActionExecutor extends BaseDatasetBulkInsert
     Map<String, String> customOpts = new HashMap<>(1);
     if (HoodieSparkUtils.isSpark2()) {
       targetFormat = "org.apache.hudi.internal";
+      // TODO: change to spark4.internal
     } else if (HoodieSparkUtils.isSpark3()) {
       targetFormat = "org.apache.hudi.spark3.internal";
+      customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
+    } else if (HoodieSparkUtils.isSpark4()) {
+      targetFormat = "org.apache.hudi.spark4.internal";
       customOpts.put(HoodieInternalConfig.BULKINSERT_INPUT_DATA_SCHEMA_DDL.key(), records.schema().json());
     } else {
       throw new HoodieException("Bulk insert using row writer is not supported with current Spark version."
