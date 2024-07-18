@@ -356,6 +356,15 @@ class TestHoodieBackedTableMetadataWriter {
     );
   }
 
+  static Stream<Arguments> archivalAndCleanConfigTestCases() {
+    return Stream.of(
+        Arguments.of(true, true, 1, 1),    // Both enabled - both should be called
+        Arguments.of(true, false, 1, 0),   // Only clean enabled - only clean should be called
+        Arguments.of(false, true, 0, 1),   // Only archive enabled - only archive should be called
+        Arguments.of(false, false, 0, 0)   // Both disabled - neither should be called
+    );
+  }
+
   @ParameterizedTest
   @MethodSource("performTableServicesFailureTestCases")
   void testPerformTableServicesWithFailureHandling(
@@ -443,5 +452,76 @@ class TestHoodieBackedTableMetadataWriter {
 
     // Verify metrics are incremented when there's a failure
     verify(metrics, times(1)).incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
+  }
+
+  @ParameterizedTest
+  @MethodSource("archivalAndCleanConfigTestCases")
+  void testArchivalAndCleanRespectDataTableSettings(
+      boolean autoClean,
+      boolean autoArchive,
+      int expectedCleanCalls,
+      int expectedArchiveCalls) throws Exception {
+    // Create mocks for dependencies
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
+    HoodieInstant lastInstant = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED,
+        HoodieTimeline.DELTA_COMMIT_ACTION,
+        "20250101000000");
+
+    // Set up config mocks
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.shouldFailOnTableServiceFailures()).thenReturn(false);
+    when(writeConfig.getTableName()).thenReturn("test_table");
+    when(writeConfig.isAutoClean()).thenReturn(autoClean);
+    when(writeConfig.isAutoArchive()).thenReturn(autoArchive);
+
+    // Set up timeline mocks - no pending compactions/log compactions
+    when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(timeline);
+    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(0);
+    when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(0);
+    when(timeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant())
+        .thenReturn(Option.of(lastInstant));
+
+    // Set up write client mocks
+    when(writeClient.getConfig()).thenReturn(writeConfig);
+
+    // Create a partial mock of HoodieBackedTableMetadataWriter
+    HoodieBackedTableMetadataWriter writer = mock(HoodieBackedTableMetadataWriter.class);
+
+    // Mock getWriteClient to return our mock write client
+    when(writer.getWriteClient()).thenReturn(writeClient);
+
+    // Set up the writer's fields using reflection
+    java.lang.reflect.Field metadataMetaClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metadataMetaClient");
+    metadataMetaClientField.setAccessible(true);
+    metadataMetaClientField.set(writer, metaClient);
+
+    java.lang.reflect.Field writeClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(writer, writeClient);
+
+    java.lang.reflect.Field writeConfigField = HoodieBackedTableMetadataWriter.class.getDeclaredField("dataWriteConfig");
+    writeConfigField.setAccessible(true);
+    writeConfigField.set(writer, writeConfig);
+
+    java.lang.reflect.Field metricsField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(writer, Option.of(metrics));
+
+    // Call the real performTableServices method
+    doCallRealMethod().when(writer).performTableServices(any(), eq(true));
+
+    // Execute
+    writer.performTableServices(Option.empty(), true);
+
+    // Verify that clean and archive are called based on the settings
+    verify(writeClient, times(expectedCleanCalls)).clean(any());
+    verify(writeClient, times(expectedArchiveCalls)).archive();
   }
 }
