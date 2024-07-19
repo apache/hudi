@@ -48,6 +48,7 @@ RUN set -x \
     && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
     && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
     && rm /tmp/hadoop.tar.gz* \
+    && rm -rf /opt/hadoop-$HADOOP_VERSION/share/doc/ \
     && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
     && mkdir /hadoop-data
 
