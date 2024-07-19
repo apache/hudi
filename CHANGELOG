@@ -252,3 +252,11 @@ fef3ecd08 [ENG-11435][INTERNAL] lazy initialize objects in HoodieTable when poss
 ee80332be [ENG-8251][HUDI-7979] Adjusting defaults with spillable map memory (#820)
 5b7826936 [ENG-8251][INTERNAL] Cherry picking HUDI-7961 with PR 11581 and HUDI-7921 with PR 11496 (#819)
 a523e6492 [ENG-8251][INTERNAL] Refactor FileSystemView classes to support rocksDb, spillable map FSVs with metadata table (#784)
+
+---[2024-07-19 15:07:29] [release-v1.25.0] ---
+df51091a29a [ENG-11947][MINOR] Update how RLI validation filters out new entries (#829)
+4c2aa94a958 [ENG-11551][HUDI-7985] Support timestamp string without zone offset in timestamp logical types and integers for decimals in Json Avro converter (#830)
+f3c8f858bcb [ENG-11950][MINOR] Improve error logging in JSON Avro conversion (#832)
+f06b244373f [ENG-11551][HUDI-7985] Support timestamp string without zone offset in timestamp logical types in Json Avro converter (#828)
+14a0086b0d9 [AUDIT-862] Fixing integ-test bundle build (#826)
+c742b6c4f56 [AUDIT-862]: Changelog for release-v1.24.0 (#825)
