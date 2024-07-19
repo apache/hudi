@@ -338,16 +338,15 @@ public class ClusteringUtils {
    * @param activeTimeline               The active timeline
    * @param metaClient                   The meta client
    * @param cleanerPolicy                The hoodie cleaning policy
-   * @param shouldArchiveBeyondSavepoint Is archival enabled to run beyond savepoint
    * @return the earliest instant to retain for clustering
    */
   public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
-      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieCleaningPolicy cleanerPolicy, boolean shouldArchiveBeyondSavepoint) throws IOException {
+      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieCleaningPolicy cleanerPolicy) throws IOException {
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
     HoodieTimeline replaceOrClusterTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
-    Option<HoodieInstant> cleanInstantOpt =
-        activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
     if (!replaceOrClusterTimeline.empty()) {
+      Option<HoodieInstant> cleanInstantOpt =
+          activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
       if (cleanInstantOpt.isPresent()) {
         // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
         // the clean metadata.
@@ -355,7 +354,7 @@ public class ClusteringUtils {
         HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested() ? cleanInstant : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()));
         Option<String> earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp);
         String retainLowerBound;
-        Option<String> earliestReplacedSavepointInClean = getEarliestReplacedSavepointInClean(activeTimeline, cleanerPolicy, cleanerPlan, shouldArchiveBeyondSavepoint);
+        Option<String> earliestReplacedSavepointInClean = getEarliestReplacedSavepointInClean(activeTimeline, cleanerPolicy, cleanerPlan);
         if (earliestReplacedSavepointInClean.isPresent()) {
           retainLowerBound = earliestReplacedSavepointInClean.get();
         } else if (earliestInstantToRetain.isPresent() && !StringUtils.isNullOrEmpty(earliestInstantToRetain.get())) {
@@ -375,16 +374,11 @@ public class ClusteringUtils {
         oldestInstantToRetain = replaceOrClusterTimeline.firstInstant();
       }
     }
-    if (!shouldArchiveBeyondSavepoint) {
-      // explicitly check the savepoint timeline and guard against the first one
-      Option<HoodieInstant> firstSavepointOpt = activeTimeline.getSavePointTimeline().filterCompletedInstants().firstInstant();
-      oldestInstantToRetain = Option.ofNullable(HoodieTimeline.minTimestampInstant(oldestInstantToRetain.orElse(null), firstSavepointOpt.orElse(null)));
-    }
     return oldestInstantToRetain;
   }
 
   public static Option<String> getEarliestReplacedSavepointInClean(HoodieActiveTimeline activeTimeline, HoodieCleaningPolicy cleanerPolicy,
-                                                                   HoodieCleanerPlan cleanerPlan, boolean shouldArchiveBeyondSavepoint) {
+                                                                   HoodieCleanerPlan cleanerPlan) {
     // EarliestSavepoint in clean is required to block archival when savepoint is deleted.
     // This ensures that archival is blocked until clean has cleaned up files retained due to savepoint.
     // If this guard is not present, the archiving of commits can lead to duplicates. Here is a scenario

@@ -187,8 +187,7 @@ public class TestCleanPlanner {
     List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
-    assertEquals(expectedEarliestSavepointInLastClean, ClusteringUtils.getEarliestReplacedSavepointInClean(activeTimeline, config.getCleanerPolicy(),
-        cleanerPlan, false));
+    assertEquals(expectedEarliestSavepointInLastClean, ClusteringUtils.getEarliestReplacedSavepointInClean(activeTimeline, config.getCleanerPolicy(), cleanerPlan));
 
     Collections.sort(expectedPartitions);
     Collections.sort(partitionsToClean);

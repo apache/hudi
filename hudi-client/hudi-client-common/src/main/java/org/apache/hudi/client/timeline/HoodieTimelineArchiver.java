@@ -209,7 +209,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // to check whether the file slice generated in pending clustering after archive isn't committed.
     Option<HoodieInstant> earliestInstantToRetainForClustering =
         ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient(),
-            config.getCleanerPolicy(), config.shouldArchiveBeyondSavepoint());
+            config.getCleanerPolicy());
     earliestInstantToRetainCandidates.add(earliestInstantToRetainForClustering);
 
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
@@ -265,14 +265,20 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         .map(Option::get)
         .min(HoodieInstant.COMPARATOR);
 
+    // Step2: We cannot archive any commits which are made after the first savepoint present,
+    // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
+    Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
+
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
         .filter(s -> {
           if (config.shouldArchiveBeyondSavepoint()) {
             // skip savepoint commits and proceed further
             return !savepointTimestamps.contains(s.getTimestamp());
           } else {
-            return true;
+            // if no savepoint present, then don't filter
+            // stop at first savepoint commit
+            return !firstSavepoint.isPresent() || compareTimestamps(s.getTimestamp(), LESSER_THAN, firstSavepoint.get().getTimestamp());
           }
         }).filter(s -> earliestInstantToRetain
             .map(instant -> compareTimestamps(s.getTimestamp(), LESSER_THAN, instant.getTimestamp()))
