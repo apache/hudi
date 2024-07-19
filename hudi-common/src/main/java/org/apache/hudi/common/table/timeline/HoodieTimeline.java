@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -250,9 +251,14 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterRequestedRollbackTimeline();
 
   /**
-   * Create a new Timeline with all the instants after startTs.
+   * Create a new Timeline with numCommits after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
+
+  /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfterOrEquals(String commitTime);
 
   /**
    * Create a new Timeline with instants after startTs and before or on endTs.
@@ -453,6 +459,29 @@ public interface HoodieTimeline extends Serializable {
 
   static boolean compareTimestamps(String commit1, BiPredicate<String, String> predicateToApply, String commit2) {
     return predicateToApply.test(commit1, commit2);
+  }
+
+  /**
+   * Returns smaller of the two given timestamps. Returns the non null argument if one of the argument is null.
+   */
+  static String minTimestamp(String commit1, String commit2) {
+    if (StringUtils.isNullOrEmpty(commit1)) {
+      return commit2;
+    } else if (StringUtils.isNullOrEmpty(commit2)) {
+      return commit1;
+    }
+    return minInstant(commit1, commit2);
+  }
+
+  /**
+   * Returns smaller of the two given instants compared by their respective timestamps.
+   * Returns the non null argument if one of the argument is null.
+   */
+  static HoodieInstant minTimestampInstant(HoodieInstant instant1, HoodieInstant instant2) {
+    String commit1 = instant1 != null ? instant1.getTimestamp() : null;
+    String commit2 = instant2 != null ? instant2.getTimestamp() : null;
+    String minTimestamp = minTimestamp(commit1, commit2);
+    return Objects.equals(minTimestamp, commit1) ? instant1 : instant2;
   }
 
   /**
