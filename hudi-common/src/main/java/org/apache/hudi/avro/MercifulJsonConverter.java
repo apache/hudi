@@ -357,7 +357,12 @@ public class MercifulJsonConverter {
       private static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
         // Case 1: Object is a number.
         if (obj instanceof Number) {
-          return Pair.of(true, BigDecimal.valueOf(((Number) obj).doubleValue()));
+          Number number = (Number) obj;
+          // Special case integers and 0.0 to avoid conversion errors related to decimals with a scale of 0
+          if (obj instanceof Integer || obj instanceof Long || obj instanceof Short || obj instanceof Byte || number.doubleValue() == 0.0) {
+            return Pair.of(true, BigDecimal.valueOf(number.longValue()));
+          }
+          return Pair.of(true, BigDecimal.valueOf(number.doubleValue()));
         }
 
         // Case 2: Object is a number in String format.

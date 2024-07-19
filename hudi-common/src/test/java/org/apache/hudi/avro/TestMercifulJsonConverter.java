@@ -161,7 +161,7 @@ public class TestMercifulJsonConverter {
   @ParameterizedTest
   @MethodSource("decimalGoodCases")
   void decimalLogicalTypeTest(String avroFilePath, String groundTruth, String strInput,
-                              Double numInput, boolean testFixedByteArray) throws IOException {
+                              Number numInput, boolean testFixedByteArray) throws IOException {
     BigDecimal bigDecimal = new BigDecimal(groundTruth);
     Map<String, Object> data = new HashMap<>();
 
@@ -222,19 +222,39 @@ public class TestMercifulJsonConverter {
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", "123.45", null, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99",null, 999.99, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999L, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, (short) 999, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "100", null, (byte) 100, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0D, false),
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0, false),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "0", null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "000.00", null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true)
 
     );
+  }
+
+  @Test // tests an edge case where 0.0 is can be interpreted as having scale = 1
+  void zeroScaleDecimalConversion() throws IOException {
+    Schema schema = new Schema.Parser().parse("{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\",\"fields\": [{\"name\": \"decimalField\", "
+        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 5, \"scale\": 0}}]}");
+    Map<String, Object> data = new HashMap<>();
+    data.put("decimalField", 0.0);
+    String json = MAPPER.writeValueAsString(data);
+
+    GenericRecord record = new GenericData.Record(schema);
+    Conversions.DecimalConversion conv = new Conversions.DecimalConversion();
+    Schema decimalFieldSchema = schema.getField("decimalField").schema();
+    record.put("decimalField", conv.toBytes(new BigDecimal(0), decimalFieldSchema, decimalFieldSchema.getLogicalType()));
+
+    GenericRecord real = CONVERTER.convert(json, schema);
+    assertEquals(record, real);
   }
 
   private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
