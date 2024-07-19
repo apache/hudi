@@ -576,7 +576,7 @@ public class MercifulJsonConverter {
         // Formatter for parsing timestamp.
         // The pattern is derived from ISO_OFFSET_DATE_TIME definition with the relaxation on the separator.
         // Pattern asserts the string is
-        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + zone offset
+        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + optional <zone offset>
         // <separator> is 'T' or ' '
         // For example, "2024-07-13T11:36:01.951Z", "2024-07-13T11:36:01.951+01:00",
         // "2024-07-13T11:36:01Z", "2024-07-13T11:36:01+01:00",
@@ -587,7 +587,10 @@ public class MercifulJsonConverter {
             new DateTimeFormatterBuilder()
                 .parseCaseInsensitive()
                 .append(localDateTimeFormatter)
+                .optionalStart()
                 .appendOffsetId()
+                .optionalEnd()
+                .parseDefaulting(ChronoField.OFFSET_SECONDS, 0L)
                 .toFormatter()
                 .withResolverStyle(ResolverStyle.STRICT)
                 .withChronology(IsoChronology.INSTANCE),
@@ -650,7 +653,7 @@ public class MercifulJsonConverter {
       protected Pair<Boolean, Instant> convertToInstantTime(String input) {
         // Parse the input timestamp
         // The input string is assumed in the format:
-        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + zone offset
+        // <optional sign><Year>-<Month>-<Day><separator><Hour>:<Minute> + optional <second> + optional <fractional second> + optional <zone offset>
         // <separator> is 'T' or ' '
         Instant time = null;
         try {

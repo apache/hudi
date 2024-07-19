@@ -569,6 +569,15 @@ public class TestMercifulJsonConverter {
             (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
             "2024-05-13 23:53:36Z", // Timestamp equivalence
             "2024-05-13 23:53:36Z"),
+        // Test timestamps with no zone offset
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e3),
+            "2024-05-13T23:53:36.004",
+            "2024-05-13T23:53:36.004"),
+        Arguments.of(
+            (long) (1715644416 * 1e6 + 4000000 / 1e3),
+            "2024-05-13 23:53:36.004",
+            "2024-05-13 23:53:36.004"),
         // Test timestamps with different zone offsets
         Arguments.of(
             (long) (1715644416 * 1e6 - 2 * 3600 * 1e6),
