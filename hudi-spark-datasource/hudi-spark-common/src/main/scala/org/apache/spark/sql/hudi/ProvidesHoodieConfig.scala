@@ -384,7 +384,7 @@ trait ProvidesHoodieConfig extends Logging {
       val staticPartitionValues = partitionSpec.filter(p => p._2.isDefined).mapValues(_.get)
       val predicates = staticPartitionValues.map { case (k, v) =>
         val partition = AttributeReference(k, partitionNameToType(k))()
-        val value = Literal(v)
+        val value = HoodieSqlCommonUtils.castIfNeeded(Literal.create(v), partitionNameToType(k))
         EqualTo(partition, value)
       }.toSeq
       Option(fileIndex.getPartitionPaths(predicates).map(_.getPath).mkString(","))
