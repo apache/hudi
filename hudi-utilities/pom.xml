@@ -379,6 +379,10 @@
       <groupId>io.confluent</groupId>
       <artifactId>kafka-protobuf-serializer</artifactId>
     </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-json-schema-serializer</artifactId>
+    </dependency>
 
     <!-- Httpcomponents -->
     <dependency>

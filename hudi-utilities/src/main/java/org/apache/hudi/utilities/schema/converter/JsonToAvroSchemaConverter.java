@@ -29,6 +29,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import java.io.IOException;
 import java.net.URI;
@@ -59,8 +61,9 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
   private static final Pattern SYMBOL_REGEX = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
   @Override
-  public String convert(String jsonSchema) throws IOException {
-    JsonNode jsonNode = MAPPER.readTree(jsonSchema);
+  public String convert(ParsedSchema parsedSchema) throws IOException {
+    JsonSchema jsonSchema = (JsonSchema) parsedSchema;
+    JsonNode jsonNode = MAPPER.readTree(jsonSchema.canonicalString());
     ObjectNode avroRecord = MAPPER.createObjectNode()
         .put("type", "record")
         .put("name", getAvroSchemaRecordName(jsonNode))

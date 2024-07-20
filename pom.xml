@@ -1810,6 +1810,11 @@
         <artifactId>kafka-protobuf-serializer</artifactId>
         <version>${confluent.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-json-schema-serializer</artifactId>
+        <version>${confluent.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <repositories>
