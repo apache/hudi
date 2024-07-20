@@ -109,8 +109,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     //dataSchema is not always right due to spark bugs
     val partitionColumns = partitionSchema.fieldNames
     val preCombineField = options.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
-    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filterNot(f => partitionColumns.contains(f.name)
-      && preCombineField.equals(f.name)))
+    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filter(f => !partitionColumns.contains(f.name)
+      || preCombineField.equals(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
