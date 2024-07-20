@@ -42,7 +42,7 @@ public class SparkExecuteClusteringCommitActionExecutor<T>
                                                     String instantTime) {
     super(context, config, table, instantTime, WriteOperationType.CLUSTER);
     this.clusteringPlan = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(instantTime))
+        table.getMetaClient(), ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline()).get())
         .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
             "Unable to read clustering plan for instant: " + instantTime));
   }
@@ -54,6 +54,6 @@ public class SparkExecuteClusteringCommitActionExecutor<T>
 
   @Override
   protected String getCommitActionType() {
-    return HoodieTimeline.REPLACE_COMMIT_ACTION;
+    return HoodieTimeline.CLUSTERING_ACTION;
   }
 }

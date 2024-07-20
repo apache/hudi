@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -279,11 +278,10 @@ public class HoodieFlinkClusteringJob {
             CompactionUtil.isLIFO(cfg.clusteringSeq) ? instants.get(instants.size() - 1) : instants.get(0);
       }
 
-      HoodieInstant inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(
-          clusteringInstant.getTimestamp());
-      if (table.getMetaClient().getActiveTimeline().containsInstant(inflightInstant)) {
+      Option<HoodieInstant> inflightInstantOpt = ClusteringUtils.getInflightClusteringInstant(clusteringInstant.getTimestamp(), table.getActiveTimeline());
+      if (inflightInstantOpt.isPresent()) {
         LOG.info("Rollback inflight clustering instant: [" + clusteringInstant + "]");
-        table.rollbackInflightClustering(inflightInstant,
+        table.rollbackInflightClustering(inflightInstantOpt.get(),
             commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false));
         table.getMetaClient().reloadActiveTimeline();
       }
@@ -308,7 +306,7 @@ public class HoodieFlinkClusteringJob {
         return;
       }
 
-      HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstant.getTimestamp());
+      HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(clusteringInstant.getTimestamp(), table.getActiveTimeline()).get();
 
       int inputGroupSize = clusteringPlan.getInputGroups().size();
 
@@ -318,7 +316,7 @@ public class HoodieFlinkClusteringJob {
           : Math.min(conf.getInteger(FlinkOptions.CLUSTERING_TASKS), inputGroupSize);
 
       // Mark instant as clustering inflight
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+      ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
 
       final Schema tableAvroSchema = StreamerUtil.getTableAvroSchema(table.getMetaClient(), false);
       final DataType rowDataType = AvroSchemaConverter.convertToDataType(tableAvroSchema);

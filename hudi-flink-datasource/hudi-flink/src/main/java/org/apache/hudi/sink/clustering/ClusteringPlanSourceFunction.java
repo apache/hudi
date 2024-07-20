@@ -75,7 +75,7 @@ public class ClusteringPlanSourceFunction extends AbstractRichFunction implement
 
   @Override
   public void run(SourceContext<ClusteringPlanEvent> sourceContext) throws Exception {
-    boolean isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline().isPendingClusterInstant(clusteringInstantTime);
+    boolean isPending = StreamerUtil.createMetaClient(conf).getActiveTimeline().isPendingClusteringInstant(clusteringInstantTime);
     if (isPending) {
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {
         LOG.info("Execute clustering plan for instant {} as {} file slices", clusteringInstantTime, clusteringGroup.getSlices().size());

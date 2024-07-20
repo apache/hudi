@@ -221,7 +221,7 @@ public class HoodieIncrSource extends RowSource {
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
           .load(srcPath);
       if (snapshotLoadQuerySplitter.isPresent()) {
-        queryInfo = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryInfo);
+        queryInfo = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryInfo, sourceProfileSupplier);
       }
       source = snapshot
           // add filtering so that only interested records are returned.

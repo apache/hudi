@@ -29,6 +29,7 @@ import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
@@ -37,12 +38,15 @@ import org.apache.spark.util.Utils
 import org.joda.time.DateTimeZone
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
+  private val LOG = LoggerFactory.getLogger(getClass)
 
   private lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
@@ -68,8 +72,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   private var tableId = 0
 
+  private var extraConf = Map[String, String]()
+
   def sparkConf(): SparkConf = {
-    getSparkConfForTest("Hoodie SQL Test")
+    val conf = getSparkConfForTest("Hoodie SQL Test")
+    conf.setAll(extraConf)
+    conf
+  }
+
+  protected def initQueryIndexConf(): Unit = {
+    extraConf = extraConf ++ Map(
+      DataSkippingFailureMode.configName -> DataSkippingFailureMode.Strict.value
+    )
   }
 
   protected def withTempDir(f: File => Unit): Unit = {
@@ -79,14 +93,18 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  protected def getTableStoragePath(tableName: String): String = {
+    new File(sparkWareHouse, tableName).getCanonicalPath
+  }
+
   override protected def test(testName: String, testTags: Tag*)(testFun: => Any /* Assertion */)(implicit pos: source.Position): Unit = {
     super.test(testName, testTags: _*)(
       try {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
-        catalog.listDatabases().foreach{db =>
-          catalog.listTables(db).foreach {table =>
+        catalog.listDatabases().foreach { db =>
+          catalog.listTables(db).foreach { table =>
             catalog.dropTable(table, true, true)
           }
         }
@@ -231,6 +249,9 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 }
 
 object HoodieSparkSqlTestBase {
+
+  // the naming format of 0.x version
+  final val NAME_FORMAT_0_X: Pattern = Pattern.compile("^(\\d+)(\\.\\w+)(\\.\\D+)?$")
 
   def getLastCommitMetadata(spark: SparkSession, tablePath: String) = {
     val metaClient = createMetaClient(spark, tablePath)

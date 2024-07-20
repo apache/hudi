@@ -53,6 +53,7 @@ import org.apache.spark.sql.types.{AtomicType, DataType, StructField, StructType
 import org.apache.spark.util.SerializableConfiguration
 
 import java.net.URI
+
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 /**

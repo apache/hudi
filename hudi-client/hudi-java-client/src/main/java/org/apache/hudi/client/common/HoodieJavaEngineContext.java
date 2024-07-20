@@ -31,6 +31,7 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
@@ -168,5 +169,10 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public void cancelAllJobs() {
     // no operation for now
+  }
+
+  @Override
+  public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
+    return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
   }
 }

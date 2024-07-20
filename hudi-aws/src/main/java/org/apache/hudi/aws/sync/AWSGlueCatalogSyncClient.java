@@ -21,12 +21,15 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
@@ -56,6 +59,7 @@ import software.amazon.awssdk.services.glue.model.CreateTableRequest;
 import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.DatabaseInput;
 import software.amazon.awssdk.services.glue.model.DeletePartitionIndexRequest;
+import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
 import software.amazon.awssdk.services.glue.model.GetPartitionIndexesRequest;
@@ -107,6 +111,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABL
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.getPartitionKeyType;
 import static org.apache.hudi.hive.util.HiveSchemaUtil.parquetSchemaToMapSchema;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.util.TableUtils.tableId;
@@ -152,6 +157,17 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     } catch (URISyntaxException e) {
       throw new RuntimeException(e);
     }
+    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
+    this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
+    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
+    this.allPartitionsReadParallelism = config.getIntOrDefault(ALL_PARTITIONS_READ_PARALLELISM);
+    this.changedPartitionsReadParallelism = config.getIntOrDefault(CHANGED_PARTITIONS_READ_PARALLELISM);
+    this.changeParallelism = config.getIntOrDefault(PARTITION_CHANGE_PARALLELISM);
+  }
+
+  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config) {
+    super(config);
+    this.awsGlue = awsGlue;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
@@ -520,6 +536,50 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public void createOrReplaceTable(String tableName,
+                                   MessageType storageSchema,
+                                   String inputFormatClass,
+                                   String outputFormatClass,
+                                   String serdeClass,
+                                   Map<String, String> serdeProperties,
+                                   Map<String, String> tableProperties) {
+
+    if (!tableExists(tableName)) {
+      // if table doesn't exist before, directly create new table.
+      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+      return;
+    }
+
+    try {
+      // Create a temp table will validate the schema before dropping and recreating the table
+      String tempTableName = generateTempTableName(tableName);
+      createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+
+      Table tempTable = getTable(awsGlue, databaseName, tempTableName);
+      final Instant now = Instant.now();
+      TableInput updatedTableInput = TableInput.builder()
+          .name(tableName)
+          .tableType(tempTable.tableType())
+          .parameters(tempTable.parameters())
+          .partitionKeys(tempTable.partitionKeys())
+          .storageDescriptor(tempTable.storageDescriptor())
+          .lastAccessTime(now)
+          .lastAnalyzedTime(now)
+          .build();
+
+      UpdateTableRequest request = UpdateTableRequest.builder()
+          .databaseName(databaseName)
+          .skipArchive(skipTableArchive)
+          .tableInput(updatedTableInput)
+          .build();
+      awsGlue.updateTable(request);
+      dropTable(tempTableName);
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to recreate the table" + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
   public void createTable(String tableName,
                           MessageType storageSchema,
                           String inputFormatClass,
@@ -718,14 +778,6 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
-    Map<String, String> schema = getMetastoreSchema(tableName);
-    return schema.entrySet().stream()
-          .map(f -> new FieldSchema(f.getKey(), f.getValue()))
-          .collect(Collectors.toList());
-  }
-
-  @Override
   public boolean tableExists(String tableName) {
     GetTableRequest request = GetTableRequest.builder()
         .databaseName(databaseName)
@@ -825,6 +877,44 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
+  public void dropTable(String tableName) {
+    DeleteTableRequest deleteTableRequest = DeleteTableRequest.builder()
+        .databaseName(databaseName)
+        .name(tableName)
+        .build();
+
+    try {
+      awsGlue.deleteTable(deleteTableRequest).get();
+      LOG.info("Successfully deleted table in AWS Glue: {}.{}", databaseName, tableName);
+    } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        // In case {@code InterruptedException} was thrown, resetting the interrupted flag
+        // of the thread, we reset it (to true) again to permit subsequent handlers
+        // to be interrupted as well
+        Thread.currentThread().interrupt();
+      }
+      throw new HoodieGlueSyncException("Failed to delete table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public List<FieldSchema> getMetastoreFieldSchemas(String tableName) {
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      List<FieldSchema> partitionFields = getFieldSchemas(table.partitionKeys());
+      List<FieldSchema> columnsFields = getFieldSchemas(table.storageDescriptor().columns());
+      columnsFields.addAll(partitionFields);
+      return columnsFields;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to get field schemas from metastore for table : " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  private List<FieldSchema> getFieldSchemas(List<Column> columns) {
+    return columns.stream().map(column -> new FieldSchema(column.name(), column.type(), column.comment())).collect(Collectors.toList());
+  }
+
+  @Override
   public Option<String> getLastReplicatedTime(String tableName) {
     throw new UnsupportedOperationException("Not supported: `getLastReplicatedTime`");
   }
@@ -842,6 +932,76 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
     return new GluePartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, (HiveSyncConfig) config);
+  }
+
+  @Override
+  public boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
+    if (MapUtils.isNullOrEmpty(serdeProperties)) {
+      return false;
+    }
+
+    try {
+      serdeProperties.putIfAbsent("serialization.format", "1");
+      Table table = getTable(awsGlue, databaseName, tableName);
+      StorageDescriptor existingTableStorageDescriptor = table.storageDescriptor();
+
+      if (existingTableStorageDescriptor != null && existingTableStorageDescriptor.serdeInfo() != null
+              && existingTableStorageDescriptor.serdeInfo().parameters().size() == serdeProperties.size()) {
+        Map<String, String> existingSerdeProperties = existingTableStorageDescriptor.serdeInfo().parameters();
+        boolean different = serdeProperties.entrySet().stream().anyMatch(e ->
+                !existingSerdeProperties.containsKey(e.getKey()) || !existingSerdeProperties.get(e.getKey()).equals(e.getValue()));
+        if (!different) {
+          LOG.debug("Table " + tableName + " serdeProperties already up to date, skip update serde properties.");
+          return false;
+        }
+      }
+
+      HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
+      String serDeClassName = HoodieInputFormatUtils.getSerDeClassName(baseFileFormat);
+
+      SerDeInfo newSerdeInfo = SerDeInfo
+          .builder()
+          .serializationLibrary(serDeClassName)
+          .parameters(serdeProperties)
+          .build();
+
+      StorageDescriptor storageDescriptor = table
+          .storageDescriptor()
+          .toBuilder()
+          .serdeInfo(newSerdeInfo)
+          .build();
+
+      TableInput updatedTableInput = TableInput.builder()
+          .name(tableName)
+          .tableType(table.tableType())
+          .parameters(table.parameters())
+          .partitionKeys(table.partitionKeys())
+          .storageDescriptor(storageDescriptor)
+          .lastAccessTime(table.lastAccessTime())
+          .lastAccessTime(table.lastAnalyzedTime())
+          .build();
+
+      UpdateTableRequest updateTableRequest = UpdateTableRequest.builder()
+          .databaseName(databaseName)
+          .tableInput(updatedTableInput)
+          .build();
+
+      awsGlue.updateTable(updateTableRequest);
+      return true;
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Failed to update table serde info for table: "
+              + tableName, e);
+    }
+  }
+
+  @Override
+  public String getTableLocation(String tableName) {
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      return table.storageDescriptor().location();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to get base path for the table " + tableId(databaseName, tableName), e);
+    }
   }
 
   private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {

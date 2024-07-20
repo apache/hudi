@@ -19,8 +19,9 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
-import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hudi.exception.HoodieLockException;
+
+import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 
 class Heartbeat implements Runnable {
   private final IMetaStoreClient client;

@@ -182,12 +182,9 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     this.numMergedRecordsInLog = records.size();
 
     if (LOG.isInfoEnabled()) {
-      LOG.info("Number of log files scanned => {}", logFilePaths.size());
-      LOG.info("MaxMemoryInBytes allowed for compaction => {}", maxMemorySizeInBytes);
-      LOG.info("Number of entries in MemoryBasedMap in ExternalSpillableMap => {}", records.getInMemoryMapNumEntries());
-      LOG.info("Total size in bytes of MemoryBasedMap in ExternalSpillableMap => {}", records.getCurrentInMemoryMapSize());
-      LOG.info("Number of entries in DiskBasedMap in ExternalSpillableMap => {}", records.getDiskBasedMapNumEntries());
-      LOG.info("Size of file spilled to disk => {}", records.getSizeOfFileOnDiskInBytes());
+      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
+          logFilePaths.size(), maxMemorySizeInBytes, records.getInMemoryMapNumEntries(), records.getCurrentInMemoryMapSize(),
+          records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes());
     }
   }
 

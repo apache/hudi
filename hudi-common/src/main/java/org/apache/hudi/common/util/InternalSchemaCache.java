@@ -78,16 +78,12 @@ public class InternalSchemaCache {
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
-  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient, boolean cacheEnable) {
+  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
     Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
     if (candidateSchema.isPresent()) {
       return candidateSchema.get();
     }
-    if (!cacheEnable) {
-      // parse history schema and return directly
-      return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
-    }
-    String tablePath = metaClient.getBasePath();
+    String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
     synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
@@ -206,9 +202,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn(String.format(
-            "Cannot find internal schema from commit file %s. Falling back to parsing historical internal schema",
-            candidateCommitFile.toString()));
+        LOG.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
       }
     }
     // step2:
@@ -232,7 +226,7 @@ public class InternalSchemaCache {
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
-    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getStorage(), validCommitLists);
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(), validCommitLists);
   }
 }
 

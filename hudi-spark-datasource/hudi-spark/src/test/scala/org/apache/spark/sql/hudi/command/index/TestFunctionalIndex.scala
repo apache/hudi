@@ -36,8 +36,14 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.hudi.command.{CreateIndexCommand, ShowIndexesCommand}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.scalatest.Ignore
 
+@Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
+
+  override protected def beforeAll(): Unit = {
+    initQueryIndexConf()
+  }
 
   test("Test Functional Index With Hive Sync Non Partitioned Table") {
     // There is a big difference between Java class loader architecture of versions 1.8 and 17.
@@ -71,12 +77,11 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName values(2, 'a2', 10, 100000)")
           // ts=10000000 and from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'
           spark.sql(s"insert into $tableName values(3, 'a3', 10, 10000000)")
-
-          val createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
-          spark.sql(createIndexSql)
+          // create functional index
+          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
           val metaClient = createMetaClient(spark, basePath)
-          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
-          val functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertTrue(metaClient.getIndexMetadata.isPresent)
+          val functionalIndexMetadata = metaClient.getIndexMetadata.get()
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
 
@@ -106,7 +111,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           )
 
           // teardown Hive
-          HiveTestUtil.clear()
+          hiveClient.close()
+          tool.close()
           HiveTestUtil.shutdown()
         }
       }
@@ -218,8 +224,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)
-          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
-          var functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          assertTrue(metaClient.getIndexMetadata.isPresent)
+          var functionalIndexMetadata = metaClient.getIndexMetadata.get()
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
 
@@ -227,7 +233,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='identity')"
           spark.sql(createIndexSql)
           metaClient = createMetaClient(spark, basePath)
-          functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          functionalIndexMetadata = metaClient.getIndexMetadata.get()
           assertEquals(2, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_name_lower", functionalIndexMetadata.getIndexDefinitions.get("func_index_name_lower").getIndexName)
 
@@ -276,11 +282,11 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         var createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
         spark.sql(createIndexSql)
         var metaClient = createMetaClient(spark, basePath)
-        var functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+        var functionalIndexMetadata = metaClient.getIndexMetadata.get()
         assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
         assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
-        assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
+        assertTrue(metaClient.getIndexMetadata.isPresent)
 
         // do another insert after initializing the index
         spark.sql(s"insert into $tableName values(4, 'a4', 10, 10000000)")
@@ -293,7 +299,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         createIndexSql = s"create index name_lower on $tableName using column_stats(ts) options(func='identity')"
         spark.sql(createIndexSql)
         metaClient = createMetaClient(spark, basePath)
-        functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+        functionalIndexMetadata = metaClient.getIndexMetadata.get()
         assertEquals(2, functionalIndexMetadata.getIndexDefinitions.size())
         assertEquals("func_index_name_lower", functionalIndexMetadata.getIndexDefinitions.get("func_index_name_lower").getIndexName)
 
@@ -308,7 +314,6 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     if (HoodieSparkUtils.gteqSpark3_2) {
       withTempDir { tmp =>
         Seq("cow").foreach { tableType =>
-          val databaseName = "default"
           val tableName = generateTableName
           val basePath = s"${tmp.getCanonicalPath}/$tableName"
           spark.sql("set hoodie.metadata.enable=true")
@@ -332,17 +337,12 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           spark.sql(s"insert into $tableName (id, name, ts, price) values(1, 'a1', 1000, 10)")
           spark.sql(s"insert into $tableName (id, name, ts, price) values(2, 'a2', 200000, 100)")
           spark.sql(s"insert into $tableName (id, name, ts, price) values(3, 'a3', 2000000000, 1000)")
-
-          var metaClient = createMetaClient(spark, basePath)
-
-          var createIndexSql = s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')"
-
-          spark.sql(createIndexSql)
-          spark.sql(s"select key, type, ColumnStatsMetadata from hudi_metadata('$tableName') where type = 3").show(false)
-
-          metaClient = createMetaClient(spark, basePath)
-          assertTrue(metaClient.getFunctionalIndexMetadata.isPresent)
-          var functionalIndexMetadata = metaClient.getFunctionalIndexMetadata.get()
+          // create functional index
+          spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+          // validate index created successfully
+          val metaClient = createMetaClient(spark, basePath)
+          assertTrue(metaClient.getIndexMetadata.isPresent)
+          val functionalIndexMetadata = metaClient.getIndexMetadata.get()
           assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
           assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
 

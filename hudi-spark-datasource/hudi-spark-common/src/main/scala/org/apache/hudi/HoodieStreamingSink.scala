@@ -163,7 +163,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
           }
           if (clusteringInstant.isPresent) {
             asyncClusteringService.enqueuePendingAsyncServiceInstant(new HoodieInstant(
-              State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstant.get()
+              State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()
             ))
           }
           Success((true, commitOps, compactionInstantOps))

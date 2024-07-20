@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieDataSourceHelper, HoodieTableSchema}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,6 +50,8 @@ class CDCRelation(
     endInstant: String,
     options: Map[String, String]
 ) extends BaseRelation with PrunedFilteredScan with Logging {
+
+  imbueConfigs(sqlContext)
 
   val spark: SparkSession = sqlContext.sparkSession
 
@@ -77,7 +80,8 @@ class CDCRelation(
         .startInstant(startInstant)
         .endInstant(endInstant)
         .nullableBoundary(true)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build())
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build(),
+      false)
 
   override final def needConversion: Boolean = false
 
@@ -117,6 +121,11 @@ class CDCRelation(
       changes.toArray
     )
     cdcRdd.asInstanceOf[RDD[InternalRow]]
+  }
+
+  def imbueConfigs(sqlContext: SQLContext): Unit = {
+    // Disable vectorized reading for CDC relation
+    sqlContext.sparkSession.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", "false")
   }
 }
 
@@ -180,7 +189,7 @@ object CDCRelation {
       options: Map[String, String]): CDCRelation = {
 
     if (!isCDCEnabled(metaClient)) {
-      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePathV2.toString}")
+      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
     val startingInstant = options.getOrElse(DataSourceReadOptions.BEGIN_INSTANTTIME.key(),

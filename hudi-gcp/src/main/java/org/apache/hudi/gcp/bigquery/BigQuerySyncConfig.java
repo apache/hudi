@@ -100,13 +100,6 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .markAdvanced()
       .withDocumentation("Name of the source uri gcs path prefix of the table");
 
-  public static final ConfigProperty<String> BIGQUERY_SYNC_SYNC_BASE_PATH = ConfigProperty
-      .key("hoodie.gcp.bigquery.sync.base_path")
-      .noDefaultValue()
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(META_SYNC_BASE_PATH)))
-      .markAdvanced()
-      .withDocumentation("Base path of the hoodie table to sync");
-
   public static final ConfigProperty<String> BIGQUERY_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.partition_fields")
       .noDefaultValue()
@@ -179,7 +172,6 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_BQ_MANIFEST_FILE.key(), useBqManifestFile);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI.key(), sourceUri);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_SOURCE_URI_PREFIX.key(), sourceUriPrefix);
-      props.setPropertyIfNonNull(BIGQUERY_SYNC_SYNC_BASE_PATH.key(), hoodieSyncConfigParams.basePath);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(BIGQUERY_SYNC_USE_FILE_LISTING_FROM_METADATA.key(), hoodieSyncConfigParams.useFileListingFromMetadata);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID.key(), bigLakeConnectionId);

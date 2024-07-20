@@ -31,5 +31,5 @@ public interface HiveShim {
 
   int getDays(Object dateWritable);
 
-  long getMills(Object timestamp);
+  long getMills(Object timestampWritable);
 }

@@ -76,7 +76,28 @@ public enum MetadataPartitionType {
 
     @Override
     public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
-      return metaClient.getFunctionalIndexMetadata().isPresent();
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX));
+      }
+      return false;
+    }
+  },
+  SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-") {
+    @Override
+    public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
+      // Secondary index is created via sql and not via write path.
+      // HUDI-7662 tracks adding a separate config to enable/disable secondary index.
+      return false;
+    }
+
+    @Override
+    public boolean isMetadataPartitionAvailable(HoodieTableMetaClient metaClient) {
+      if (metaClient.getIndexMetadata().isPresent()) {
+        return metaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
+            .anyMatch(indexDef -> indexDef.getIndexName().startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX));
+      }
+      return false;
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-") {
@@ -141,6 +162,15 @@ public enum MetadataPartitionType {
     return Arrays.stream(values())
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(writeConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
+  }
+
+  public static MetadataPartitionType fromPartitionPath(String partitionPath) {
+    for (MetadataPartitionType partitionType : values()) {
+      if (partitionPath.equals(partitionType.getPartitionPath()) || partitionPath.startsWith(partitionType.getPartitionPath())) {
+        return partitionType;
+      }
+    }
+    throw new IllegalArgumentException("No MetadataPartitionType for partition path: " + partitionPath);
   }
 
   @Override

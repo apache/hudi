@@ -27,12 +27,15 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -44,6 +47,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Utils for Avro Schema.
  */
 public class AvroSchemaUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaUtils.class);
 
   private AvroSchemaUtils() {}
 
@@ -231,7 +236,13 @@ public class AvroSchemaUtils {
     if (!nestedPart.isPresent()) {
       return Option.empty();
     }
-    return nestedPart;
+    boolean isUnion = false;
+    if (foundSchema.getType().equals(Schema.Type.UNION)) {
+      isUnion = true;
+      foundSchema = resolveNullableSchema(foundSchema);
+    }
+    Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
+    return Option.of(new Schema.Field(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
   }
 
   public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
@@ -253,10 +264,7 @@ public class AvroSchemaUtils {
         fields.add(new Schema.Field(f.name(), f.schema(), f.doc(), f.defaultVal()));
       }
     }
-
-    Schema newSchema = Schema.createRecord(a.getName(), a.getDoc(), a.getNamespace(), a.isError());
-    newSchema.setFields(fields);
-    return newSchema;
+    return createNewSchemaFromFieldsWithReference(a, fields);
   }
 
   /**
@@ -286,7 +294,31 @@ public class AvroSchemaUtils {
       fields.addAll(newFields);
     }
 
+    return createNewSchemaFromFieldsWithReference(schema, fields);
+  }
+
+  /**
+   * Create a new schema but maintain all meta info from the old schema
+   *
+   * @param schema schema to get the meta info from
+   * @param fields list of fields in order that will be in the new schema
+   *
+   * @return schema with fields from fields, and metadata from schema
+   */
+  public static Schema createNewSchemaFromFieldsWithReference(Schema schema, List<Schema.Field> fields) {
+    if (schema == null) {
+      throw new IllegalArgumentException("Schema must not be null");
+    }
     Schema newSchema = Schema.createRecord(schema.getName(), schema.getDoc(), schema.getNamespace(), schema.isError());
+    Map<String, Object> schemaProps = Collections.emptyMap();
+    try {
+      schemaProps = schema.getObjectProps();
+    } catch (Exception e) {
+      LOG.warn("Error while getting object properties from schema: {}", schema, e);
+    }
+    for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
     newSchema.setFields(fields);
     return newSchema;
   }

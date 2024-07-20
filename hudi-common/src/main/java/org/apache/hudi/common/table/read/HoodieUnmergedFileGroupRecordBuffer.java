@@ -23,13 +23,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
@@ -48,18 +48,12 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
   public HoodieUnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
-      Schema readerSchema,
-      Schema baseFileSchema,
+      HoodieTableMetaClient hoodieTableMetaClient,
       Option<String> partitionNameOverrideOpt,
       Option<String[]> partitionPathFieldOpt,
       HoodieRecordMerger recordMerger,
-      TypedProperties payloadProps,
-      long maxMemorySizeInBytes,
-      String spillableMapBasePath,
-      ExternalSpillableMap.DiskMapType diskMapType,
-      boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+      TypedProperties props) {
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, props);
   }
 
   @Override

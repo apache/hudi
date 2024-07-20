@@ -65,7 +65,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
     if (profile == null) {
       throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
     }
-    mergeOnReadUpsertPartitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, (HoodieSparkEngineContext) context, table, config);
+    mergeOnReadUpsertPartitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, (HoodieSparkEngineContext) context, table, config, operationType);
     return mergeOnReadUpsertPartitioner;
   }
 

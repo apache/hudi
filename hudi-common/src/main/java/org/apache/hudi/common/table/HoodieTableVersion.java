@@ -40,8 +40,12 @@ public enum HoodieTableVersion {
   // 0.12.0 onwards
   FIVE(5),
   // 0.14.0 onwards
-  SIX(6);
-
+  SIX(6),
+  // 0.16.0
+  SEVEN(7),
+  // 1.0 beta
+  EIGHT(8);
+  
   private final int versionCode;
 
   HoodieTableVersion(int versionCode) {
@@ -53,7 +57,7 @@ public enum HoodieTableVersion {
   }
 
   public static HoodieTableVersion current() {
-    return SIX;
+    return EIGHT;
   }
 
   public static HoodieTableVersion versionFromCode(int versionCode) {

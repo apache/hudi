@@ -39,11 +39,10 @@ import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
+import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import org.apache.flink.configuration.Configuration;
 
 import java.io.File;
 import java.io.IOException;
@@ -136,11 +135,11 @@ public class TestClusteringUtil {
         plan, Collections.emptyMap(), 1);
     String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant clusteringInstant =
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
     try {
-      metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+      metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant,
           TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
+      table.getActiveTimeline().transitionClusterRequestedToInflight(clusteringInstant, Option.empty());
     } catch (IOException ioe) {
       throw new HoodieIOException("Exception scheduling clustering", ioe);
     }

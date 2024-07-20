@@ -59,8 +59,12 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -317,7 +321,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
         new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05"),
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06")
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, "06"),
+        new HoodieInstant(State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, "07")
     ).collect(Collectors.toList()));
     assertTrue(timeline.isBeforeTimelineStarts("00"));
     assertTrue(timeline.isBeforeTimelineStarts("01"));
@@ -348,10 +353,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     // Test that various types of getXXX operations from HoodieActiveTimeline
     // return the correct set of Instant
     checkTimeline.accept(timeline.getCommitsTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getWriteTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
-    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION));
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
+    checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
     checkTimeline.accept(timeline.getRollbackTimeline(), Collections.singleton(HoodieTimeline.ROLLBACK_ACTION));
@@ -359,7 +364,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getSavePointTimeline(), Collections.singleton(HoodieTimeline.SAVEPOINT_ACTION));
     checkTimeline.accept(timeline.getAllCommitsTimeline(), CollectionUtils.createSet(
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION,
-        HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.INDEXING_ACTION));
+        HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.INDEXING_ACTION));
 
     // Get some random Instants
     Random rand = new Random();
@@ -620,6 +625,17 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testMinTimestamp() {
+    String timestamp1 = "20240601040632402";
+    String timestamp2 = "20250601040632402";
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(null, timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp("", timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, null));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, ""));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, timestamp2));
+  }
+
+  @Test
   public void testParseDateFromInstantTime() throws ParseException {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";
@@ -681,6 +697,30 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         HoodieActiveTimeline.parseDateFromInstantTimeSafely(testInstant).get().getTime());
   }
 
+  @Test
+  public void testInstantCompletionTimeBackwardCompatibility() {
+    HoodieInstant requestedInstant = new HoodieInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, "1");
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "2");
+    HoodieInstant completeInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, "3");
+
+    timeline = new HoodieActiveTimeline(metaClient);
+    timeline.createNewInstant(requestedInstant);
+    timeline.createNewInstant(inflightInstant);
+
+    // Note:
+    // 0.x meta file name pattern: ${instant_time}.action[.state]
+    // 1.x meta file name pattern: ${instant_time}_${completion_time}.action[.state].
+    String legacyCompletedFileName = HoodieTimeline.makeCommitFileName(completeInstant.getTimestamp());
+    metaClient.getStorage().createImmutableFileInPath(new StoragePath(metaClient.getMetaPath().toString(), legacyCompletedFileName), Option.empty());
+
+    timeline = timeline.reload();
+    assertThat("Some instants might be missing", timeline.countInstants(), is(3));
+    List<HoodieInstant> instants = timeline.getInstants();
+    assertNull(instants.get(0).getCompletionTime(), "Requested instant does not have completion time");
+    assertNull(instants.get(1).getCompletionTime(), "Inflight instant does not have completion time");
+    assertNotNull(instants.get(2).getCompletionTime(), "Completed instant has modification time as completion time for 0.x release");
+  }
+
   /**
    * Returns an exhaustive list of all possible HoodieInstant.
    * @return list of HoodieInstant
@@ -711,6 +751,10 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         // Compaction complete is called commit complete
         if (state == State.COMPLETED && action.equals(HoodieTimeline.COMPACTION_ACTION)) {
           action = HoodieTimeline.COMMIT_ACTION;
+        }
+        // Cluster complete is called replacecommit complete
+        if (state == State.COMPLETED && action.equals(HoodieTimeline.CLUSTERING_ACTION)) {
+          action = HoodieTimeline.REPLACE_COMMIT_ACTION;
         }
 
         allInstants.add(new HoodieInstant(state, action, String.format("%03d", instantTime++)));

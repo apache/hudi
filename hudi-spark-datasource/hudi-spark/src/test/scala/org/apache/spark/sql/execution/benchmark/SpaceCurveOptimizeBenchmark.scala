@@ -18,10 +18,11 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.ColumnStatsIndexHelper.buildColumnStatsTableFor
 import org.apache.hudi.config.HoodieClusteringConfig.LayoutOptimizationStrategy
 import org.apache.hudi.sort.SpaceCurveSortingHelper
+
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, StructField}

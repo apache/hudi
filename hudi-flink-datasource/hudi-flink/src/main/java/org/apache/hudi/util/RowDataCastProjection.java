@@ -23,6 +23,7 @@ import org.apache.hudi.table.format.CastMap;
 import org.apache.flink.table.types.logical.LogicalType;
 
 import javax.annotation.Nullable;
+
 import java.util.stream.IntStream;
 
 /**

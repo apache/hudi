@@ -94,6 +94,8 @@ public class HoodieCompactor {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
+    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
+    public Boolean skipClean = true;
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
     public Boolean runSchedule = false;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
@@ -124,6 +126,7 @@ public class HoodieCompactor {
           + "   --schema-file " + schemaFile + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --skipClean " + skipClean + ", \n"
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --mode " + runningMode + ", \n"
@@ -150,6 +153,7 @@ public class HoodieCompactor {
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(retry, config.retry)
+          && Objects.equals(skipClean, config.skipClean)
           && Objects.equals(runSchedule, config.runSchedule)
           && Objects.equals(runningMode, config.runningMode)
           && Objects.equals(strategyClassName, config.strategyClassName)
@@ -160,7 +164,7 @@ public class HoodieCompactor {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, tableName, compactionInstantTime, schemaFile,
-          sparkMaster, parallelism, sparkMemory, retry, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
+          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
     }
   }
 
@@ -292,7 +296,7 @@ public class HoodieCompactor {
   }
 
   private void clean(SparkRDDWriteClient<?> client) {
-    if (client.getConfig().isAutoClean()) {
+    if (!cfg.skipClean && client.getConfig().isAutoClean()) {
       client.clean();
     }
   }
