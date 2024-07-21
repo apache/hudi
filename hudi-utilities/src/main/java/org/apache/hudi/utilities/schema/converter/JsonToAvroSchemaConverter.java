@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.schema.converter;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -59,6 +60,10 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
       {"number", "double"}
   }).collect(Collectors.collectingAndThen(Collectors.toMap(p -> p[0], p -> p[1]), Collections::<String, String>unmodifiableMap));
   private static final Pattern SYMBOL_REGEX = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
+
+  public JsonToAvroSchemaConverter(TypedProperties properties) {
+    // properties unused in this converter
+  }
 
   @Override
   public String convert(ParsedSchema parsedSchema) throws IOException {

@@ -44,7 +44,7 @@ class TestJsonToAvroSchemaConverter {
   })
   void testConvertJsonSchemaToAvroSchema(String inputCase) throws IOException {
     String jsonSchema = loadJsonSchema(inputCase);
-    String avroSchema = new JsonToAvroSchemaConverter().convert(new JsonSchema(jsonSchema));
+    String avroSchema = new JsonToAvroSchemaConverter(null).convert(new JsonSchema(jsonSchema));
     Schema schema = new Schema.Parser().parse(avroSchema);
     Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase));
     assertEquals(expected, schema);
