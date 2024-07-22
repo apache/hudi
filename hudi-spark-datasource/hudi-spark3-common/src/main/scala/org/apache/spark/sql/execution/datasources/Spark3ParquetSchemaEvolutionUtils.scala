@@ -25,11 +25,10 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.InternalSchemaCache
-import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
-import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
@@ -45,13 +44,12 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                                  filePath: Path,
                                                  requiredSchema: StructType,
-                                                 partitionSchema: StructType) extends SparkAdapterSupport{
+                                                 partitionSchema: StructType,
+                                                 internalSchemaOpt: util.Option[InternalSchema]) extends SparkAdapterSupport{
   // Fetch internal schema
-  private lazy val internalSchemaStr: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
+  private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
-  private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaStr, requiredSchema)
-
-  var shouldUseInternalSchema: Boolean = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
+  var shouldUseInternalSchema: Boolean = querySchemaOption.isPresent
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
@@ -183,16 +181,11 @@ abstract class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 }
 
 object Spark3ParquetSchemaEvolutionUtils {
-  def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): util.Option[InternalSchema] = {
-    if (!isNullOrEmpty(internalSchemaStr) ) {
-      val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
-      if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
-        util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get()))
-      } else {
-        querySchemaOption
-      }
+  def pruneInternalSchema(internalSchemaOpt:  util.Option[InternalSchema], requiredSchema: StructType): util.Option[InternalSchema] = {
+    if (internalSchemaOpt.isPresent && requiredSchema.nonEmpty) {
+      util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, internalSchemaOpt.get()))
     } else {
-      util.Option.empty()
+      internalSchemaOpt
     }
   }
 }

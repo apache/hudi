@@ -103,7 +103,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
+        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
+        readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 
