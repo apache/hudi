@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
@@ -68,10 +69,12 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -171,10 +174,10 @@ public class ParquetUtils extends FileFormatUtils {
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath The parquet file path.
-   * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
+   * @return {@link Iterator} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
     return fetchRecordKeysWithPositions(storage, filePath, Option.empty());
   }
 
@@ -223,16 +226,9 @@ public class ParquetUtils extends FileFormatUtils {
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
-    long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, keyGeneratorOpt)) {
-      while (iterator.hasNext()) {
-        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
-        position++;
-      }
-      return hoodieKeysAndPositions;
-    }
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt), next -> Pair.of(next, position.getAndIncrement()));
   }
 
   /**

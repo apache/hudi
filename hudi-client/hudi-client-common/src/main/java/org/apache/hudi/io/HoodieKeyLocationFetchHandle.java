@@ -24,57 +24,51 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.storage.HoodieStorage;
 
-import java.util.List;
-import java.util.stream.Stream;
+import java.util.Iterator;
 
 /**
  * {@link HoodieRecordLocation} fetch handle for all records from {@link HoodieBaseFile} of interest.
- *
- * @param <T>
  */
-public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieKeyLocationFetchHandle {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
   private final Option<BaseKeyGenerator> keyGeneratorOpt;
+  private final HoodieStorage storage;
 
-  public HoodieKeyLocationFetchHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-                                      Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, hoodieTable, Pair.of(partitionPathBaseFilePair.getLeft(), partitionPathBaseFilePair.getRight().getFileId()));
+  public HoodieKeyLocationFetchHandle(HoodieStorage storage, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
     this.keyGeneratorOpt = keyGeneratorOpt;
+    this.storage = storage;
   }
 
-  private List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
-    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
+  private Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
+    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(baseFile.getStoragePath());
     if (keyGeneratorOpt.isPresent()) {
-      return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt);
+      return fileFormatUtils.fetchRecordKeysWithPositions(storage, baseFile.getStoragePath(), keyGeneratorOpt);
     } else {
-      return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath());
+      return fileFormatUtils.fetchRecordKeysWithPositions(storage, baseFile.getStoragePath());
     }
   }
 
-  public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
+  public Iterator<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
     String commitTime = baseFile.getCommitTime();
     String fileId = baseFile.getFileId();
-    return fetchRecordKeysWithPositions(baseFile).stream()
-        .map(entry -> Pair.of(entry.getLeft(),
-            new HoodieRecordLocation(commitTime, fileId, entry.getRight())));
+    return new MappingIterator<>(fetchRecordKeysWithPositions(baseFile),
+        entry -> Pair.of(entry.getLeft(), new HoodieRecordLocation(commitTime, fileId, entry.getRight())));
   }
 
-  public Stream<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
+  public Iterator<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    return fetchRecordKeysWithPositions(baseFile).stream()
-        .map(entry -> Pair.of(entry.getLeft().getRecordKey(),
-            new HoodieRecordGlobalLocation(
-                entry.getLeft().getPartitionPath(), baseFile.getCommitTime(),
-                baseFile.getFileId(), entry.getRight())));
+    return new MappingIterator<>(fetchRecordKeysWithPositions(baseFile),
+        entry -> Pair.of(entry.getLeft().getRecordKey(),
+            new HoodieRecordGlobalLocation(entry.getLeft().getPartitionPath(), baseFile.getCommitTime(), baseFile.getFileId(), entry.getRight())));
   }
 }
