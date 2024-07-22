@@ -367,8 +367,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   /**
    * Get only the inflights (no-completed) commit timeline.
    */
-  public HoodieTimeline getPendingCommitTimeline() {
-    return metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
+  public HoodieTimeline getPendingCommitsTimeline() {
+    return metaClient.getCommitsTimeline().filterInflightsAndRequested();
   }
 
   /**
