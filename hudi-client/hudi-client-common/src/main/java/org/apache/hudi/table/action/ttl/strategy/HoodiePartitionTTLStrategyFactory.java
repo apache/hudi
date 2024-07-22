@@ -64,7 +64,7 @@ public class HoodiePartitionTTLStrategyFactory {
       try {
         strategyTypeEnum = PartitionTTLStrategyType.valueOf(strategyType.toUpperCase(Locale.ROOT));
       } catch (IllegalArgumentException e) {
-        throw new HoodieException("Unsupported PartitionTTLStrategy Type " + strategyType);
+        throw new HoodieException("Unsupported PartitionTTLStrategy Type " + strategyType, e);
       }
       strategyClassName = getPartitionTTLStrategyFromType(strategyTypeEnum);
     }
