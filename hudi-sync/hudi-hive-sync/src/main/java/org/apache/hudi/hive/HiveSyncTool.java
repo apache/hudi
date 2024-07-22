@@ -401,7 +401,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       LOG.info("No Schema difference for {}.", tableName);
     } else {
       LOG.info("Schema difference found for {}. Updated schema: {}", tableName, schema);
-      syncClient.updateTableSchema(tableName, schema);
+      syncClient.updateTableSchema(tableName, schema, schemaDiff);
       schemaChanged = true;
     }
 
