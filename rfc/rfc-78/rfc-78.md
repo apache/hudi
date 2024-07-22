@@ -74,30 +74,30 @@ a. Existing pipelines are in 0.15.x. (bronze, silver, gold)
 b. Migrate pipelines to 0.16.0 (in any order. we do not have any constraints around which pipeline should be migrated first). 
 c. Ensure all pipelines are in 0.16.0 (both readers and writers)
 d. Start migrating pipelines in a rolling fashion to 1.x. At this juncture, we could have few pipelines in 1.x and few pipelines in 0.16.0. but since 0.16.x 
-can read 1.x tables, we should be ok here. Just that do not enable new features like Non blocking concurrency control yet. 
+can read 1.x tables, all readers will be intact. Just that do not enable new features like Non blocking concurrency control yet. 
 e. Migrate all of 0.16.0 to 1.x version. 
 f. Once all readers and writers are in 1.x, we are good to enable any new features (like NBCC) with 1.x tables.
 
 As you could see, company/org wide coordination to migrate gold before migrating silver or bronze is relaxed with the bridge release. Only requirement to keep a tab on, 
 is to ensure to migrate all pipelines completely to 0.16.x before starting to migrate to 1.x.
 
-So, here are the objectives of this RFC with the bridge release. 
+So, here are the deliverables from this bridge release RFC:
 - 1.x reader should be able to read 0.14.x to 0.16.x tables w/o any loss in functionality and no data inconsistencies.
 - 0.16.x should have read capability for 1.x tables w/ some limitations. For features ported over from 0.x, no loss in functionality should be guaranteed.
   But for new features that are being introduced in 1.x, we may not be able to support all of them. Will be calling out which new features may not work with 0.16.x reader.
 - Document steps for rolling upgrade from 0.16.x to 1.x with minimal downtime.
 - Downgrade from 1.x to 0.16.x documented with call outs on any functionality loss. 
 
-### Considerations when choosing Migration strategy
+### Considerations when choosing migration strategy
 - While migration is happening, we want to allow readers to continue reading data. This means, we cannot employ a stop-the-world strategy when we are migrating. 
 All the actions that we are performing as part of table upgrade should not have any side-effects of breaking snapshot isolation for readers.
 - Also, users should have migrated to 0.16.x before upgrading to 1.x. We do not want to add read support for very old versions of hudi in 1.x(for eg 0.7.0). 
 - So, in an effort to bring everyone to latest hudi versions, 1.x reader will have full read capabilities for 0.16.x, but for older hudi versions, 1.x reader may not have full reader support. 
-The reocmmended guideline is to upgrade all readers and writers to 0.16.x. and then slowly start upgrading to 1.x(readers followed by writers). 
+The recommended guideline is to upgrade all readers and writers to 0.16.x. and then slowly start upgrading to 1.x(readers followed by writers). Support matrix for different query types is given below in another section. 
 
 Before we dive in further, lets understand the format changes:
 
-## Format changes
+## Format changes in 1.x
 ### Table properties
 - Payload class ➝ payload type.
 - hoodie.record.merge.mode is introduced in 1.x. 
@@ -111,12 +111,12 @@ Before we dive in further, lets understand the format changes:
 - [storage changes] Completed write commits have completed times in the file name(timeline commit files).
 - [storage changes] Completed and inflight write commits are in avro format which were json in 0.x.
 - We are switching the action type for pending clustering from “replace commit” to “cluster”.
-- [storage changes] Timeline ➝ LST timeline. There is no archived timeline in 1.x.
+- [storage changes] Timeline ➝ LSM timeline. There is an archived timeline in 1.x, but its been redesigned for scalable access.
 - [In-memory changes] HoodieInstant changes due to presence of completion time for completed HoodieInstants.
 
 ### Filegroup/FileSlice changes:
 - Log file names contain delta commit time instead of base instant time.
-- Log appends are disabled in 1.x. In other words, each log block is already appended to a new log file.
+- Log appends are disabled in 1.x. In other words, each log block is already appended to a new log file. There is 1-1 mapping from a log block to log file.
 - File Slice determination logic for log files changed. In 0.x, we have base instant time in log files and its straight forward. 
 In 1.x, we find completion time for a log file and find the base instant time (parsed from base files) for a given HoodieFileGroup, 
 - which has the highest value lesser than the completion time of the log file) of interest. 
@@ -129,11 +129,24 @@ In 1.x, we find completion time for a log file and find the base instant time (p
 ## Changes to be ported over to 0.16.x to support reading 1.x tables
 
 ### What will be supported
-- For features introduced in 0.x, and tables written in 1.x, 0.16.0 reader should be able to provide consistent reads w/o any breakage. 
+- For features introduced in 0.x, and tables written in 1.x, 0.16.0 reader should be able to provide consistent reads w/o any breakage. Check below table for compatibility matrix.
+
+| Features present Table written by 1.x writer     |  Reader type               | 1.x reader              | 0.16.x Reader |
+|-----------------------------------------------------------------|------------------|-------------------------|-------|
+| COW, partitioned                                 | SNAPSHOT, time travel, incr query | supported               | supported. no change in behavior compared to 1.x reader.|
+| COW, non-partitioned                                 | SNAPSHOT, time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
+| MOR, partitioned                                 | READ_OPTIMIZED | supported               | supported. no change in behavior compared to 1.x reader.|
+| MOR, partitioned                                 | time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
+| MOR, partitioned                                 | SNAPSHOT  | supported               | supported but only if NBCC is not enabled.|
+| MOR, non-partitioned                                 | READ_OPTIMIZED | supported               | supported. no change in behavior compared to 1.x reader.|
+| MOR, non-partitioned                                 | time travel, incr query  | supported               | supported. no change in behavior compared to 1.x reader.|
+| MOR, non-partitioned                                 | SNAPSHOT  | supported               | supported but only if NBCC is not enabled.|
 
 ### What will not be supported
 - A 0.16 writer cannot write to a table that has been upgraded-to/created using 1.x without downgrading to 0.16. Might be obvious, but calling it out nevertheless.
-- For new features introduced in 1.x, we may or may not have full support with 0.16.x reader. 
+- For new features introduced in 1.x, we may or may not have full support with 0.16.x reader.
+
+Diving into some of the new features introduced in 1.x, and how 0.16.0 reader functions in comparison to 1.x reader.
 
 | 1.x Features written by 1.x writer        | 1.x reader   | 0.16.x Reader | 
 |----------------|-------------------------------------------|-------|
@@ -145,7 +158,7 @@ In 1.x, we find completion time for a log file and find the base instant time (p
 
 
 ### Timeline
-- Commit instants w/ completion time should be readable. HoodieInstant parsing logic to parse completion time should be ported over.
+- Commit instants w/ completion time should be parsed and deduced.
 - Commit metadata in avro instead of json should be readable.
    - More details on this under Implementation section.
 - Pending Clustering commits using “cluster” action should be readable in 0.16.0 reader.
@@ -158,17 +171,17 @@ LSM timeline reader logic to 0.16.0.
 #### Completion time based read in FileGroup/FileSlice grouping and log block reads
 - As of this write up, we are not supporting completion time based log file ordering in in 0.16. Punting it as called out earlier.
 - What's the impact if not for this support:
-    - For users having single writer mode or OCC in 1.x, 0.16.0 reader not supporting completion time based read(log file ordering) should still be ok. Both 1.x reader and 0.16.0 reader should have same behavior.
+    - For users having single writer mode or OCC in 1.x, 0.16.0 reader not supporting completion time based read(log file ordering) should behave the same way as a 1.x reader. 
     - But only if someone has NBCC writes and have log files in different ordering written compared to the log file versions, 0.16.0 reader might result in data consistency issues. but since we are calling out that 0.16.0 is a bridge release and recommend users to migrate all the readers to 1.x fully before starting to enable any new features for 1.x tables.
     - Example scenarios. say, we have lf1_10_25, lf2_15_20(format "logfile[index]_[starttime]_[completiontime]") for a file slice. In 1.x reader, we will order and read it as lf2 followed by lf1. w/o this support in 0.16.0, we might read lf1 followed by lf2. Just to re-iterate this might only impact users who have enabled NBCC and having multi writers writing log files in different ordering. Even if they were using OCC, one of the writers is expected to have failed (on the writer side) since data is overlapping for two writers in 1.x writer.
 
 ### FileSystemView:
-- Support ignoring partially failed log files from FSV. In 0.16.0, from FSV standpoint, all log files(including partially failed) are valid. We let the log record reader ignore the partially failed log files. But
+- Support ignoring partially failed log files from FSV. In 0.16.0, from FSV standpoint, all log files(including partially failed) written are valid. We rely on log record reader to filter out the partially failed log files. But
   in 1.x, log files could be rolledback (deleted) by a concurrent rollback. So, the FSV should ensure it ignores the uncommitted log files. 
 - We don't need the completion time logic ported over either for file slice determination nor for log file ordering.\
-    - So, here is how File Slice determination will happen using 0.16.0 reader.\
+    - So, here is how file slice determination will happen using 0.16.0 reader.\
       a. Read base files and assign to resp file groups. \
-      b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). Find largest (<=) base instant times in the corresponding file group
+      b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). Find largest base instant times in the file group, less than or equal to the instant time of interest
       and assign the log file to it. \
       d. Log files within a file slice are ordered based on log version and write tokens.\
       The same logic will be used whether we are reading a 0.16.x table or its a 1.x table. Only difference wrt how a 1.x reader will behave in comparison to 0.16.x reader while reading a 1.x table is when NBCC is involved w/ multi-writers. But as of this writing, 
@@ -215,7 +228,7 @@ Bringing this altogether, lets see how different reader behaves in some of the s
 
 ### Incremental reads and time travel query: 
 - Incremental reads in 1.x is expected to have some changes and design is not fully out. So, until then we have to wait to design 0.16.x read support for 1.x tables for incremental queries. 
-- Time travel query: I don't see any changes in 1.x wrt time travel query. So, as per master, we are still using commit time(i.e not completed time) to serve time travel query. Until we make any changes to that, we do not need to add any additional support to 0.16.x reader. But if we plan to make changes in 1.x, we might have to revisit this. 
+- Time travel query: There aren't notable changes in 1.x wrt time travel query. So, as per master, we are still using commit time(i.e not completed time) to serve time travel query. Until we make any changes to that, we do not need to add any additional support to 0.16.x reader. But if we plan to make changes in 1.x, we might have to revisit this. 
 
 ### CDC reads:
 - There has not been a lot of changes in 1.x wrt CDC. Only minor change was done in HoodieAppendHandle. but that affects only the writer side logic. So, we are good wrt CDC. i.e we do not need to port 
@@ -229,9 +242,8 @@ This will be an automatic upgrade for users when they start using 1.x hudi libra
 log files written in 0.16.0, since we have log appends. So, we need to trigger rollbacks of failed writes using 0.16.x rollback flow and not 1.x flow. 
 - No changes to log reader.
 - Check custom payload class and hoodie.record.merge.mode in table properties and switch to respective 0.16.x properties.
-- Debatable: Trigger compaction for latest file slices. We do not want a single file slice having a mix of log files from 0.x and log files from 1.x. So, we will trigger a full compaction 
-of the table to ensure all latest file slices has just the base files. I need to dug deeper on this(need to have detailed discussion w/ initial authors who designed this). But if we ensure all partially failed writes are rollbacked completely, 
-we should be good to upgrade w/o needing to trigger full compaction. 
+- Trigger compaction for latest file slices. We do not want a single file slice having a mix of log files from 0.x and log files from 1.x. So, we will trigger a full compaction 
+of the table to ensure all latest file slices has just the base files. 
 
 Lets walk through an example:
 Say we have a file group and latest file slice is fs3. and it has 2 log files in 0.x. 
@@ -266,7 +278,7 @@ We could afford to take some downtime during downgrade, but upgrade path should 
    B: While downgrading from 1.x to 0.16.0, let’s rewrite the active timeline instants too. So that after downgrade, we can't differentiate whether table was natively created in 0.16.0 or was it upgraded to 1.x and then later downgraded. The con in Option A is not an issue here since we take care of active timeline instants during 1.x to 0.16.0 downgrade only. So, downgrade from 0.16.0 to any lower hudi version does not need to do any special handling if table was native to 0.16.0 or was it downgraded from 1.x to 0.16.0
    Our proposal is to go with Option B to ensure 0.16.0 table will be intact and not have any residues from 1.x writes. While the rewrite of active instants are happening, we could see some read failures. But 
    we do not want to have a 0.16.0 (post upgrade) table to deal w/ 1.x timeline intricacies. 
-- If there are new MDT partitions (functional index, sec index), nuke them. Update table properties.
+- If there are new MDT partitions (functional index, sec index), remove them. Update table properties.
 - Check latest snapshot files for log files w/ new features enabled. For eg, deletion vector, partial update. If any log files are found in latest snapshot, we have to trigger compaction for those file groups. This calls for a custom compaction strategy as well which compacts only for certain file groups.
    - In order to reduce downtime to downgrade, we are inclining to do this only for snapshot reads. If there are older file slices and users are issuing time travel or incremental reads, and if they have any of the new features enabled (deletion vector, partial update), readers could break after downgrade.
 
@@ -278,7 +290,7 @@ To ensure read capability of 1.x tables in 0.16.0, documenting the changes requi
 Let’s reiterate what we need to support w/ 0.16.0 reader.
 
 ### Timeline read of 1.x need to be supported
-- Commit instants w/ completion time should be readable. HoodieInstant parsing logic to parse completion time should be ported over.
+- Commit instants w/ completion time should be parsed and deduced.
 - We could ignore the completion time log file ordering semantics since we don’t plan to support it yet in 0.16.0. But reading should not break.
 - Pending Clustering commits using “cluster” action should be readable in 0.16.0 reader.
 - HoodieDefaultTimeline should be able to support both 0.x timeline and 1.x timeline. 
@@ -296,7 +308,7 @@ findInstantsModifiedAfterByStateTransitionTime -> findInstantsModifiedAfterByCom
 getInstantsOrderedByStateTransitionTime -> getInstantsOrderedByCompletionTime\
 We need to add back these older methods to HoodieDefaultTimeline, so that we do not need to fix all the callers in 0.16.0. We could certainly introduce private methods and avoid code duplication.\
 c. HoodieInstant changes from 1.x need to be ported over so that completion time is accounted for. If completion time is present, we should account for that, if not, we can fallback to last mod time of the completed commit meta file.\
-d. We need to port code changes which accounts for uncommitted log files. In 0.16.0, from FSV standpoint, all log files(including partially failed) are valid. We let the log record reader ignore the partially failed log files. But
+d. We need to port code changes which accounts for uncommitted log files. In 0.16.0, from FSV standpoint, all log files(including partially failed) written are valid. We rely on the log record reader ignore the partially failed log files. But
   in 1.x, log files could be rolledback (deleted) by a concurrent rollback. So, the FSV should ensure it ignores the uncommitted log files.\
 e. full LSM based read capability needs to be ported back to 0.16.x timeline reader. \
 f. Given the requirement to port over above changes, we have two options to go about HoodieDefaultTimeline. But one option to consider: we could introduce Hoodie016xDefaultTimeline and Hoodie1xDefaultTimeline and use delegate pattern to delegate to either of the timelines. Using hoodie table version we could instantiate (internally to HoodieDefaultTimeline) to either of Hoodie016xDefaultTimeline or Hoodie1xDefaultTimeline. 
@@ -305,9 +317,9 @@ Or we need to make pointed fixes to entire HoodieDefaultTimeline to account for 
 ### FileSystemView changes
 Even though completion time based read might seen critical, we could get away w/ it by not needing to port over these changes to 0.16.x reader.\
 Here is how the file slice determination will happen in 0.16.x reader.\
-a. Read base files and assign to resp file groups. \
-b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). Find largest (<=) base instant times in the corresponding file group 
-and assign the log file to it. \
+a. Read base files and assign to respective file groups. \
+b. Read log files. Parse instant time from log file name (it could refer to base instant time for a file written in 0.16.x, or it could refer to delta commit in case of 1.x writer). 
+Find largest base instant time less than or equal to this instant time in the corresponding file group and assign the log file to it. \
 c. File slice determination logic is complete.\
 d. Log files within a file slice are ordered based on log version and write tokens.\
 \
@@ -331,11 +343,11 @@ we may not have delta commit times in 1.x So, we need to flush this out in finer
 
 ## Rollout/Adoption Plan
 
- - What impact (if any) will there be on existing users? 
+ <- What impact (if any) will there be on existing users? 
  - If we are changing behavior how will we phase out the older behavior?
  - If we need special migration tools, describe them here.
- - When will we remove the existing behavior
+ - When will we remove the existing behavior>
 
 ## Test Plan
 
-Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.
+<Describe in few sentences how the RFC will be tested. How will we know that the implementation works as expected? How will we know nothing broke?.>
