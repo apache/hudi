@@ -88,7 +88,7 @@ class Spark32ParquetReader(enableVectorizedReader: Boolean,
   protected def doRead(file: PartitionedFile,
                        requiredSchema: StructType,
                        partitionSchema: StructType,
-                       internalSchemaOpt: util.Option[InternalSchema],
+                       internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                        filters: Seq[Filter],
                        sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
