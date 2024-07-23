@@ -140,7 +140,7 @@ from different engines as shown below:
 
 ### column_stats index and data skipping
 Enabling metadata table and column stats index is a prerequisite to enabling data skipping capabilities. Following are the 
-corresponding configs across Spark adn Flink readers.
+corresponding configs across Spark and Flink readers.
 
 | Readers                                                                                            | Config                                                                           | Description                                                                                                                                                                                                                                                                                                                                                      |
 |----------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
