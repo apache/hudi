@@ -1135,6 +1135,7 @@ Show invalid parquet files of a table.
 |----------------|---------|----------|---------------|--------------------------------------|
 | Path           | String  | Y        | None          | Hudi table name                      |
 | limit          | Int     | N        | 100           | Limit number                         |
+| needDelete     | Boolean | N        | false         | should delete                        |
 
 **Output**
 
