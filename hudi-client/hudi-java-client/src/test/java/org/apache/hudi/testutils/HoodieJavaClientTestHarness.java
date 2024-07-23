@@ -154,7 +154,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     cleanupExecutorService();
   }
 
-  public class TestJavaTaskContextSupplier extends TaskContextSupplier {
+  public static class TestJavaTaskContextSupplier extends TaskContextSupplier {
     int partitionId = 0;
     int stageId = 0;
     long attemptId = 0;
