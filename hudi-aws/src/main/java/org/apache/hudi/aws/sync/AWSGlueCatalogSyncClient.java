@@ -534,32 +534,34 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
 
     try {
-      // Create a temp table will validate the schema before dropping and recreating the table
-      String tempTableName = generateTempTableName(tableName);
-      createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
-
-      Table tempTable = getTable(awsGlue, databaseName, tempTableName);
-      final Instant now = Instant.now();
-      TableInput updatedTableInput = TableInput.builder()
-          .name(tableName)
-          .tableType(tempTable.tableType())
-          .parameters(tempTable.parameters())
-          .partitionKeys(tempTable.partitionKeys())
-          .storageDescriptor(tempTable.storageDescriptor())
-          .lastAccessTime(now)
-          .lastAnalyzedTime(now)
-          .build();
-
-      UpdateTableRequest request = UpdateTableRequest.builder()
-          .databaseName(databaseName)
-          .skipArchive(skipTableArchive)
-          .tableInput(updatedTableInput)
-          .build();
-      awsGlue.updateTable(request);
-      dropTable(tempTableName);
+      // validate before dropping the table
+      validateSchemaAndProperties(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+      // drop and recreate the actual table
+      dropTable(tableName);
+      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties)
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to recreate the table" + tableId(databaseName, tableName), e);
     }
+  }
+
+  /**
+   * creates a temp table with the given schema and properties to ensure
+   * table creation succeeds before dropping the table and recreating it.
+   * This ensures that actual table is not dropped in case there are any
+   * issues with table creation because of provided schema or properties
+   */
+  private void validateSchemaAndProperties(String tableName,
+                                           MessageType storageSchema,
+                                           String inputFormatClass,
+                                           String outputFormatClass,
+                                           String serdeClass,
+                                           Map<String, String> serdeProperties,
+                                           Map<String, String> tableProperties) {
+    // Create a temp table to validate the schema and properties
+    String tempTableName = generateTempTableName(tableName);
+    createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+    // drop the temp table
+    dropTable(tempTableName);
   }
 
   @Override

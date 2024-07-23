@@ -43,6 +43,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -747,9 +748,15 @@ public class FSUtils {
     return pathInfoList;
   }
 
-  // Converts s3a to s3a
-  public static String s3aToS3(String s3aUrl) {
-    return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
+  public static boolean comparePathsWithoutScheme(String pathStr1, String pathStr2) {
+    Path pathWithoutScheme1 = getPathWithoutScheme(new Path(pathStr1));
+    Path pathWithoutScheme2 = getPathWithoutScheme(new Path(pathStr2));
+    return pathWithoutScheme1.equals(pathWithoutScheme2);
+  }
+
+  public static Path getPathWithoutScheme(Path path) {
+    return path.isUriPathAbsolute()
+        ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
   }
 
   /**
