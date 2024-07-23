@@ -20,6 +20,7 @@ package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hive.ScriptRunner;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -50,9 +51,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -80,7 +87,7 @@ public class HiveTestService {
     this.hadoopConf = hadoopConf;
   }
 
-  public HiveServer2 start() throws IOException {
+  public HiveServer2 start() throws SQLException, IOException {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
     String localHiveLocation = getHiveLocation(workDir);
@@ -270,7 +277,8 @@ public class HiveTestService {
     }
   }
 
-  private TServer startMetaStore(HiveConf conf) throws IOException {
+  private TServer startMetaStore(HiveConf conf) throws SQLException, IOException {
+    setUpMetastore(hiveConf.getVar(ConfVars.METASTORECONNECTURLKEY));
     try {
       // Server will create new threads up to max as necessary. After an idle
       // period, it will destroy threads to keep the number of threads in the
@@ -313,6 +321,17 @@ public class HiveTestService {
       return tServer;
     } catch (Throwable x) {
       throw new IOException(x);
+    }
+  }
+
+  private void setUpMetastore(String dbUrl) throws SQLException, IOException {
+    Connection conn = DriverManager.getConnection(dbUrl);
+    ScriptRunner scriptRunner = new ScriptRunner(conn, true, true);
+
+    ClassLoader classLoader = ClassLoader.getSystemClassLoader();
+    InputStream inputStream = classLoader.getResourceAsStream("hive-schema-3.1.0.derby.sql");
+    try (Reader reader = new InputStreamReader(inputStream)) {
+      scriptRunner.runScript(reader);
     }
   }
 }
