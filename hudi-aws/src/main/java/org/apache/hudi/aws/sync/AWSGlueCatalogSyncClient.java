@@ -499,7 +499,11 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableInput(updatedTableInput)
           .build();
 
-      awsGlue.updateTable(request);
+      try {
+        awsGlue.updateTable(request).get();
+      } catch (Exception e) {
+        throw new HoodieGlueSyncException("Fail to update table comments " + tableId(databaseName, table.name()), e);
+      }
       return true;
     }
   }
@@ -531,7 +535,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableInput(updatedTableInput)
           .build();
 
-      awsGlue.updateTable(request);
+      awsGlue.updateTable(request).get();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }
@@ -574,7 +578,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .skipArchive(skipTableArchive)
           .tableInput(updatedTableInput)
           .build();
-      awsGlue.updateTable(request);
+      awsGlue.updateTable(request).get();
       dropTable(tempTableName);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to recreate the table" + tableId(databaseName, tableName), e);
@@ -1011,7 +1015,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableInput(updatedTableInput)
           .build();
 
-      awsGlue.updateTable(updateTableRequest);
+      awsGlue.updateTable(updateTableRequest).get();
       return true;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Failed to update table serde info for table: "
@@ -1094,7 +1098,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .tableInput(updatedTableInput)
           .skipArchive(skipTableArchive)
           .build();
-      awsGlue.updateTable(request);
+      awsGlue.updateTable(request).get();
       return true;
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + updatingParams, e);
