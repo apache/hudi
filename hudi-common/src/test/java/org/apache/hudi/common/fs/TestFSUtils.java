@@ -565,6 +565,57 @@ public class TestFSUtils extends HoodieCommonTestHarness {
         false));
   }
 
+  @Test
+  void testComparePathsWithoutScheme() {
+    String path1 = "s3://test_bucket_one/table/base/path";
+    String path2 = "s3a://test_bucket_two/table/base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since bucket names dont match");
+
+    path1 = "s3a://test_bucket_one/table/new_base/path";
+    path2 = "s3a://test_bucket_one/table/old_base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since paths don't match");
+
+    path1 = "s3://test_bucket_one/table/base/path";
+    path2 = "s3a://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since bucket names match without file shema");
+
+    path1 = "s3a://test_bucket_one/table/base/path";
+    path2 = "s3a://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    path2 = "gs://test_bucket_two/table/base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    path2 = "gs://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "file:/var/table/base/path";
+    path2 = "/var/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since path matches");
+
+    path1 = "file:/var/table/base/path";
+    path2 = "file:/var/table/old_base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since path doesn't matches");
+
+    path1 = "table/base/path";
+    path2 = "table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since relative path doesn't matches");
+  }
+
+  @Test
+  void testGetPathWithoutScheme() {
+    String path1 = "s3://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+
+    path1 = "s3a://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+  }
+
   private Path getHoodieTempDir() {
     return new Path(baseUri.toString(), ".hoodie/.temp");
   }
