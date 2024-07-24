@@ -529,7 +529,7 @@ public class MercifulJsonConverter {
       private static final Map<AvroLogicalTypeEnum, DateTimeParseContext> DATE_TIME_PARSE_CONTEXT_MAP = getParseContext();
 
       private static Map<AvroLogicalTypeEnum, DateTimeParseContext> getParseContext() {
-        // Formatter for parsing local timestamp. It ignores the time zone info of the timestamp.
+        // Formatter for parsing a timestamp. It assumes UTC timezone, with 'Z' as the zone ID.
         // No pattern is defined as ISO_INSTANT format internal is not clear.
         DateTimeParseContext dateTimestampParseContext = new DateTimeParseContext(
             DateTimeFormatter.ISO_INSTANT,
