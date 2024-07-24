@@ -206,7 +206,7 @@ object RecordLevelIndexSupport {
     if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
       true
     } else {
-      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
+      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == attributeName
     }
   }
 }

@@ -51,7 +51,7 @@ class TestSecondaryIndexSupport {
 
     // Case 4: EqualTo filters on simple AttributeReference and Literal which should return non-empty result
     testFilter = EqualTo(AttributeReference("_row_key", StringType, nullable = true)(), Literal("row1"))
-    result = filterQueriesWithSecondaryKey(Seq(testFilter), Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))._2
+    result = filterQueriesWithSecondaryKey(Seq(testFilter), Option.apply("_row_key"))._2
     assertTrue(result.nonEmpty)
     assertEquals(result, List.apply("row1"))
 
@@ -66,7 +66,7 @@ class TestSecondaryIndexSupport {
 
     // Case 7: In filter on record key should return non-empty result
     testFilter = In(AttributeReference("_row_key", StringType, nullable = true)(), List.apply(Literal("xyz"), Literal("abc")))
-    result = filterQueriesWithSecondaryKey(Seq(testFilter), Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))._2
+    result = filterQueriesWithSecondaryKey(Seq(testFilter), Option.apply("_row_key"))._2
     assertTrue(result.nonEmpty)
 
     // Case 8: In filter on simple AttributeReference(on record-key) and non-Literal should return empty result

@@ -49,7 +49,7 @@ class TestRecordLevelIndexSupport {
 
     // Case 4: EqualTo filters on simple AttributeReference and Literal which should return non-empty result
     testFilter = EqualTo(AttributeReference("_row_key", StringType, nullable = true)(), Literal("row1"))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("_row_key"))
     assertTrue(result.isDefined)
     assertEquals(result, Option.apply(testFilter, List.apply("row1")))
 
@@ -64,7 +64,7 @@ class TestRecordLevelIndexSupport {
 
     // Case 7: In filter on record key should return non-empty result
     testFilter = In(AttributeReference("_row_key", StringType, nullable = true)(), List.apply(Literal("xyz"), Literal("abc")))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("_row_key"))
     assertTrue(result.isDefined)
 
     // Case 8: In filter on simple AttributeReference(on record-key) and non-Literal should return empty result
@@ -84,5 +84,10 @@ class TestRecordLevelIndexSupport {
     testFilter = GreaterThan(AttributeReference("_row_key", StringType, nullable = true)(), Literal("row1"))
     result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
+
+    testFilter = EqualTo(AttributeReference(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName, StringType, nullable = true)(), Literal("row1"))
+    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply("_row_key"))
+    assertTrue(result.isDefined)
+    assertEquals(result, Option.apply(testFilter, List.apply("row1")))
   }
 }
