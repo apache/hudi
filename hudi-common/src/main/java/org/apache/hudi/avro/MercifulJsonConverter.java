@@ -540,7 +540,7 @@ public class MercifulJsonConverter {
         DateTimeParseContext dateTimeParseContext = new DateTimeParseContext(
             DateTimeFormatter.ISO_LOCAL_TIME,
             Pattern.compile("^[+-]?\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,9})?)?"));
-        // Formatter for parsing local time. The pattern is derived from ISO_LOCAL_TIME definition.
+        // Formatter for parsing a timestamp in a local timezone. The pattern is derived from ISO_LOCAL_DATE_TIME definition.
         // Pattern asserts the string is
         // <optional sign><Year>-<Month>-<Day>T<Hour>:<Minute> + optional <second> + optional <fractional second>
         DateTimeParseContext localTimestampParseContext = new DateTimeParseContext(
