@@ -547,7 +547,7 @@ public class MercifulJsonConverter {
             DateTimeFormatter.ISO_LOCAL_DATE_TIME,
             Pattern.compile("^[+-]?\\d{4,10}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,9})?)?")
         );
-        // Formatter for parsing local date. The pattern is derived from ISO_LOCAL_DATE definition.
+        // Formatter for parsing a date. The pattern is derived from ISO_LOCAL_DATE definition.
         // Pattern asserts the string is
         // <optional sign><Year>-<Month>-<Day>
         DateTimeParseContext localDateParseContext = new DateTimeParseContext(
