@@ -29,7 +29,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -179,7 +178,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   fileSliceMapping.getPartitionValues)
               }
 
-            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters, storageConf)
+            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -189,14 +188,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             fileGroupSplit, cdcFileReader.asInstanceOf[PartitionedFile => Iterator[InternalRow]],
             storageConf, fileIndexProps, requiredSchema)
 
-        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters, storageConf)
+        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
       }
     }
   }
 
   private def setSchemaEvolutionConfigs(conf: StorageConfiguration[_]): Unit = {
     if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchemaOpt.get()))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tableState.tablePath)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
