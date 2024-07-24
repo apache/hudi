@@ -260,3 +260,6 @@ f3c8f858bcb [ENG-11950][MINOR] Improve error logging in JSON Avro conversion (#8
 f06b244373f [ENG-11551][HUDI-7985] Support timestamp string without zone offset in timestamp logical types in Json Avro converter (#828)
 14a0086b0d9 [AUDIT-862] Fixing integ-test bundle build (#826)
 c742b6c4f56 [AUDIT-862]: Changelog for release-v1.24.0 (#825)
+
+---[2024-07-24 16:02:00] [release-v1.25.1] ---
+6696e5e356 [ENG-12088][HUDI-8015] Fix Glue Meta Sync Failure on base path change (#837)
