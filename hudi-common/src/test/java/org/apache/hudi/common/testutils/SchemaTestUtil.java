@@ -76,6 +76,10 @@ public final class SchemaTestUtil {
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
+  
+  public static Schema getSchemaFromResourceFilePath(String filePath) throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(filePath));
+  }
 
   public static Schema getSchema(String path) throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
