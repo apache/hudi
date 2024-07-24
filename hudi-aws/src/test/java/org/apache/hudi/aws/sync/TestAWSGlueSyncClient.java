@@ -41,6 +41,8 @@ import software.amazon.awssdk.services.glue.model.GetTableRequest;
 import software.amazon.awssdk.services.glue.model.GetTableResponse;
 import software.amazon.awssdk.services.glue.model.SerDeInfo;
 import software.amazon.awssdk.services.glue.model.Table;
+import software.amazon.awssdk.services.glue.model.UpdateTableRequest;
+import software.amazon.awssdk.services.glue.model.UpdateTableResponse;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -54,6 +56,7 @@ import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -223,6 +226,28 @@ class TestAWSGlueSyncClient {
     assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.getTableLocation(tableName));
   }
 
+  @Test
+  void testUpdateTableProperties() throws ExecutionException, InterruptedException {
+    String tableName = "test";
+    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
+        Column.builder().name("age").type("int").comment("person's age").build());
+    List<Column> partitionKeys = Arrays.asList(Column.builder().name("city").type("string").comment("person's city").build());
+    CompletableFuture<GetTableResponse> tableResponseFuture = getTableWithDefaultProps(tableName, columns, partitionKeys);
+    HashMap<String, String> newTableProperties = new HashMap<>();
+    newTableProperties.put("last_commit_time_sync", "100");
+
+    CompletableFuture<UpdateTableResponse> mockUpdateTableResponse = Mockito.mock(CompletableFuture.class);
+    Mockito.when(mockUpdateTableResponse.get()).thenReturn(UpdateTableResponse.builder().build());
+    Mockito.when(mockAwsGlue.getTable(any(GetTableRequest.class))).thenReturn(tableResponseFuture);
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(mockUpdateTableResponse);
+    boolean updated = awsGlueSyncClient.updateTableProperties(tableName, newTableProperties);
+    assertTrue(updated, "should return true when new parameters is not empty");
+    verify(mockAwsGlue, times(1)).updateTable(any(UpdateTableRequest.class));
+
+    Mockito.when(mockUpdateTableResponse.get()).thenThrow(new InterruptedException());
+    assertThrows(HoodieGlueSyncException.class, () -> awsGlueSyncClient.updateTableProperties(tableName, newTableProperties));
+  }
+
   private CompletableFuture<GetTableResponse> getTableWithDefaultProps(String tableName, List<Column> columns, List<Column> partitionColumns) {
     String databaseName = "testdb";
     String inputFormatClass = "inputFormat";
@@ -230,6 +255,9 @@ class TestAWSGlueSyncClient {
     String serdeClass = "serde";
     HashMap<String, String> serdeProperties = new HashMap<>();
     HashMap<String, String> tableProperties = new HashMap<>();
+    tableProperties.put("EXTERNAL", "true");
+    tableProperties.put("spark.sql.sources.schema.numPartCols", "1");
+    tableProperties.put("hudi.metadata-listing-enabled", "false");
     software.amazon.awssdk.services.glue.model.StorageDescriptor storageDescriptor = software.amazon.awssdk.services.glue.model.StorageDescriptor.builder()
         .serdeInfo(SerDeInfo.builder().serializationLibrary(serdeClass).parameters(serdeProperties).build())
         .inputFormat(inputFormatClass)
@@ -240,7 +268,6 @@ class TestAWSGlueSyncClient {
     Table table = Table.builder()
         .name(tableName)
         .tableType("COPY_ON_WRITE")
-        .parameters(new HashMap<>())
         .storageDescriptor(storageDescriptor)
         .partitionKeys(partitionColumns)
         .parameters(tableProperties)
