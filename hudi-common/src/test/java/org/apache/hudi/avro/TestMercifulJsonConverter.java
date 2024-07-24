@@ -204,10 +204,7 @@ public class TestMercifulJsonConverter {
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true)
-
     );
   }
 

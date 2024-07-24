@@ -534,7 +534,7 @@ public class MercifulJsonConverter {
         DateTimeParseContext dateTimestampParseContext = new DateTimeParseContext(
             DateTimeFormatter.ISO_INSTANT,
             null /* match everything*/);
-        // Formatter for parsing timestamp with time zone. The pattern is derived from ISO_LOCAL_TIME definition.
+        // Formatter for parsing a time of day. The pattern is derived from ISO_LOCAL_TIME definition.
         // Pattern asserts the string is
         // <optional sign><Hour>:<Minute> + optional <second> + optional <fractional second>
         DateTimeParseContext dateTimeParseContext = new DateTimeParseContext(
