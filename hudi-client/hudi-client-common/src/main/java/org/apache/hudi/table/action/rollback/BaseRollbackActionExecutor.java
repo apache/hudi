@@ -165,7 +165,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     if (config.getFailedWritesCleanPolicy().isEager()  && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-      HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      HoodieTimeline pendingCommitsTimeline = table.getPendingCommitsTimeline();
       // Check validity of completed commit timeline.
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
@@ -184,7 +184,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         }
       }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstantsAsStream()
+      List<String> inflights = pendingCommitsTimeline.getInstantsAsStream()
           .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant))
           .map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
