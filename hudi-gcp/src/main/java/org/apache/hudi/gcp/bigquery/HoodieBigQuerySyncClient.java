@@ -19,6 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -52,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID;
@@ -326,7 +326,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   private boolean isBasePathUpdated(ExternalTableDefinition externalTableDefinition) {
     String basePath = StringUtils.stripEnd(getBasePath(), "/");
     if (externalTableDefinition.getHivePartitioningOptions() == null) {
-      List<String> sourceUris = Optional.ofNullable(externalTableDefinition.getSourceUris()).orElse(Collections.emptyList());
+      List<String> sourceUris = Option.ofNullable(externalTableDefinition.getSourceUris()).orElse(Collections.emptyList());
       // compare source uris with trailing slash to make sure it unwanted prefix matches are avoided
       String basePathWithTrailingSlash = String.format("%s/", basePath);
       boolean isTableBasePathUpdated = sourceUris.stream()
