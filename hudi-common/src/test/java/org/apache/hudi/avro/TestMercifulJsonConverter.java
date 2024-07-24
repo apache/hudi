@@ -20,16 +20,23 @@ package org.apache.hudi.avro;
 
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.avro.Conversions;
+import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericData.Fixed;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TestMercifulJsonConverter {
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -98,5 +105,45 @@ public class TestMercifulJsonConverter {
     rec.put("favorite_color", color);
 
     Assertions.assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
+  }
+
+  @Test
+  public void testConvertNumberToFixed() throws IOException {
+    String testSchemaStr = "{\"type\": \"record\",\"name\": \"test_record\",\"namespace\": \"test_namespace\",\"fields\": "
+        + "[{\"name\": \"decimal_field\",\"type\": [\"null\",{\"type\": \"fixed\",\"name\": \"fixed\",\"namespace\": \"test_namespace.decimal_field\",\"size\": 9,"
+        + "    \"logicalType\": \"decimal\",\"precision\": 20,\"scale\": 0}],\"default\": null},"
+        + "{\"name\": \"decimal2_field\",\"type\": [\"null\",{\"type\": \"fixed\",\"name\": \"fixed\",\"namespace\": \"test_namespace.decimal2_field\",\"size\": 9,"
+        + "    \"logicalType\": \"decimal\",\"precision\": 20,\"scale\": 2}],\"default\": null},"
+        + "{\"name\": \"decimal3_field\",\"type\": [\"null\",{\"type\": \"fixed\",\"name\": \"fixed\",\"namespace\": \"test_namespace.decimal3_field\",\"size\": 9,"
+        + "    \"logicalType\": \"decimal\",\"precision\": 20,\"scale\": 2}],\"default\": null},"
+        + "{\"name\": \"int_field\",\"type\": [\"null\",\"int\"],\"default\": null},"
+        + "{\"name\": \"long_field\",\"type\": [\"null\",\"long\"],\"default\": null},"
+        + "{\"name\": \"string_field\",\"type\": [\"null\",\"string\"],\"default\": null}]}";
+    Schema schema = Schema.parse(testSchemaStr);
+
+    String testValueStr = "{\n"
+        + "    \"decimal_field\": 1720623716,\n"
+        + "    \"decimal2_field\": 1720623716.23,\n"
+        + "    \"decimal3_field\": [0, 0, 0, 0, 40, 15, -73, 111, 39],\n"
+        + "    \"int_field\": 1720623716,\n"
+        + "    \"long_field\": 1720623716,\n"
+        + "    \"string_field\": \"STRING040467046577\"\n"
+        + "}";
+
+    GenericRecord record = CONVERTER.convert(testValueStr, schema);
+    ObjectMapper objectMapper = new ObjectMapper();
+    JsonNode root = objectMapper.readTree(testValueStr);
+
+    assertEquals(root.get("decimal_field").asLong(), convertFixedToDecimal((Fixed) record.get("decimal_field")).longValue());
+    assertEquals(root.get("decimal2_field").asDouble(), convertFixedToDecimal((Fixed) record.get("decimal2_field")).doubleValue());
+
+    Fixed testFixedValue = new Fixed(((Fixed) record.get("decimal3_field")).getSchema(), new byte[] {0, 0, 0, 0, 40, 15, -73, 111, 39});
+    assertEquals(1720623716.23, convertFixedToDecimal(testFixedValue).doubleValue());
+    assertEquals(testFixedValue, record.get("decimal3_field"));
+  }
+
+  private BigDecimal convertFixedToDecimal(GenericData.Fixed fixedRecord) {
+    DecimalConversion decimalConversion = new Conversions.DecimalConversion();
+    return decimalConversion.fromFixed(fixedRecord, fixedRecord.getSchema(), fixedRecord.getSchema().getLogicalType());
   }
 }
