@@ -1101,6 +1101,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       awsGlue.updateTable(request).get();
       return true;
     } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        // In case {@code InterruptedException} was thrown, resetting the interrupted flag
+        // of the thread, we reset it (to true) again to permit subsequent handlers
+        // to be interrupted as well
+        Thread.currentThread().interrupt();
+      }
       throw new HoodieGlueSyncException("Fail to update params for table " + tableId(databaseName, tableName) + ": " + updatingParams, e);
     }
   }
