@@ -633,7 +633,7 @@ public class MercifulJsonConverter {
       }
 
       private Pair<Boolean, LocalDate> convertToLocalDate(String input) {
-        // Parse the input timestamp, DateTimeFormatter.ISO_LOCAL_TIME is implied here
+        // Parse the input date string, DateTimeFormatter.ISO_LOCAL_DATE is implied here
         LocalDate date = null;
         try {
           // Try parsing as an ISO date
