@@ -262,7 +262,8 @@ object HoodieSchemaUtils {
     // Filter the table schema fields to get the partition field names in order
     val tableSchemaPartitionFields = tableSchemaFields.filter(partitionFields.contains).toSeq
     if (tableSchemaPartitionFields != partitionFields) {
-      throw new IllegalArgumentException("Partition schema fields order does not match the table schema fields order.")
+      throw new IllegalArgumentException(s"Partition schema fields order does not match the table schema fields order," +
+        s" tableSchemaFields: $tableSchemaPartitionFields, partitionFields: $partitionFields.")
     }
   }
 }
