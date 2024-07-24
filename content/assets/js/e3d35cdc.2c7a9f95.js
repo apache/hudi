@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[32367],{86283:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/open-architecture","name":"Open Architecture","count":1,"permalink":"/blog/tags/open-architecture"}')}}]);
