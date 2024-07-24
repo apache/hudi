@@ -41,8 +41,7 @@ public class ConfigGroups {
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    HUDI_STREAMER("Hudi Streamer Configs"),
-    INDEXING("Indexing Configs");
+    HUDI_STREAMER("Hudi Streamer Configs");
 
     public final String name;
 
@@ -78,10 +77,7 @@ public class ConfigGroups {
         "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
-        "No subgroup. This description should be hidden."),
-    FUNCTIONAL_INDEX(
-        "Functional Index Configs",
-        "Configurations controlling the behavior of functional index.");
+        "No subgroup. This description should be hidden.");
 
     public final String name;
     private final String description;
