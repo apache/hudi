@@ -2545,6 +2545,7 @@
         <orc.spark.version>1.6.12</orc.spark.version>
         <avro.version>1.10.2</avro.version>
         <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.12.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
