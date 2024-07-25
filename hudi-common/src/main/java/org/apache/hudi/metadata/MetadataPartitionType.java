@@ -148,6 +148,10 @@ public enum MetadataPartitionType {
     return fileIdPrefix;
   }
 
+  public int getRecordType() {
+    return recordType;
+  }
+
   public int getRecordType(String key) {
     return recordType;
   }

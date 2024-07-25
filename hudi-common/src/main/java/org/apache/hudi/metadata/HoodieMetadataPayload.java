@@ -200,7 +200,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       key = record.get(KEY_FIELD_NAME).toString();
       type = (int) record.get(SCHEMA_FIELD_NAME_TYPE);
 
-      if (type == MetadataPartitionType.FILES.getRecordType(EMPTY_STRING) || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
+      if (type == MetadataPartitionType.FILES.getRecordType() || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
         Map<String, HoodieMetadataFileInfo> metadata = getNestedFieldValue(record, SCHEMA_FIELD_NAME_METADATA);
         if (metadata != null) {
           filesystemMetadata = metadata;
@@ -209,14 +209,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
           });
         }
-      } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType(EMPTY_STRING)) {
+      } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType()) {
         GenericRecord bloomFilterRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_BLOOM_FILTER);
         // NOTE: Only legitimate reason for {@code BloomFilterMetadata} to not be present is when
         //       it's not been read from the storage (ie it's not been a part of projected schema).
         //       Otherwise, it has to be present or the record would be considered invalid
         if (bloomFilterRecord == null) {
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_BLOOM_FILTER) == null,
-              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType(EMPTY_STRING)));
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
         } else {
           bloomFilterMetadata = new HoodieMetadataBloomFilter(
               (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
@@ -225,14 +225,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
           );
         }
-      } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType(EMPTY_STRING) || type == MetadataPartitionType.PARTITION_STATS.getRecordType(EMPTY_STRING)) {
+      } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType() || type == MetadataPartitionType.PARTITION_STATS.getRecordType()) {
         GenericRecord columnStatsRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_COLUMN_STATS);
         // NOTE: Only legitimate reason for {@code ColumnStatsMetadata} to not be present is when
         //       it's not been read from the storage (ie it's not been a part of projected schema).
         //       Otherwise, it has to be present or the record would be considered invalid
         if (columnStatsRecord == null) {
           checkArgument(record.getSchema().getField(SCHEMA_FIELD_ID_COLUMN_STATS) == null,
-              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType(EMPTY_STRING)));
+              String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_COLUMN_STATS, MetadataPartitionType.COLUMN_STATS.getRecordType()));
         } else {
           columnStatMetadata = HoodieMetadataColumnStats.newBuilder(METADATA_COLUMN_STATS_BUILDER_STUB.get())
               .setFileName((String) columnStatsRecord.get(COLUMN_STATS_FIELD_FILE_NAME))
@@ -249,7 +249,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setIsDeleted((Boolean) columnStatsRecord.get(COLUMN_STATS_FIELD_IS_DELETED))
               .build();
         }
-      } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType(EMPTY_STRING)) {
+      } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType()) {
         GenericRecord recordIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_RECORD_INDEX);
         Object recordIndexPosition = recordIndexRecord.get(RECORD_INDEX_FIELD_POSITION);
         recordIndexMetadata = new HoodieRecordIndexInfo(recordIndexRecord.get(RECORD_INDEX_FIELD_PARTITION).toString(),
@@ -260,9 +260,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             Long.parseLong(recordIndexRecord.get(RECORD_INDEX_FIELD_INSTANT_TIME).toString()),
             Integer.parseInt(recordIndexRecord.get(RECORD_INDEX_FIELD_FILEID_ENCODING).toString()),
             recordIndexPosition != null ? Long.parseLong(recordIndexPosition.toString()) : null);
-      } else if (type == MetadataPartitionType.SECONDARY_INDEX.getRecordType(EMPTY_STRING)) {
+      } else if (type == MetadataPartitionType.SECONDARY_INDEX.getRecordType()) {
         GenericRecord secondaryIndexRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_SECONDARY_INDEX);
-        checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType(EMPTY_STRING));
+        checkState(secondaryIndexRecord != null, "Valid SecondaryIndexMetadata record expected for type: " + MetadataPartitionType.SECONDARY_INDEX.getRecordType());
         secondaryIndexMetadata = new HoodieSecondaryIndexInfo(
             secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
             (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
@@ -277,19 +277,19 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(EMPTY_STRING), null, metadataBloomFilter, null, null, null);
+    this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, MetadataPartitionType.COLUMN_STATS.getRecordType(EMPTY_STRING), null, null, columnStats, null, null);
+    this(key, MetadataPartitionType.COLUMN_STATS.getRecordType(), null, null, columnStats, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(EMPTY_STRING), null, null, null, recordIndexMetadata, null);
+    this(key, MetadataPartitionType.RECORD_INDEX.getRecordType(), null, null, null, recordIndexMetadata, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieSecondaryIndexInfo secondaryIndexMetadata) {
-    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(EMPTY_STRING), null, null, null, null, secondaryIndexMetadata);
+    this(key, MetadataPartitionType.SECONDARY_INDEX.getRecordType(), null, null, null, null, secondaryIndexMetadata);
   }
 
   protected HoodieMetadataPayload(String key, int type,
@@ -349,7 +349,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
     HoodieKey key = new HoodieKey(partitionIdentifier, MetadataPartitionType.FILES.getPartitionPath());
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), MetadataPartitionType.FILES.getRecordType(EMPTY_STRING), fileInfo);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), MetadataPartitionType.FILES.getRecordType(), fileInfo);
     return new HoodieAvroRecord<>(key, payload);
   }
 
@@ -398,15 +398,15 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     checkArgument(previousRecord.key.equals(key),
         "Cannot combine " + previousRecord.key + " with " + key + " as the keys differ");
 
-    if (type == MetadataPartitionType.FILES.getRecordType(EMPTY_STRING) || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
+    if (type == MetadataPartitionType.FILES.getRecordType() || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
       Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFileSystemMetadata(previousRecord);
       return new HoodieMetadataPayload(key, type, combinedFileInfo);
-    } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType()) {
       HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
       return new HoodieMetadataPayload(key, combineBloomFilterMetadata);
-    } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType()) {
       return new HoodieMetadataPayload(key, combineColumnStatsMetadata(previousRecord));
-    } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType()) {
       // There is always a single mapping and the latest mapping is maintained.
       // Mappings in record index can change in two scenarios:
       // 1. A key deleted from dataset and then added again (new filedID)
@@ -414,7 +414,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
       // No need to merge with previous record index, always pick the latest payload.
       return this;
-    } else if (type == MetadataPartitionType.SECONDARY_INDEX.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.SECONDARY_INDEX.getRecordType()) {
       // Secondary Index combine()/merge() always returns the current (*this*)
       // record and discards the prevRecord. Based on the 'isDeleted' marker in the payload,
       // the merger running on top takes the right action (discard current or retain current record).
@@ -877,24 +877,24 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     sb.append(KEY_FIELD_NAME + "=").append(key).append(", ");
     sb.append(SCHEMA_FIELD_NAME_TYPE + "=").append(type).append(", ");
 
-    if (type == MetadataPartitionType.FILES.getRecordType(EMPTY_STRING) || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
+    if (type == MetadataPartitionType.FILES.getRecordType() || type == MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST)) {
       sb.append("Files: {");
       sb.append("creations=").append(Arrays.toString(getFilenames().toArray())).append(", ");
       sb.append("deletions=").append(Arrays.toString(getDeletions().toArray())).append(", ");
       sb.append("}");
-    } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.BLOOM_FILTERS.getRecordType()) {
       checkState(getBloomFilterMetadata().isPresent());
       sb.append("BloomFilter: {");
       sb.append("bloom size: ").append(getBloomFilterMetadata().get().getBloomFilter().array().length).append(", ");
       sb.append("timestamp: ").append(getBloomFilterMetadata().get().getTimestamp()).append(", ");
       sb.append("deleted: ").append(getBloomFilterMetadata().get().getIsDeleted());
       sb.append("}");
-    } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.COLUMN_STATS.getRecordType()) {
       checkState(getColumnStatMetadata().isPresent());
       sb.append("ColStats: {");
       sb.append(getColumnStatMetadata().get());
       sb.append("}");
-    } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType(EMPTY_STRING)) {
+    } else if (type == MetadataPartitionType.RECORD_INDEX.getRecordType()) {
       sb.append("RecordIndex: {");
       sb.append("location=").append(getRecordGlobalLocation());
       sb.append("}");
@@ -904,7 +904,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    if (type == MetadataPartitionType.FILES.getRecordType(EMPTY_STRING)) {
+    if (type == MetadataPartitionType.FILES.getRecordType()) {
       filesystemMetadata.forEach((fileName, fileInfo) -> checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0"));
     }
   }

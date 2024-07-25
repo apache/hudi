@@ -176,11 +176,11 @@ public class TestMetadataPartitionType {
   @Test
   public void testGetMetadataPartitionRecordType() {
     assertEquals(1, MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST));
-    assertEquals(2, MetadataPartitionType.FILES.getRecordType(""));
-    assertEquals(3, MetadataPartitionType.COLUMN_STATS.getRecordType(""));
-    assertEquals(4, MetadataPartitionType.BLOOM_FILTERS.getRecordType(""));
-    assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType(""));
-    assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType(""));
-    assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType(""));
+    assertEquals(2, MetadataPartitionType.FILES.getRecordType());
+    assertEquals(3, MetadataPartitionType.COLUMN_STATS.getRecordType());
+    assertEquals(4, MetadataPartitionType.BLOOM_FILTERS.getRecordType());
+    assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType());
+    assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType());
+    assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType());
   }
 }
