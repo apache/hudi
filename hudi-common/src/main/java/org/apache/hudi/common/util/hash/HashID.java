@@ -79,10 +79,10 @@ public class HashID implements Serializable {
   }
 
   /**
-   * Get the hash value for a string message and for the desired @{@link Size}.
+   * Get the hash value for a string message and for the desired @{@link HashID.Size}.
    *
    * @param message - String message to get the hash value for
-   * @param bits    - @{@link Size} of the hash value
+   * @param bits    - @{@link HashID.Size} of the hash value
    * @return Hash value for the message as byte array
    */
   public static byte[] hash(final String message, final Size bits) {
@@ -106,6 +106,24 @@ public class HashID implements Serializable {
       default:
         throw new IllegalArgumentException("Unexpected Hash size bits: " + bits);
     }
+  }
+
+  /**
+   * Get the hash value as string for a given string and for the desired @{@link Size}.
+   *
+   * @param input - String message to get the hash value for.
+   * @param size  - @{@link Size} of the hash value
+   * @return Hash value for the message as string.
+   */
+  public static String generateXXHashAsString(String input, Size size) {
+    // Compute the hash
+    byte[] hashBytes = hash(input, size);
+    // Convert the hash value to a hexadecimal string
+    StringBuilder hexString = new StringBuilder();
+    for (byte hashByte : hashBytes) {
+      hexString.append(String.format("%02X", hashByte));
+    }
+    return hexString.toString();
   }
 
   public static int getXXHash32(final String message, int hashSeed) {

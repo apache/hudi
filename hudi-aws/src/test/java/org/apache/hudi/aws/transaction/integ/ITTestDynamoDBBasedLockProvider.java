@@ -18,7 +18,24 @@
 
 package org.apache.hudi.aws.transaction.integ;
 
+import org.apache.hudi.aws.transaction.lock.DynamoDBBasedImplicitPartitionKeyLockProvider;
+import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider;
+import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProviderBase;
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.hash.HashID;
+import org.apache.hudi.config.DynamoDbBasedLockConfig;
+import org.apache.hudi.storage.StorageConfiguration;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,18 +43,11 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.BillingMode;
 
-import org.apache.hudi.aws.transaction.lock.DynamoDBBasedLockProvider;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.config.DynamoDbBasedLockConfig;
-
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-
 import java.net.URI;
 import java.util.UUID;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
 
@@ -48,62 +58,78 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_
 @Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
 public class ITTestDynamoDBBasedLockProvider {
 
-  private static LockConfiguration lockConfiguration;
-  private static DynamoDbClient dynamoDb;
-
+  private static final LockConfiguration LOCK_CONFIGURATION;
+  private static final LockConfiguration IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH;
+  private static final LockConfiguration IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY;
+  private static final LockConfiguration IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME;
+  private static final LockConfiguration IMPLICIT_PART_KEY_LOCK_CONFIG;
   private static final String TABLE_NAME_PREFIX = "testDDBTable-";
   private static final String REGION = "us-east-2";
+  private static DynamoDbClient dynamoDb;
+
+  static {
+    Properties dynamoDblpProps = new Properties();
+    Properties implicitPartKeyLpProps;
+    // Common properties shared by both lock providers.
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key(), BillingMode.PAY_PER_REQUEST.name());
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_CREATION_TIMEOUT.key(), Integer.toString(20 * 1000 * 5));
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key(), REGION);
+    dynamoDblpProps.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key(), "0");
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key(), "0");
+
+    implicitPartKeyLpProps = new TypedProperties(dynamoDblpProps);
+    dynamoDblpProps = new TypedProperties(dynamoDblpProps);
+
+    // For the day-1 DynamoDbBasedLockProvider, it requires an optional partition key
+    dynamoDblpProps.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
+    LOCK_CONFIGURATION = new LockConfiguration(dynamoDblpProps);
+
+    // For the newly added implicit partition key DDB lock provider, it can derive the partition key from
+    // hudi table base path and hudi table name. These properties are available in lockConfig as of today.
+    implicitPartKeyLpProps.setProperty(
+        HoodieCommonConfig.BASE_PATH.key(),
+        "gs://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
+    implicitPartKeyLpProps.setProperty(
+        HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
+    IMPLICIT_PART_KEY_LOCK_CONFIG = new LockConfiguration(implicitPartKeyLpProps);
+    // With partition key nothing should break, the field should be simply ignored.
+    TypedProperties withPartKey = new TypedProperties(implicitPartKeyLpProps);
+    withPartKey.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
+    IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY = new LockConfiguration(withPartKey);
+
+    // Missing either base path or hoodie table name is a bad config for implicit partition key lock provider.
+    TypedProperties missingBasePath = new TypedProperties(implicitPartKeyLpProps);
+    missingBasePath.remove(HoodieCommonConfig.BASE_PATH.key());
+    IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH = new LockConfiguration(missingBasePath);
+
+    TypedProperties missingTableName = new TypedProperties(implicitPartKeyLpProps);
+    missingTableName.remove(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+    IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME = new LockConfiguration(missingTableName);
+  }
 
   @BeforeAll
   public static void setup() throws InterruptedException {
-    Properties properties = new Properties();
-    properties.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_BILLING_MODE.key(), BillingMode.PAY_PER_REQUEST.name());
-    // properties.setProperty(AWSLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX);
-    properties.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
-    properties.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_REGION.key(), REGION);
-    properties.setProperty(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "1000");
-    properties.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_READ_CAPACITY.key(), "0");
-    properties.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_WRITE_CAPACITY.key(), "0");
-    lockConfiguration = new LockConfiguration(properties);
     dynamoDb = getDynamoClientWithLocalEndpoint();
   }
 
-  @Test
-  public void testAcquireLock() {
-    lockConfiguration.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, dynamoDb);
-    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-    dynamoDbBasedLockProvider.unlock();
+  public static Stream<Object> testDimensions() {
+    return Stream.of(
+        // Without parititon key, only table name is used.
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedLockProvider.class),
+        Arguments.of(LOCK_CONFIGURATION, DynamoDBBasedLockProvider.class),
+        // Even if we have partition key set, nothing would break.
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY, DynamoDBBasedImplicitPartitionKeyLockProvider.class),
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG, DynamoDBBasedImplicitPartitionKeyLockProvider.class)
+    );
   }
 
-  @Test
-  public void testUnlock() {
-    lockConfiguration.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, dynamoDb);
-    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-    dynamoDbBasedLockProvider.unlock();
-    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-  }
-
-  @Test
-  public void testReentrantLock() {
-    lockConfiguration.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, dynamoDb);
-    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-    Assertions.assertFalse(dynamoDbBasedLockProvider.tryLock(lockConfiguration.getConfig()
-            .getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
-    dynamoDbBasedLockProvider.unlock();
-  }
-
-  @Test
-  public void testUnlockWithoutLock() {
-    lockConfiguration.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
-    DynamoDBBasedLockProvider dynamoDbBasedLockProvider = new DynamoDBBasedLockProvider(lockConfiguration, null, dynamoDb);
-    dynamoDbBasedLockProvider.unlock();
+  public static Stream<Object> badTestDimensions() {
+    return Stream.of(
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME, DynamoDBBasedLockProvider.class),
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME, DynamoDBBasedImplicitPartitionKeyLockProvider.class),
+        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH, DynamoDBBasedImplicitPartitionKeyLockProvider.class)
+    );
   }
 
   private static DynamoDbClient getDynamoClientWithLocalEndpoint() {
@@ -112,13 +138,95 @@ public class ITTestDynamoDBBasedLockProvider {
       throw new IllegalStateException("dynamodb-local.endpoint system property not set");
     }
     return DynamoDbClient.builder()
-            .region(Region.of(REGION))
-            .endpointOverride(URI.create(endpoint))
-            .credentialsProvider(getCredentials())
-            .build();
+        .region(Region.of(REGION))
+        .endpointOverride(URI.create(endpoint))
+        .credentialsProvider(getCredentials())
+        .build();
   }
 
   private static AwsCredentialsProvider getCredentials() {
     return StaticCredentialsProvider.create(AwsBasicCredentials.create("random-access-key", "random-secret-key"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("badTestDimensions")
+  void testBadConfig(LockConfiguration lockConfig, Class<?> lockProviderClass) {
+    lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
+    Exception e = new Exception();
+    try {
+      ReflectionUtils.loadClass(
+          lockProviderClass.getName(),
+          new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+          lockConfig, null, dynamoDb);
+    } catch (Exception ex) {
+      e = ex;
+    }
+    Assertions.assertEquals(IllegalArgumentException.class, e.getCause().getCause().getClass());
+  }
+
+  @ParameterizedTest
+  @MethodSource("testDimensions")
+  void testAcquireLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
+    lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
+    DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
+        lockProviderClass.getName(),
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Object[] {lockConfig, null, dynamoDb});
+
+    // Also validate the partition key is properly constructed.
+    if (lockProviderClass.equals(DynamoDBBasedLockProvider.class)) {
+      String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+      String partitionKey = (String) lockConfig.getConfig().get(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key());
+      if (partitionKey != null) {
+        Assertions.assertEquals(partitionKey, dynamoDbBasedLockProvider.getPartitionKey());
+      } else {
+        Assertions.assertEquals(tableName, dynamoDbBasedLockProvider.getPartitionKey());
+      }
+    } else if (lockProviderClass.equals(DynamoDBBasedImplicitPartitionKeyLockProvider.class)) {
+      String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+      String basePath = (String) lockConfig.getConfig().get(HoodieCommonConfig.BASE_PATH.key());
+      Assertions.assertEquals(
+          tableName + '-' + HashID.generateXXHashAsString(basePath, HashID.Size.BITS_64),
+          dynamoDbBasedLockProvider.getPartitionKey());
+    }
+    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+    dynamoDbBasedLockProvider.unlock();
+  }
+
+  @ParameterizedTest
+  @MethodSource("testDimensions")
+  void testUnlock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
+    lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
+    DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
+        lockProviderClass.getName(),
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Object[] {lockConfig, null, dynamoDb});
+    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+    dynamoDbBasedLockProvider.unlock();
+    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+  }
+
+  @ParameterizedTest
+  @MethodSource("testDimensions")
+  void testReentrantLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
+    lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
+    DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
+        lockProviderClass.getName(),
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Object[] {lockConfig, null, dynamoDb});
+    Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+    Assertions.assertFalse(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
+    dynamoDbBasedLockProvider.unlock();
+  }
+
+  @ParameterizedTest
+  @MethodSource("testDimensions")
+  void testUnlockWithoutLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
+    lockConfig.getConfig().setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME.key(), TABLE_NAME_PREFIX + UUID.randomUUID());
+    DynamoDBBasedLockProviderBase dynamoDbBasedLockProvider = (DynamoDBBasedLockProviderBase) ReflectionUtils.loadClass(
+        lockProviderClass.getName(),
+        new Class<?>[] {LockConfiguration.class, StorageConfiguration.class, DynamoDbClient.class},
+        new Object[] {lockConfig, null, dynamoDb});
+    dynamoDbBasedLockProvider.unlock();
   }
 }
