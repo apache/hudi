@@ -21,7 +21,6 @@ package org.apache.hudi.hive.testutils;
 import static java.nio.file.attribute.PosixFilePermissions.asFileAttribute;
 import static java.nio.file.attribute.PosixFilePermissions.fromString;
 
-import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hive.ScriptRunner;
@@ -171,8 +170,8 @@ public class HiveTestService {
     conf.setVar(ConfVars.METASTOREURIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
     File localHiveDir = new File(localHiveLocation);
     localHiveDir.mkdirs();
-    File metastoreDbDir = Files.
-        createDirectories(new File(localHiveDir, "metastore_db").toPath(), asFileAttribute(fromString("rwxrwxrwx")))
+    File metastoreDbDir = Files
+        .createDirectories(new File(localHiveDir, "metastore_db").toPath(), asFileAttribute(fromString("rwxrwxrwx")))
         .toFile();
     conf.setVar(ConfVars.METASTORECONNECTURLKEY, "jdbc:derby:" + metastoreDbDir.getPath() + ";create=true");
     File derbyLogFile = new File(localHiveDir, "derby.log");
