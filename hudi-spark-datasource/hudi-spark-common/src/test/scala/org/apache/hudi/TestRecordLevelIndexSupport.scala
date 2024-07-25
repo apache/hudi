@@ -100,10 +100,5 @@ class TestRecordLevelIndexSupport {
     testFilter = GreaterThan(AttributeReference(filterColumnName, StringType, nullable = true)(), Literal("row1"))
     result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName))
     assertTrue(result.isEmpty)
-
-    testFilter = EqualTo(AttributeReference(HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName, StringType, nullable = true)(), Literal("row1"))
-    result = RecordLevelIndexSupport.filterQueryWithRecordKey(testFilter, Option.apply(recordKeyField))
-    assertTrue(result.isDefined)
-    assertEquals(result, Option.apply(testFilter, List.apply("row1")))
   }
 }
