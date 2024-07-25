@@ -47,6 +47,8 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
     return new DynamoDbBasedLockConfig.Builder();
   }
 
+  public static final int MAX_PARTITION_KEY_SIZE_BYTE = 2048;
+
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX + "dynamodb.";
 
@@ -140,26 +142,23 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
     public DynamoDbBasedLockConfig build() {
       lockConfig.setDefaults(DynamoDbBasedLockConfig.class.getName());
-      checkRequiredProps(lockConfig);
       return lockConfig;
     }
 
     public Builder fromProperties(TypedProperties props) {
       lockConfig.getProps().putAll(props);
+      checkRequiredProps();
       return this;
     }
 
-    private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
+    private void checkRequiredProps() {
       String errorMsg = "Config key is not found: ";
       ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
+          lockConfig.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
           errorMsg + DYNAMODB_LOCK_TABLE_NAME.key());
       ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_REGION.key()),
+          lockConfig.contains(DYNAMODB_LOCK_REGION.key()),
           errorMsg + DYNAMODB_LOCK_REGION.key());
-      ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_PARTITION_KEY.key()),
-          errorMsg + DYNAMODB_LOCK_PARTITION_KEY.key());
     }
   }
 }
