@@ -119,7 +119,7 @@
     <joda.version>2.9.9</joda.version>
     <hadoop.version>3.3.5</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.4</hive.version>
+    <hive.version>3.1.3</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.8.2</hive.avro.version>
     <presto.version>0.273</presto.version>
@@ -1498,6 +1498,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.eclipse.jetty.aggregate</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.eclipse.jetty</groupId>
             <artifactId>*</artifactId>
           </exclusion>
           <exclusion>
