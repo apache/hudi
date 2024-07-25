@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
@@ -70,24 +73,27 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
    * Read an individual parquet file
    * Code from ParquetFileFormat#buildReaderWithPartitionValues from Spark v3.5.1 adapted here
    *
-   * @param file            parquet file to read
-   * @param requiredSchema  desired output schema of the data
-   * @param partitionSchema schema of the partition columns. Partition values will be appended to the end of every row
-   * @param filters         filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf      the hadoop conf
+   * @param file               parquet file to read
+   * @param requiredSchema     desired output schema of the data
+   * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
+   * @param internalSchemaOpt  option of internal schema for schema.on.read
+   * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
+   * @param sharedConf         the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  protected def doRead(file: PartitionedFile,
-                       requiredSchema: StructType,
-                       partitionSchema: StructType,
-                       filters: Seq[Filter],
-                       sharedConf: Configuration): Iterator[InternalRow] = {
+  override protected def doRead(file: PartitionedFile,
+                                requiredSchema: StructType,
+                                partitionSchema: StructType,
+                                internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
+                                filters: scala.Seq[Filter],
+                                sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
 
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
+      partitionSchema, internalSchemaOpt)
 
     val fileFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading

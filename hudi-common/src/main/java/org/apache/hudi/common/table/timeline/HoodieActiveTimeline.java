@@ -74,7 +74,8 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
       ROLLBACK_EXTENSION, REQUESTED_ROLLBACK_EXTENSION, INFLIGHT_ROLLBACK_EXTENSION,
       REQUESTED_REPLACE_COMMIT_EXTENSION, INFLIGHT_REPLACE_COMMIT_EXTENSION, REPLACE_COMMIT_EXTENSION,
       REQUESTED_INDEX_COMMIT_EXTENSION, INFLIGHT_INDEX_COMMIT_EXTENSION, INDEX_COMMIT_EXTENSION,
-      REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION));
+      REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION, INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION, SAVE_SCHEMA_ACTION_EXTENSION,
+      REQUESTED_CLUSTERING_COMMIT_EXTENSION, INFLIGHT_CLUSTERING_COMMIT_EXTENSION));
 
   public static final Set<String> NOT_PARSABLE_TIMESTAMPS = new HashSet<String>(3) {{
       add(HoodieTimeline.INIT_INSTANT_TS);
@@ -223,7 +224,7 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
     createFileInMetaPath(instant.getFileName(), Option.empty(), false);
   }
 
-  public void createRequestedReplaceCommit(String instantTime, String actionType) {
+  public void createRequestedCommitWithReplaceMetadata(String instantTime, String actionType) {
     try {
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, actionType, instantTime);
       LOG.info("Creating a new instant " + instant);
@@ -629,6 +630,22 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   /**
+   * Transition cluster requested file to cluster inflight.
+   *
+   * @param requestedInstant Requested instant
+   * @param data Extra Metadata
+   * @return inflight instant
+   */
+  public HoodieInstant transitionClusterRequestedToInflight(HoodieInstant requestedInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(requestedInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
+    ValidationUtils.checkArgument(requestedInstant.isRequested());
+    HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, CLUSTERING_ACTION, requestedInstant.getTimestamp());
+    // Then write to timeline
+    transitionPendingState(requestedInstant, inflightInstant, data);
+    return inflightInstant;
+  }
+
+  /**
    * Transition replace inflight to Committed.
    *
    * @param shouldLock Whether to hold the lock when performing transition
@@ -639,6 +656,24 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   public HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock,
                                                            HoodieInstant inflightInstant, Option<byte[]> data) {
     ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.isInflight());
+    HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
+    // Then write to timeline
+    transitionStateToComplete(shouldLock, inflightInstant, commitInstant, data);
+    return commitInstant;
+  }
+
+  /**
+   * Transition cluster inflight to replace committed.
+   *
+   * @param shouldLock Whether to hold the lock when performing transition
+   * @param inflightInstant Inflight instant
+   * @param data Extra Metadata
+   * @return commit instant
+   */
+  public HoodieInstant transitionClusterInflightToComplete(boolean shouldLock,
+                                                           HoodieInstant inflightInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
     ValidationUtils.checkArgument(inflightInstant.isInflight());
     HoodieInstant commitInstant = new HoodieInstant(State.COMPLETED, REPLACE_COMMIT_ACTION, inflightInstant.getTimestamp());
     // Then write to timeline
@@ -791,6 +826,14 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
    */
   public void saveToPendingReplaceCommit(HoodieInstant instant, Option<byte[]> content) {
     ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    createFileInMetaPath(instant.getFileName(), content, false);
+  }
+
+  /**
+   * Saves content for requested CLUSTER instant.
+   */
+  public void saveToPendingClusterCommit(HoodieInstant instant, Option<byte[]> content) {
+    ValidationUtils.checkArgument(instant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION));
     createFileInMetaPath(instant.getFileName(), content, false);
   }
 

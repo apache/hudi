@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.execution.datasources.Spark3ParquetSchemaEvolutionUtils
@@ -29,8 +32,9 @@ import java.time.ZoneId
 class Spark31ParquetSchemaEvolutionUtils(sharedConf: Configuration,
                                          filePath: Path,
                                          requiredSchema: StructType,
-                                         partitionSchema: StructType) extends
-  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema) {
+                                         partitionSchema: StructType,
+                                         internalSchemaOpt: util.Option[InternalSchema]) extends
+  Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema, internalSchemaOpt) {
 
   def buildVectorizedReader(convertTz: ZoneId,
                             datetimeRebaseMode: String,

@@ -112,7 +112,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
-        metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
+        metaClient, HoodieTimeline.getClusteringCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
 
     List<HoodieClusteringGroup> inputGroups = plan.getInputGroups();
     Assertions.assertEquals(1, inputGroups.size(), "Clustering plan will contain 1 input group");

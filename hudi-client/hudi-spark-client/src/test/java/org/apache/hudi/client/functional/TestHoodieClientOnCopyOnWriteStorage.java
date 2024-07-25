@@ -122,6 +122,7 @@ import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PA
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
@@ -710,7 +711,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     List<List<FileSlice>> firstInsertFileSlicesList = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getAllFileSlices().collect(Collectors.toList())).collect(Collectors.toList());
     List<FileSlice>[] fileSlices = (List<FileSlice>[]) firstInsertFileSlicesList.toArray(new List[0]);
-    createRequestedReplaceInstant(this.metaClient, "002", fileSlices);
+    createRequestedClusterInstant(this.metaClient, "002", fileSlices);
 
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
     insertBatchRecords(client, "003", 1, 1, 1, SparkRDDWriteClient::upsert);
@@ -1087,7 +1088,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
 
-    FileCreateUtils.createRequestedReplaceCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedClusterCommit(metaClient.getBasePath().toString(), pendingClusteringInstant.getTimestamp(), requestedReplaceMetadata);
 
     // trigger clustering again. no new rollback instants should be generated.
     try {
@@ -1630,14 +1631,14 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     assertThrows(HoodieWriteConflictException.class, () -> client.commit(inflightCommit, ingestionResult));
   }
 
-  protected HoodieInstant createRequestedReplaceInstant(HoodieTableMetaClient metaClient, String clusterTime, List<FileSlice>[] fileSlices) throws IOException {
+  protected HoodieInstant createRequestedClusterInstant(HoodieTableMetaClient metaClient, String clusterTime, List<FileSlice>[] fileSlices) throws IOException {
     HoodieClusteringPlan clusteringPlan =
         ClusteringUtils.createClusteringPlan(EXECUTION_STRATEGY_CLASS_NAME.defaultValue(), STRATEGY_PARAMS, fileSlices, Collections.emptyMap());
 
-    HoodieInstant clusteringInstant = new HoodieInstant(REQUESTED, REPLACE_COMMIT_ACTION, clusterTime);
+    HoodieInstant clusteringInstant = new HoodieInstant(REQUESTED, CLUSTERING_ACTION, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
+    metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, TimelineMetadataUtils.serializeRequestedReplaceMetadata(requestedReplaceMetadata));
     return clusteringInstant;
   }
 

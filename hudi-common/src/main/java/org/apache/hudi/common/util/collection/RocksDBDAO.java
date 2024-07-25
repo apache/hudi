@@ -414,7 +414,7 @@ public class RocksDBDAO {
         // This will not delete the last entry
         getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(firstEntry), getUTF8Bytes(lastEntry));
         // Delete the last entry
-        getRocksDB().delete(getUTF8Bytes(lastEntry));
+        getRocksDB().delete(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(lastEntry));
       } catch (RocksDBException e) {
         LOG.error("Got exception performing range delete");
         throw new HoodieException(e);

@@ -115,6 +115,7 @@ class TestAWSGlueSyncClient {
     CompletableFuture<DeleteTableResponse> deleteTableResponse = CompletableFuture.completedFuture(DeleteTableResponse.builder().build());
     Mockito.when(mockAwsGlue.deleteTable(any(DeleteTableRequest.class))).thenReturn(deleteTableResponse);
 
+    Mockito.when(mockAwsGlue.updateTable(any(UpdateTableRequest.class))).thenReturn(CompletableFuture.completedFuture(null));
     awsGlueSyncClient.createOrReplaceTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
 
     // Verify that awsGlue.updateTable() is called exactly once

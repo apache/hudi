@@ -164,4 +164,8 @@ public enum WriteOperationType {
   public static boolean isDelete(WriteOperationType operation) {
     return operation == DELETE || operation == DELETE_PREPPED;
   }
+
+  public static boolean isPreppedWriteOperation(WriteOperationType operationType) {
+    return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
+  }
 }

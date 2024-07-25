@@ -165,7 +165,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     if (config.getFailedWritesCleanPolicy().isEager()  && !HoodieTableMetadata.isMetadataTable(config.getBasePath())) {
       final String instantTimeToRollback = instantToRollback.getTimestamp();
       HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
-      HoodieTimeline inflightAndRequestedCommitTimeline = table.getPendingCommitTimeline();
+      HoodieTimeline pendingCommitsTimeline = table.getPendingCommitsTimeline();
       // Check validity of completed commit timeline.
       // Make sure only the last n commits are being rolled back
       // If there is a commit in-between or after that is not rolled back, then abort
@@ -184,12 +184,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         }
       }
 
-      List<String> inflights = inflightAndRequestedCommitTimeline.getInstantsAsStream().filter(instant -> {
-        if (!instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-          return true;
-        }
-        return !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant);
-      }).map(HoodieInstant::getTimestamp)
+      List<String> inflights = pendingCommitsTimeline.getInstantsAsStream()
+          .filter(instant -> !ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant))
+          .map(HoodieInstant::getTimestamp)
           .collect(Collectors.toList());
       if ((instantTimeToRollback != null) && !inflights.isEmpty()
           && (inflights.indexOf(instantTimeToRollback) != inflights.size() - 1)) {
@@ -211,8 +208,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     final boolean isPendingCompaction = Objects.equals(HoodieTimeline.COMPACTION_ACTION, instantToRollback.getAction())
         && !instantToRollback.isCompleted();
 
-    final boolean isPendingClustering = Objects.equals(HoodieTimeline.REPLACE_COMMIT_ACTION, instantToRollback.getAction())
-        && !instantToRollback.isCompleted() && ClusteringUtils.getClusteringPlan(table.getMetaClient(), instantToRollback).isPresent();
+    final boolean isPendingClustering = !instantToRollback.isCompleted() && ClusteringUtils.isClusteringInstant(table.getMetaClient().getActiveTimeline(), instantToRollback);
     validateSavepointRollbacks();
     if (!isPendingCompaction && !isPendingClustering) {
       validateRollbackCommitSequence();

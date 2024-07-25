@@ -112,12 +112,6 @@ public class HiveSchemaUtil {
         expectedType = expectedType.replaceAll("`", "");
 
         if (!tableColumnType.equalsIgnoreCase(expectedType)) {
-          // check for incremental queries, the schema type change is allowed as per evolution
-          // rules
-          if (!isSchemaTypeUpdateAllowed(tableColumnType, expectedType)) {
-            throw new HoodieHiveSyncException("Could not convert field Type from " + tableColumnType + " to "
-                + expectedType + " for field " + fieldName);
-          }
           schemaDiffBuilder.updateTableColumn(fieldName, getExpectedType(newTableSchema, tickSurroundedFieldName));
         }
       }
@@ -419,23 +413,6 @@ public class HiveSchemaUtil {
     }
     array.append(">");
     return array.toString();
-  }
-
-  public static boolean isSchemaTypeUpdateAllowed(String prevType, String newType) {
-    if (prevType == null || prevType.trim().isEmpty() || newType == null || newType.trim().isEmpty()) {
-      return false;
-    }
-    prevType = prevType.toLowerCase();
-    newType = newType.toLowerCase();
-    if (prevType.equals(newType)) {
-      return true;
-    } else if (prevType.equalsIgnoreCase(INT_TYPE_NAME) && newType.equalsIgnoreCase(BIGINT_TYPE_NAME)) {
-      return true;
-    } else if (prevType.equalsIgnoreCase(FLOAT_TYPE_NAME) && newType.equalsIgnoreCase(DOUBLE_TYPE_NAME)) {
-      return true;
-    } else {
-      return prevType.contains("struct") && newType.toLowerCase().contains("struct");
-    }
   }
 
   public static String generateSchemaString(MessageType storageSchema) throws IOException {

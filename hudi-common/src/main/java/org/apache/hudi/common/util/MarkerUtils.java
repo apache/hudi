@@ -307,7 +307,7 @@ public class MarkerUtils {
       String instantTime = markerDirToInstantTime(instantPath);
       return instantTime.compareToIgnoreCase(currentInstantTime) < 0
           && !activeTimeline.filterPendingCompactionTimeline().containsInstant(instantTime)
-          && !activeTimeline.filterPendingReplaceTimeline().containsInstant(instantTime);
+          && !activeTimeline.filterPendingReplaceOrClusteringTimeline().containsInstant(instantTime);
     }).filter(instantPath -> {
       try {
         return !isHeartbeatExpired(markerDirToInstantTime(instantPath),

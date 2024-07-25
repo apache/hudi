@@ -50,7 +50,7 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".actions")
-      .noDefaultValue()
+      .defaultValue("")
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("The actions deployed on table service manager, such as compaction or clean.");
@@ -171,7 +171,11 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
   }
 
   public boolean isEnabledAndActionSupported(ActionType actionType) {
-    return isTableServiceManagerEnabled() && getTableServiceManagerActions().contains(actionType.name());
+    boolean isActionSupported = getTableServiceManagerActions().contains(actionType.name());
+    if (actionType.equals(ActionType.clustering)) {
+      isActionSupported = isActionSupported || getTableServiceManagerActions().contains(ActionType.replacecommit.name());
+    }
+    return isTableServiceManagerEnabled() && isActionSupported;
   }
 
   public static class Builder {

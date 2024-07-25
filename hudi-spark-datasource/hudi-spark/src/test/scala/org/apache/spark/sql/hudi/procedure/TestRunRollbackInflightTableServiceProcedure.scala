@@ -60,9 +60,9 @@ class TestRunRollbackInflightTableServiceProcedure extends HoodieSparkProcedureT
 
       spark.sql(s"call run_rollback_inflight_tableservice(table => '$tableName', pending_instant => '$clusteringInstantTime')")
       Assertions.assertTrue(!metaClient.reloadActiveTimeline().getInstants
-        .contains(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime)))
+        .contains(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime)))
       Assertions.assertTrue(metaClient.reloadActiveTimeline().getInstants
-        .contains(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringInstantTime)))
+        .contains(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstantTime)))
     }}
   }
 

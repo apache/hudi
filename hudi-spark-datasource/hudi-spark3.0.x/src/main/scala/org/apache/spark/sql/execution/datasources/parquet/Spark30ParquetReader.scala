@@ -19,6 +19,9 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce._
@@ -70,16 +73,18 @@ class Spark30ParquetReader(enableVectorizedReader: Boolean,
    * Read an individual parquet file
    * Code from ParquetFileFormat#buildReaderWithPartitionValues from Spark v3.0.3 adapted here
    *
-   * @param file            parquet file to read
-   * @param requiredSchema  desired output schema of the data
-   * @param partitionSchema schema of the partition columns. Partition values will be appended to the end of every row
-   * @param filters         filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param sharedConf      the hadoop conf
+   * @param file               parquet file to read
+   * @param requiredSchema     desired output schema of the data
+   * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
+   * @param internalSchemaOpt  option of internal schema for schema.on.read
+   * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
+   * @param sharedConf         the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
   protected def doRead(file: PartitionedFile,
                        requiredSchema: StructType,
                        partitionSchema: StructType,
+                       internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                        filters: Seq[Filter],
                        sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)
@@ -94,7 +99,8 @@ class Spark30ParquetReader(enableVectorizedReader: Boolean,
         Array.empty,
         null)
 
-    val schemaEvolutionUtils = new Spark30ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema, partitionSchema)
+    val schemaEvolutionUtils = new Spark30ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
+      partitionSchema, internalSchemaOpt)
 
     lazy val footerFileMetaData =
       ParquetFileReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS).getFileMetaData

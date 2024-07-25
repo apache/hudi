@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.schema.converter;
 
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import org.apache.avro.Schema;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -43,7 +44,7 @@ class TestJsonToAvroSchemaConverter {
   })
   void testConvertJsonSchemaToAvroSchema(String inputCase) throws IOException {
     String jsonSchema = loadJsonSchema(inputCase);
-    String avroSchema = new JsonToAvroSchemaConverter().convert(jsonSchema);
+    String avroSchema = new JsonToAvroSchemaConverter(null).convert(new JsonSchema(jsonSchema));
     Schema schema = new Schema.Parser().parse(avroSchema);
     Schema expected = new Schema.Parser().parse(loadAvroSchema(inputCase));
     assertEquals(expected, schema);

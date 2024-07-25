@@ -44,7 +44,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private static final String DELIMITER = ".";
 
-  private static final String UNDERSCORE = "_";
+  public static final String UNDERSCORE = "_";
 
   private static final String FILE_NAME_FORMAT_ERROR =
       "The provided file name %s does not conform to the required format";
@@ -191,6 +191,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     Map<String, String> comparableMap = new HashMap<>();
     comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
     comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
+    comparableMap.put(HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
     return comparableMap;
   }
 
@@ -244,6 +245,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
         return HoodieTimeline.makeInflightReplaceFileName(timestamp);
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedReplaceFileName(timestamp);
+      }
+    } else if (HoodieTimeline.CLUSTERING_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightClusteringFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedClusteringFileName(timestamp);
       }
     } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       if (isInflight()) {

@@ -114,7 +114,7 @@ public class ITTestFlinkConsistentHashingClustering {
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     table.getMetaClient().reloadActiveTimeline();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), table.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().lastInstant().get());
+        table.getMetaClient(), table.getMetaClient().getActiveTimeline().filterPendingClusteringTimeline().lastInstant().get());
     return clusteringPlanOption.get().getRight();
   }
 

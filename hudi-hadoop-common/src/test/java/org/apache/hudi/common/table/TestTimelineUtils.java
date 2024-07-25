@@ -49,6 +49,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -66,6 +67,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETE
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
@@ -104,8 +106,9 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     cleanMetaClient();
   }
 
-  @Test
-  public void testGetPartitionsWithReplaceCommits() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testGetPartitionsWithReplaceOrClusterCommits(boolean withReplace) throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty());
@@ -113,12 +116,18 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     String ts1 = "1";
     String replacePartition = "2021/01/01";
     String newFilePartition = "2021/01/02";
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts1);
+    HoodieInstant instant1 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION, ts1);
     activeTimeline.createNewInstant(instant1);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(instant1,
-        Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
-            newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    if (withReplace) {
+      activeTimeline.saveAsComplete(instant1,
+          Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    } else {
+      activeTimeline.transitionClusterInflightToComplete(true, instant1,
+          Option.of(getReplaceCommitMetadata(basePath, ts1, replacePartition, 2,
+              newFilePartition, 0, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    }
     metaClient.reloadActiveTimeline();
 
     List<String> partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("0", 10));
@@ -126,12 +135,18 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(replacePartition, partitions.get(0));
 
     String ts2 = "2";
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
+    HoodieInstant instant2 = new HoodieInstant(true, withReplace ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     // create replace metadata only with replaced file Ids (no new files created)
-    activeTimeline.saveAsComplete(instant2,
-        Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
-            newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    if (withReplace) {
+      activeTimeline.saveAsComplete(instant2,
+          Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    } else {
+      activeTimeline.transitionClusterInflightToComplete(true, instant2,
+          Option.of(getReplaceCommitMetadata(basePath, ts2, replacePartition, 0,
+              newFilePartition, 3, Collections.emptyMap(), WriteOperationType.CLUSTER)));
+    }
     metaClient.reloadActiveTimeline();
     partitions = TimelineUtils.getAffectedPartitions(metaClient.getActiveTimeline().findInstantsAfter("1", 10));
     assertEquals(1, partitions.size());
@@ -262,11 +277,11 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
 
     // verify adding clustering commit doesn't change behavior of getExtraMetadataFromLatest
     String ts2 = "2";
-    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, ts2);
+    HoodieInstant instant2 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, ts2);
     activeTimeline.createNewInstant(instant2);
     String newValueForMetadata = "newValue2";
     extraMetadata.put(extraMetadataKey, newValueForMetadata);
-    activeTimeline.saveAsComplete(instant2,
+    activeTimeline.transitionClusterInflightToComplete(true, instant2,
         Option.of(getReplaceCommitMetadata(basePath, ts2, "p2", 0,
             "p2", 3, extraMetadata, WriteOperationType.CLUSTER)));
     metaClient.reloadActiveTimeline();
@@ -417,7 +432,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
                     new HoodieInstant(REQUESTED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
-                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"),
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012"))), false));
 
     // No inflight instants
     assertEquals(
@@ -429,7 +445,8 @@ public class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "002"),
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "003"),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010"),
-                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"))), false));
+                    new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011"),
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012"))), false));
 
     // Rollbacks only
     assertEquals(

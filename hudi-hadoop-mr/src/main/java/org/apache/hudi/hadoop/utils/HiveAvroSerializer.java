@@ -304,8 +304,7 @@ public class HiveAvroSerializer {
       case DATE:
         return HoodieHiveUtils.getDays(structFieldData);
       case TIMESTAMP:
-        Object timestamp = HoodieHiveUtils.getTimestamp(structFieldData);
-        return HoodieHiveUtils.getMills(timestamp);
+        return HoodieHiveUtils.getMills(structFieldData);
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();

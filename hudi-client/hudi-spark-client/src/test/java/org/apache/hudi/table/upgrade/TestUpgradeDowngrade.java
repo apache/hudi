@@ -199,16 +199,16 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
     prepForUpgradeFromZeroToOne(table);
-    HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
+    HoodieInstant commitsInstant = table.getPendingCommitsTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
     WriteMarkers writeMarkers =
-        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitsInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getStorage().deleteDirectory(new StoragePath(
-          table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
+          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
     }
@@ -225,7 +225,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         .run(HoodieTableVersion.ONE, null);
 
     // assert marker files
-    assertMarkerFilesForUpgrade(table, commitInstant, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
+    assertMarkerFilesForUpgrade(table, commitsInstant, firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices);
 
     // verify hoodie.table.version got upgraded
     metaClient = HoodieTableMetaClient.builder()
@@ -614,15 +614,15 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, client, false);
 
     HoodieTable table = this.getHoodieTable(metaClient, cfg);
-    HoodieInstant commitInstant = table.getPendingCommitTimeline().lastInstant().get();
+    HoodieInstant commitsInstant = table.getPendingCommitsTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitsInstant.getTimestamp());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getStorage().deleteDirectory(new StoragePath(
-          table.getMetaClient().getTempFolderPath() + "/" + commitInstant.getTimestamp()
+          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getTimestamp()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
     }
@@ -635,7 +635,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     if (fromVersion.versionCode() == HoodieTableVersion.TWO.versionCode()) {
       // assert marker files
-      assertMarkerFilesForDowngrade(table, commitInstant, toVersion == HoodieTableVersion.ONE);
+      assertMarkerFilesForDowngrade(table, commitsInstant, toVersion == HoodieTableVersion.ONE);
     }
 
     // verify hoodie.table.version got downgraded

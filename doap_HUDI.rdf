@@ -189,6 +189,13 @@
         <revision>0.15.0</revision>
       </Version>
     </release>
+    <release>
+      <Version>
+        <name>Apache Hudi 1.0.0-beta2</name>
+        <created>2024-07-14</created>
+        <revision>1.0.0-beta2</revision>
+      </Version>
+    </release>
     <repository>
       <GitRepository>
         <location rdf:resource="https://github.com/apache/hudi.git"/>

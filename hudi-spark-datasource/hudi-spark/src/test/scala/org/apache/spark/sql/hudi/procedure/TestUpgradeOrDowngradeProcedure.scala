@@ -22,9 +22,12 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 
 import java.io.IOException
 import java.time.Instant
+import scala.collection.JavaConverters._
+
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
@@ -138,6 +141,56 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       val expectedCheckSum = BinaryUtil.generateChecksum(StringUtils.getUTF8Bytes(tableName))
       assertResult(expectedCheckSum) {
         metaClient.getTableConfig.getLong(HoodieTableConfig.TABLE_CHECKSUM)
+      }
+    }
+  }
+
+  test("Test downgrade table from version eight to version seven") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | options (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql("set hoodie.compact.inline=true")
+      spark.sql("set hoodie.compact.inline.max.delta.commits=1")
+      spark.sql("set hoodie.clean.commits.retained = 2")
+      spark.sql("set hoodie.keep.min.commits = 3")
+      spark.sql("set hoodie.keep.min.commits = 4")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      var metaClient = createMetaClient(spark, tablePath)
+      // verify hoodie.table.version of the table is EIGHT
+      if (metaClient.getTableConfig.getTableVersion.versionCode().equals(HoodieTableVersion.EIGHT.versionCode())) {
+        // downgrade table from version eight to version seven
+        checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        assertResult(HoodieTableVersion.SEVEN.versionCode) {
+          metaClient.getTableConfig.getTableVersion.versionCode()
+        }
+        // Verify whether the naming format of instant files is consistent with 0.x
+        metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(f.getFileName).find())
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
       }
     }
   }

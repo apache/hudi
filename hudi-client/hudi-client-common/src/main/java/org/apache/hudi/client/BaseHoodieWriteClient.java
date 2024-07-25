@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -928,8 +929,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       this.heartbeatClient.start(instantTime);
     }
 
-    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-      metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
+    if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
       metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
@@ -1013,7 +1014,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstantTime) {
-    if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.clustering)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
     return cluster(clusteringInstantTime, true);

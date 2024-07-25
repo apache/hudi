@@ -46,8 +46,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 @Immutable
 @ConfigClassProperty(name = "Common Index Configs",
-    groupName = ConfigGroups.Names.INDEXING,
-    subGroupName = ConfigGroups.SubGroupNames.FUNCTIONAL_INDEX,
+    groupName = ConfigGroups.Names.WRITE_CLIENT,
+    subGroupName = ConfigGroups.SubGroupNames.INDEX,
     areCommonConfigs = true,
     description = "")
 public class HoodieIndexingConfig extends HoodieConfig {

@@ -379,6 +379,14 @@
       <groupId>io.confluent</groupId>
       <artifactId>kafka-protobuf-serializer</artifactId>
     </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-json-schema-serializer</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.kjetland</groupId>
+      <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
+    </dependency>
 
     <!-- Httpcomponents -->
     <dependency>

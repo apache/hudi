@@ -117,10 +117,11 @@ public class AvroConvertor implements Serializable {
       initJsonConvertor();
       return jsonConverter.convert(json, schema);
     } catch (Exception e) {
+      String errorMessage = "Failed to convert JSON string to Avro record: ";
       if (json != null) {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
+        throw new HoodieSchemaException(errorMessage + json + "; schema: " + schemaStr, e);
       } else {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
+        throw new HoodieSchemaException(errorMessage + "JSON string was null.", e);
       }
     }
   }

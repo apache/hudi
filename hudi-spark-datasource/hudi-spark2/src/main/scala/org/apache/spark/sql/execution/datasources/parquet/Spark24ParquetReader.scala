@@ -18,6 +18,9 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.util
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.lib.input.FileSplit
@@ -81,6 +84,7 @@ class Spark24ParquetReader(enableVectorizedReader: Boolean,
   protected def doRead(file: PartitionedFile,
                        requiredSchema: StructType,
                        partitionSchema: StructType,
+                       internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
                        filters: Seq[Filter],
                        sharedConf: Configuration): Iterator[InternalRow] = {
     assert(file.partitionValues.numFields == partitionSchema.size)

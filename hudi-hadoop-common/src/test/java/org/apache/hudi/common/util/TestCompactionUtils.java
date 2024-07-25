@@ -325,7 +325,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
             new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, "06"),
             new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "07"),
             new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "08"),
-            new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09")).collect(Collectors.toList()));
+            new HoodieInstant(true, HoodieTimeline.DELTA_COMMIT_ACTION, "09"),
+            new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, "10")).collect(Collectors.toList()));
 
     actual =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(timeline).get();

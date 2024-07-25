@@ -327,4 +327,58 @@ public class StringUtils {
     }
     return str.substring(0, end);
   }
+
+  /**
+   * Concatenates two strings such that the total byte length does not exceed the threshold.
+   * If the total byte length exceeds the threshold, the function will find the maximum length of the first string
+   * that fits within the threshold and concatenate that with the second string.
+   *
+   * @param a         The first string
+   * @param b         The second string
+   * @param threshold The maximum byte length
+   */
+  public static String concatenateWithThreshold(String a, String b, int threshold) {
+    // Convert both strings to byte arrays in UTF-8 encoding
+    byte[] bytesA = getUTF8Bytes(a);
+    byte[] bytesB = getUTF8Bytes(b);
+    if (bytesB.length > threshold) {
+      throw new IllegalArgumentException(String.format(
+          "Length of the Second string to concatenate exceeds the threshold (%d > %d)",
+          bytesB.length, threshold));
+    }
+
+    // Calculate total bytes
+    int totalBytes = bytesA.length + bytesB.length;
+
+    // If total bytes is within the threshold, return concatenated string
+    if (totalBytes <= threshold) {
+      return a + b;
+    }
+
+    // Calculate the maximum bytes 'a' can take
+    int bestLength = getBestLength(a, threshold - bytesB.length);
+
+    // Concatenate the valid substring of 'a' with 'b'
+    return a.substring(0, bestLength) + b;
+  }
+
+  private static int getBestLength(String a, int threshold) {
+    // Binary search to find the maximum length of substring of 'a' that fits within maxBytesForA
+    int low = 0;
+    int high = Math.min(a.length(), threshold);
+    int bestLength = 0;
+
+    while (low <= high) {
+      int mid = (low + high) / 2;
+      byte[] subABytes = getUTF8Bytes(a.substring(0, mid));
+
+      if (subABytes.length <= threshold) {
+        bestLength = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return bestLength;
+  }
 }

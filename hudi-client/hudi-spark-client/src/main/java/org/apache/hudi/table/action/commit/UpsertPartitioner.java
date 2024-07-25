@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -86,16 +87,21 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   private HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieWriteConfig config;
+  private final WriteOperationType operationType;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
-      HoodieWriteConfig config) {
+                           HoodieWriteConfig config, WriteOperationType operationType) {
     super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
     this.config = config;
+    this.operationType = operationType;
     assignUpdates(profile);
-    assignInserts(profile, context);
+    long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
+    if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
+      assignInserts(profile, context);
+    }
 
     LOG.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
         totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());

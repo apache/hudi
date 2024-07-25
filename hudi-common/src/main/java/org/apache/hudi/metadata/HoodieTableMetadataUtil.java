@@ -246,7 +246,7 @@ public class HoodieTableMetadataUtil {
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         targetFields.stream().map(field -> {
           ColumnStats colStats = allColumnStats.get(field.name());
-          return HoodieColumnRangeMetadata.<Comparable>create(
+          HoodieColumnRangeMetadata<Comparable> hcrm = HoodieColumnRangeMetadata.<Comparable>create(
               filePath,
               field.name(),
               colStats == null ? null : coerceToComparable(field.schema(), colStats.minValue),
@@ -259,6 +259,7 @@ public class HoodieTableMetadataUtil {
               0L,
               0L
           );
+          return hcrm;
         });
     return hoodieColumnRangeMetadataStream.collect(
         Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
@@ -1078,21 +1079,28 @@ public class HoodieTableMetadataUtil {
                                                         Option<HoodieTableFileSystemView> fileSystemView,
                                                         String partition,
                                                         boolean mergeFileSlices) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream;
-    if (mergeFileSlices) {
-      if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
-        fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
-            // including pending compaction instant as the last instant so that the finished delta commits
-            // that start earlier than the compaction can be queried.
-            partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp());
+    HoodieTableFileSystemView fsView = null;
+    try {
+      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      Stream<FileSlice> fileSliceStream;
+      if (mergeFileSlices) {
+        if (metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().isPresent()) {
+          fileSliceStream = fsView.getLatestMergedFileSlicesBeforeOrOn(
+              // including pending compaction instant as the last instant so that the finished delta commits
+              // that start earlier than the compaction can be queried.
+              partition, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().get().getTimestamp());
+        } else {
+          return Collections.emptyList();
+        }
       } else {
-        return Collections.emptyList();
+        fileSliceStream = fsView.getLatestFileSlices(partition);
       }
-    } else {
-      fileSliceStream = fsView.getLatestFileSlices(partition);
+      return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
+    } finally {
+      if (!fileSystemView.isPresent()) {
+        fsView.close();
+      }
     }
-    return fileSliceStream.sorted(Comparator.comparing(FileSlice::getFileId)).collect(Collectors.toList());
   }
 
   /**
@@ -1106,11 +1114,18 @@ public class HoodieTableMetadataUtil {
   public static List<FileSlice> getPartitionLatestFileSlicesIncludingInflight(HoodieTableMetaClient metaClient,
                                                                               Option<HoodieTableFileSystemView> fileSystemView,
                                                                               String partition) {
-    HoodieTableFileSystemView fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
-    Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
-    return fileSliceStream
-        .sorted(Comparator.comparing(FileSlice::getFileId))
-        .collect(Collectors.toList());
+    HoodieTableFileSystemView fsView = null;
+    try {
+      fsView = fileSystemView.orElseGet(() -> getFileSystemView(metaClient));
+      Stream<FileSlice> fileSliceStream = fsView.getLatestFileSlicesIncludingInflight(partition);
+      return fileSliceStream
+          .sorted(Comparator.comparing(FileSlice::getFileId))
+          .collect(Collectors.toList());
+    } finally {
+      if (!fileSystemView.isPresent()) {
+        fsView.close();
+      }
+    }
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToColumnStatsRecords(HoodieCommitMetadata commitMetadata,

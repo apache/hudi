@@ -29,7 +29,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -40,6 +39,7 @@ import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
 
@@ -108,8 +108,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     //dataSchema is not always right due to spark bugs
     val partitionColumns = partitionSchema.fieldNames
     val preCombineField = options.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
-    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filterNot(f => partitionColumns.contains(f.name)
-      && preCombineField.equals(f.name)))
+    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filter(f => !partitionColumns.contains(f.name)
+      || preCombineField.equals(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
@@ -131,12 +131,13 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
-    val broadcastedStorageConf = spark.sparkContext.broadcast(augmentedStorageConf)
+    val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
     val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     (file: PartitionedFile) => {
+      val storageConf = new HadoopStorageConfiguration(broadcastedStorageConf.value.value)
       file.partitionValues match {
         // Snapshot or incremental queries.
         case fileSliceMapping: HoodiePartitionFileSliceMapping =>
@@ -149,7 +150,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 baseFileReader(createPartitionedFile(fileSliceMapping.getPartitionValues, hoodieBaseFile.getStoragePath, 0, hoodieBaseFile.getFileLen))
               } else {
                 val readerContext = new SparkFileFormatInternalRowReaderContext(parquetFileReader.value, tableState.recordKeyField, filters, requiredFilters)
-                val storageConf = broadcastedStorageConf.value
                 val metaClient: HoodieTableMetaClient = HoodieTableMetaClient
                   .builder().setConf(storageConf).setBasePath(tableState.tablePath).build
                 val props = metaClient.getTableConfig.getProps
@@ -178,8 +178,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                   fileSliceMapping.getPartitionValues)
               }
 
-            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
-              broadcastedStorageConf.value)
+            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -187,17 +186,15 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
           val fileGroupSplit: HoodieCDCFileGroupSplit = HoodieCDCFileGroupSplit(fileSplits)
           buildCDCRecordIterator(
             fileGroupSplit, cdcFileReader.asInstanceOf[PartitionedFile => Iterator[InternalRow]],
-            broadcastedStorageConf.value, fileIndexProps, requiredSchema)
+            storageConf, fileIndexProps, requiredSchema)
 
-        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, filters,
-          broadcastedStorageConf.value)
+        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
       }
     }
   }
 
   private def setSchemaEvolutionConfigs(conf: StorageConfiguration[_]): Unit = {
     if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchemaOpt.get()))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tableState.tablePath)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }

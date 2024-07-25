@@ -105,12 +105,14 @@ import static org.apache.hudi.common.model.WriteOperationType.CLUSTER;
 import static org.apache.hudi.common.model.WriteOperationType.COMPACT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.FileCreateUtils.baseFileName;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCleanFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightClusterCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightCompaction;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightDeltaCommit;
@@ -120,6 +122,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createInflightSav
 import static org.apache.hudi.common.testutils.FileCreateUtils.createMarkerFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createReplaceCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCleanFile;
+import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedClusterCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedDeltaCommit;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createRequestedReplaceCommit;
@@ -138,7 +141,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 /**
  * Test Hoodie Table for testing only.
  */
-public class HoodieTestTable {
+public class HoodieTestTable implements AutoCloseable {
 
   public static final String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
@@ -334,6 +337,37 @@ public class HoodieTestTable {
   public HoodieTestTable addPendingReplace(String instantTime, Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
     createRequestedReplaceCommit(basePath, instantTime, requestedReplaceMetadata);
     createInflightReplaceCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addPendingCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addRequestedCluster(String instantTime, HoodieRequestedReplaceMetadata requestedReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addInflightCluster(String instantTime, Option<HoodieCommitMetadata> inflightReplaceMetadata) throws Exception {
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    currentInstantTime = instantTime;
+    return this;
+  }
+
+  public HoodieTestTable addCluster(
+      String instantTime,
+      HoodieRequestedReplaceMetadata requestedReplaceMetadata,
+      Option<HoodieCommitMetadata> inflightReplaceMetadata,
+      HoodieReplaceCommitMetadata completeReplaceMetadata) throws Exception {
+    createRequestedClusterCommit(basePath, instantTime, requestedReplaceMetadata);
+    createInflightClusterCommit(basePath, instantTime, inflightReplaceMetadata);
+    createReplaceCommit(basePath, instantTime, completeReplaceMetadata);
     currentInstantTime = instantTime;
     return this;
   }
@@ -1012,11 +1046,20 @@ public class HoodieTestTable {
     HoodieReplaceCommitMetadata replaceMetadata =
         (HoodieReplaceCommitMetadata) buildMetadata(writeStats, partitionToReplaceFileIds, Option.empty(), CLUSTER, PHONY_TABLE_SCHEMA,
             REPLACE_COMMIT_ACTION);
-    addReplaceCommit(commitTime, Option.empty(), Option.empty(), replaceMetadata);
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
+        .setOperationType(WriteOperationType.CLUSTER.name())
+        .setExtraMetadata(Collections.emptyMap())
+        .setClusteringPlan(new HoodieClusteringPlan())
+        .build();
+    addCluster(commitTime, requestedReplaceMetadata, Option.empty(), replaceMetadata);
     return replaceMetadata;
   }
 
   public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete) throws IOException {
+    return doClean(commitTime, partitionFileCountsToDelete, Collections.emptyMap());
+  }
+
+  public HoodieCleanMetadata doClean(String commitTime, Map<String, Integer> partitionFileCountsToDelete, Map<String, String> extraMetadata) throws IOException {
     Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
     for (Map.Entry<String, Integer> entry : partitionFileCountsToDelete.entrySet()) {
       partitionFilesToDelete.put(entry.getKey(), getEarliestFilesInPartition(entry.getKey(), entry.getValue()));
@@ -1027,8 +1070,11 @@ public class HoodieTestTable {
       deleteFilesInPartition(entry.getKey(), entry.getValue());
     }
     Pair<HoodieCleanerPlan, HoodieCleanMetadata> cleanerMeta = getHoodieCleanMetadata(commitTime, testTableState);
-    addClean(commitTime, cleanerMeta.getKey(), cleanerMeta.getValue());
-    return cleanerMeta.getValue();
+    HoodieCleanMetadata cleanMetadata = cleanerMeta.getValue();
+    cleanerMeta.getKey().setExtraMetadata(extraMetadata);
+    cleanMetadata.setExtraMetadata(extraMetadata);
+    addClean(commitTime, cleanerMeta.getKey(), cleanMetadata);
+    return cleanMetadata;
   }
 
   /**
@@ -1196,7 +1242,8 @@ public class HoodieTestTable {
 
   private Option<HoodieCommitMetadata> getCommitMeta(HoodieInstant hoodieInstant) throws IOException {
     switch (hoodieInstant.getAction()) {
-      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case REPLACE_COMMIT_ACTION:
+      case CLUSTERING_ACTION:
         HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata
             .fromBytes(metaClient.getActiveTimeline().getInstantDetails(hoodieInstant).get(), HoodieReplaceCommitMetadata.class);
         return Option.of(replaceCommitMetadata);
@@ -1334,6 +1381,11 @@ public class HoodieTestTable {
     return writeStats;
   }
 
+  @Override
+  public void close() throws Exception {
+    // no-op
+  }
+
   /**
    * Exception for {@link HoodieTestTable}.
    */
@@ -1440,4 +1492,5 @@ public class HoodieTestTable {
       return this.commitsToPartitionToLogFileInfoStats.get(commitTime);
     }
   }
+
 }

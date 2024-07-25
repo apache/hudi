@@ -93,7 +93,7 @@
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
     <maven-docker-plugin.version>0.42.1</maven-docker-plugin.version>
 
-    <java.version>1.8</java.version>
+    <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
     <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
@@ -179,7 +179,7 @@
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
     <scala11.version>2.11.12</scala11.version>
-    <scala12.version>2.12.10</scala12.version>
+    <scala12.version>2.12.15</scala12.version>
     <scala13.version>2.13.8</scala13.version>
     <scala.version>${scala12.version}</scala.version>
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
@@ -483,6 +483,8 @@
               <include>org.apache.hbase.thirdparty:hbase-shaded-protobuf</include>
               <include>org.apache.hbase.thirdparty:hbase-unsafe</include>
               <include>org.apache.htrace:htrace-core4</include>
+              <!-- roaring bitmap -->
+              <include>org.roaringbitmap:RoaringBitmap</include>
               <!-- afterburner module for jackson performance -->
               <include>com.fasterxml.jackson.module:jackson-module-afterburner</include>
               <include>com.fasterxml.jackson.module:jackson-module-scala_${scala.binary.version}</include>
@@ -582,6 +584,10 @@
               <pattern>org.apache.hadoop.metrics2.util.MetricSampleQuantiles</pattern>
               <shadedPattern>org.apache.hudi.org.apache.hadoop.metrics2.util.MetricSampleQuantiles
               </shadedPattern>
+            </relocation>
+            <relocation>
+              <pattern>org.roaringbitmap.</pattern>
+              <shadedPattern>org.apache.hudi.org.roaringbitmap.</shadedPattern>
             </relocation>
             <relocation>
               <pattern>com.fasterxml.jackson.module</pattern>
@@ -1811,6 +1817,22 @@
         <artifactId>kafka-protobuf-serializer</artifactId>
         <version>${confluent.version}</version>
       </dependency>
+      <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-json-schema-serializer</artifactId>
+        <version>${confluent.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.kjetland</groupId>
+            <artifactId>mbknor-jackson-jsonschema_2.12</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>com.kjetland</groupId>
+        <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
+        <version>1.0.39</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <repositories>
@@ -2529,6 +2551,7 @@
         <orc.spark.version>1.6.12</orc.spark.version>
         <avro.version>1.10.2</avro.version>
         <antlr.version>4.8</antlr.version>
+        <fasterxml.spark3.version>2.12.3</fasterxml.spark3.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>

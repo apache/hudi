@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -551,6 +552,26 @@ public class TestHoodieWriteConfig {
             .withWriteConcurrencyMode(WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL)
             .build(),
         "Non-blocking concurrency control requires the MOR table with simple bucket index");
+  }
+
+  @Test
+  public void testFileSystemViewStorageConfigDefaults() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.BOOTSTRAP_BASE_FILE_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForBootstrapBaseFile());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_COMPACTION_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingCompaction());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_LOG_COMPACTION_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingLogCompaction());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_CLUSTERING_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() * FileSystemViewStorageConfig.SPILLABLE_REPLACED_MEM_FRACTION.defaultValue(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups());
+    assertEquals(FileSystemViewStorageConfig.SPILLABLE_MEMORY.defaultValue() - writeConfig.getViewStorageConfig().getMaxMemoryForBootstrapBaseFile()
+        - writeConfig.getViewStorageConfig().getMaxMemoryForPendingCompaction() - writeConfig.getViewStorageConfig().getMaxMemoryForPendingLogCompaction()
+        - writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups()
+        - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(),
+        writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
   }
 
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
