@@ -41,6 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Properties;
 
@@ -134,7 +135,7 @@ public class HiveSyncFunctionalTestHarness {
   }
 
   @BeforeEach
-  public synchronized void runBeforeEach() throws IOException, InterruptedException {
+  public synchronized void runBeforeEach() throws SQLException, IOException, InterruptedException {
     initialized = hiveTestService != null && zookeeperTestService != null;
     if (!initialized) {
       hadoopConf = new Configuration();
