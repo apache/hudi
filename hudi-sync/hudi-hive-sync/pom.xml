@@ -183,6 +183,7 @@
     <dependency>
       <groupId>org.eclipse.jetty.aggregate</groupId>
       <artifactId>jetty-all</artifactId>
+      <type>pom</type>
       <scope>test</scope>
       <version>${jetty.version}</version>
     </dependency>
