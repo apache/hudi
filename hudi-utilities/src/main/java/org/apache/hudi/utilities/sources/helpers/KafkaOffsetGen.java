@@ -60,6 +60,8 @@ import static org.apache.hudi.common.util.ConfigUtils.checkRequiredProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_TIMESTAMP;
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils.checkTopicCheckpoint;
 
 /**
@@ -70,7 +72,6 @@ public class KafkaOffsetGen {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
   private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
-  public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
 
   public static class CheckpointUtils {
     /**
@@ -258,13 +259,13 @@ public class KafkaOffsetGen {
     long numEvents;
     if (sourceLimit == Long.MAX_VALUE) {
       numEvents = maxEventsToReadFromKafka;
-      LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
+      LOG.info("SourceLimit not configured, set numEvents to default value : {}", maxEventsToReadFromKafka);
     } else {
       numEvents = sourceLimit;
     }
 
     long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
-    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key() + " to " + minPartitions);
+    LOG.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
     return getNextOffsetRanges(lastCheckpointStr, numEvents, minPartitions, metrics);
   }
@@ -281,8 +282,14 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
+      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
         lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
+      } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType) && partitionInfoList.size() != 1) {
+        throw new HoodieException("Kafka topic " + topicName + " has " + partitionInfoList.size()
+            + " partitions (more than 1). single_offset checkpoint type is not applicable.");
+      } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
+          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpointStr)) {
+        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpointStr.get());
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
@@ -369,8 +376,7 @@ public class KafkaOffsetGen {
       if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS)) {
         throw new HoodieStreamerException(message);
       } else {
-        LOG.warn(message
-            + " If you want Hudi Streamer to fail on such cases, set \"" + KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
+        LOG.warn("{} If you want Hudi Streamer to fail on such cases, set \"{}\" to \"true\".", message, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key());
       }
     }
     return isCheckpointOutOfBounds ? earliestOffsets : checkpointOffsets;
@@ -388,6 +394,24 @@ public class KafkaOffsetGen {
     Pattern pattern = Pattern.compile("[-+]?[0-9]+(\\.[0-9]+)?");
     Matcher isNum = pattern.matcher(lastCheckpointStr.get());
     return isNum.matches() && (lastCheckpointStr.get().length() == 13 || lastCheckpointStr.get().length() == 10);
+  }
+
+  /**
+   * Check if checkpoint is a single offset
+   * @param lastCheckpointStr
+   * @return
+   */
+  private Boolean isValidOffsetCheckpointType(Option<String> lastCheckpointStr) {
+    if (!lastCheckpointStr.isPresent()) {
+      return false;
+    }
+    try {
+      Long.parseUnsignedLong(lastCheckpointStr.get());
+      return true;
+    } catch (NumberFormatException ex) {
+      LOG.warn("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
+      return false;
+    }
   }
 
   private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
@@ -424,16 +448,15 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
 
-    StringBuilder sb = new StringBuilder();
-    sb.append(topicName + ",");
+    StringBuilder sb = new StringBuilder(topicName);
     for (Map.Entry<TopicPartition, OffsetAndTimestamp> map : offsetAndTimestamp.entrySet()) {
       if (map.getValue() != null) {
-        sb.append(map.getKey().partition()).append(":").append(map.getValue().offset()).append(",");
+        sb.append(",").append(map.getKey().partition()).append(":").append(map.getValue().offset());
       } else {
-        sb.append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey())).append(",");
+        sb.append(",").append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey()));
       }
     }
-    return Option.of(sb.deleteCharAt(sb.length() - 1).toString());
+    return Option.of(sb.toString());
   }
 
   /**
