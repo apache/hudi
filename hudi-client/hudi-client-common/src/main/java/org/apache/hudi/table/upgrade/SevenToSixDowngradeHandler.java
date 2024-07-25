@@ -20,10 +20,7 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import java.util.Collections;
 import java.util.Map;
@@ -38,12 +35,6 @@ public class SevenToSixDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
-    if ((tableConfig.getKeyGeneratorClassName().equals(KeyGeneratorType.CUSTOM.getClassName())
-        || tableConfig.getKeyGeneratorClassName().equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))
-        && config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) != null) {
-      return Collections.singletonMap(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
-    }
     return Collections.emptyMap();
   }
 }

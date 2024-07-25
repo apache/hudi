@@ -20,10 +20,13 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.slf4j.Logger;
@@ -72,6 +75,14 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         }
         return false;
       }, instants.size());
+    }
+
+    HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
+    String keyGenerator = tableConfig.getKeyGeneratorClassName();
+    String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    if (keyGenerator != null && partitionPathField != null
+        && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
+      return Collections.singletonMap(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
     }
     return Collections.emptyMap();
   }

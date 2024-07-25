@@ -25,7 +25,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
-public class TableConfigUtils {
+public class HoodieTableConfigUtils {
 
   /**
    * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
@@ -40,8 +40,8 @@ public class TableConfigUtils {
    * strip the partition key generator related info from the fields.
    */
   public static Option<String> getPartitionFieldProp(HoodieConfig config) {
-    if (getTableVersion(config).greaterThan(HoodieTableVersion.SIX)) {
-      // After table version six, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
+    if (getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)) {
+      // With table version eight, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
       // stores the corresponding partition type as well. This partition type is useful for CustomKeyGenerator
       // and CustomAvroKeyGenerator.
       return getPartitionFields(config).map(fields -> String.join(BaseKeyGenerator.FIELD_SEPARATOR, fields));
@@ -58,13 +58,23 @@ public class TableConfigUtils {
     if (HoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS, config)) {
       return Option.of(Arrays.stream(config.getString(HoodieTableConfig.PARTITION_FIELDS).split(","))
           .filter(p -> !p.isEmpty())
-          .map(p -> getTableVersion(config).greaterThan(HoodieTableVersion.SIX)
-              ? p.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
-              : p)
+          .map(p -> getPartitionFieldWithoutType(p, config))
           .collect(Collectors.toList()).toArray(new String[] {}));
     }
     return Option.empty();
   }
+
+  /**
+   * This function returns the partition fields only. The input partition field would contain partition
+   * type corresponding to the custom key generator if table version is eight and if custom key
+   * generator is configured. This function would strip the partition type and return the partition field.
+   */
+  public static String getPartitionFieldWithoutType(String partitionField, HoodieConfig config) {
+    return getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)
+        ? partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
+        : partitionField;
+  }
+
 
   /**
    * This function returns the hoodie.table.version from hoodie.properties file.

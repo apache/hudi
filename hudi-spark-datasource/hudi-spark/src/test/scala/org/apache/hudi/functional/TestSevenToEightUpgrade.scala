@@ -21,7 +21,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.util.TableConfigUtils
+import org.apache.hudi.common.util.HoodieTableConfigUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.table.upgrade.{SparkUpgradeDowngradeHelper, UpgradeDowngrade}
 import org.apache.spark.sql.SaveMode
@@ -29,13 +29,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
+class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testPartitionFieldsWithUpgrade(tableType: HoodieTableType): Unit = {
     val partitionFields = "partition:simple"
-    val hudiOpts = commonOpts + (
+    val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> KeyGeneratorType.CUSTOM.getClassName,
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> partitionFields)
@@ -48,17 +48,17 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
 
     // assert table version is eight and the partition fields in table config has partition type
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
-    assertEquals(partitionFields, TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
-    // downgrade table props to version six
-    // assert table version is six and the partition fields in table config does not have partition type
+    // downgrade table props to version seven
+    // assert table version is seven and the partition fields in table config does not have partition type
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
       .run(HoodieTableVersion.SEVEN, null)
     new UpgradeDowngrade(metaClient, getWriteConfig(hudiOpts), context, SparkUpgradeDowngradeHelper.getInstance)
-      .run(HoodieTableVersion.SIX, null)
+      .run(HoodieTableVersion.SEVEN, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    assertEquals(HoodieTableVersion.SIX, metaClient.getTableConfig.getTableVersion)
-    assertEquals("partition", TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals(HoodieTableVersion.SEVEN, metaClient.getTableConfig.getTableVersion)
+    assertEquals("partition", HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
 
     // auto upgrade the table
     // assert table version is eight and the partition fields in table config has partition type
@@ -68,6 +68,6 @@ class TestSixToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
-    assertEquals(partitionFields, TableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
   }
 }
