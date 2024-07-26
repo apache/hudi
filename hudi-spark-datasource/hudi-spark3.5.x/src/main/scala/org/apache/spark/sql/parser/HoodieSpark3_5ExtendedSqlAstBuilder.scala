@@ -20,8 +20,9 @@ import org.antlr.v4.runtime.tree.{ParseTree, RuleNode, TerminalNode}
 import org.antlr.v4.runtime.{ParserRuleContext, Token}
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseVisitor, HoodieSqlBaseParser}
+
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.{AnalysisException, hudi}
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat}
 import org.apache.spark.sql.catalyst.expressions._
@@ -47,6 +48,7 @@ import org.apache.spark.util.random.RandomSampler
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.xml.bind.DatatypeConverter
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -105,7 +107,7 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
         "timestamp expression cannot contain subqueries", ctx.timestamp)
     }
 
-    TimeTravelRelation(plan, timestamp, version)
+    hudi.logical.TimeTravelRelation(plan, timestamp, version)
   }
 
   // ============== The following code is fork from org.apache.spark.sql.catalyst.parser.AstBuilder

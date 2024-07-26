@@ -76,7 +76,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql("set hoodie.schema.on.read.enable=true")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
@@ -150,7 +150,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
           //       and are disallowed now by default in Spark 3.x
@@ -187,7 +187,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      if (HoodieSparkUtils.gteqSpark3_1) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         spark.sql("set hoodie.schema.on.read.enable=true")
         // Create table
         spark.sql(
@@ -244,7 +244,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         spark.sql("set hoodie.compact.inline=false")
         spark.sql("set hoodie.compact.schedule.inline=false")
 
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           // NOTE: This is required since as this tests use type coercions which were only permitted in Spark 2.x
@@ -349,7 +349,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql("set " + DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION.key + "=upsert")
           spark.sql(
@@ -402,7 +402,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
@@ -483,7 +483,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
@@ -512,7 +512,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("cow", "mor").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql("set hoodie.schema.on.read.enable=true")
           spark.sql(
             s"""
@@ -552,7 +552,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         "spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql(
             s"""
                |create table $tableName (
@@ -639,7 +639,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
 
           val dataGen = new HoodieTestDataGenerator
           val schema = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA
@@ -713,7 +713,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
         // for complex schema.
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           val dataGen = new QuickstartUtils.DataGenerator
           val inserts = QuickstartUtils.convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
           val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
@@ -813,7 +813,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       Seq("COPY_ON_WRITE", "MERGE_ON_READ").foreach { tableType =>
         val tableName = generateTableName
         val tablePath = s"${new Path(tmp.getCanonicalPath, tableName).toUri.toString}"
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           // adding a struct column to force reads to use non-vectorized readers
           spark.sql(
             s"""
@@ -861,7 +861,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         // Using INMEMORY index for mor table so that log files will be created instead of parquet
         val tableName = generateTableName
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql(
             s"""
                |create table $tableName (
@@ -901,7 +901,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         // Using INMEMORY index for mor table so that log files will be created instead of parquet
         val tableName = generateTableName
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql(
             s"""
                |create table $tableName (
@@ -969,7 +969,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         // Using INMEMORY index for mor table so that log files will be created instead of parquet
         val tableName = generateTableName
-        if (HoodieSparkUtils.gteqSpark3_1) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql(
             s"""
                |create table $tableName (

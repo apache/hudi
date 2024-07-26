@@ -24,7 +24,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   test("Test Insert and Update Record with time travel") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withRecordType()(withTempDir { tmp =>
         val tableName1 = generateTableName
         spark.sql(
@@ -67,7 +67,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into Records with time travel To new Table") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         // Create Non-Partitioned table
         val tableName1 = generateTableName
@@ -139,7 +139,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Two Table's Union Join with time travel") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withRecordType()(withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -225,7 +225,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Unsupported syntax can be parsed") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       checkAnswer("select 1 distribute by 1")(Seq(1))
       withTempDir { dir =>
         val path = dir.toURI.getPath
@@ -237,7 +237,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Select Record with time travel and Repartition") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         val tableName = generateTableName
         spark.sql(
@@ -280,7 +280,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Time Travel With Schema Evolution") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withRecordType()(withTempDir { tmp =>
         spark.sql("set hoodie.schema.on.read.enable=true")
         val tableName = generateTableName

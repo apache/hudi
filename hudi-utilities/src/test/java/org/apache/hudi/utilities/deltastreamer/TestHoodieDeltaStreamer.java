@@ -2230,7 +2230,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
     //       Please check HUDI-4496 for more details
-    if (HoodieSparkUtils$.MODULE$.gteqSpark3_0()) {
+    if (HoodieSparkUtils$.MODULE$.isSpark3()) {
       testORCDFSSource(false, null);
     }
   }
@@ -2239,7 +2239,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
     //       Please check HUDI-4496 for more details
-    if (HoodieSparkUtils$.MODULE$.gteqSpark3_0()) {
+    if (HoodieSparkUtils$.MODULE$.isSpark3()) {
       testORCDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }
   }

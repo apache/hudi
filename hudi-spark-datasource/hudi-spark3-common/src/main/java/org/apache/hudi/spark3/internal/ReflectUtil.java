@@ -17,8 +17,6 @@
 
 package org.apache.hudi.spark3.internal;
 
-import org.apache.hudi.HoodieSparkUtils;
-
 import org.apache.spark.sql.catalyst.util.DateFormatter;
 
 import java.lang.reflect.Method;
@@ -29,17 +27,10 @@ public class ReflectUtil {
   public static DateFormatter getDateFormatter(ZoneId zoneId) {
     try {
       ClassLoader loader = Thread.currentThread().getContextClassLoader();
-      if (HoodieSparkUtils.gteqSpark3_2()) {
-        Class<?> clazz = loader.loadClass(DateFormatter.class.getName());
-        Method applyMethod = clazz.getDeclaredMethod("apply");
-        applyMethod.setAccessible(true);
-        return (DateFormatter)applyMethod.invoke(null);
-      } else {
-        Class<?> clazz = loader.loadClass(DateFormatter.class.getName());
-        Method applyMethod = clazz.getDeclaredMethod("apply", ZoneId.class);
-        applyMethod.setAccessible(true);
-        return (DateFormatter)applyMethod.invoke(null, zoneId);
-      }
+      Class<?> clazz = loader.loadClass(DateFormatter.class.getName());
+      Method applyMethod = clazz.getDeclaredMethod("apply");
+      applyMethod.setAccessible(true);
+      return (DateFormatter)applyMethod.invoke(null);
     } catch (Exception e) {
       throw new RuntimeException("Error in apply DateFormatter", e);
     }

@@ -50,7 +50,7 @@ object CowTableReadBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }

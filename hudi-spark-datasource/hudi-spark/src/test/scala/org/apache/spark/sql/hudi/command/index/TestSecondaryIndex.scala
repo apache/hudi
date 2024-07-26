@@ -28,7 +28,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 class TestSecondaryIndex extends HoodieSparkSqlTestBase {
 
   test("Test Create/Show/Drop Secondary Index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -96,7 +96,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Secondary Index Creation With hudi_metadata TVF") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir {
         tmp => {
           val tableName = generateTableName
@@ -132,7 +132,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Secondary Index Creation Failure For Multiple Fields") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir {
         tmp => {
           val tableName = generateTableName

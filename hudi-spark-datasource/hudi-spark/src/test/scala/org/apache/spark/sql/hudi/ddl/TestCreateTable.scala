@@ -404,7 +404,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test create table like") {
-    if (HoodieSparkUtils.gteqSpark3_1) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       // 1. Test create table from an existing HUDI table
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -1110,7 +1110,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     )
   }
 
-  if (HoodieSparkUtils.gteqSpark3_2) {
+  if (HoodieSparkUtils.gteqSpark3_3) {
     test("Test create table with comment") {
       val tableName = generateTableName
       spark.sql(

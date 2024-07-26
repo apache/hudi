@@ -91,7 +91,7 @@ public class TestSchedulerConfGenerator {
     Map<String, String> configs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
 
     URI schedulerFile = URI.create(configs.get(SparkConfigs.SPARK_SCHEDULER_ALLOCATION_FILE_KEY()));
-    if (HoodieSparkUtils.gteqSpark3_2()) {
+    if (HoodieSparkUtils.gteqSpark3_3()) {
       assertNotNull(schedulerFile.getScheme());
     } else {
       assertNull(schedulerFile.getScheme());

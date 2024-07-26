@@ -1462,7 +1462,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         val tableName = s"spark_catalog.default.$generateTableName"
         // Create a partitioned table
-        if (HoodieSparkUtils.gteqSpark3_2) {
+        if (HoodieSparkUtils.gteqSpark3_3) {
           spark.sql(
             s"""
                |create table $tableName (
@@ -2590,7 +2590,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test INSERT INTO with upsert operation type") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("mor").foreach { tableType =>
           val tableName = generateTableName
@@ -2831,7 +2831,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test insert into with special cols") {
     withTempDir { tmp =>
-      if (HoodieSparkUtils.gteqSpark3_2) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         val targetTableA = generateTableName
         val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
         if (HoodieSparkUtils.isSpark3_4) {
@@ -2909,7 +2909,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test insert overwrite with special cols") {
     withTempDir { tmp =>
-      if (HoodieSparkUtils.gteqSpark3_2) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         val targetTableA = generateTableName
         val tablePathA = s"${tmp.getCanonicalPath}/$targetTableA"
         if (HoodieSparkUtils.isSpark3_4) {
