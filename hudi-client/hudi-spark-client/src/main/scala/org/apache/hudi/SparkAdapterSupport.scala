@@ -39,7 +39,7 @@ object SparkAdapterSupport {
       "org.apache.spark.sql.adapter.Spark3_4Adapter"
     } else if (HoodieSparkUtils.isSpark3_3) {
       "org.apache.spark.sql.adapter.Spark3_3Adapter"
-    }  else {
+    } else {
       "org.apache.spark.sql.adapter.Spark2Adapter"
     }
     getClass.getClassLoader.loadClass(adapterClass)

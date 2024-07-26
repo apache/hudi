@@ -267,7 +267,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     private HoodieSnapshotExporter.Config createConfig(String format) {
       // NOTE: Hudi doesn't support Orc in Spark < 3.0
       //       Please check HUDI-4496 for more details
-      if ("orc".equals(format) && !HoodieSparkUtils.isSpark3()) {
+      if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_3()) {
         return null;
       }
 
