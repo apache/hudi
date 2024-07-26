@@ -51,6 +51,7 @@ import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyU
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createInflightCommit;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCompaction;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingCluster;
+import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createPendingInsertOverwrite;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createReplace;
 import static org.apache.hudi.client.transaction.TestConflictResolutionStrategyUtil.createRequestedCommit;
 
@@ -344,6 +345,31 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
     } catch (HoodieWriteConflictException e) {
       // expected
     }
+  }
+
+  @Test
+  public void tstConcurrentWritesWithPendingInsertOverwriteReplace() throws Exception {
+    createCommit(metaClient.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    // consider commits before this are all successful
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // writer 1 starts
+    String currentWriterInstant = metaClient.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // insert_overwrite 1 gets scheduled and inflighted
+    String newInstantTime = metaClient.createNewInstantTime();
+    createPendingInsertOverwrite(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant).collect(
+        Collectors.toList());
+    // writer 1 will not conflicts with insert_overwrite 1
+    Assertions.assertTrue(candidateInstants.size() == 0);
   }
 
   // try to simulate HUDI-3355
