@@ -71,7 +71,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
       val dataSourceV2ToV1Fallback: RuleBuilder =
         session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
 
-      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSparkResolveReferences"
+      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
       val spark3ResolveReferences: RuleBuilder =
         session => instantiateKlass(spark3ResolveReferencesClass, session)
 
