@@ -34,7 +34,6 @@ import org.mockito.Mockito;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.metadata.HoodieTableMetadata.RECORDKEY_PARTITION_LIST;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -58,6 +57,7 @@ public class TestMetadataPartitionType {
     int expectedEnabledPartitions;
     switch (partitionType) {
       case FILES:
+      case ALL_PARTITIONS:
       case FUNCTIONAL_INDEX:
       case SECONDARY_INDEX:
         metadataConfigBuilder.enable(true);
@@ -87,11 +87,11 @@ public class TestMetadataPartitionType {
 
     // Verify partition type is enabled due to config
     if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX || partitionType == MetadataPartitionType.SECONDARY_INDEX) {
-      assertEquals(1, enabledPartitions.size(), "FUNCTIONAL_INDEX should be enabled by SQL, only FILES is enabled in this case.");
+      assertEquals(1, enabledPartitions.size(), "FUNCTIONAL_INDEX or SECONDARY_INDEX should be enabled by SQL, only FILES is enabled in this case.");
       assertTrue(enabledPartitions.contains(MetadataPartitionType.FILES));
     } else {
       assertEquals(expectedEnabledPartitions, enabledPartitions.size());
-      assertTrue(enabledPartitions.contains(partitionType));
+      assertTrue(enabledPartitions.contains(partitionType) || MetadataPartitionType.ALL_PARTITIONS.equals(partitionType));
     }
   }
 
@@ -175,7 +175,7 @@ public class TestMetadataPartitionType {
 
   @Test
   public void testGetMetadataPartitionRecordType() {
-    assertEquals(1, MetadataPartitionType.FILES.getRecordType(RECORDKEY_PARTITION_LIST));
+    assertEquals(1, MetadataPartitionType.ALL_PARTITIONS.getRecordType());
     assertEquals(2, MetadataPartitionType.FILES.getRecordType());
     assertEquals(3, MetadataPartitionType.COLUMN_STATS.getRecordType());
     assertEquals(4, MetadataPartitionType.BLOOM_FILTERS.getRecordType());
