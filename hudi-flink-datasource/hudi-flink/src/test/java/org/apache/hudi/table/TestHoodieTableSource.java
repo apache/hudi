@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.flink.table.catalog.ResolvedSchema;
+import org.apache.flink.table.data.ArrayData;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -176,12 +177,20 @@ public class TestHoodieTableSource {
     assertNotNull(fileList);
     assertThat(fileList.size(), is(4));
     CopyOnWriteInputFormat inputFormat = (CopyOnWriteInputFormat) tableSource.getInputFormat();
-    //tableSource.getScanRuntimeProvider(null).produceDataStream();
+
     inputFormat.open(inputFormat.createInputSplits(1)[0]);
     while (!inputFormat.reachedEnd()) {
       RowData row = inputFormat.nextRecord(null);
       assertNotNull(row);
-      row.getArray(3);
+      ArrayData rowArray = row.getArray(3);
+      assertNotNull(rowArray);
+      for(int i = 0; i < rowArray.size(); ++i) {
+        RowData subRow = rowArray.getRow(i, 2);
+        assertNotNull(subRow);
+        assertNotNull(subRow.getString(0));
+        subRow.getInt(1);
+      }
+
     }
   }
 

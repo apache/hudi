@@ -18,12 +18,15 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.flink.table.types.logical.*;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.table.format.cow.vector.HeapArrayGroupColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.HeapDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
 import org.apache.hudi.table.format.cow.vector.reader.ArrayColumnReader;
+import org.apache.hudi.table.format.cow.vector.reader.ArrayGroupReader;
 import org.apache.hudi.table.format.cow.vector.reader.EmptyColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.FixedLenBytesColumnReader;
 import org.apache.hudi.table.format.cow.vector.reader.Int64TimestampColumnReader;
@@ -57,14 +60,6 @@ import org.apache.flink.table.data.columnar.vector.heap.HeapShortVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapTimestampVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.ArrayType;
-import org.apache.flink.table.types.logical.DecimalType;
-import org.apache.flink.table.types.logical.IntType;
-import org.apache.flink.table.types.logical.LocalZonedTimestampType;
-import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.MapType;
-import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.util.Preconditions;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.ParquetRuntimeException;
@@ -282,12 +277,23 @@ public class ParquetSplitReaderUtil {
         }
         return tv;
       case ARRAY:
-        HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
-        if (value == null) {
-          arrayVector.fillWithNulls();
-          return arrayVector;
+        ArrayType arrayType = (ArrayType) type;
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          HeapArrayGroupColumnVector arrayGroup = new HeapArrayGroupColumnVector(batchSize);
+          if (value == null) {
+            arrayGroup.fillWithNulls();
+            return arrayGroup;
+          } else {
+            throw new UnsupportedOperationException("Unsupported create row with default value.");
+          }
         } else {
-          throw new UnsupportedOperationException("Unsupported create array with default value.");
+            HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
+            if (value == null) {
+              arrayVector.fillWithNulls();
+              return arrayVector;
+            } else {
+              throw new UnsupportedOperationException("Unsupported create array with default value.");
+            }
         }
       case MAP:
         HeapMapColumnVector mapVector = new HeapMapColumnVector(batchSize, null, null);
@@ -394,12 +400,23 @@ public class ParquetSplitReaderUtil {
             throw new AssertionError();
         }
       case ARRAY:
-        return new ArrayColumnReader(
-            descriptor,
-            pageReader,
-            utcTimestamp,
-            descriptor.getPrimitiveType(),
-            fieldType);
+        ArrayType arrayType = (ArrayType) fieldType;
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)){
+          return new ArrayGroupReader(createColumnReader(
+                  utcTimestamp,
+                  arrayType.getElementType(),
+                  physicalType.asGroupType().getType(0),
+                  descriptors,
+                  pages,
+                  depth + 1));
+        } else {
+          return new ArrayColumnReader(
+                  descriptor,
+                  pageReader,
+                  utcTimestamp,
+                  descriptor.getPrimitiveType(),
+                  fieldType);
+        }
       case MAP:
         MapType mapType = (MapType) fieldType;
         ArrayColumnReader keyReader =
@@ -427,14 +444,25 @@ public class ParquetSplitReaderUtil {
           if (fieldIndex < 0) {
             fieldReaders.add(new EmptyColumnReader());
           } else {
-            fieldReaders.add(
-                createColumnReader(
-                    utcTimestamp,
-                    rowType.getTypeAt(i),
-                    groupType.getType(fieldIndex),
-                    descriptors,
-                    pages,
-                    depth + 1));
+            if (descriptors.get(i).getMaxRepetitionLevel() > 0) {
+              fieldReaders.add(
+                      createColumnReader(
+                              utcTimestamp,
+                              new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                              groupType.getType(fieldIndex),
+                              descriptors,
+                              pages,
+                              depth + 1));
+            } else {
+              fieldReaders.add(
+                      createColumnReader(
+                              utcTimestamp,
+                              rowType.getTypeAt(i),
+                              groupType.getType(fieldIndex),
+                              descriptors,
+                              pages,
+                              depth + 1));
+            }
           }
         }
         return new RowColumnReader(fieldReaders);
@@ -512,14 +540,23 @@ public class ParquetSplitReaderUtil {
         return new HeapDecimalVector(batchSize);
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
-        return new HeapArrayVector(
-            batchSize,
-            createWritableColumnVector(
-                batchSize,
-                arrayType.getElementType(),
-                physicalType,
-                descriptors,
-                depth));
+        if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+          return new HeapArrayGroupColumnVector(batchSize, createWritableColumnVector(
+                  batchSize,
+                  arrayType.getElementType(),
+                  physicalType.asGroupType().getType(0),
+                  descriptors,
+                  depth + 1));
+        } else {
+          return new HeapArrayVector(
+                  batchSize,
+                  createWritableColumnVector(
+                          batchSize,
+                          arrayType.getElementType(),
+                          physicalType,
+                          descriptors,
+                          depth));
+        }
       case MAP:
         MapType mapType = (MapType) fieldType;
         GroupType repeatedType = physicalType.asGroupType().getType(0).asGroupType();
@@ -548,13 +585,23 @@ public class ParquetSplitReaderUtil {
           if (fieldIndex < 0) {
             columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
           } else {
-            columnVectors[i] =
-                createWritableColumnVector(
-                    batchSize,
-                    rowType.getTypeAt(i),
-                    groupType.getType(fieldIndex),
-                    descriptors,
-                    depth + 1);
+            if (descriptors.get(i).getMaxRepetitionLevel() > 0) {
+              columnVectors[i] =
+                      createWritableColumnVector(
+                              batchSize,
+                              new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)),
+                              groupType.getType(fieldIndex),
+                              descriptors,
+                              depth + 1);
+            } else {
+              columnVectors[i] =
+                      createWritableColumnVector(
+                              batchSize,
+                              rowType.getTypeAt(i),
+                              groupType.getType(fieldIndex),
+                              descriptors,
+                              depth + 1);
+            }
           }
         }
         return new HeapRowColumnVector(batchSize, columnVectors);
