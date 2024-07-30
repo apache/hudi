@@ -239,9 +239,10 @@ class TestAWSGlueSyncClient {
   @Test
   void testUpdateTableProperties() throws ExecutionException, InterruptedException {
     String tableName = "test";
-    List<Column> columns = Arrays.asList(Column.builder().name("name").type("string").comment("person's name").build(),
-        Column.builder().name("age").type("int").comment("person's age").build());
-    List<Column> partitionKeys = Arrays.asList(Column.builder().name("city").type("string").comment("person's city").build());
+    GlueTestUtil.getColumn("name", "string", "person's name");
+    List<Column> columns = Arrays.asList(GlueTestUtil.getColumn("name", "string", "person's name"),
+        GlueTestUtil.getColumn("age", "int", "person's age"));
+    List<Column> partitionKeys = Collections.singletonList(GlueTestUtil.getColumn("city", "string", "person's city"));
     CompletableFuture<GetTableResponse> tableResponseFuture = getTableWithDefaultProps(tableName, columns, partitionKeys);
     HashMap<String, String> newTableProperties = new HashMap<>();
     newTableProperties.put("last_commit_time_sync", "100");
