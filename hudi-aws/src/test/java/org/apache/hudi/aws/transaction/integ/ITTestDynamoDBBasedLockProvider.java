@@ -66,7 +66,9 @@ public class ITTestDynamoDBBasedLockProvider {
   private static final String TABLE_NAME_PREFIX = "testDDBTable-";
   private static final String REGION = "us-east-2";
   private static DynamoDbClient dynamoDb;
-
+  private static String SCHEME_S3 = "s3";
+  private static String SCHEME_S3A = "s3a";
+  private static String URI_NO_CLOUD_PROVIDER_PREFIX = "://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table";
   static {
     Properties dynamoDblpProps = new Properties();
     Properties implicitPartKeyLpProps;
@@ -88,8 +90,7 @@ public class ITTestDynamoDBBasedLockProvider {
     // For the newly added implicit partition key DDB lock provider, it can derive the partition key from
     // hudi table base path and hudi table name. These properties are available in lockConfig as of today.
     implicitPartKeyLpProps.setProperty(
-        HoodieCommonConfig.BASE_PATH.key(),
-        "gs://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
+        HoodieCommonConfig.BASE_PATH.key(), SCHEME_S3A + URI_NO_CLOUD_PROVIDER_PREFIX);
     implicitPartKeyLpProps.setProperty(
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
     IMPLICIT_PART_KEY_LOCK_CONFIG = new LockConfiguration(implicitPartKeyLpProps);
@@ -185,9 +186,11 @@ public class ITTestDynamoDBBasedLockProvider {
     } else if (lockProviderClass.equals(DynamoDBBasedImplicitPartitionKeyLockProvider.class)) {
       String tableName = (String) lockConfig.getConfig().get(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
       String basePath = (String) lockConfig.getConfig().get(HoodieCommonConfig.BASE_PATH.key());
+      // Base path is constructed with prefix s3a, verify that for partition key calculation, s3a is replaced with s3
       Assertions.assertEquals(
-          tableName + '-' + HashID.generateXXHashAsString(basePath, HashID.Size.BITS_64),
+          tableName + '-' + HashID.generateXXHashAsString(SCHEME_S3 + URI_NO_CLOUD_PROVIDER_PREFIX, HashID.Size.BITS_64),
           dynamoDbBasedLockProvider.getPartitionKey());
+      Assertions.assertTrue(basePath.startsWith(SCHEME_S3A));
     }
     Assertions.assertTrue(dynamoDbBasedLockProvider.tryLock(lockConfig.getConfig().getLong(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY), TimeUnit.MILLISECONDS));
     dynamoDbBasedLockProvider.unlock();
