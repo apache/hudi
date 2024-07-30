@@ -362,7 +362,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
 
       // Delete with condition expression.
       val errorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`s_id` + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.s_id + 1)`"
       } else {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`s_id` + 1)`;"
       }
@@ -639,7 +639,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       // 1) set source column name to be same as target column
       //
       val complexConditionsErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
-        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`id` + 1)`"
+        "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.id = (s0.id + 1)`"
       } else {
         "Only simple conditions of the form `t.id = s.id` are allowed on the primary-key and partition path column. Found `t0.`id` = (s0.`id` + 1)`;"
       }
