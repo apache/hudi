@@ -29,9 +29,10 @@ public class HoodieTableConfigUtils {
 
   /**
    * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
-   * include the partition type with the field.
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
    */
-  public static Option<String> getPartitionFieldPropWithType(HoodieConfig config) {
+  public static Option<String> getPartitionFieldPropForKeyGenerator(HoodieConfig config) {
     return Option.ofNullable(config.getString(HoodieTableConfig.PARTITION_FIELDS));
   }
 
@@ -58,7 +59,7 @@ public class HoodieTableConfigUtils {
     if (HoodieConfig.contains(HoodieTableConfig.PARTITION_FIELDS, config)) {
       return Option.of(Arrays.stream(config.getString(HoodieTableConfig.PARTITION_FIELDS).split(","))
           .filter(p -> !p.isEmpty())
-          .map(p -> getPartitionFieldWithoutType(p, config))
+          .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
           .collect(Collectors.toList()).toArray(new String[] {}));
     }
     return Option.empty();
@@ -69,7 +70,7 @@ public class HoodieTableConfigUtils {
    * type corresponding to the custom key generator if table version is eight and if custom key
    * generator is configured. This function would strip the partition type and return the partition field.
    */
-  public static String getPartitionFieldWithoutType(String partitionField, HoodieConfig config) {
+  public static String getPartitionFieldWithoutKeyGenPartitionType(String partitionField, HoodieConfig config) {
     return getTableVersion(config).greaterThan(HoodieTableVersion.SEVEN)
         ? partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
         : partitionField;

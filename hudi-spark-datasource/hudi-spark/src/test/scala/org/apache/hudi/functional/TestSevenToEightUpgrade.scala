@@ -48,7 +48,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
 
     // assert table version is eight and the partition fields in table config has partition type
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
-    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
     // downgrade table props to version seven
     // assert table version is seven and the partition fields in table config does not have partition type
@@ -56,7 +56,7 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       .run(HoodieTableVersion.SEVEN, null)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.SEVEN, metaClient.getTableConfig.getTableVersion)
-    assertEquals("partition", HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals("partition", HoodieTableConfigUtils.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
 
     // auto upgrade the table
     // assert table version is eight and the partition fields in table config has partition type
@@ -66,6 +66,6 @@ class TestSevenToEightUpgrade extends RecordLevelIndexTestBase {
       validate = false)
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig.getTableVersion)
-    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropWithType(metaClient.getTableConfig).get())
+    assertEquals(partitionFields, HoodieTableConfigUtils.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).get())
   }
 }

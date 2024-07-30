@@ -184,7 +184,7 @@ public class KafkaConnectUtils {
    * @param typedProperties properties from the config.
    * @return partition columns Returns the partition columns separated by comma.
    */
-  public static String getPartitionColumnsWithType(KeyGenerator keyGenerator, TypedProperties typedProperties) {
+  public static String getPartitionColumnsForKeyGenerator(KeyGenerator keyGenerator, TypedProperties typedProperties) {
     if (keyGenerator instanceof BaseKeyGenerator) {
       return String.join(",", ((BaseKeyGenerator) keyGenerator).getPartitionPathFields());
     }

@@ -39,7 +39,7 @@ object SparkKeyGenUtils {
    * @param properties config properties
    * @return partition columns
    */
-  def getPartitionColumnsWithType(props: TypedProperties): String = {
+  def getPartitionColumnsForKeyGenerator(props: TypedProperties): String = {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
     getPartitionColumns(keyGenerator, props, true)
   }
@@ -62,7 +62,7 @@ object SparkKeyGenUtils {
    * @param keyGen key generator class name
    * @return partition columns
    */
-  def getPartitionColumns(keyGenClass: KeyGenerator, typedProperties: TypedProperties, includeType: Boolean): String = {
+  def getPartitionColumns(keyGenClass: KeyGenerator, typedProperties: TypedProperties, includeKeyGenPartitionType: Boolean): String = {
     // For {@link AutoRecordGenWrapperKeyGenerator} or {@link AutoRecordGenWrapperAvroKeyGenerator},
     // get the base key generator for the partition paths
     var baseKeyGen = keyGenClass match {
@@ -75,7 +75,7 @@ object SparkKeyGenUtils {
     // is: "field_name: field_type", we extract the field_name from the partition path field.
     if (baseKeyGen.isInstanceOf[CustomKeyGenerator] || baseKeyGen.isInstanceOf[CustomAvroKeyGenerator]) {
       val partitionFields = typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
-      if (includeType) {
+      if (includeKeyGenPartitionType) {
         partitionFields
       } else {
         partitionFields.split(",").map(pathField => {
