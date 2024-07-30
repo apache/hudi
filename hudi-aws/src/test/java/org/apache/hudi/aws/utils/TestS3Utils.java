@@ -24,7 +24,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class S3UtilsTest {
+class TestS3Utils {
 
   @Test
   void testS3aToS3_AWS() {
