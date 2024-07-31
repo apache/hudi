@@ -77,7 +77,7 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
     super(tableMetadata, config.isIncrementalTimelineSyncEnabled());
     this.config = config;
     this.schemaHelper = new RocksDBSchemaHelper(metaClient);
-    this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath());
+    this.rocksDB = new RocksDBDAO(metaClient.getBasePath(), config.getRocksdbBasePath(), new HashMap<>());
     init(metaClient, visibleActiveTimeline);
   }
 

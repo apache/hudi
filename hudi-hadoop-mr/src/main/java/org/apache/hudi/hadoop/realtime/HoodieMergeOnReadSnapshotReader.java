@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -121,6 +122,7 @@ public class HoodieMergeOnReadSnapshotReader extends AbstractRealtimeRecordReade
         new DefaultSizeEstimator(),
         new HoodieRecordSizeEstimator(readerSchema),
         jobConf.getEnum(SPILLABLE_DISK_MAP_TYPE.key(), SPILLABLE_DISK_MAP_TYPE.defaultValue()),
+        new DefaultSerializer<>(),
         jobConf.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()));
     try (ClosableIterator<String> baseFileIterator = baseFileReader.getRecordKeyIterator()) {
       timer.startTimer();

@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -140,6 +141,7 @@ public class HoodieCDCLogger implements Closeable {
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           config.getCommonConfig().getSpillableDiskMapType(),
+          new DefaultSerializer<>(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
       this.transformer = getTransformer();
       this.maxBlockSize = config.getLogFileDataBlockMaxSize();

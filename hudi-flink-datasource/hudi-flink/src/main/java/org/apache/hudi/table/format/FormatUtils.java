@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.HoodieProducer;
@@ -137,6 +138,7 @@ public class FormatUtils {
           new DefaultSizeEstimator<>(),
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
+          new DefaultSerializer<>(),
           writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
     } catch (IOException e) {
       throw new HoodieIOException(
