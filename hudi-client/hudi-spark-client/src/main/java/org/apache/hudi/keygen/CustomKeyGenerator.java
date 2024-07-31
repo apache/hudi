@@ -63,14 +63,14 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     super(stripPartitionPathConfig(props));
     this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
         .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
+            Arrays.stream(recordKeyConfigValue.split(BaseKeyGenerator.FIELD_SEPARATOR))
                 .map(String::trim)
                 .collect(Collectors.toList())
         ).orElse(Collections.emptyList());
     String partitionPathFields = props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
     this.partitionPathFields = partitionPathFields == null
         ? Collections.emptyList()
-        : Arrays.stream(partitionPathFields.split(",")).map(String::trim).collect(Collectors.toList());
+        : Arrays.stream(partitionPathFields.split(BaseKeyGenerator.FIELD_SEPARATOR)).map(String::trim).collect(Collectors.toList());
     this.customAvroKeyGenerator = new CustomAvroKeyGenerator(props);
     this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1
         ? new SimpleKeyGenerator(config, Option.ofNullable(config.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())), null)
@@ -83,12 +83,9 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return Collections.emptyList();
     } else {
       return partitionPathFields.stream().map(field -> {
-        String[] fieldWithType = field.split(CustomAvroKeyGenerator.SPLIT_REGEX);
-        if (fieldWithType.length != 2) {
-          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
-        }
-        String partitionPathField = fieldWithType[0];
-        CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
+        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType(field);
+        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight();
+        String partitionPathField = partitionAndType.getLeft();
         switch (keyType) {
           case SIMPLE:
             return new SimpleKeyGenerator(config, partitionPathField);

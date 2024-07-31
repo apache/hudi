@@ -369,6 +369,37 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test query with custom key generator") {
+    withTempDir { tmp => {
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      val writePartitionFields = "ts:timestamp"
+      val dateFormat = "yyyy/MM/dd"
+      val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+      val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
+      val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+
+      prepareTableWithKeyGenerator(
+        tableName, tablePath, "MERGE_ON_READ",
+        CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
+
+      createTableWithSql(tableName, tablePath,
+        s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields', "
+          + keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+
+      // INSERT INTO should fail due to conflict between write and table config of partition path fields
+      val sourceTableName = tableName + "_source"
+      prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+      // INSERT INTO should succeed now
+      testFirstRoundInserts(tableName, tsGenFunc, customPartitionFunc)
+      assertEquals(7, spark.sql(
+        s"""
+           | SELECT * from $tableName
+           | """.stripMargin).count())
+    }
+    }
+  }
+
   private def testFirstRoundInserts(tableName: String,
                                     tsGenFunc: Integer => String,
                                     partitionGenFunc: (Integer, String) => String): Unit = {
@@ -555,6 +586,9 @@ object TestSparkSqlWithCustomKeyGenerator {
   val TS_TO_STRING_FUNC = (tsSeconds: Integer) => tsSeconds.toString
   val TS_FORMATTER_FUNC = (tsSeconds: Integer) => {
     new DateTime(tsSeconds * 1000L).toString(DateTimeFormat.forPattern(DATE_FORMAT_PATTERN))
+  }
+  val TS_FORMATTER_FUNC_WITH_FORMAT = (tsSeconds: Integer, dateFormat: String) => {
+    new DateTime(tsSeconds * 1000L).toString(DateTimeFormat.forPattern(dateFormat))
   }
 
   def getTimestampKeyGenConfigs: Map[String, String] = {
