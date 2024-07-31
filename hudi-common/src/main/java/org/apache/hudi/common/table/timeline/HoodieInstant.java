@@ -275,8 +275,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    String timestampWithCompletionTime = timestamp +
-        (StringUtils.isNullOrEmpty(completionTime) ? "" : "_" + completionTime);
+    String timestampWithCompletionTime = timestamp
+        + (StringUtils.isNullOrEmpty(completionTime) ? "" : "_" + completionTime);
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
