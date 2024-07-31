@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[65350],{1722:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/cdc","name":"CDC","count":8,"permalink":"/cn/blog/tags/cdc"}')}}]);
