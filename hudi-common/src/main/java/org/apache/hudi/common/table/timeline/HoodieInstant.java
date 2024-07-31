@@ -24,6 +24,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -111,6 +112,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final String action;
   private final String timestamp;
   private final String completionTime;
+  // For older formats, we need the state transition time (pre table version 7)
+  private String stateTransitionTime = null;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -139,7 +142,10 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       completionTime = timestamps.length > 1
           ? timestamps[1]
           // for backward compatibility with 0.x release.
-          : state == State.COMPLETED ? pathInfo.getModificationTime() + "" : null;
+          : null;
+      if (state == State.COMPLETED) {
+        stateTransitionTime = HoodieInstantTimeGenerator.formatDate(new Date(pathInfo.getModificationTime()));
+      }
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
@@ -269,8 +275,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = timestamp + "_" + completionTime;
+    String timestampWithCompletionTime = timestamp +
+        (StringUtils.isNullOrEmpty(completionTime) ? "" : "_" + completionTime);
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
@@ -334,7 +340,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public String getCompletionTime() {
-    return completionTime;
+    return completionTime != null ? completionTime : stateTransitionTime;
   }
 
   @Override
