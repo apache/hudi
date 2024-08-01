@@ -112,8 +112,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final String action;
   private final String timestamp;
   private final String completionTime;
-  // For older formats, we need the state transition time (pre table version 7)
-  private String stateTransitionTime = null;
+  // Marker for older formats, we need the state transition time (pre table version 7)
+  private boolean isLegacy = false;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -139,12 +139,16 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           state = State.COMPLETED;
         }
       }
-      completionTime = timestamps.length > 1
-          ? timestamps[1]
-          // for backward compatibility with 0.x release.
-          : null;
       if (state == State.COMPLETED) {
-        stateTransitionTime = HoodieInstantTimeGenerator.formatDate(new Date(pathInfo.getModificationTime()));
+        if (timestamps.length > 1) {
+          completionTime = timestamps[1];
+        } else {
+          // for backward compatibility with 0.x release.
+          completionTime = HoodieInstantTimeGenerator.formatDate(new Date(pathInfo.getModificationTime()));
+          isLegacy = true;
+        }
+      } else {
+        completionTime = null;
       }
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
@@ -275,8 +279,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   private String getCompleteFileName(String completionTime) {
-    String timestampWithCompletionTime = timestamp
-        + (StringUtils.isNullOrEmpty(completionTime) ? "" : "_" + completionTime);
+    ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
+    String timestampWithCompletionTime = isLegacy ? timestamp : timestamp + "_" + completionTime;
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
@@ -340,7 +344,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   }
 
   public String getCompletionTime() {
-    return completionTime != null ? completionTime : stateTransitionTime;
+    return completionTime;
   }
 
   @Override
