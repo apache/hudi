@@ -317,6 +317,16 @@ Recent Athena version silently drops Hudi data when the partition location has a
 partition `s3` scheme fixes the issue. We have added a fix to use `s3` scheme for the Hudi table partitions in AWS Glue
 Catalog sync ([HUDI-7362](https://issues.apache.org/jira/browse/HUDI-7362)).
 
+## Known Regressions
+The Hudi 0.15.0 release introduces a regression related to Complex Key generation when the record key consists of a 
+single field. This issue was also present in version 0.14.1. When upgrading a table from previous versions, 
+it may silently ingest duplicate records.
+
+:::tip
+Avoid upgrading any existing table to 0.14.1 and 0.15.0 from any prior version if you are using ComplexKeyGenerator and 
+number of fields in record key is 1.
+:::
+
 ## Raw Release Notes
 
 The raw release notes are

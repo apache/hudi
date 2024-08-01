@@ -175,6 +175,12 @@ Caused by: [CIRCULAR REFERENCE: java.io.IOException: Write end dead]
 
 We have an active patch([https://github.com/apache/hudi/pull/7245](https://github.com/apache/hudi/pull/7245)) on fixing the issue. Until we land this, you can use above config to bypass the issue.
 
+#### Hudi upserts with RLI fails with ClassCastException
+
+In certain environments, RLI Hudi upserts may fail with the error: `Caused by: java.lang.ClassCastException: class org.apache.avro.generic.GenericData$Record cannot be cast to class org.apache.hudi.avro.model.HoodieDeleteRecordList`.
+
+To resolve this issue, we should add the hudi bundle JAR to both `spark.driver.extraClassPath` and `spark.executor.extraClassPath`.
+
 ### Hive Sync
 #### SQLException: following columns have types incompatible
 
