@@ -152,7 +152,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
         UpgradeOrDowngradeCommand.getHoodieTableVersionName(null, overrideWithDefault));
     assertEquals(overrideWithDefault ? HoodieTableVersion.current().name() : "",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("", overrideWithDefault));
-    assertEquals("THREE",
+    assertEquals("FOUR",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("FIVE", overrideWithDefault));
     assertEquals("FIVE",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("5", overrideWithDefault));
