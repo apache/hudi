@@ -267,3 +267,8 @@ c742b6c4f56 [AUDIT-862]: Changelog for release-v1.24.0 (#825)
 ---[2024-07-25 02:54:54] [release-v1.25.2] ---
 1086134d66 [ENG-12149][HUDI-8016] LastSyncedTime is not updated for Snapshot table in Glue Sync (#841)
 22e3f7d66b [ENG-12142][HUDI-7881] Compare bigquery table base path via source-uris if hive partitioning options are not available (#840)
+
+---[2024-08-01 11:39:44] [release-v1.26.0] ---
+3a17791bac9 [ENG-12108][INTERNAL] allow filter query of timestamp partition column for mor rt if timestamp keygen is used to change the pattern (#845)
+684f191b99b [ENG-12283][INTERNAL] Allow custom serialization and add hoodie file group estimator (#844)
+a28448ebc00 [ENG-11284][HUDI-8029] Enforce s3 base path format for partition key calculation (#846)
