@@ -125,7 +125,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
 
     // verify marker files for inflight commit exists
     for (String partitionPath : DEFAULT_PARTITION_PATHS) {
-      assertEquals(1,
+      assertEquals(5,
           FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
     }
 
@@ -140,7 +140,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
     if (toVersion == HoodieTableVersion.ZERO) {
       // verify marker files are non existent
       for (String partitionPath : DEFAULT_PARTITION_PATHS) {
-        assertEquals(0, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
+        assertEquals(5, FileCreateUtils.getTotalMarkerFileCount(tablePath, partitionPath, "101", IOType.MERGE));
       }
     }
   }
@@ -152,7 +152,7 @@ public class TestUpgradeDowngradeCommand extends CLIFunctionalTestHarness {
         UpgradeOrDowngradeCommand.getHoodieTableVersionName(null, overrideWithDefault));
     assertEquals(overrideWithDefault ? HoodieTableVersion.current().name() : "",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("", overrideWithDefault));
-    assertEquals("FIVE",
+    assertEquals("THREE",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("FIVE", overrideWithDefault));
     assertEquals("FIVE",
         UpgradeOrDowngradeCommand.getHoodieTableVersionName("5", overrideWithDefault));
