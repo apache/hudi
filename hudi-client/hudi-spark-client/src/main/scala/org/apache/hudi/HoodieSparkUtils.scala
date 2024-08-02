@@ -24,10 +24,10 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -240,6 +240,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  partitionPath: String,
                                  basePath: StoragePath,
                                  schema: StructType,
+                                 tableConfig: HoodieTableConfig,
                                  timeZoneId: String,
                                  sparkParsePartitionUtil: SparkParsePartitionUtil,
                                  shouldValidatePartitionCols: Boolean): Array[Object] = {
@@ -294,7 +295,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         }.mkString(StoragePath.SEPARATOR)
 
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
-        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
+        val partitionSchema = sparkParsePartitionUtil.getPartitionSchema(tableConfig, schema)
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
           sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
         partitionValues.map(_.asInstanceOf[Object]).toArray

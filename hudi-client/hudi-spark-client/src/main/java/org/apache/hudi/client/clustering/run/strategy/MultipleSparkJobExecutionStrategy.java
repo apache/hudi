@@ -398,7 +398,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         int startOfPartitionPath = bootstrapFilePath.indexOf(bootstrapBasePath) + bootstrapBasePath.length() + 1;
         String partitionFilePath = bootstrapFilePath.substring(startOfPartitionPath, bootstrapFilePath.lastIndexOf("/"));
         partitionValues = getPartitionFieldVals(partitionFields, partitionFilePath, bootstrapBasePath, baseFileReader.getSchema(),
-            storageConf.unwrapAs(Configuration.class));
+            getHoodieTable().getMetaClient().getTableConfig(), storageConf.unwrapAs(Configuration.class));
       }
       baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
           baseFileReader,

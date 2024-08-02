@@ -434,7 +434,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
-      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
+      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema, tableConfig,
         configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
         sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
     }
