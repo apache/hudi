@@ -272,3 +272,6 @@ c742b6c4f56 [AUDIT-862]: Changelog for release-v1.24.0 (#825)
 3a17791bac9 [ENG-12108][INTERNAL] allow filter query of timestamp partition column for mor rt if timestamp keygen is used to change the pattern (#845)
 684f191b99b [ENG-12283][INTERNAL] Allow custom serialization and add hoodie file group estimator (#844)
 a28448ebc00 [ENG-11284][HUDI-8029] Enforce s3 base path format for partition key calculation (#846)
+
+---[2024-08-01 13:34:45] [release-v1.26.1] ---
+e0c211aedd8 [ENG-12523] fix master branch compilation error
