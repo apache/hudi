@@ -335,6 +335,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
         LOG.warn("Base path in table source uris: {}, new base path: {}", sourceUris, basePathWithTrailingSlash);
       }
       return isTableBasePathUpdated;
+    }
     String basePathInTableDefinition = externalTableDefinition.getHivePartitioningOptions().getSourceUriPrefix();
     basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
     boolean isTableBasePathUpdated = !basePathInTableDefinition.equals(basePath);
