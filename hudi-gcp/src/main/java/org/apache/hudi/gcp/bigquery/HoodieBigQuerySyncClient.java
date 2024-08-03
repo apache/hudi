@@ -327,7 +327,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     String basePath = StringUtils.stripEnd(getBasePath(), "/");
     if (externalTableDefinition.getHivePartitioningOptions() == null) {
       List<String> sourceUris = Option.ofNullable(externalTableDefinition.getSourceUris()).orElse(Collections.emptyList());
-      // compare source uris with trailing slash to make sure it unwanted prefix matches are avoided
+      // compare source uris with trailing slash to make sure the unwanted prefix matches are avoided
       String basePathWithTrailingSlash = String.format("%s/", basePath);
       boolean isTableBasePathUpdated = sourceUris.stream()
           .noneMatch(sourceUri -> sourceUri.startsWith(basePathWithTrailingSlash));
