@@ -426,14 +426,24 @@ public class ParquetSplitReaderUtil {
                 utcTimestamp,
                 descriptor.getPrimitiveType(),
                 new ArrayType(mapType.getKeyType()));
-        ArrayColumnReader valueReader =
-            new ArrayColumnReader(
-                descriptors.get(1),
-                pages.getPageReader(descriptors.get(1)),
-                utcTimestamp,
-                descriptors.get(1).getPrimitiveType(),
-                new ArrayType(mapType.getValueType()));
-        return new MapColumnReader(keyReader, valueReader, fieldType);
+        ColumnReader<WritableColumnVector> valueReader;
+        if (mapType.getValueType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)){
+          valueReader = new ArrayGroupReader(createColumnReader(
+                  utcTimestamp,
+                  mapType.getValueType(),
+                  physicalType.asGroupType().getType(0).asGroupType().getType(1), // Get the value physical type
+                  descriptors.subList(1, descriptors.size()), // remove the key descriptor
+                  pages,
+                  depth + 2)); // increase the depth by 2, because there's a key_value entry in the path
+        } else {
+          valueReader = new ArrayColumnReader(
+                          descriptors.get(1),
+                          pages.getPageReader(descriptors.get(1)),
+                          utcTimestamp,
+                          descriptors.get(1).getPrimitiveType(),
+                          new ArrayType(mapType.getValueType()));
+        }
+        return new MapColumnReader(keyReader, valueReader);
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();
@@ -541,12 +551,14 @@ public class ParquetSplitReaderUtil {
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
         if (arrayType.getElementType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
-          return new HeapArrayGroupColumnVector(batchSize, createWritableColumnVector(
+          return new HeapArrayGroupColumnVector(
                   batchSize,
-                  arrayType.getElementType(),
-                  physicalType.asGroupType().getType(0),
-                  descriptors,
-                  depth + 1));
+                  createWritableColumnVector(
+                          batchSize,
+                          arrayType.getElementType(),
+                          physicalType.asGroupType().getType(0),
+                          descriptors,
+                          depth + 1));
         } else {
           return new HeapArrayVector(
                   batchSize,
@@ -561,20 +573,31 @@ public class ParquetSplitReaderUtil {
         MapType mapType = (MapType) fieldType;
         GroupType repeatedType = physicalType.asGroupType().getType(0).asGroupType();
         // the map column has three level paths.
-        return new HeapMapColumnVector(
-            batchSize,
-            createWritableColumnVector(
+      WritableColumnVector keyColumnVector = createWritableColumnVector(
+              batchSize,
+              new ArrayType(mapType.getKeyType().isNullable(), mapType.getKeyType()),
+              repeatedType.getType(0),
+              descriptors,
+              depth + 2);
+      WritableColumnVector valueColumnVector;
+      if (mapType.getValueType().isAnyOf(LogicalTypeFamily.CONSTRUCTED)) {
+        valueColumnVector = new HeapArrayGroupColumnVector(
                 batchSize,
-                mapType.getKeyType(),
-                repeatedType.getType(0),
-                descriptors,
-                depth + 2),
-            createWritableColumnVector(
+                createWritableColumnVector(
+                        batchSize,
+                        mapType.getValueType(),
+                        repeatedType.getType(1).asGroupType(),
+                        descriptors,
+                        depth + 2));
+      } else {
+        valueColumnVector = createWritableColumnVector(
                 batchSize,
                 mapType.getValueType(),
                 repeatedType.getType(1),
                 descriptors,
-                depth + 2));
+                depth + 2);
+      }
+      return new HeapMapColumnVector(batchSize, keyColumnVector, valueColumnVector);
       case ROW:
         RowType rowType = (RowType) fieldType;
         GroupType groupType = physicalType.asGroupType();

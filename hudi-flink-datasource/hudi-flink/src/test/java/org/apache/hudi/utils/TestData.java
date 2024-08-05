@@ -19,6 +19,7 @@
 package org.apache.hudi.utils;
 
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.data.GenericMapData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -479,6 +481,76 @@ public class TestData {
                           GenericRowData.of(StringData.fromString("Han2"), 256)
                   }))
   );
+
+  public static final DataType MAP_OF_ROWS_DATA_TYPE = DataTypes.ROW(
+                  DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
+                  DataTypes.FIELD("partition", DataTypes.VARCHAR(10)),
+                  DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
+                  DataTypes.FIELD("data", DataTypes.MAP( DataTypes.VARCHAR(10), DataTypes.ROW(
+                          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
+                          DataTypes.FIELD("age", DataTypes.INT())
+                  ))))
+          .notNull();
+
+  public static final RowType MAP_OF_ROWS_TYPE = (RowType) MAP_OF_ROWS_DATA_TYPE.getLogicalType();
+
+  public static List<RowData> DATA_SET_MAP_OF_ROWS = Arrays.asList(
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id1"), StringData.fromString("par1"),
+                  TimestampData.fromEpochMillis(3),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Danny"), 23),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Danny2"), 223)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id2"), StringData.fromString("par1"),
+                  TimestampData.fromEpochMillis(2),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Stephen"), 33),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Stephen2"), 233)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id3"), StringData.fromString("par2"),
+                  TimestampData.fromEpochMillis(3),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Julian"), 53),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Julian2"), 253)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id4"), StringData.fromString("par2"),
+                  TimestampData.fromEpochMillis(4),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Fabian"), 31),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Fabian2"), 231)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id5"), StringData.fromString("par3"),
+                  TimestampData.fromEpochMillis(5),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Sophia"), 18),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Sophia2"), 218)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id6"), StringData.fromString("par3"),
+                  TimestampData.fromEpochMillis(6),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Emma"), 20),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Emma2"), 220)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id7"), StringData.fromString("par4"),
+                  TimestampData.fromEpochMillis(7),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Bob"), 44),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Bob2"), 244)
+                  ))),
+          insertRow(MAP_OF_ROWS_TYPE, StringData.fromString("id8"), StringData.fromString("par4"),
+                  TimestampData.fromEpochMillis(8),
+                  new GenericMapData( MapOf(
+                          StringData.fromString("key1"), GenericRowData.of(StringData.fromString("Han"), 56),
+                          StringData.fromString("key2"), GenericRowData.of(StringData.fromString("Han2"), 256)
+                  )))
+  );
+
+  public static <K,V> Map<K,V> MapOf(K key1, V value1, K key2, V value2){
+    Map<K,V> map = new HashMap<>();
+    map.put(key1, value1);
+    map.put(key2, value2);
+    return map;
+  }
 
   public static List<RowData> dataSetInsert(int... ids) {
     List<RowData> inserts = new ArrayList<>();
