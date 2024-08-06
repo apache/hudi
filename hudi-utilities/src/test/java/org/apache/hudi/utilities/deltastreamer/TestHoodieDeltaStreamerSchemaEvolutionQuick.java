@@ -61,7 +61,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     Stream.Builder<Arguments> b = Stream.builder();
     if (fullTest) {
       //only testing row-writer enabled for now
-      for (Boolean rowWriterEnable : new Boolean[] {true}) {
+      for (Boolean rowWriterEnable : new Boolean[] {false, true}) {
         for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
           for (Boolean useKafkaSource : new Boolean[] {false, true}) {
             for (Boolean addFilegroups : new Boolean[] {false, true}) {
@@ -82,6 +82,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     } else {
       b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, false));
       b.add(Arguments.of("COPY_ON_WRITE", true, false, true, false, false, true, true));
+      b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, false, true, true));
+      b.add(Arguments.of("MERGE_ON_READ", true, false, false, true, true, true, true));
       b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
       b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true));
       b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true));
@@ -91,7 +93,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
 
   protected static Stream<Arguments> testReorderedColumn() {
     Stream.Builder<Arguments> b = Stream.builder();
-    for (Boolean rowWriterEnable : new Boolean[] {true}) {
+    for (Boolean rowWriterEnable : new Boolean[] {false, true}) {
       for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
         for (Boolean useKafkaSource : new Boolean[] {false, true}) {
           for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
@@ -109,7 +111,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     if (fullTest) {
       for (Boolean useTransformer : new Boolean[] {false, true}) {
         for (Boolean setSchema : new Boolean[] {false, true}) {
-          for (Boolean rowWriterEnable : new Boolean[] {true}) {
+          for (Boolean rowWriterEnable : new Boolean[] {false, true}) {
             for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
               for (Boolean useKafkaSource : new Boolean[] {false, true}) {
                 for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
@@ -123,9 +125,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     } else {
       b.add(Arguments.of("COPY_ON_WRITE", true, true, true, true, true));
       b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, true));
+      b.add(Arguments.of("COPY_ON_WRITE", false, false, false, false, true));
       b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, true, false, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));
+      b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, false));
     }
     return b.build();
   }
