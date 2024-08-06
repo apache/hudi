@@ -544,10 +544,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
             .withMetadataIndexBloomFilter(true)
             .withEnableRecordIndex(true).build())
         .build();
-    for (MetadataPartitionType partitionType : MetadataPartitionType.values()) {
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType.getPartitionPath(), true);
     }
-    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.values());
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.getValidValues());
     String metadataTableBasePath = Paths.get(basePath, METADATA_TABLE_FOLDER_PATH).toString();
     HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.init(metadataTableBasePath, MERGE_ON_READ);
     HoodieMetadataTestTable.of(metadataTableMetaClient)

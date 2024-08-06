@@ -19,8 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.metadata.HoodieMetadataPayload.getPartitionStatsIndexKey
-
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -243,8 +242,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result1DF = spark.sql(s"select * from hudi_filesystem_view('$identifier', 'price*')")
           result1DF.show(false)
           val result1Array = result1DF.select(
-              col("Partition_Path")
-            ).orderBy("Partition_Path").take(10)
+            col("Partition_Path")
+          ).orderBy("Partition_Path").take(10)
           checkAnswer(result1Array)(
             Seq("price=10.0"),
             Seq("price=10.0"),
