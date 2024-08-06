@@ -36,20 +36,32 @@ public class FileSliceMetricUtils {
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
   public static final String TOTAL_LOG_FILES = "TOTAL_LOG_FILES";
 
+  // >>>>>>>>> For Sort Merge Join Compaction >>>>>>>>> //
+  public static final String TOTAL_BASE_FILES = "TOTAL_BASE_FILES";
+  public static final String TOTAL_BASE_FILE_SIZE = "TOTAL_BASE_FILE_SIZE";
+  // <<<<<<<<< For Sort Merge Join Compaction <<<<<<<<< //
+
   public static void addFileSliceCommonMetrics(List<FileSlice> fileSlices, Map<String, Double> metrics, long defaultBaseFileSize) {
     int numLogFiles = 0;
     long totalLogFileSize = 0;
     long totalIORead = 0;
     long totalIOWrite = 0;
     long totalIO = 0;
+    // >>>>>>>>> For Sort Merge Join Compaction >>>>>>>>> //
+    int numBaseFiles = 0;
+    long totalBaseFileSize = 0;
+    // <<<<<<<<< For Sort Merge Join Compaction <<<<<<<<< //
 
     for (FileSlice slice : fileSlices) {
       numLogFiles += slice.getLogFiles().count();
       // Total size of all the log files
       totalLogFileSize += slice.getLogFiles().map(HoodieLogFile::getFileSize).filter(size -> size >= 0)
           .reduce(Long::sum).orElse(0L);
-
       long baseFileSize = slice.getBaseFile().isPresent() ? slice.getBaseFile().get().getFileSize() : 0L;
+      // >>>>>>>>> For Sort Merge Join Compaction >>>>>>>>> //
+      numBaseFiles += slice.getBaseFile().isPresent() ? 1 : 0;
+      totalBaseFileSize += baseFileSize;
+      // <<<<<<<<< For Sort Merge Join Compaction <<<<<<<<< //
       totalIORead += baseFileSize;
       // Total write will be similar to the size of the base file
       totalIOWrite += baseFileSize > 0 ? baseFileSize : defaultBaseFileSize;
@@ -66,5 +78,10 @@ public class FileSliceMetricUtils {
     metrics.put(TOTAL_IO_MB, (double) totalIO);
     metrics.put(TOTAL_LOG_FILE_SIZE, (double) totalLogFileSize);
     metrics.put(TOTAL_LOG_FILES, (double) numLogFiles);
+
+    // >>>>>>>>> For Sort Merge Join Compaction >>>>>>>>> //
+    metrics.put(TOTAL_BASE_FILES, (double) numBaseFiles);
+    metrics.put(TOTAL_BASE_FILE_SIZE, (double) totalBaseFileSize);
+    // <<<<<<<<< For Sort Merge Join Compaction <<<<<<<<< //
   }
 }

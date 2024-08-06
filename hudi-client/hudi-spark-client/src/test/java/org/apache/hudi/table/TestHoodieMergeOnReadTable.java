@@ -318,7 +318,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
   }
 
   @ParameterizedTest
-  @CsvSource({"true,avro", "true,parquet", "false,avro", "false,parquet"})
+  @CsvSource({"false,parquet", "true,avro", "true,parquet", "false,avro", "false,parquet"})
   public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields, String logFileFormat) throws Exception {
 
     HoodieCompactionConfig compactionConfig = HoodieCompactionConfig.newBuilder()

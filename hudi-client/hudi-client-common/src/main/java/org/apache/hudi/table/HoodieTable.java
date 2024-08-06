@@ -41,6 +41,7 @@ import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -1108,10 +1109,14 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public void runMerge(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime, String fileId) throws IOException {
+    this.runMerge(upsertHandle, instantTime, fileId, Option.empty());
+  }
+
+  public void runMerge(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime, String fileId, Option<CompactionContext> compactionContext) throws IOException {
     if (upsertHandle.getOldFilePath() == null) {
       throw new HoodieUpsertException("Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
     } else {
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
+      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle, compactionContext);
     }
   }
 }

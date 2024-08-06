@@ -218,7 +218,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     // NOTE: We're leveraging Spark's default [[GenericAvroSerializer]] to serialize Avro
     Serializer<GenericRecord> avroSerializer = kryo.getSerializer(GenericRecord.class);
 
-    kryo.writeObjectOrNull(output, payload, avroSerializer);
+    kryo.writeObject(output, payload, avroSerializer);
   }
 
   /**

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.model;
 
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -38,7 +37,7 @@ import java.util.Objects;
  *
  *       Check out HUDI-5760 for more details
  */
-public class DeleteRecord implements Serializable {
+public class DeleteRecord {
   private static final long serialVersionUID = 1L;
 
   /**
