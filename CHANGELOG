@@ -272,6 +272,15 @@ c742b6c4f56 [AUDIT-862]: Changelog for release-v1.24.0 (#825)
 3a17791bac9 [ENG-12108][INTERNAL] allow filter query of timestamp partition column for mor rt if timestamp keygen is used to change the pattern (#845)
 684f191b99b [ENG-12283][INTERNAL] Allow custom serialization and add hoodie file group estimator (#844)
 a28448ebc00 [ENG-11284][HUDI-8029] Enforce s3 base path format for partition key calculation (#846)
+8215f76249e [AUDIT-883] Change log for release-v1.25.2 (#842)
+374895a746d [ENG-11948][INTERNAL] Allow batch lookup with spillable fsviews (#843)
+1d683be075f [ENG-11847][HUDI-8005] Add new lock provider implementation (#833)
+1086134d661 [ENG-12149][HUDI-8016] LastSyncedTime is not updated for Snapshot table in Glue Sync (#841)
 
 ---[2024-08-01 13:34:45] [release-v1.26.1] ---
 e0c211aedd8 [ENG-12523] fix master branch compilation error
+
+---[2024-08-06 08:10:12] [release-v1.26.2] ---
+99444f5ea9f [ENG-11977][HUDI-8043] Fix DDB Lock provider bug (#855)
+7ccf28fe6f2 [AUDIT-891] : Changelog for release-v1.26.1 (#853)
+9bf4b717e4f fix master branch compilation error (#852)
