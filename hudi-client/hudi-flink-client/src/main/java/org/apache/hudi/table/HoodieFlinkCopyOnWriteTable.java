@@ -44,6 +44,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.HoodieUnmergedCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -449,4 +450,35 @@ public class HoodieFlinkCopyOnWriteTable<T>
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr) throws IOException {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle =
+        new HoodieUnmergedCreateHandle<>(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
+    createHandle.write();
+    return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
+                                                                      HoodieBaseFile oldDataFile) throws IOException {
+    HoodieMergeHandle upsertHandle = getUpdateHandleForSortedMerge(instantTime, partitionPath, fileId, unMergedRecordsItr, oldDataFile);
+    return handleUpdateInternal(upsertHandle, instantTime, fileId);
+  }
+
+  protected HoodieMergeHandle getUpdateHandleForSortedMerge(String instantTime, String partitionPath, String fileId,
+                                                            Iterator<HoodieRecord> iterator, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
+    if (!config.populateMetaFields()) {
+      try {
+        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieAvroKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
+      } catch (IOException e) {
+        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
+            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
+      }
+    }
+    return HoodieMergeHandleFactory.create(config, instantTime, this, iterator, partitionPath, fileId,
+        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+  }
+
 }

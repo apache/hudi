@@ -98,5 +98,25 @@ public class HoodieMergeHandleFactory {
       return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     }
+
+
+  }
+
+  /**
+   * Creates a merge handle for compaction path.
+   */
+  public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
+      HoodieWriteConfig writeConfig,
+      String instantTime,
+      HoodieTable<T, I, K, O> table,
+      Iterator<HoodieRecord> recordItr,
+      String partitionPath,
+      String fileId,
+      HoodieBaseFile dataFileToBeMerged,
+      TaskContextSupplier taskContextSupplier,
+      Option<BaseKeyGenerator> keyGeneratorOpt) {
+    LOG.info("Get sortedUnmergeUpdateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
+    return new HoodieSortedMerge2Handle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, dataFileToBeMerged,
+        taskContextSupplier, keyGeneratorOpt);
   }
 }

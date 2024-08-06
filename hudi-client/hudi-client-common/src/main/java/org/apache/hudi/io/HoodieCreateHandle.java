@@ -62,8 +62,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long insertRecordsWritten = 0;
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
-  private boolean useWriterSchema = false;
-  private final boolean preserveMetadata;
+  protected boolean useWriterSchema = false;
+  protected final boolean preserveMetadata;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {

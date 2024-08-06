@@ -120,6 +120,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
 
+  protected boolean isCompaction = false;
+
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
@@ -142,7 +144,15 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    this(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, true);
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                           Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                           boolean isCompaction) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.isCompaction = isCompaction;
     this.keyToNewRecords = keyToNewRecords;
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
@@ -160,6 +170,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       throw new NoSuchElementException(String.format("FileID %s of partition path %s does not exist.", fileId, partitionPath));
     }
     return baseFileOp.get();
+  }
+
+  public Option<BaseKeyGenerator> getKeyGeneratorOpt() {
+    return keyGeneratorOpt;
   }
 
   /**
@@ -241,6 +255,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     return true;
   }
 
+
+
   /**
    * Load the new incoming records in a map and return partitionPath.
    */
@@ -260,7 +276,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + ", Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in DiskBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
@@ -458,6 +474,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
 
+      LOG.info("MergeHandle successfully merge: {} to a new file: {}", oldFilePath, newFilePath);
+
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
@@ -523,5 +541,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public Object[] getPartitionValues() {
     return this.partitionValues;
+  }
+
+  public boolean isCompaction() {
+    return isCompaction;
   }
 }

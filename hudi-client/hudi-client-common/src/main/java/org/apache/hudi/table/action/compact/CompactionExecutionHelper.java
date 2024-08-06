@@ -22,7 +22,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.table.log.AbstractHoodieLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieUnMergedSortedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -69,6 +71,33 @@ public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> i
           scanner.getRecords());
     }
     return result;
+  }
+
+  protected Iterator<List<WriteStatus>> writeFileAndGetWriteStats(HoodieCompactionHandler compactionHandler,
+                                                                  CompactionOperation operation,
+                                                                  String instantTime,
+                                                                  AbstractHoodieLogRecordScanner scanner,
+                                                                  Option<HoodieBaseFile> oldDataFileOpt) throws IOException {
+    if (scanner instanceof HoodieUnMergedSortedLogRecordScanner) {
+      return writeFileAndGetWriteStats(compactionHandler, operation, instantTime, (HoodieUnMergedSortedLogRecordScanner) scanner, oldDataFileOpt);
+    } else {
+      return writeFileAndGetWriteStats(compactionHandler, operation, instantTime, (HoodieMergedLogRecordScanner) scanner, oldDataFileOpt);
+    }
+  }
+
+  protected Iterator<List<WriteStatus>> writeFileAndGetWriteStats(HoodieCompactionHandler compactionHandler,
+                                                                  CompactionOperation operation,
+                                                                  String instantTime,
+                                                                  HoodieUnMergedSortedLogRecordScanner scanner,
+                                                                  Option<HoodieBaseFile> oldDataFileOpt) throws IOException {
+    if (!oldDataFileOpt.isPresent()) {
+      // handle insert
+      return compactionHandler.handleInsertWithUnMergedIterator(instantTime, operation.getPartitionPath(), operation.getFileId(),
+          scanner.iterator());
+    }
+
+    return compactionHandler.handleUpdateWithUnMergedIterator(instantTime, operation.getPartitionPath(),
+        operation.getFileId(), scanner.iterator(), oldDataFileOpt.orElse(null));
   }
 
   protected boolean enableOptimizedLogBlockScan(HoodieWriteConfig writeConfig) {

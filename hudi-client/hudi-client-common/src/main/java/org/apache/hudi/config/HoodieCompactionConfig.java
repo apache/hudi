@@ -191,6 +191,14 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
+  public static final ConfigProperty<String> SORTED_MERGE_COMPACTION = ConfigProperty
+      .key("hoodie.compaction.sortedmerge")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
+          + "This is useful way to speed up the compaction process.");
+
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
    */
@@ -458,6 +466,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
       compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
+      return this;
+    }
+
+    public Builder withSortedMergeCompaction(boolean sortedMergeCompaction) {
+      compactionConfig.setValue(SORTED_MERGE_COMPACTION, String.valueOf(sortedMergeCompaction));
       return this;
     }
 

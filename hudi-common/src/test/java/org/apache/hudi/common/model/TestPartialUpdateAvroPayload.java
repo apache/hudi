@@ -120,6 +120,7 @@ public class TestPartialUpdateAvroPayload {
     // Test combineAndGetUpdateValue: let payload1's ordering val equal to  payload2, then payload2 will be considered to newer record
     record1.put("ts", 1L);
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema, properties).get(), record4);
+    assertEquals(payload1.combineAndGetUpdateValue(record2, schema, properties).get(), record4);
 
     // Test preCombine again: let payload1's ordering val larger than payload2
     record1.put("ts", 2L);
