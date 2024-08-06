@@ -98,7 +98,7 @@ public class TestDataHubSyncClient {
     DatahubSyncConfigStub configStub = new DatahubSyncConfigStub(props, restEmitterMock);
     DataHubSyncClientStub dhClient = new DataHubSyncClientStub(configStub);
 
-    dhClient.updateTableSchema("some_table", null);
+    dhClient.updateTableSchema("some_table", null, null);
     verify(restEmitterMock, times(2)).emit(any(MetadataChangeProposalWrapper.class),
             Mockito.any());
   }

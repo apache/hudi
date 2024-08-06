@@ -698,14 +698,14 @@ public class ITTestHoodieDataSource {
   void testLookupJoin(HoodieTableType tableType) {
     TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
-        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_NAME, tableType)
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t1")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 
     String hoodieTableDDL2 = sql("t2")
-        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
-        .option(FlinkOptions.TABLE_NAME, tableType)
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t2")
+        .option(FlinkOptions.TABLE_TYPE, tableType)
         .end();
     tableEnv.executeSql(hoodieTableDDL2);
 

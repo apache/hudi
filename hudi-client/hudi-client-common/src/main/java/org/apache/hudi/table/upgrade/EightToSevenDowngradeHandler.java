@@ -20,17 +20,21 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,6 +52,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     UpgradeDowngradeUtils.runCompaction(table, context, config, upgradeDowngradeHelper);
     UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
 
@@ -73,6 +78,19 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         return false;
       }, instants.size());
     }
-    return Collections.emptyMap();
+
+    downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
+    return tablePropsToAdd;
+  }
+
+  private static void downgradePartitionFields(HoodieWriteConfig config, HoodieEngineContext context, SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                                               Map<ConfigProperty, String> tablePropsToAdd) {
+    HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
+    String keyGenerator = tableConfig.getKeyGeneratorClassName();
+    String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    if (keyGenerator != null && partitionPathField != null
+        && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
+      tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
+    }
   }
 }

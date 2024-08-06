@@ -308,7 +308,7 @@ public class HoodieTableSource implements
     return TableFunctionProvider.of(
         new HoodieLookupFunction(
             new HoodieLookupTableReader(this::getBatchInputFormat, conf),
-            tableRowType,
+            (RowType) getProducedDataType().notNull().getLogicalType(),
             getLookupKeys(context.getKeys()),
             duration,
             conf

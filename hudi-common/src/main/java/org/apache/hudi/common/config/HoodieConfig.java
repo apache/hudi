@@ -113,10 +113,14 @@ public class HoodieConfig implements Serializable {
   }
 
   public <T> boolean contains(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
+    return contains(configProperty, this);
+  }
+
+  public static <T> boolean contains(ConfigProperty<T> configProperty, HoodieConfig config) {
+    if (config.getProps().containsKey(configProperty.key())) {
       return true;
     }
-    return configProperty.getAlternatives().stream().anyMatch(props::containsKey);
+    return configProperty.getAlternatives().stream().anyMatch(k -> config.getProps().containsKey(k));
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {

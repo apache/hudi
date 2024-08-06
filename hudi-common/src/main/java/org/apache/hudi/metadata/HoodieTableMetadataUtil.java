@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.DoubleWrapper;
 import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
+import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -79,6 +80,8 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
+import org.apache.hudi.common.util.hash.ColumnIndexID;
+import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -118,6 +121,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -131,6 +135,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.getSchemaForFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
+import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
@@ -140,6 +145,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_O
 import static org.apache.hudi.common.util.ConfigUtils.getReaderConfigs;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.RECORD_INDEX_MISSING_FILEINDEX_FALLBACK;
 import static org.apache.hudi.metadata.HoodieTableMetadata.EMPTY_PARTITION_NAME;
@@ -2139,6 +2145,118 @@ public class HoodieTableMetadataUtil {
     }
 
     return getFileStatsRangeMetadata(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
+  }
+
+  public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
+    final PartitionIndexID partitionIndexID = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionPath));
+    final ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+    return columnIndexID.asBase64EncodedString().concat(partitionIndexID.asBase64EncodedString());
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
+                                                                  HoodieMetadataColumnStats newColumnStats) {
+    checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
+
+    // We're handling 2 cases in here
+    //  - New record is a tombstone: in this case it simply overwrites previous state
+    //  - Previous record is a tombstone: in that case new proper record would also
+    //    be simply overwriting previous state
+    if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
+      return newColumnStats;
+    }
+
+    Comparable minValue =
+        (Comparable) Stream.of(
+                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
+                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue()))
+            .filter(Objects::nonNull)
+            .min(Comparator.naturalOrder())
+            .orElse(null);
+
+    Comparable maxValue =
+        (Comparable) Stream.of(
+                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
+                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue()))
+            .filter(Objects::nonNull)
+            .max(Comparator.naturalOrder())
+            .orElse(null);
+
+    return HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
+        .setFileName(newColumnStats.getFileName())
+        .setColumnName(newColumnStats.getColumnName())
+        .setMinValue(wrapValueIntoAvro(minValue))
+        .setMaxValue(wrapValueIntoAvro(maxValue))
+        .setValueCount(prevColumnStats.getValueCount() + newColumnStats.getValueCount())
+        .setNullCount(prevColumnStats.getNullCount() + newColumnStats.getNullCount())
+        .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
+        .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
+        .setIsDeleted(newColumnStats.getIsDeleted())
+        .build();
+  }
+
+  public static Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+    Map<String, HoodieMetadataFileInfo> combinedFileInfo = new HashMap<>();
+    // First, add all files listed in the previous record
+    if (older.filesystemMetadata != null) {
+      combinedFileInfo.putAll(older.filesystemMetadata);
+    }
+
+    // Second, merge in the files listed in the new record
+    if (newer.filesystemMetadata != null) {
+      validatePayload(newer.type, newer.filesystemMetadata);
+
+      newer.filesystemMetadata.forEach((key, fileInfo) -> {
+        combinedFileInfo.merge(key, fileInfo,
+            // Combine previous record w/ the new one, new records taking precedence over
+            // the old one
+            //
+            // NOTE: That if previous listing contains the file that is being deleted by the tombstone
+            //       record (`IsDeleted` = true) in the new one, we simply delete the file from the resulting
+            //       listing as well as drop the tombstone itself.
+            //       However, if file is not present in the previous record we have to persist tombstone
+            //       record in the listing to make sure we carry forward information that this file
+            //       was deleted. This special case could occur since the merging flow is 2-stage:
+            //          - First we merge records from all of the delta log-files
+            //          - Then we merge records from base-files with the delta ones (coming as a result
+            //          of the previous step)
+            (oldFileInfo, newFileInfo) -> {
+              // NOTE: We can’t assume that MT update records will be ordered the same way as actual
+              //       FS operations (since they are not atomic), therefore MT record merging should be a
+              //       _commutative_ & _associative_ operation (ie one that would work even in case records
+              //       will get re-ordered), which is
+              //          - Possible for file-sizes (since file-sizes will ever grow, we can simply
+              //          take max of the old and new records)
+              //          - Not possible for is-deleted flags*
+              //
+              //       *However, we’re assuming that the case of concurrent write and deletion of the same
+              //       file is _impossible_ -- it would only be possible with concurrent upsert and
+              //       rollback operation (affecting the same log-file), which is implausible, b/c either
+              //       of the following have to be true:
+              //          - We’re appending to failed log-file (then the other writer is trying to
+              //          rollback it concurrently, before it’s own write)
+              //          - Rollback (of completed instant) is running concurrently with append (meaning
+              //          that restore is running concurrently with a write, which is also nut supported
+              //          currently)
+              if (newFileInfo.getIsDeleted()) {
+                if (oldFileInfo.getIsDeleted()) {
+                  LOG.warn("A file is repeatedly deleted in the files partition of the metadata table: {}", key);
+                  return newFileInfo;
+                }
+                return null;
+              }
+              return new HoodieMetadataFileInfo(
+                  Math.max(newFileInfo.getSize(), oldFileInfo.getSize()), false);
+            });
+      });
+    }
+    return combinedFileInfo;
+  }
+
+  private static void validatePayload(int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
+    if (type == MetadataPartitionType.FILES.getRecordType()) {
+      filesystemMetadata.forEach((fileName, fileInfo) -> checkState(fileInfo.getIsDeleted() || fileInfo.getSize() > 0, "Existing files should have size > 0"));
+    }
   }
 
   /**

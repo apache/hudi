@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.keygen.{AutoRecordKeyGeneratorWrapper, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator}
+import org.apache.hudi.keygen.{AutoRecordKeyGeneratorWrapper, BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, GlobalAvroDeleteKeyGenerator, GlobalDeleteKeyGenerator, KeyGenerator, NonpartitionedAvroKeyGenerator, NonpartitionedKeyGenerator}
 
 object SparkKeyGenUtils {
 
@@ -32,7 +32,16 @@ object SparkKeyGenUtils {
    */
   def getPartitionColumns(props: TypedProperties): String = {
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
-    getPartitionColumns(keyGenerator, props)
+    getPartitionColumns(keyGenerator, props, false)
+  }
+
+  /**
+   * @param properties config properties
+   * @return partition columns
+   */
+  def getPartitionColumnsForKeyGenerator(props: TypedProperties): String = {
+    val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+    getPartitionColumns(keyGenerator, props, true)
   }
 
   /**
@@ -46,14 +55,14 @@ object SparkKeyGenUtils {
     } else {
       HoodieSparkKeyGeneratorFactory.createKeyGenerator(KeyGenClassNameOption.get, props)
     }
-    getPartitionColumns(keyGenerator, props)
+    getPartitionColumns(keyGenerator, props, false)
   }
 
   /**
    * @param keyGen key generator class name
    * @return partition columns
    */
-  def getPartitionColumns(keyGenClass: KeyGenerator, typedProperties: TypedProperties): String = {
+  def getPartitionColumns(keyGenClass: KeyGenerator, typedProperties: TypedProperties, includeKeyGenPartitionType: Boolean): String = {
     // For {@link AutoRecordGenWrapperKeyGenerator} or {@link AutoRecordGenWrapperAvroKeyGenerator},
     // get the base key generator for the partition paths
     var baseKeyGen = keyGenClass match {
@@ -65,10 +74,15 @@ object SparkKeyGenUtils {
     // For CustomKeyGenerator and CustomAvroKeyGenerator, the partition path filed format
     // is: "field_name: field_type", we extract the field_name from the partition path field.
     if (baseKeyGen.isInstanceOf[CustomKeyGenerator] || baseKeyGen.isInstanceOf[CustomAvroKeyGenerator]) {
-      typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
-        .split(",").map(pathField => {
-        pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX)
-          .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${baseKeyGen}")}).mkString(",")
+      val partitionFields = typedProperties.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+      if (includeKeyGenPartitionType) {
+        partitionFields
+      } else {
+        partitionFields.split(",").map(pathField => {
+          pathField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)
+            .headOption.getOrElse(s"Illegal partition path field format: '$pathField' for ${baseKeyGen}")
+        }).mkString(",")
+      }
     } else if (baseKeyGen.isInstanceOf[NonpartitionedKeyGenerator]
       || baseKeyGen.isInstanceOf[NonpartitionedAvroKeyGenerator]
       || baseKeyGen.isInstanceOf[GlobalDeleteKeyGenerator]

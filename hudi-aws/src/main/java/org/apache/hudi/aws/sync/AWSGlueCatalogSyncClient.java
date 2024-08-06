@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -186,6 +187,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
         GetPartitionsResponse result = awsGlue.getPartitions(GetPartitionsRequest.builder()
             .databaseName(databaseName)
             .tableName(tableName)
+            .excludeColumnSchema(true)
             .segment(segment)
             .nextToken(nextToken)
             .build()).get();
@@ -424,6 +426,9 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     }
   }
 
+  /**
+   * Update the table properties to the table.
+   */
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
     try {
@@ -509,9 +514,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType newSchema) {
-    // ToDo Cascade is set in Hive meta sync, but need to investigate how to configure it for Glue meta
-    boolean cascade = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0;
+  public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
     try {
       Table table = getTable(awsGlue, databaseName, tableName);
       Map<String, String> newSchemaMap = parquetSchemaToMapSchema(newSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false);
@@ -536,9 +539,28 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           .build();
 
       awsGlue.updateTable(request).get();
+      // glue needs partition schema cascading only when columns get updated
+      // TODO: skip cascading when new fields in structs are added to the schema in last position
+      boolean cascade = config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size() > 0 && !schemaDiff.getUpdateColumnTypes().isEmpty();
+      if (cascade) {
+        LOG.info("Cascading column changes to partitions");
+        List<String> allPartitions = getAllPartitions(tableName).stream()
+            .map(partition -> getStringFromPartition(table.partitionKeys(), partition.getValues()))
+            .collect(Collectors.toList());
+        updatePartitionsToTable(tableName, allPartitions);
+      }
+      awsGlue.updateTable(request).get();
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to update definition for table " + tableId(databaseName, tableName), e);
     }
+  }
+
+  private String getStringFromPartition(List<Column> partitionKeys, List<String> values) {
+    ArrayList<String> partitionValues = new ArrayList<>();
+    for (int i = 0; i < partitionKeys.size(); i++) {
+      partitionValues.add(String.format("%s=%s", partitionKeys.get(i).name(), values.get(i)));
+    }
+    return partitionValues.stream().collect(Collectors.joining("/"));
   }
 
   @Override
@@ -793,7 +815,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return Objects.nonNull(awsGlue.getTable(request).get().table());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof EntityNotFoundException) {
-        LOG.info("Table not found: " + tableId(databaseName, tableName), e);
+        LOG.warn("Table not found: " + tableId(databaseName, tableName), e);
         return false;
       } else {
         throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
@@ -810,7 +832,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return Objects.nonNull(awsGlue.getDatabase(request).get().database());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof EntityNotFoundException) {
-        LOG.info("Database not found: " + databaseName, e);
+        LOG.warn("Database not found: " + databaseName, e);
         return false;
       } else {
         throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);

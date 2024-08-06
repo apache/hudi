@@ -641,7 +641,7 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
 
-    // Create bootstrap index by partition folder if it does not exist
+    // Create bootstrap index by file-id folder if it does not exist
     final StoragePath bootstrap_index_folder_by_fileids =
         new StoragePath(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH);
     if (!storage.exists(bootstrap_index_folder_by_fileids)) {

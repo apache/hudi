@@ -149,7 +149,7 @@ public class BootstrapExecutorUtils implements Serializable {
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
     SchemaProvider schemaProvider = createSchemaProvider(cfg.schemaProviderClass, props, jssc);
-    String keyGenClass = genKeyGenClassAndPartitionColumns().getLeft();
+    String keyGenClass = genKeyGenClassAndPartitionColumnsForKeyGenerator().getLeft();
     HoodieWriteConfig.Builder builder =
         HoodieWriteConfig.newBuilder().withPath(cfg.basePath)
             .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
@@ -230,9 +230,9 @@ public class BootstrapExecutorUtils implements Serializable {
             + ". Cannot bootstrap data on top of an existing table");
       }
     }
-    Pair<String, String> keyGenClassAndParCols = genKeyGenClassAndPartitionColumns();
+    Pair<String, String> keyGenClassAndParColsForKeyGenerator = genKeyGenClassAndPartitionColumnsForKeyGenerator();
     Map<String, Object> timestampKeyGeneratorConfigs =
-        extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenClassAndParCols.getLeft(), props);
+        extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenClassAndParColsForKeyGenerator.getLeft(), props);
 
     HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
         .fromProperties(props)
@@ -267,13 +267,13 @@ public class BootstrapExecutorUtils implements Serializable {
             PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))
         .set(timestampKeyGeneratorConfigs)
-        .setKeyGeneratorClassProp(keyGenClassAndParCols.getLeft())
-        .setPartitionFields(keyGenClassAndParCols.getRight());
+        .setKeyGeneratorClassProp(keyGenClassAndParColsForKeyGenerator.getLeft())
+        .setPartitionFields(keyGenClassAndParColsForKeyGenerator.getRight());
 
     builder.initTable(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()), cfg.basePath);
   }
 
-  private Pair<String, String> genKeyGenClassAndPartitionColumns() {
+  private Pair<String, String> genKeyGenClassAndPartitionColumnsForKeyGenerator() {
     String keyGenClass;
     if (StringUtils.nonEmpty(props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), null))) {
       keyGenClass = props.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key());
@@ -283,15 +283,15 @@ public class BootstrapExecutorUtils implements Serializable {
       keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(props));
     }
     props.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), keyGenClass);
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumns(props);
+    String partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props);
 
-    if (StringUtils.isNullOrEmpty(partitionColumns)) {
-      partitionColumns = null;
+    if (StringUtils.isNullOrEmpty(partitionColumnsForKeyGenerator)) {
+      partitionColumnsForKeyGenerator = null;
       if (keyGenClass.equals(SimpleKeyGenerator.class.getName())) {
         keyGenClass = NonpartitionedKeyGenerator.class.getName();
       }
     }
-    return Pair.of(keyGenClass, partitionColumns);
+    return Pair.of(keyGenClass, partitionColumnsForKeyGenerator);
   }
 
   private Map<String, Object> extractConfigsRelatedToTimestampBasedKeyGenerator(String keyGenerator, TypedProperties params) {

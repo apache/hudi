@@ -27,9 +27,10 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
-import java.util.Collections;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -43,6 +44,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
                                              String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
 
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
       // Record merge mode is required to dictate the merging behavior in version 8,
       // playing the same role as the payload class config in version 7.
@@ -63,12 +65,20 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       ValidationUtils.checkState(null != propToAdd, String.format("Couldn't infer (%s) from (%s) class name",
           HoodieTableConfig.RECORD_MERGE_MODE.key(), payloadClassName));
 
-      Map<ConfigProperty, String> tablePropsToAdd = new Hashtable<>();
       tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_MODE, propToAdd);
+    }
 
-      return tablePropsToAdd;
-    } else {
-      return Collections.emptyMap();
+    upgradePartitionFields(config, tableConfig, tablePropsToAdd);
+
+    return tablePropsToAdd;
+  }
+
+  private static void upgradePartitionFields(HoodieWriteConfig config, HoodieTableConfig tableConfig, Map<ConfigProperty, String> tablePropsToAdd) {
+    String keyGenerator = tableConfig.getKeyGeneratorClassName();
+    String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
+    if (keyGenerator != null && partitionPathField != null
+        && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
+      tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, partitionPathField);
     }
   }
 }

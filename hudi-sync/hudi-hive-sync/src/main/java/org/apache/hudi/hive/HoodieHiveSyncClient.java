@@ -201,7 +201,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType newSchema) {
+  public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
   }
 

@@ -76,7 +76,7 @@ public class KafkaSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Schema to deserialize the records.");
 
-
+  @Deprecated
   public static final ConfigProperty<Long> KAFKA_FETCH_PARTITION_TIME_OUT = ConfigProperty
       .key(PREFIX + "fetch_partition.time.out")
       .defaultValue(300 * 1000L)
@@ -137,6 +137,35 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(ByteArrayDeserializer.class.getName())
       .sinceVersion("0.15.0")
       .withDocumentation("Kafka Proto Payload Deserializer Class");
+
+  public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
+      .key(PREFIX + "retry.initial_interval_ms")
+      .defaultValue(100L)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on KafkaConsumer.");
+
+  public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
+      .key(PREFIX + "retry.max_interval_ms")
+      .defaultValue(2000L)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
+
+  public static final ConfigProperty<Integer> MAX_RETRY_COUNT = ConfigProperty
+      .key(PREFIX + "retry.max_count")
+      .defaultValue(4)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
+
+  public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
+      .key(PREFIX + "retry.exceptions")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
+          + "Default is empty which means retry all the IOException and RuntimeException from KafkaConsumer");
 
   /**
    * Kafka reset offset strategies.

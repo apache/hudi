@@ -259,6 +259,8 @@ public class TestKafkaOffsetGen {
     assertEquals(300, nextOffsetRanges[0].untilOffset());
 
     props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 2L);
+    // just to check warn-message manually if props contains deprecated config
+    props.put(KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT.key(), 1L);
     kafkaOffsetGen = new KafkaOffsetGen(props);
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
     assertEquals(0, nextOffsetRanges[0].fromOffset());

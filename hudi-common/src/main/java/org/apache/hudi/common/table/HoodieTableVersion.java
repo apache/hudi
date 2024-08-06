@@ -65,4 +65,8 @@ public enum HoodieTableVersion {
         .filter(v -> v.versionCode == versionCode).findAny()
         .orElseThrow(() -> new HoodieException("Unknown versionCode:" + versionCode));
   }
+
+  public boolean greaterThan(HoodieTableVersion other) {
+    return this.versionCode > other.versionCode;
+  }
 }

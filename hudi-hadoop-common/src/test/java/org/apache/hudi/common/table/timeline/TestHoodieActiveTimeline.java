@@ -719,6 +719,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertNull(instants.get(0).getCompletionTime(), "Requested instant does not have completion time");
     assertNull(instants.get(1).getCompletionTime(), "Inflight instant does not have completion time");
     assertNotNull(instants.get(2).getCompletionTime(), "Completed instant has modification time as completion time for 0.x release");
+    assertEquals(instants.get(2).getTimestamp() + HoodieTimeline.COMMIT_EXTENSION, instants.get(2).getFileName(), "Instant file name should not have completion time");
   }
 
   /**

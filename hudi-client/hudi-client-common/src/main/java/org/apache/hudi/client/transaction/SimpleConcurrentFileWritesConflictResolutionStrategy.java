@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -62,6 +63,8 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
         .filterPendingReplaceClusteringAndCompactionTimeline()
+        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant)
+            || HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()))
         .findInstantsAfter(currentInstant.getTimestamp())
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);

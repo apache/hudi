@@ -144,6 +144,19 @@ public class TestConflictResolutionStrategyUtil {
         .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
   }
 
+  public static void createPendingInsertOverwrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
+    //insert_overwrite
+    String fileId1 = "file-1";
+    String fileId2 = "file-2";
+
+    HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
+    HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+
+    HoodieTestTable.of(metaClient)
+        .addPendingReplace(instantTime, Option.of(requestedReplaceMetadata), Option.empty())
+        .withBaseFilesInPartition(HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH, fileId1, fileId2);
+  }
+
   public static void createReplace(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) throws Exception {
     String fileId1 = "file-1";
     String fileId2 = "file-2";

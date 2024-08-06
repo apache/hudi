@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 
+import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -49,7 +50,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +57,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredProperties;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -274,7 +275,7 @@ public class KafkaOffsetGen {
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
-    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+    try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, kafkaParams)) {
       if (!checkTopicExists(consumer)) {
         throw new HoodieException("Kafka topic:" + topicName + " does not exist");
       }
@@ -324,22 +325,12 @@ public class KafkaOffsetGen {
    * @param topicName
    */
   private List<PartitionInfo> fetchPartitionInfos(KafkaConsumer consumer, String topicName) {
-    long timeout = getLongWithAltKeys(this.props, KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT);
-    long start = System.currentTimeMillis();
-
-    List<PartitionInfo> partitionInfos;
-    do {
-      // TODO(HUDI-4625) cleanup, introduce retrying client
-      partitionInfos = consumer.partitionsFor(topicName);
-      try {
-        if (partitionInfos == null) {
-          TimeUnit.SECONDS.sleep(10);
-        }
-      } catch (InterruptedException e) {
-        LOG.error("Sleep failed while fetching partitions");
-      }
-    } while (partitionInfos == null && (System.currentTimeMillis() <= (start + timeout)));
-
+    if (containsConfigProperty(this.props, KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT)) {
+      LOG.warn("{} is deprecated and is not taking effect anymore. Use {}, {} and {} for setting up retrying configuration of KafkaConsumer",
+          KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT.key(), KafkaSourceConfig.INITIAL_RETRY_INTERVAL_MS.key(),
+          KafkaSourceConfig.MAX_RETRY_INTERVAL_MS.key(), KafkaSourceConfig.MAX_RETRY_COUNT.key());
+    }
+    List<PartitionInfo> partitionInfos = consumer.partitionsFor(topicName);
     if (partitionInfos == null) {
       throw new HoodieStreamerException(String.format("Can not find metadata for topic %s from kafka cluster", topicName));
     }
@@ -477,7 +468,7 @@ public class KafkaOffsetGen {
     return kafkaParams;
   }
 
-  private Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
+  public static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
     Map<String, Object> kafkaParams = new HashMap<>();
     props.keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
@@ -500,7 +491,7 @@ public class KafkaOffsetGen {
     checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
-    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+    try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, kafkaParams)) {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
       consumer.commitSync(offsetAndMetadataMap);
     } catch (CommitFailedException | TimeoutException e) {

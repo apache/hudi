@@ -47,9 +47,10 @@ import java.util.stream.Collectors;
 /**
  * Simple examples of #{@link HoodieJavaWriteClient}.
  *
- * Usage: HoodieJavaWriteClientExample <tablePath> <tableName>
+ * Usage: HoodieJavaWriteClientExample <tablePath> <tableName> <tableType>
  * <tablePath> and <tableName> describe root path of hudi and table name
- * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt`
+ * <tableType> describe table's type, now support mor and cow, default value is cow
+ * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt mor`
  */
 public class HoodieJavaWriteClientExample {
 
@@ -57,13 +58,21 @@ public class HoodieJavaWriteClientExample {
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
+  private static final String morStr = "mor";
+
   public static void main(String[] args) throws Exception {
-    if (args.length < 2) {
-      System.err.println("Usage: HoodieJavaWriteClientExample <tablePath> <tableName>");
+    if (args.length < 3) {
+      System.err.println("Usage: HoodieJavaWriteClientExample <tablePath> <tableName> <tableType: [cow|mor]>");
       System.exit(1);
     }
     String tablePath = args[0];
     String tableName = args[1];
+    String tableTypeStr = args[2];
+    if (tableTypeStr != null && tableTypeStr.equals(morStr)) {
+      tableType = HoodieTableType.MERGE_ON_READ.name();
+    }
+
+    LOG.info("Start JavaWriteClient example with tablePath: " + tablePath + ", tableName: " + tableName + ", tableType: " + tableType);
 
     // Generator of some records to be loaded in.
     HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();

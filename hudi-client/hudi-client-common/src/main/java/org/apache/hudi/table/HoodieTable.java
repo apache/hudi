@@ -1002,7 +1002,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Deletes the metadata partition if the writer disables any metadata index.
    */
   public void deleteMetadataIndexIfNecessary() {
-    Stream.of(MetadataPartitionType.values()).forEach(partitionType -> {
+    Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());
