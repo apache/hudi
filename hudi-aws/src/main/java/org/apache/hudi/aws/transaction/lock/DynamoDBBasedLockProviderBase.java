@@ -85,16 +85,15 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   }
 
   protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final Configuration conf, DynamoDbClient dynamoDB) {
-    if (dynamoDB == null) {
-      dynamoDB = getDynamoDBClient();
-    }
     this.dynamoDbBasedLockConfig = new DynamoDbBasedLockConfig.Builder()
         .fromProperties(lockConfiguration.getConfig())
         .build();
     this.tableName = dynamoDbBasedLockConfig.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
     long leaseDuration = dynamoDbBasedLockConfig.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
     dynamoDBPartitionKey = getDynamoDBPartitionKey(lockConfiguration);
-
+    if (dynamoDB == null) {
+      dynamoDB = getDynamoDBClient();
+    }
     // build the dynamoDb lock client
     this.client = new AmazonDynamoDBLockClient(
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
