@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.sort.merge.ForceSortMergeCompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -197,6 +198,43 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
+
+  /* ------------ Sort Merge Join Compaction Related Configuration ------------- */
+
+  public static final ConfigProperty<String> SORT_MERGE_COMPACTION = ConfigProperty
+      .key("hoodie.compaction.sort.merge")
+      .defaultValue("true")
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
+          + "This is useful way to speed up the compaction process.");
+
+  public static final ConfigProperty<Integer> COMPACTION_PROGRESS_LOG_INTERNAL_NUM = ConfigProperty
+      .key("hoodie.compaction.progress.log.internal.num")
+      .defaultValue(1000000)
+      .sinceVersion("0.14.0")
+      .withDocumentation("The number of compaction progress logs to be printed internally.");
+
+  public static final ConfigProperty<Double> MAGNIFICATION_RATION_FOR_BASE_FILE = ConfigProperty
+      .key("hoodie.compaction.magnification.ratio.base.file")
+      .defaultValue(10.0)
+      .sinceVersion("0.14.0")
+      .withDocumentation("The magnification ratio for base file in sort merge compaction.");
+
+  public static final ConfigProperty<Double> MAGNIFICATION_RATION_FOR_LOG_FILE = ConfigProperty
+      .key("hoodie.compaction.magnification.ratio.log.file")
+      .defaultValue(2.0)
+      .sinceVersion("0.14.0")
+      .withDocumentation("The magnification ratio for log file in sort merge compaction.");
+
+  public static final ConfigProperty<String> SORT_MERGE_COMPACTION_TRIGGER_STRATEGY = ConfigProperty
+      .key("hoodie.compaction.sort.merge.compaction.trigger.strategy")
+      .defaultValue(ForceSortMergeCompactionTriggerStrategy.class.getName())
+      .sinceVersion("0.14.0")
+      .withDocumentation("Strategy decides should we trigger sort merge join compaction. "
+        + "By default, we trigger sort merge join compaction for the first time to generate the sorted base file."
+        + "We will use it only if the configuration #hoodie.compaction.sort.merge is set to true.");
+
 
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
@@ -475,8 +513,28 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withSortedMergeCompaction(boolean sortedMergeCompaction) {
+      compactionConfig.setValue(SORT_MERGE_COMPACTION, String.valueOf(sortedMergeCompaction));
+      return this;
+    }
+
     public Builder withCompactionSpecifyPartitionPathRegex(String partitionPathRegex) {
       compactionConfig.setValue(COMPACTION_SPECIFY_PARTITION_PATH_REGEX, partitionPathRegex);
+      return this;
+    }
+
+    public Builder withCompactionProgressLogInternalNum(int compactionProgressLogInternalNum) {
+      compactionConfig.setValue(COMPACTION_PROGRESS_LOG_INTERNAL_NUM, String.valueOf(compactionProgressLogInternalNum));
+      return this;
+    }
+
+    public Builder withMagnificationRatioForBaseFile(double magnificationRatioForBaseFile) {
+      compactionConfig.setValue(MAGNIFICATION_RATION_FOR_BASE_FILE, String.valueOf(magnificationRatioForBaseFile));
+      return this;
+    }
+
+    public Builder withMagnificationRatioForLogFile(double magnificationRatioForLogFile) {
+      compactionConfig.setValue(MAGNIFICATION_RATION_FOR_LOG_FILE, String.valueOf(magnificationRatioForLogFile));
       return this;
     }
 

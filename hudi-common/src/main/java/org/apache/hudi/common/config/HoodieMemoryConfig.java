@@ -85,6 +85,13 @@ public class HoodieMemoryConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Default file path for spillable map");
 
+  public static final ConfigProperty<String> EXTERNAL_SORTER_BASE_PATH = ConfigProperty
+      .key("hoodie.memory.external.sorter.path")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("Default file path for external-sorter");
+
   public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION = ConfigProperty
       .key("hoodie.memory.writestatus.failure.fraction")
       .defaultValue(0.1)

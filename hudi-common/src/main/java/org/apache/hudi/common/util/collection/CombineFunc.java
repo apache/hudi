@@ -18,33 +18,22 @@
 
 package org.apache.hudi.common.util.collection;
 
-import java.util.Iterator;
-import java.util.function.Function;
+public interface CombineFunc<K, V, C> {
+  C combine(K key, V value, C oldValue);
 
-/**
- * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
- */
-public class MappingIterator<I, O> implements Iterator<O> {
+  C initCombine(K key, V value);
 
-  protected final Iterator<I> source;
-  private final Function<I, O> mapper;
+  static <K, V, C> CombineFunc<K, V, C> defaultCombineFunc() {
+    return new CombineFunc<K, V, C>() {
+      @Override
+      public C combine(K key, V value, C oldValue) {
+        return (C) value;
+      }
 
-  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
-    this.source = source;
-    this.mapper = mapper;
-  }
-
-  @Override
-  public boolean hasNext() {
-    return source.hasNext();
-  }
-
-  @Override
-  public O next() {
-    return mapper.apply(source.next());
-  }
-
-  public static <I, O> MappingIterator<I, O> wrap(Iterator source, Function mapper) {
-    return new MappingIterator(source, mapper);
+      @Override
+      public C initCombine(K key, V value) {
+        return (C) value;
+      }
+    };
   }
 }

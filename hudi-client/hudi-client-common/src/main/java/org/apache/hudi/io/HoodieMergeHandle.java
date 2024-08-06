@@ -101,6 +101,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
+  protected final int progressLogIntervalNum;
+
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
@@ -118,6 +120,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected Option<String[]> partitionFields = Option.empty();
   protected Object[] partitionValues = new Object[0];
 
+  protected boolean isCompaction = false;
+
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
@@ -129,6 +133,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
     init(fileId, recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -140,7 +145,16 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    this(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt, true);
+  }
+
+  public HoodieMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                           Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
+                           HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
+                           boolean isCompaction) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
+    this.isCompaction = isCompaction;
     this.keyToNewRecords = keyToNewRecords;
     this.preserveMetadata = true;
     init(fileId, this.partitionPath, dataFileToBeMerged);
@@ -277,7 +291,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     LOG.info("Number of entries in MemoryBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getInMemoryMapNumEntries()
         + ", Total size in bytes of MemoryBasedMap => "
-        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
+        + ((ExternalSpillableMap) keyToNewRecords).getCurrentInMemoryMapSize() + ", Number of entries in DiskBasedMap => "
         + ((ExternalSpillableMap) keyToNewRecords).getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
         + ((ExternalSpillableMap) keyToNewRecords).getSizeOfFileOnDiskInBytes());
   }
@@ -303,12 +317,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
     }
-    writeInsertRecord(newRecord, schema, config.getProps());
-  }
-
-  protected void writeInsertRecord(HoodieRecord<T> newRecord, Schema schema, Properties prop)
-      throws IOException {
-    if (writeRecord(newRecord, Option.of(newRecord), schema, prop, HoodieOperation.isDelete(newRecord.getOperation()))) {
+    if (writeRecord(newRecord, Option.of(newRecord), schema, config.getProps(), HoodieOperation.isDelete(newRecord.getOperation()))) {
       insertRecordsWritten++;
     }
   }
@@ -369,10 +378,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
-    if (keyToNewRecords.containsKey(key)) {
+    if (containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
-      HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
+      HoodieRecord<T> newRecord = getRecordByKey(key).newInstance();
       try {
         Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
         Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
@@ -389,10 +398,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
            */
           copyOldRecord = false;
         }
-        writtenRecordKeys.add(key);
+        markRecordWritten(key);
       } catch (Exception e) {
         throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
-            + keyToNewRecords.get(key) + "}, old value {" + oldRecord + "}", e);
+            + getRecordByKey(key) + "}, old value {" + oldRecord + "}", e);
       }
     }
 
@@ -410,9 +419,30 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     }
   }
 
+  protected boolean containsKey(String key) {
+    return keyToNewRecords.containsKey(key);
+  }
+
+  protected HoodieRecord getRecordByKey(String key) {
+    return keyToNewRecords.get(key);
+  }
+
+  protected void markRecordWritten(String key) {
+    writtenRecordKeys.add(key);
+  }
+
+  protected void closeInner() throws IOException {
+    if (keyToNewRecords instanceof Closeable) {
+      ((Closeable) keyToNewRecords).close();
+    }
+  }
+
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
+    if (recordsWritten % progressLogIntervalNum == 0) {
+      LOG.info("Merge processing: new file: {} ------------ write {} records ------------", newFilePath, recordsWritten);
+    }
     MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
     HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 
@@ -446,9 +476,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       markClosed();
       writeIncomingRecords();
 
-      if (keyToNewRecords instanceof Closeable) {
-        ((Closeable) keyToNewRecords).close();
-      }
+      closeInner();
 
       keyToNewRecords = null;
       writtenRecordKeys = null;
@@ -472,12 +500,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
       performMergeDataValidationCheck(writeStatus);
 
-      LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+      LOG.info("MergeHandle Stats: TotalWrites=" + recordsWritten + ", " + "TotalDeletes=" + recordsDeleted + ", "
+          + "TotalUpdateWrites=" + updatedRecordsWritten + ", " + "TotalInserts=" + insertRecordsWritten + ", "
+          + "TotalErrors=" + writeStatus.getTotalErrorRecords() + ", " + "TotalBytesWritten=" + fileSizeInBytes + ", "
+          + "TotalRecordsSize=" + fileSizeInBytes + ", " + "TotalUpsertTime=" + runtimeStats.getTotalUpsertTime() + " ("
+          + runtimeStats.getTotalUpsertTime() + "ms)");
+
+      LOG.info("MergeHandle successfully merge: {} to a new file: {} with cost taken: {}", oldFilePath, newFilePath, runtimeStats.getTotalUpsertTime());
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+      throw new HoodieUpsertException("Failed to close MergeHandle", e);
     }
   }
 
@@ -540,5 +573,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   public Object[] getPartitionValues() {
     return this.partitionValues;
+  }
+
+  public boolean isCompaction() {
+    return isCompaction;
   }
 }

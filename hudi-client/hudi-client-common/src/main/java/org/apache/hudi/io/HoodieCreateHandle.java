@@ -62,6 +62,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   private boolean useWriterSchema = false;
   private final boolean preserveMetadata;
+  protected int progressLogIntervalNum;
+  protected boolean isCompaction = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -118,6 +120,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
       TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
+    this.isCompaction = true;
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
     this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
@@ -157,6 +161,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         recordsWritten++;
         insertRecordsWritten++;
+        if (isCompaction && recordsWritten % progressLogIntervalNum == 0) {
+          LOG.info("Merge processing: ------------ write {} records ------------", recordsWritten);
+        }
       } else {
         recordsDeleted++;
       }
@@ -187,13 +194,21 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
+      writeRecord(record);
     }
   }
 
+  protected void writeRecord(HoodieRecord<T> record) {
+    write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
+  }
+  
   @Override
   public IOType getIOType() {
     return IOType.CREATE;
+  }
+
+  protected void closeInner() {
+    // no-op
   }
 
   /**
@@ -211,6 +226,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       markClosed();
 
       if (fileWriter != null) {
+        closeInner();
         fileWriter.close();
         fileWriter = null;
       }
@@ -250,5 +266,11 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
+
+    LOG.info("CreateHandle Stats: TotalWrites=" + recordsWritten + ", " + "TotalDeletes=" + recordsDeleted + ", "
+        + "TotalInserts=" + insertRecordsWritten + ", "
+        + "TotalErrors=" + writeStatus.getTotalErrorRecords() + ", " + "TotalBytesWritten=" + fileSize + ", "
+        + "TotalCreateTime=" + runtimeStats.getTotalCreateTime());
+
   }
 }

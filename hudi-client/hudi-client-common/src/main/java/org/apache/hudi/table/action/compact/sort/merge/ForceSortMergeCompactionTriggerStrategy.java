@@ -16,35 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util.collection;
+package org.apache.hudi.table.action.compact.sort.merge;
 
-import java.util.Iterator;
-import java.util.function.Function;
+import org.apache.hudi.common.model.CompactionContext;
+import org.apache.hudi.config.HoodieWriteConfig;
 
-/**
- * Iterator mapping elements of the provided source {@link Iterator} from {@code I} to {@code O}
- */
-public class MappingIterator<I, O> implements Iterator<O> {
-
-  protected final Iterator<I> source;
-  private final Function<I, O> mapper;
-
-  public MappingIterator(Iterator<I> source, Function<I, O> mapper) {
-    this.source = source;
-    this.mapper = mapper;
-  }
-
+public class ForceSortMergeCompactionTriggerStrategy implements SortMergeCompactionTriggerStrategy {
   @Override
-  public boolean hasNext() {
-    return source.hasNext();
-  }
-
-  @Override
-  public O next() {
-    return mapper.apply(source.next());
-  }
-
-  public static <I, O> MappingIterator<I, O> wrap(Iterator source, Function mapper) {
-    return new MappingIterator(source, mapper);
+  public boolean trigger(CompactionContext context, HoodieWriteConfig config) {
+    return true;
   }
 }

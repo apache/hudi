@@ -82,6 +82,7 @@ import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.sort.merge.SortMergeCompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -2418,6 +2419,11 @@ public class HoodieWriteConfig extends HoodieConfig {
         .orElseGet(FileIOUtils::getDefaultSpillableMapBasePath);
   }
 
+  public String getExternalSorterBasePath() {
+    return Option.ofNullable(getString(HoodieMemoryConfig.EXTERNAL_SORTER_BASE_PATH))
+        .orElseGet(FileIOUtils::getDefaultExternalSorterBasePath);
+  }
+
   public double getWriteStatusFailureFraction() {
     return getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION);
   }
@@ -2789,6 +2795,29 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
+  }
+
+  /**
+   * Sort Merge Join Compaction configs.
+   */
+  public boolean isSortMergeCompactionEnabled() {
+    return commonConfig.getBoolean(HoodieCompactionConfig.SORT_MERGE_COMPACTION);
+  }
+
+  public int getCompactionProgressLogIntervalNum() {
+    return commonConfig.getInt(HoodieCompactionConfig.COMPACTION_PROGRESS_LOG_INTERNAL_NUM);
+  }
+
+  public double getMagnificationRatioForBaseFile() {
+    return commonConfig.getDouble(HoodieCompactionConfig.MAGNIFICATION_RATION_FOR_BASE_FILE);
+  }
+
+  public double getMagnificationRatioForLogFile() {
+    return commonConfig.getDouble(HoodieCompactionConfig.MAGNIFICATION_RATION_FOR_LOG_FILE);
+  }
+
+  public SortMergeCompactionTriggerStrategy getSortMergeCompactionTriggerStrategy() {
+    return ReflectionUtils.loadClass(commonConfig.getString(HoodieCompactionConfig.SORT_MERGE_COMPACTION_TRIGGER_STRATEGY));
   }
 
   public static class Builder {

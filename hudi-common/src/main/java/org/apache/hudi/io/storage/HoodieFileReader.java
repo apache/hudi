@@ -66,4 +66,9 @@ public interface HoodieFileReader<T> extends AutoCloseable {
   void close();
 
   long getTotalRecords();
+
+  // TODO: implement this method in more inherited classes
+  default boolean isSorted() {
+    return false;
+  }
 }

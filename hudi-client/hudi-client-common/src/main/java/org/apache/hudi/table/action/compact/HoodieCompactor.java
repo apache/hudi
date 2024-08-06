@@ -26,6 +26,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -33,7 +34,9 @@ import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.HoodieLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieSortedMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -41,9 +44,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.EngineBroadcastManager;
@@ -52,6 +59,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,7 +86,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
    *
    * @param table                     {@link HoodieTable} instance to use.
    * @param pendingCompactionTimeline pending compaction timeline.
-   * @param instantTime     compaction instant
+   * @param instantTime               compaction instant
    */
   public abstract void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime);
@@ -192,6 +201,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
+    CompactionContext context = new CompactionContext();
     HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -215,12 +225,74 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
+    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime, ((HoodieTable) compactionHandler).isMetadataTable(), executionHelper instanceof LogCompactionExecutionHelper);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
-    HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+
+    Option<HoodieBaseFile> oldDataFileOpt =
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+
+    long maxMemoryForLogScanner = maxMemoryPerCompaction;
+    // calculate the max available memory in compaction
+    FileSystem fileSystem = (FileSystem) storage.getFileSystem();
+    long logFilesSize;
+    if (operation.getMetrics().containsKey(CompactionStrategy.TOTAL_LOG_FILE_SIZE)) {
+      logFilesSize = operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue();
+    } else {
+      logFilesSize = logFiles.stream().map(logFile -> {
+        try {
+          return HadoopFSUtils.getFileSize(fileSystem, new Path(logFile));
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to get file size for log file " + logFile, e);
+        }
+      }).reduce(Long::sum).orElse(0L);
+    }
+    long estimatedLogFilesSize = (long) (logFilesSize * config.getMagnificationRatioForLogFile());
+    // set log files related context
+    // TODO: consider log in append mode
+    context.setLogFilesContext(logFiles, logFilesSize, estimatedLogFilesSize);
+
+    if (oldDataFileOpt.isPresent()) {
+      long baseFileSize;
+      StoragePath oldDataPath = oldDataFileOpt.get().getStoragePath();
+      if (operation.getMetrics().containsKey(CompactionStrategy.TOTAL_BASE_FILE_SIZE)) {
+        baseFileSize = operation.getMetrics().get(CompactionStrategy.TOTAL_BASE_FILE_SIZE).longValue();
+      } else {
+        baseFileSize = HadoopFSUtils.getFileSize(fileSystem, new Path(oldDataPath.toUri()));
+      }
+      long estimatedBaseFileSize = (long) (baseFileSize * config.getMagnificationRatioForBaseFile());
+      // set base file related context
+      HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storage.newInstance(oldDataPath, storage.getConf().newInstance()))
+          .getReaderFactory(config.getRecordMerger().getRecordType())
+          .getFileReader(config, oldDataFileOpt.get().getStoragePath());
+      context.setBaseFileContext(oldDataPath.toString(), baseFileSize, estimatedBaseFileSize, baseFileReader.isSorted());
+    }
+
+    // TODO: disable sort merge join compaction in metadata table now, consider if we need to enable it
+    // TODO: disable sort merge join compaction for log compaction now, consider if we need to enable it
+    if (!context.isMetadataTableCompaction() && !context.isLogCompaction() && config.isSortMergeCompactionEnabled()) {
+      boolean trigger = config.getSortMergeCompactionTriggerStrategy().trigger(context, config);
+      context.setSortMergeCompaction(trigger);
+    }
+
+    if (context.isSortMergeCompaction()) {
+      // when decide to use sort merge join compaction
+      if (context.hasBaseFile() && !context.isBaseFileSorted() && context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize() > 0) {
+        // calculate max memory can be used for log scanner, because base-file's sorting also need memory
+        double ratio = (double) context.getEstimatedLogFileSize() / (context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize());
+        maxMemoryForLogScanner = (long) (maxMemoryPerCompaction * ratio);
+      }
+      context.setMaxMemoryForLogScanner(maxMemoryForLogScanner);
+    }
+
+    LOG.info("Compaction context: {}", context);
+
+    HoodieLogRecordScanner scanner;
+    if (context.isSortMergeCompaction()) {
+      scanner = HoodieSortedMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)
@@ -228,7 +300,26 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
         .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+        .withMaxMemorySizeInBytes(context.getMaxMemoryForLogScanner())
+        .withReverseReader(config.getCompactionReverseLogReadEnabled())
+        .withBufferSize(config.getMaxDFSStreamBufferSize())
+        .withOperationField(config.allowOperationMetadataField())
+        .withPartition(operation.getPartitionPath())
+        .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
+        .withRecordMerger(config.getRecordMerger())
+        .withTableMetaClient(metaClient)
+        .withExternalSorterBasePath(config.getExternalSorterBasePath())
+        .build();
+    } else {
+      scanner = HoodieMergedLogRecordScanner.newBuilder()
+        .withStorage(storage)
+        .withBasePath(metaClient.getBasePath())
+        .withLogFilePaths(logFiles)
+        .withReaderSchema(readerSchema)
+        .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
+        .withInstantRange(instantRange)
+        .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+        .withMaxMemorySizeInBytes(context.getMaxMemoryForCompaction())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
@@ -240,9 +331,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withRecordMerger(config.getRecordMerger())
         .withTableMetaClient(metaClient)
         .build();
-
-    Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+    }
 
     // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
     // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
@@ -266,13 +355,15 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt, context);
     scanner.close();
 
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
       final HoodieWriteStat stat = s.getStat();
-      stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+      if (scanner instanceof HoodieMergedLogRecordScanner) {
+        stat.setTotalUpdatedRecordsCompacted(((HoodieMergedLogRecordScanner) scanner).getNumMergedRecordsInLog());
+      }
       stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       stat.setTotalLogRecords(scanner.getTotalLogRecords());
       stat.setPartitionPath(operation.getPartitionPath());
@@ -283,7 +374,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       stat.setTotalRollbackBlocks(scanner.getTotalRollbacks());
       RuntimeStats runtimeStats = new RuntimeStats();
       // scan time has to be obtained from scanner.
-      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToReadAndMergeBlocks());
+      runtimeStats.setTotalScanTime(scanner.getTotalTimeTakenToScanRecords());
       // create and upsert time are obtained from the create or merge handle.
       if (stat.getRuntimeStats() != null) {
         runtimeStats.setTotalCreateTime(stat.getRuntimeStats().getTotalCreateTime());

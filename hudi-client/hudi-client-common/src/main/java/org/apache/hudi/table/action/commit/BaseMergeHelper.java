@@ -18,7 +18,9 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.table.HoodieTable;
@@ -36,7 +38,18 @@ public abstract class BaseMergeHelper {
    * @param upsertHandle Merge Handle
    * @throws IOException in case of error
    */
-  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle) throws IOException;
+  public void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle) throws IOException {
+    runMerge(table, upsertHandle, Option.empty());
+  }
+
+  /**
+   * Read records from previous version of base file and merge.
+   * @param table Hoodie Table
+   * @param upsertHandle Merge Handle
+   * @param compactionContextOptionOpt Compaction context, only present during compaction
+   * @throws IOException in case of error
+   */
+  public abstract void runMerge(HoodieTable<?, ?, ?, ?> table, HoodieMergeHandle<?, ?, ?, ?> upsertHandle, Option<CompactionContext> compactionContextOptionOpt) throws IOException;
 
   /**
    * Consumer that dequeues records from queue and sends to Merge Handle.
