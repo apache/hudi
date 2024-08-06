@@ -36,6 +36,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
+import org.apache.hudi.storage.strategy.StorageStrategy;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.Schema;
@@ -92,8 +94,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   private final Object sharedLock = new Object();
 
-  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, Option<Schema> schemaOpt) throws IOException {
-    this(path, new HoodieHadoopStorage(path, storageConf), storageConf, schemaOpt, Option.empty());
+  public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StorageStrategy storageStrategy, StoragePath path, Option<Schema> schemaOpt) throws IOException {
+    this(path, new HoodieHadoopStorage(path, storageConf, storageStrategy), storageConf, schemaOpt, Option.empty());
   }
 
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path, HoodieStorage storage,
@@ -102,7 +104,8 @@ public class HoodieHBaseAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   }
 
   public HoodieHBaseAvroHFileReader(StorageConfiguration<?> storageConf, StoragePath path) throws IOException {
-    this(storageConf, path, Option.empty());
+    // TODO: Need to revisit this to pass an actual storage strategy in
+    this(storageConf, new DefaultStorageStrategy(), path, Option.empty());
   }
 
   public HoodieHBaseAvroHFileReader(StoragePath path, HoodieStorage storage, StorageConfiguration<?> storageConf,

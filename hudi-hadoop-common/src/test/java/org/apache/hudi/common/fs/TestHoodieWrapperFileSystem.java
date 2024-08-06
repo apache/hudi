@@ -27,6 +27,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -77,7 +78,7 @@ class TestHoodieWrapperFileSystem {
     StoragePath testFile = new StoragePath(basePath + StoragePath.SEPARATOR + "clean.00000001");
 
     // create same commit twice
-    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy(basePath));
     storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
     storage.createImmutableFileInPath(testFile, Option.of(getUTF8Bytes(testContent)));
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(basePath));

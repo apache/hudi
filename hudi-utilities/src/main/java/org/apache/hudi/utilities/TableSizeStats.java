@@ -44,6 +44,7 @@ import com.codahale.metrics.UniformReservoir;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -278,7 +279,7 @@ public class TableSizeStats implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration());
     HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
-        engineContext, new HoodieHadoopStorage(basePath, storageConf), metadataConfig, basePath);
+        engineContext, new HoodieHadoopStorage(basePath, storageConf, new DefaultStorageStrategy(basePath)), metadataConfig, basePath);
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();
 

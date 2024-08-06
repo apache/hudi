@@ -74,6 +74,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
@@ -784,8 +785,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(), "Listing " + numDirsToList + " partitions from filesystem");
+      DefaultStorageStrategy storageStrategy = new DefaultStorageStrategy(storageBasePath.toString());
       List<DirectoryInfo> processedDirectories = engineContext.map(pathsToProcess, path -> {
-        HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
+        HoodieStorage storage = new HoodieHadoopStorage(path, storageConf, storageStrategy);
         String relativeDirPath = FSUtils.getRelativePartitionPath(storageBasePath, path);
         return new DirectoryInfo(relativeDirPath, storage.listDirectEntries(path), initializationTime, pendingDataInstants);
       }, numDirsToList);

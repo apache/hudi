@@ -35,6 +35,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -578,8 +579,8 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   public void testMakeQualified() {
     FileSystem fs = HadoopFSUtils.getFs("file:///a/b/c", new Configuration());
     FileSystem wrapperFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
-    HoodieStorage storage = new HoodieHadoopStorage(fs);
-    HoodieStorage wrapperStorage = new HoodieHadoopStorage(wrapperFs);
+    HoodieStorage storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
+    HoodieStorage wrapperStorage = new HoodieHadoopStorage(wrapperFs, new DefaultStorageStrategy());
     assertEquals(new StoragePath("file:///x/y"),
         FSUtils.makeQualified(storage, new StoragePath("/x/y")));
     assertEquals(new StoragePath("file:///x/y"),

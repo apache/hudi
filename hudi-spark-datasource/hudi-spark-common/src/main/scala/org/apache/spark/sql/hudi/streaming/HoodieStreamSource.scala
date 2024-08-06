@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext}
@@ -58,7 +59,7 @@ class HoodieStreamSource(
 
   private lazy val tablePath: StoragePath = {
     val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-    val fs = new HoodieHadoopStorage(path, storageConf)
+    val fs = new HoodieHadoopStorage(path, storageConf, new DefaultStorageStrategy(path.toString))
     TablePathUtils.getTablePath(fs, path).get()
   }
 

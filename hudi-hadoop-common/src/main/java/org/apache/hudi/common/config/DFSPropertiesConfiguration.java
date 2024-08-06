@@ -30,6 +30,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -150,7 +151,8 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
 
     HoodieStorage storage = new HoodieHadoopStorage(
         filePath,
-        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
+        HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new)),
+        new DefaultStorageStrategy(filePath.toString())
     );
 
     try {

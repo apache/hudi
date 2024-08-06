@@ -387,7 +387,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private HoodieFileReader getBaseOrBootstrapFileReader(StorageConfiguration<?> storageConf, String bootstrapBasePath, Option<String[]> partitionFields, ClusteringOperation clusteringOp)
       throws IOException {
     StoragePath dataFilePath = new StoragePath(clusteringOp.getDataFilePath());
-    HoodieStorage storage = new HoodieHadoopStorage(dataFilePath, storageConf);
+    HoodieStorage storage = new HoodieHadoopStorage(dataFilePath, storageConf, getHoodieTable().getStorage().getStorageStrategy());
     HoodieFileReader baseFileReader = getHoodieSparkIOFactory(storage).getReaderFactory(recordType)
         .getFileReader(writeConfig, dataFilePath);
     // handle bootstrap path

@@ -200,7 +200,7 @@ public class IncrementalInputSplits implements Serializable {
         LOG.warn("No partitions found for reading in user provided path.");
         return Result.EMPTY;
       }
-      List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(
+      List<StoragePathInfo> files = WriteProfiles.getFilesFromMetadata(metaClient.getStorageStrategy(),
           path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap(),
           metadataList, metaClient.getTableType(), false);
       if (files == null) {
@@ -338,7 +338,7 @@ public class IncrementalInputSplits implements Serializable {
       return Collections.emptyList();
     }
     List<StoragePathInfo> pathInfoList = WriteProfiles.getFilesFromMetadata(
-        path, hadoopConf, metadataList, metaClient.getTableType());
+        metaClient.getStorageStrategy(), path, hadoopConf, metadataList, metaClient.getTableType());
 
     if (pathInfoList.size() == 0) {
       LOG.warn("No files found for reading under path: " + path);
