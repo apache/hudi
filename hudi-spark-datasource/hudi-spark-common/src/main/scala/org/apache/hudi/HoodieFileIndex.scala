@@ -502,6 +502,8 @@ object HoodieFileIndex extends Logging {
     val isMetadataTableEnabled = getConfigValue(options, sqlConf, HoodieMetadataConfig.ENABLE.key, null)
     if (isMetadataTableEnabled != null) {
       properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(isMetadataTableEnabled))
+    } else {
+      properties.setProperty(HoodieMetadataConfig.ENABLE.key(), String.valueOf(HoodieMetadataConfig.ENABLE.defaultValue()))
     }
 
     val listingModeOverride = getConfigValue(options, sqlConf,
