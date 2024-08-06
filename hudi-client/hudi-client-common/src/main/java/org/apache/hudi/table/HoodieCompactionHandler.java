@@ -47,4 +47,10 @@ public interface HoodieCompactionHandler<T> {
                                                            Map<HoodieLogBlock.HeaderMetadataType, String> header) {
     throw new HoodieNotSupportedException("Operation is not yet supported");
   }
+
+  Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
+                                                               Iterator<HoodieRecord> unMergedRecordsItr, HoodieBaseFile oldDataFile) throws IOException;
+
+  Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
+                                                               Iterator<HoodieRecord> unMergedRecordsItr) throws IOException;
 }

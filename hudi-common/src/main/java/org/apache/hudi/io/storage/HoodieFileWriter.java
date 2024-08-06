@@ -42,4 +42,9 @@ public interface HoodieFileWriter extends AutoCloseable {
   default void write(String recordKey, HoodieRecord record, Schema schema) throws IOException {
     write(recordKey, record, schema, new Properties());
   }
+
+  default void writeFooterMetadata(String key, String value) {
+    // no-op
+    // TODO: remove default
+  }
 }

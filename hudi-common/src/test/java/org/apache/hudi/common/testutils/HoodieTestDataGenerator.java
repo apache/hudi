@@ -107,7 +107,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final String DEFAULT_THIRD_PARTITION_PATH = "2015/03/17";
 
   public static final String[] DEFAULT_PARTITION_PATHS =
-      {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
+      {DEFAULT_FIRST_PARTITION_PATH};
   public static final int DEFAULT_PARTITION_DEPTH = 3;
 
   public static final String TRIP_TYPE_ENUM_TYPE =

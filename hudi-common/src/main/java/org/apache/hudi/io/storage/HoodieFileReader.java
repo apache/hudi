@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -66,4 +67,9 @@ public interface HoodieFileReader<T> extends AutoCloseable {
   void close();
 
   long getTotalRecords();
+
+  // TODO: implement this method in more inherited classes
+  default boolean isSorted() {
+    return false;
+  }
 }

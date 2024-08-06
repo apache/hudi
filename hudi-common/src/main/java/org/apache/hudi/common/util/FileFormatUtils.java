@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.avro.HoodieFileFooterSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -126,6 +128,15 @@ public abstract class FileFormatUtils {
     }
     return new String[] {minMaxKeys.get(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER),
         minMaxKeys.get(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER)};
+  }
+
+  public boolean readIsSortedByRecordKeys(HoodieStorage storage, StoragePath filePath) {
+    Map<String, String> isSortedMap = readFooter(storage, false, filePath, HoodieFileFooterSupport.HOODIE_BASE_FILE_SORTED);
+    String value = isSortedMap.get(HoodieFileFooterSupport.HOODIE_BASE_FILE_SORTED);
+    if (value == null || value.isEmpty() || !value.equals("true")) {
+      return false;
+    }
+    return true;
   }
 
   /**

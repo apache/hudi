@@ -204,6 +204,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return key;
   }
 
+  // TODO: assess the risks of this method
+  public void setKey(HoodieKey key) {
+    this.key = key;
+  }
+
   public HoodieOperation getOperation() {
     return operation;
   }

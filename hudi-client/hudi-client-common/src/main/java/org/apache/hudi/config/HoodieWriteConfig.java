@@ -2385,6 +2385,11 @@ public class HoodieWriteConfig extends HoodieConfig {
         .orElseGet(FileIOUtils::getDefaultSpillableMapBasePath);
   }
 
+  public String getExternalSorterBasePath() {
+    return Option.ofNullable(getString(HoodieMemoryConfig.EXTERNAL_SORTER_BASE_PATH))
+        .orElseGet(FileIOUtils::getDefaultExternalSorterBasePath);
+  }
+
   public double getWriteStatusFailureFraction() {
     return getDouble(HoodieMemoryConfig.WRITESTATUS_FAILURE_FRACTION);
   }
@@ -2756,6 +2761,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getSecondaryIndexParallelism() {
     return metadataConfig.getSecondaryIndexParallelism();
+  }
+
+  public boolean isSortedMergeCompactionEnabled() {
+    return commonConfig.getBoolean(HoodieCompactionConfig.SORTED_MERGE_COMPACTION);
   }
 
   public static class Builder {

@@ -47,6 +47,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.HoodieUnmergedCreateHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -262,6 +263,27 @@ public class HoodieSparkCopyOnWriteTable<T>
         new HoodieCreateHandle(config, instantTime, this, partitionPath, fileId, recordMap, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr) throws IOException {
+    HoodieCreateHandle<?, ?, ?, ?> createHandle = new HoodieUnmergedCreateHandle(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
+    createHandle.write();
+    return Collections.singletonList(createHandle.close()).iterator();
+  }
+
+  protected HoodieMergeHandle getUpdateHandleForSortedMerge(String instantTime, String partitionPath, String fileId,
+                                                            Iterator<HoodieRecord> iterator, HoodieBaseFile dataFileToBeMerged) {
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
+    return HoodieMergeHandleFactory.create(config, instantTime, this, iterator, partitionPath, fileId,
+        dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+  }
+
+  @Override
+  public Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
+                                                                      HoodieBaseFile oldDataFile) throws IOException {
+    HoodieMergeHandle upsertHandle = getUpdateHandleForSortedMerge(instantTime, partitionPath, fileId, unMergedRecordsItr, oldDataFile);
+    return handleUpdateInternal(upsertHandle, instantTime, fileId);
   }
 
   @Override
