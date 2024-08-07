@@ -19,10 +19,13 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.Schema;
 import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +37,8 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,7 +52,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestSerializationUtils {
 
   @Test
-  public void testSerDeser() throws IOException {
+  public void testSerDeser() throws Exception {
     // It should handle null object references.
     verifyObject(null);
     // Object with nulls.
@@ -60,6 +65,18 @@ public class TestSerializationUtils {
     verifyObject(new Utf8("test-key"));
     // Verify serialization of list.
     verifyObject(new LinkedList<>(Arrays.asList(2, 3, 5)));
+
+    HoodieTestDataGenerator gen = new HoodieTestDataGenerator();
+    List<HoodieAvroIndexedRecord> collect = gen.generateInserts("000", 5).stream().map(record -> {
+      try {
+        return record.toIndexedRecord(Schema.parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA), new Properties()).get();
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }).collect(Collectors.toList());
+    for (HoodieAvroIndexedRecord hoodieAvroIndexedRecord : collect) {
+      verifyHoodieAvroIndexedRecord(hoodieAvroIndexedRecord);
+    }
   }
 
   @Test
@@ -95,6 +112,25 @@ public class TestSerializationUtils {
       assertNull(deserializedValue);
     } else {
       assertEquals(expectedValue, deserializedValue);
+    }
+  }
+
+  private void verifyHoodieAvroIndexedRecord(HoodieAvroIndexedRecord record) throws IOException {
+    byte[] serializedObject = SerializationUtils.serialize(record);
+    assertNotNull(serializedObject);
+    assertTrue(serializedObject.length > 0);
+
+    final HoodieAvroIndexedRecord deserializedValue = SerializationUtils.deserialize(serializedObject);
+    if (record == null) {
+      assertNull(deserializedValue);
+    } else {
+      assertEquals(record.getKey(), deserializedValue.getKey());
+      assertEquals(record.getData().hashCode(), deserializedValue.getData().hashCode());
+      assertEquals(record.getOperation(), deserializedValue.getOperation());
+      assertEquals(record.getMetadata(), deserializedValue.getMetadata());
+      assertEquals(record.getNewLocation(), deserializedValue.getNewLocation());
+      assertEquals(record.getCurrentLocation(), deserializedValue.getCurrentLocation());
+      assertEquals(record.getIgnoreIndexUpdate(), deserializedValue.getIgnoreIndexUpdate());
     }
   }
 
