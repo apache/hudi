@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[35623],{97:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/apache-parquet","name":"Apache Parquet","count":2,"permalink":"/cn/blog/tags/apache-parquet"}')}}]);

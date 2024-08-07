@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[73423],{27173:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/apache-orc","name":"Apache ORC","count":1,"permalink":"/blog/tags/apache-orc"}')}}]);
