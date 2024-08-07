@@ -28,11 +28,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.estimator.RecordSizeEstimator;
+import org.apache.hudi.estimator.RecordSizeEstimatorFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -53,10 +54,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
-
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
@@ -88,6 +85,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
   protected final HoodieWriteConfig config;
   private final WriteOperationType operationType;
+  private final RecordSizeEstimator recordSizeEstimator;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                            HoodieWriteConfig config, WriteOperationType operationType) {
@@ -97,6 +95,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
     bucketInfoMap = new HashMap<>();
     this.config = config;
     this.operationType = operationType;
+    this.recordSizeEstimator = RecordSizeEstimatorFactory.createRecordSizeEstimator(config);
     assignUpdates(profile);
     long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
     if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
@@ -171,14 +170,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   private void assignInserts(WorkloadProfile profile, HoodieEngineContext context) {
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
-    /*
-     * NOTE: we only use commit instants to calculate average record size because replacecommit can be
-     * created by clustering, which has smaller average record size, which affects assigning inserts and
-     * may result in OOM by making spark underestimate the actual input record sizes.
-     */
-    long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
-        .filterCompletedInstants(), config);
+
+    long averageRecordSize = recordSizeEstimator.averageBytesPerRecord(table.getMetaClient().getActiveTimeline());
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =

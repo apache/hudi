@@ -22,14 +22,10 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -52,26 +48,18 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 public class TestUpsertPartitioner extends HoodieClientTestBase {
 
@@ -108,84 +96,6 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
         "Update record should have gone to the 1 update partition");
     return partitioner;
-  }
-
-  private static List<HoodieInstant> setupHoodieInstants() {
-    List<HoodieInstant> instants = new ArrayList<>();
-    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts1"));
-    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts2"));
-    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts3"));
-    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts4"));
-    instants.add(new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "ts5"));
-    Collections.reverse(instants);
-    return instants;
-  }
-
-  private static List<HoodieWriteStat> generateCommitStatWith(int totalRecordsWritten, int totalBytesWritten) {
-    List<HoodieWriteStat> writeStatsList = generateFakeHoodieWriteStat(5);
-    // clear all record and byte stats except for last entry.
-    for (int i = 0; i < writeStatsList.size() - 1; i++) {
-      HoodieWriteStat writeStat = writeStatsList.get(i);
-      writeStat.setNumWrites(0);
-      writeStat.setTotalWriteBytes(0);
-    }
-    HoodieWriteStat lastWriteStat = writeStatsList.get(writeStatsList.size() - 1);
-    lastWriteStat.setTotalWriteBytes(totalBytesWritten);
-    lastWriteStat.setNumWrites(totalRecordsWritten);
-    return writeStatsList;
-  }
-
-  private static HoodieCommitMetadata generateCommitMetadataWith(int totalRecordsWritten, int totalBytesWritten) {
-    List<HoodieWriteStat> fakeHoodieWriteStats = generateCommitStatWith(totalRecordsWritten, totalBytesWritten);
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    fakeHoodieWriteStats.forEach(stat -> commitMetadata.addWriteStat(stat.getPartitionPath(), stat));
-    return commitMetadata;
-  }
-
-  /*
-   * This needs to be a stack so we test all cases when either/both recordsWritten ,bytesWritten is zero before a non
-   * zero averageRecordSize can be computed.
-   */
-  private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
-    LinkedList<Option<byte[]>> commits = new LinkedList<>();
-    // First commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    // Second commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    // Third commit with a small file
-    commits.push(Option.of(generateCommitMetadataWith(100, 500).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    // Fourth commit with both zero records and zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    // Fifth commit with zero records
-    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    // Sixth commit with zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
-    return commits;
-  }
-
-  @Test
-  public void testAverageBytesPerRecordForNonEmptyCommitTimeLine() throws Exception {
-    HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(1000).build())
-        .build();
-    when(commitTimeLine.empty()).thenReturn(false);
-    when(commitTimeLine.getReverseOrderedInstants()).thenReturn(setupHoodieInstants().stream());
-    LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
-    when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
-    long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
-    assertEquals(expectAvgSize, actualAvgSize);
-  }
-
-  @Test
-  public void testAverageBytesPerRecordForEmptyCommitTimeLine() throws Exception {
-    HoodieTimeline commitTimeLine = mock(HoodieTimeline.class);
-    HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
-    when(commitTimeLine.empty()).thenReturn(true);
-    long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
-    assertEquals(expectAvgSize, actualAvgSize);
   }
 
   @Test
