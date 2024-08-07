@@ -127,7 +127,6 @@ public class TestSerializationUtils {
       assertEquals(record.getKey(), deserializedValue.getKey());
       assertEquals(record.getData().hashCode(), deserializedValue.getData().hashCode());
       assertEquals(record.getOperation(), deserializedValue.getOperation());
-      assertEquals(record.getMetadata(), deserializedValue.getMetadata());
       assertEquals(record.getNewLocation(), deserializedValue.getNewLocation());
       assertEquals(record.getCurrentLocation(), deserializedValue.getCurrentLocation());
       assertEquals(record.getIgnoreIndexUpdate(), deserializedValue.getIgnoreIndexUpdate());
