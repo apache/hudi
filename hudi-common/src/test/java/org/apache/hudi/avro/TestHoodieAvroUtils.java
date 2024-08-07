@@ -60,6 +60,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -651,5 +652,13 @@ public class TestHoodieAvroUtils {
     record.put("timestamp", "foo");
     String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
     assertEquals("{\"timestamp\": \"foo\", \"_row_key\": \"key\", \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
+  }
+
+  @Test
+  void testCreateFullName() {
+    String result = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")));
+    String resultSingle = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")));
+    assertEquals("c.b.a", result);
+    assertEquals("a", resultSingle);
   }
 }
