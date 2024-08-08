@@ -117,7 +117,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Map<String, String> sqlConf = new HashMap<>();
     sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
 
-    if (HoodieSparkUtils.gteqSpark3_2()) {
+    if (HoodieSparkUtils.gteqSpark3_3()) {
       sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     }
 

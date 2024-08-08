@@ -301,58 +301,52 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   @MethodSource(Array("testArgs"))
   def testArrayOfStructsAddNewColumn(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
     // test to add a field to a STRUCT in a column of ARRAY< STRUCT<..> > type
-
-    // there is a bug on Spark3 that will prevent Array[Map/Struct] schema evolved tables form being read
-    // bug fix: https://github.com/apache/spark/commit/32a393395ee43b573ae75afba591b587ca51879b
-    // bug fix is only available Spark >= v3.1.3
-    if (HoodieSparkUtils.isSpark2 || (HoodieSparkUtils.isSpark3 && HoodieSparkUtils.gteqSpark3_1_3)) {
-      val tempRecordPath = basePath + "/record_tbl/"
-      val arrayStructData = Seq(
-        Row(1, 100, List(Row("Java", "XX", 120), Row("Scala", "XA", 300)), "aaa")
-      )
-      val arrayStructSchema = new StructType()
-        .add("id", IntegerType)
-        .add("userid", IntegerType)
-        .add("language", ArrayType(new StructType()
-          .add("name", StringType)
-          .add("author", StringType)
-          .add("pages", IntegerType)))
+    val tempRecordPath = basePath + "/record_tbl/"
+    val arrayStructData = Seq(
+      Row(1, 100, List(Row("Java", "XX", 120), Row("Scala", "XA", 300)), "aaa")
+    )
+    val arrayStructSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("language", ArrayType(new StructType()
         .add("name", StringType)
-      val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-      df1.printSchema()
-      df1.show(false)
+        .add("author", StringType)
+        .add("pages", IntegerType)))
+      .add("name", StringType)
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
+    df1.printSchema()
+    df1.show(false)
 
-      // recreate table
-      initialiseTable(df1, tempRecordPath, isCow)
+    // recreate table
+    initialiseTable(df1, tempRecordPath, isCow)
 
-      // add a column to array of struct
-      val newArrayStructData = Seq(
-        Row(2, 200, List(Row("JavaV2", "XXX", 130, 20), Row("ScalaV2", "XXA", 310, 40)), "bbb")
-      )
-      val newArrayStructSchema = new StructType()
-        .add("id", IntegerType)
-        .add("userid", IntegerType)
-        .add("language", ArrayType(new StructType()
-          .add("name", StringType)
-          .add("author", StringType)
-          .add("pages", IntegerType)
-          .add("progress", IntegerType)
-        ))
+    // add a column to array of struct
+    val newArrayStructData = Seq(
+      Row(2, 200, List(Row("JavaV2", "XXX", 130, 20), Row("ScalaV2", "XXA", 310, 40)), "bbb")
+    )
+    val newArrayStructSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("language", ArrayType(new StructType()
         .add("name", StringType)
-      val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-      df2.printSchema()
-      df2.show(false)
-      // upsert
-      upsertData(df2, tempRecordPath, isCow)
+        .add("author", StringType)
+        .add("pages", IntegerType)
+        .add("progress", IntegerType)
+      ))
+      .add("name", StringType)
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
+    df2.printSchema()
+    df2.show(false)
+    // upsert
+    upsertData(df2, tempRecordPath, isCow)
 
-      // read out the table
-      val readDf = spark.read.format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
-        .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
-    }
+    // read out the table
+    val readDf = spark.read.format("hudi")
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
+      .load(tempRecordPath)
+    readDf.printSchema()
+    readDf.show(false)
+    readDf.foreach(_ => {})
   }
 
   @ParameterizedTest
@@ -575,71 +569,65 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
   @MethodSource(Array("testArgs"))
   def testArrayOfMapsStructAddField(isCow: Boolean, useFileGroupReader: Boolean): Unit = {
     // test to add a field to a STRUCT in a column of ARRAY< MAP< k,STRUCT<..> > > type
+    val tempRecordPath = basePath + "/record_tbl/"
+    val arrayMapData = Seq(
+      Row(1, 100,
+        List(
+          Map("2022-12-01" -> Row("a1", "b1", 20)),
+          Map("2022-12-02" -> Row("a2", "b2", 30))
+        ),
+        "aaa")
+    )
+    val innerStructSchema = new StructType()
+      .add("col1", StringType)
+      .add("col2", StringType)
+      .add("col3", IntegerType)
+    val arrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("structcol", ArrayType(
+        new MapType(StringType, innerStructSchema, true)))
+      .add("name", StringType)
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
+    df1.printSchema()
+    df1.show(false)
 
-    // there is a bug on Spark3 that will prevent Array[Map/Struct] schema evolved tables form being read
-    // bug fix: https://github.com/apache/spark/commit/32a393395ee43b573ae75afba591b587ca51879b
-    // bug fix is only available Spark >= v3.1.3
-    if (HoodieSparkUtils.isSpark2 || (HoodieSparkUtils.isSpark3 && HoodieSparkUtils.gteqSpark3_1_3)) {
-      val tempRecordPath = basePath + "/record_tbl/"
-      val arrayMapData = Seq(
-        Row(1, 100,
-          List(
-            Map("2022-12-01" -> Row("a1", "b1", 20)),
-            Map("2022-12-02" -> Row("a2", "b2", 30))
-          ),
-          "aaa")
-      )
-      val innerStructSchema = new StructType()
-        .add("col1", StringType)
-        .add("col2", StringType)
-        .add("col3", IntegerType)
-      val arrayMapSchema = new StructType()
-        .add("id", IntegerType)
-        .add("userid", IntegerType)
-        .add("structcol", ArrayType(
-          new MapType(StringType, innerStructSchema, true)))
-        .add("name", StringType)
-      val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-      df1.printSchema()
-      df1.show(false)
+    // recreate table
+    initialiseTable(df1, tempRecordPath, isCow)
 
-      // recreate table
-      initialiseTable(df1, tempRecordPath, isCow)
+    // add a new column
+    val newArrayMapData = Seq(
+      Row(2, 200,
+        List(
+          Map("2022-12-01" -> Row("a3", "b3", 20, 40)),
+          Map("2022-12-02" -> Row("a4", "b4", 30, 40))
+        ),
+        "bbb")
+    )
+    val newInnerStructSchema = new StructType()
+      .add("col1", StringType)
+      .add("col2", StringType)
+      .add("col3", IntegerType)
+      .add("col4", IntegerType)
+    val newArrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("structcol", ArrayType(
+        new MapType(StringType, newInnerStructSchema, true)))
+      .add("name", StringType)
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
+    df2.printSchema()
+    df2.show(false)
+    // upsert
+    upsertData(df2, tempRecordPath, isCow)
 
-      // add a new column
-      val newArrayMapData = Seq(
-        Row(2, 200,
-          List(
-            Map("2022-12-01" -> Row("a3", "b3", 20, 40)),
-            Map("2022-12-02" -> Row("a4", "b4", 30, 40))
-          ),
-          "bbb")
-      )
-      val newInnerStructSchema = new StructType()
-        .add("col1", StringType)
-        .add("col2", StringType)
-        .add("col3", IntegerType)
-        .add("col4", IntegerType)
-      val newArrayMapSchema = new StructType()
-        .add("id", IntegerType)
-        .add("userid", IntegerType)
-        .add("structcol", ArrayType(
-          new MapType(StringType, newInnerStructSchema, true)))
-        .add("name", StringType)
-      val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-      df2.printSchema()
-      df2.show(false)
-      // upsert
-      upsertData(df2, tempRecordPath, isCow)
-
-      // read out the table
-      val readDf = spark.read.format("hudi")
-        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
-        .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
-    }
+    // read out the table
+    val readDf = spark.read.format("hudi")
+      .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), useFileGroupReader)
+      .load(tempRecordPath)
+    readDf.printSchema()
+    readDf.show(false)
+    readDf.foreach(_ => {})
   }
 
   @ParameterizedTest

@@ -30,7 +30,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
   test("Test Create/Drop/Show/Refresh Index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val databaseName = "default"

@@ -191,7 +191,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
   private void testBootstrapCommon(boolean partitioned, boolean deltaCommit, EffectiveMode mode, BootstrapMode modeForRegexMatch) throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
     //       Please check HUDI-4496 for more details
-    if (!HoodieSparkUtils.gteqSpark3_0()) {
+    if (!HoodieSparkUtils.gteqSpark3_3()) {
       return;
     }
     String keyGeneratorClass = partitioned ? SimpleKeyGenerator.class.getCanonicalName()

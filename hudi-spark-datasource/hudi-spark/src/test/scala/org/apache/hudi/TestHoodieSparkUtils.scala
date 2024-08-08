@@ -35,7 +35,7 @@ import scala.collection.JavaConverters
 class TestHoodieSparkUtils {
 
   @ParameterizedTest
-  @ValueSource(strings = Array("2.4.4", "3.1.0", "3.2.0", "3.3.0"))
+  @ValueSource(strings = Array("2.4.4", "3.3.0", "3.3.2", "3.4.0", "3.5.0"))
   def testSparkVersionCheckers(sparkVersion: String): Unit = {
     val vsMock = new SparkVersionsSupport {
       override def getSparkVersion: String = sparkVersion
@@ -46,45 +46,61 @@ class TestHoodieSparkUtils {
         assertTrue(vsMock.isSpark2)
 
         assertFalse(vsMock.isSpark3)
-        assertFalse(vsMock.isSpark3_1)
-        assertFalse(vsMock.isSpark3_0)
-        assertFalse(vsMock.isSpark3_2)
-        assertFalse(vsMock.gteqSpark3_1)
-        assertFalse(vsMock.gteqSpark3_1_3)
-        assertFalse(vsMock.gteqSpark3_2)
-
-      case "3.1.0" =>
-        assertTrue(vsMock.isSpark3)
-        assertTrue(vsMock.isSpark3_1)
-        assertTrue(vsMock.gteqSpark3_1)
-
-        assertFalse(vsMock.isSpark2)
-        assertFalse(vsMock.isSpark3_0)
-        assertFalse(vsMock.isSpark3_2)
-        assertFalse(vsMock.gteqSpark3_1_3)
-        assertFalse(vsMock.gteqSpark3_2)
-
-      case "3.2.0" =>
-        assertTrue(vsMock.isSpark3)
-        assertTrue(vsMock.isSpark3_2)
-        assertTrue(vsMock.gteqSpark3_1)
-        assertTrue(vsMock.gteqSpark3_1_3)
-        assertTrue(vsMock.gteqSpark3_2)
-
-        assertFalse(vsMock.isSpark2)
-        assertFalse(vsMock.isSpark3_0)
-        assertFalse(vsMock.isSpark3_1)
+        assertFalse(vsMock.isSpark3_3)
+        assertFalse(vsMock.isSpark3_4)
+        assertFalse(vsMock.isSpark3_5)
+        assertFalse(vsMock.gteqSpark3_3)
+        assertFalse(vsMock.gteqSpark3_3_2)
+        assertFalse(vsMock.gteqSpark3_4)
+        assertFalse(vsMock.gteqSpark3_5)
 
       case "3.3.0" =>
         assertTrue(vsMock.isSpark3)
-        assertTrue(vsMock.gteqSpark3_1)
-        assertTrue(vsMock.gteqSpark3_1_3)
-        assertTrue(vsMock.gteqSpark3_2)
+        assertTrue(vsMock.isSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3)
 
-        assertFalse(vsMock.isSpark3_2)
         assertFalse(vsMock.isSpark2)
-        assertFalse(vsMock.isSpark3_0)
-        assertFalse(vsMock.isSpark3_1)
+        assertFalse(vsMock.isSpark3_4)
+        assertFalse(vsMock.isSpark3_5)
+        assertFalse(vsMock.gteqSpark3_3_2)
+        assertFalse(vsMock.gteqSpark3_4)
+        assertFalse(vsMock.gteqSpark3_5)
+
+      case "3.3.2" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3_2)
+
+
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_4)
+        assertFalse(vsMock.isSpark3_5)
+        assertFalse(vsMock.gteqSpark3_4)
+        assertFalse(vsMock.gteqSpark3_5)
+
+      case "3.4.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_4)
+        assertTrue(vsMock.gteqSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3_2)
+        assertTrue(vsMock.gteqSpark3_4)
+
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_3)
+        assertFalse(vsMock.isSpark3_5)
+
+      case "3.5.0" =>
+        assertTrue(vsMock.isSpark3)
+        assertTrue(vsMock.isSpark3_5)
+        assertTrue(vsMock.gteqSpark3_3)
+        assertTrue(vsMock.gteqSpark3_3_2)
+        assertTrue(vsMock.gteqSpark3_4)
+        assertTrue(vsMock.gteqSpark3_5)
+
+        assertFalse(vsMock.isSpark2)
+        assertFalse(vsMock.isSpark3_3)
+        assertFalse(vsMock.isSpark3_4)
     }
   }
 

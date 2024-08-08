@@ -344,7 +344,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
       "Failed to resolve pre-combine field `_ts` w/in the source-table output"
     } else {
       "Failed to resolve pre-combine field `_ts` w/in the source-table output;"

@@ -134,7 +134,7 @@ class TestRepairTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test msck repair partitioned table [add/drop/sync] partitions") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       Seq("true", "false").foreach { hiveStylePartitionEnable =>
         withTempDir { tmp =>
           val tableName = generateTableName

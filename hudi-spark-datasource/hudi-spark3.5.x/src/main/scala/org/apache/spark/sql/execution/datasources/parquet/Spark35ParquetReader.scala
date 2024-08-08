@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.hadoop.conf.Configuration
@@ -92,7 +91,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val filePath = file.toPath
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
-    val schemaEvolutionUtils = new Spark32PlusParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
+    val schemaEvolutionUtils = new Spark3ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
       partitionSchema, internalSchemaOpt)
 
     val fileFooter = if (enableVectorizedReader) {

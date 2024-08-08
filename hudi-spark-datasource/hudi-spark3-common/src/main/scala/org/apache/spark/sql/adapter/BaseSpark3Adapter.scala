@@ -47,9 +47,7 @@ import scala.collection.JavaConverters._
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
-
-  // JsonUtils for Support Spark Version >= 3.2
-  if (HoodieSparkUtils.gteqSpark3_2) JsonUtils.registerModules()
+  JsonUtils.registerModules()
 
   private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 

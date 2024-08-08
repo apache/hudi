@@ -104,7 +104,7 @@ public class HoodieClientTestUtils {
       sparkConf.set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
     }
 
-    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_2()) {
+    if (canLoadClass("org.apache.spark.sql.hudi.catalog.HoodieCatalog") && HoodieSparkUtils.gteqSpark3_3()) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
           "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     }

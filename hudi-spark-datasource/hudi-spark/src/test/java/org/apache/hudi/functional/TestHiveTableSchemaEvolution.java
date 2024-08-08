@@ -92,7 +92,7 @@ public class TestHiveTableSchemaEvolution {
   @ParameterizedTest
   @ValueSource(strings = {"cow", "mor"})
   public void testHiveReadSchemaEvolutionTable(String tableType) throws Exception {
-    if (HoodieSparkUtils.gteqSpark3_1()) {
+    if (HoodieSparkUtils.gteqSpark3_3()) {
       String tableName = "hudi_test" + new Date().getTime();
       String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
 
