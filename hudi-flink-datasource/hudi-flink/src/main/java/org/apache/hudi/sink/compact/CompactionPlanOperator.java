@@ -24,6 +24,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -81,6 +83,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
     CompactionUtil.rollbackCompaction(table);
+
+    // try doing compcation once for batch mode
+    if (OptionsResolver.isMorTable(conf) && !conf.getBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
+      this.notifyCheckpointComplete(-1);
+    }
   }
 
   @Override
