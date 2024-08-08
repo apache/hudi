@@ -50,6 +50,6 @@ public class SparkPartitionUtils {
         tableConfig,
         hadoopConf.get("timeZone", SQLConf.get().sessionLocalTimeZone()),
         sparkParsePartitionUtil,
-        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true));
+        hadoopConf.getBoolean("spark.sql.sources.validatePartitionColumns", true), false);
   }
 }

@@ -497,15 +497,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val partitionPathWithoutScheme = file.getPath.getParent.getPathWithoutSchemeAndAuthority
       val relativePath = tablePathWithoutScheme.toUri.relativize(partitionPathWithoutScheme.toUri).toString
       val timeZoneId = conf.get("timeZone", sparkSession.sessionState.conf.sessionLocalTimeZone)
-      val rowValues = HoodieSparkUtils.parsePartitionColumnValues(
-        partitionColumns,
-        relativePath,
-        basePath,
-        tableStructSchema,
-        tableConfig,
-        timeZoneId,
-        sparkAdapter.getSparkParsePartitionUtil,
-        conf.getBoolean("spark.sql.sources.validatePartitionColumns", true))
+      val rowValues = HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, relativePath, basePath, tableStructSchema, tableConfig, timeZoneId, sparkAdapter.getSparkParsePartitionUtil, conf.getBoolean("spark.sql.sources.validatePartitionColumns", true), false)
       if(rowValues.length != partitionColumns.length) {
         throw new HoodieException("Failed to get partition column values from the partition-path:"
             + s"partition column size: ${partitionColumns.length}, parsed partition value size: ${rowValues.length}")
