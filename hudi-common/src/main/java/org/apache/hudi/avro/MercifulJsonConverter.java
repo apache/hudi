@@ -77,7 +77,6 @@ public class MercifulJsonConverter {
     this(false, "__");
   }
 
-
   /**
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
