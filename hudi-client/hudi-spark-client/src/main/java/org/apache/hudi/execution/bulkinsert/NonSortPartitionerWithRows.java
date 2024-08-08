@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.spark.sql.Dataset;
@@ -51,6 +52,14 @@ public class NonSortPartitionerWithRows implements BulkInsertPartitioner<Dataset
    */
   public NonSortPartitionerWithRows(boolean enforceNumOutputPartitions) {
     this.enforceNumOutputPartitions = enforceNumOutputPartitions;
+  }
+
+  /**
+   * Constructor to create as UserDefinedBulkInsertPartitioner class via reflection
+   * @param config HoodieWriteConfig
+   */
+  public NonSortPartitionerWithRows(HoodieWriteConfig config) {
+    this();
   }
 
   @Override
