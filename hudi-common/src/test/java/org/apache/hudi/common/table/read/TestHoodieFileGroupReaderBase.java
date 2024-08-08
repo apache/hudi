@@ -29,6 +29,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -67,7 +68,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRAT
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.compareTo;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -89,7 +89,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getRecordPayloadForMergeMode(RecordMergeMode mergeMode);
 
-  public abstract void commitToTable(List<String> recordList, String operation,
+  public abstract void commitToTable(List<HoodieRecord> recordList, String operation,
                                      Map<String, String> writeConfigs);
 
   public abstract void validateRecordsInFileGroup(String tablePath,
@@ -104,7 +104,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING));
     // Prepare a table for initializing reader context
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 1)), BULK_INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 1), BULK_INSERT.value(), writeConfigs);
     }
     StorageConfiguration<?> storageConf = getStorageConf();
     String tablePath = getBasePath();
@@ -183,17 +183,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, recordMergeMode);
 
       // Two commits; reading one file group containing a base file and a log file
-      commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1, recordMergeMode);
 
       // Three commits; reading one file group containing a base file and two log files
-      commitToTable(recordsToStrings(dataGen.generateUpdates("003", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2, recordMergeMode);
     }
@@ -209,12 +209,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode);
 
       // Two commits; reading one file group containing a base file and a log file
-      commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2, recordMergeMode);
     }

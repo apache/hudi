@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -37,12 +38,17 @@ public class HoodieArrayWritableAvroUtils {
   private static final Cache<String, ObjectInspectorCache>
       OBJECT_INSPECTOR_TABLE_CACHE = Caffeine.newBuilder().maximumSize(1000).build();
 
-  public static ObjectInspectorCache getCacheForTable(String table, Schema tableSchema, JobConf jobConf) {
-    ObjectInspectorCache cache = OBJECT_INSPECTOR_TABLE_CACHE.getIfPresent(table);
-    if (cache == null) {
-      cache = new ObjectInspectorCache(tableSchema, jobConf);
-    }
-    return cache;
+  public static ObjectInspectorCache getCacheForTable(String table) {
+    return OBJECT_INSPECTOR_TABLE_CACHE.getIfPresent(table);
+  }
+
+  public static ObjectInspectorCache initCacheForTable(String table, Schema tableSchema, JobConf jobConf) {
+    return OBJECT_INSPECTOR_TABLE_CACHE.get(table, t -> new ObjectInspectorCache(tableSchema, jobConf));
+  }
+
+  @VisibleForTesting
+  public static void resetCache() {
+    OBJECT_INSPECTOR_TABLE_CACHE.invalidateAll();
   }
 
   private static final Cache<Pair<Schema, Schema>, int[]>

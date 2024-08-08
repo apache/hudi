@@ -69,7 +69,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
       case OVERWRITE_MERGER_STRATEGY_UUID:
         return new OverwriteWithLatestSparkMerger();
       default:
-        throw new HoodieException("The merger strategy UUID is not supported: " + mergerStrategy);
+        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy);
     }
   }
 
