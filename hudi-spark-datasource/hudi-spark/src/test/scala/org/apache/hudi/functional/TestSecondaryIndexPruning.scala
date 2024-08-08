@@ -19,13 +19,19 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD}
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.{ActionType, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
-
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{Row, SaveMode}
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import org.scalatest.Assertions.assertResult
 
 /**
@@ -103,6 +109,169 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
         Seq("def", "row3")
       )
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexUpsert(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexUpsertNonPartitioned(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexUpsertAndRollback(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    rollbackLastInstant(hudiOpts)
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexWithDelete(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val insertDf = doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    val deleteDf = insertDf.limit(1)
+    deleteDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDTCleaning(tableType: HoodieTableType): Unit = {
+    var hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      hudiOpts = hudiOpts ++ Map(
+        HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
+        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15"
+      )
+    }
+
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
+    assertTrue(lastCleanInstant.isPresent)
+
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    assertTrue(getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant().get().getTimestamp
+      .compareTo(lastCleanInstant.get().getTimestamp) > 0)
+
+    var rollbackedInstant: Option[HoodieInstant] = Option.empty
+    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getAction != ActionType.clean.name()) {
+      // rollback clean instant
+      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
+    }
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  @Test
+  def testRLIWithDTCompaction(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
+    )
+
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    var lastCompactionInstant = getLatestCompactionInstant()
+    assertTrue(lastCompactionInstant.isPresent)
+
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    assertTrue(getLatestCompactionInstant().get().getTimestamp.compareTo(lastCompactionInstant.get().getTimestamp) > 0)
+    lastCompactionInstant = getLatestCompactionInstant()
+
+    var rollbackedInstant: Option[HoodieInstant] = Option.empty
+    while (rollbackedInstant.isEmpty || rollbackedInstant.get.getTimestamp != lastCompactionInstant.get().getTimestamp) {
+      // rollback compaction instant
+      rollbackedInstant = Option.apply(rollbackLastInstant(hudiOpts))
+    }
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testRLIWithDTClustering(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieClusteringConfig.INLINE_CLUSTERING.key() -> "true",
+      HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS.key() -> "2"
+    )
+
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+
+    // We are validating rollback of a DT clustering instant here
+    rollbackLastInstant(hudiOpts)
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
   }
 
   private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
