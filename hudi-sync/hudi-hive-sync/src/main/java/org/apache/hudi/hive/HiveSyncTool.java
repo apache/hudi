@@ -258,9 +258,11 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
       LOG.info("Sync complete for {}", tableName);
     } catch (HoodieHiveSyncException ex) {
-      LOG.error("failed to sync the table {}", tableName, ex);
       if (shouldRecreateAndSyncTable()) {
+        LOG.warn("failed to sync the table {}, trying to recreate", tableName, ex);
         recreateAndSyncHiveTable(tableName, useRealtimeInputFormat, readAsOptimized);
+      } else {
+        throw new HoodieHiveSyncException("failed to sync the table " + tableName, ex);
       }
     }
   }
