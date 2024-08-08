@@ -39,6 +39,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -47,6 +48,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_TARGET_SCHEMA;
@@ -54,6 +57,8 @@ import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_RESET_KEY;
 import static org.apache.hudi.utilities.streamer.StreamSync.CHECKPOINT_IGNORE_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doReturn;
@@ -158,6 +163,45 @@ public class TestStreamSyncUnitTests {
 
     Option<String> resumeCheckpoint = spy.getCheckpointToResume(Option.of(commitsTimeline));
     assertEquals(expectedResumeCheckpoint,resumeCheckpoint);
+  }
+
+  @ParameterizedTest
+  @MethodSource("getMultiTableStreamerCases")
+  void testCloneConfigsFromMultiTableStreamer(HoodieMultiTableStreamer.Config cfg) throws IOException {
+    Configuration configuration = new Configuration();
+    JavaSparkContext jssc = mock(JavaSparkContext.class);
+
+    when(jssc.hadoopConfiguration()).thenReturn(configuration);
+
+    HoodieMultiTableStreamer multiTableStreamer = new HoodieMultiTableStreamer(cfg, jssc);
+    List<TableExecutionContext> tableExecutionContextList = multiTableStreamer.getTableExecutionContexts();
+    tableExecutionContextList.forEach(it -> {
+      // make sure that if set global properties then each child streamer can get also
+      assertTrue(it.getConfig().configs.containsAll(cfg.configs));
+
+      // make sure that each streamer should have propsFilePath from multiStreamer configs, not default value
+      assertNotEquals(HoodieStreamer.Config.DEFAULT_DFS_SOURCE_PROPERTIES, it.getConfig().propsFilePath);
+    });
+
+    verify(jssc).hadoopConfiguration();
+  }
+
+  private static Stream<Arguments> getMultiTableStreamerCases() {
+    String propFile = "src/test/resources/streamer-config/kafka-source-multi.properties";
+    return Stream.of(
+        Arguments.of(generateMultiTableStreamerConfig(propFile, Collections.emptyList())),
+        Arguments.of(generateMultiTableStreamerConfig(propFile, Collections.singletonList("hoodie.keygen.timebased.output.dateformat=yyyyMMdd")))
+    );
+  }
+
+  private static HoodieMultiTableStreamer.Config generateMultiTableStreamerConfig(String propsFilePath, List<String> configs) {
+    HoodieMultiTableStreamer.Config cfg = new HoodieMultiTableStreamer.Config();
+    cfg.basePathPrefix = "src/test/resources/streamer-config";
+    cfg.configFolder = "src/test/resources/streamer-config";
+    cfg.propsFilePath = propsFilePath;
+    cfg.configs = configs;
+    cfg.tableType = "MERGE_ON_READ";
+    return cfg;
   }
 
   private static Stream<Arguments> getCheckpointToResumeCases() {
