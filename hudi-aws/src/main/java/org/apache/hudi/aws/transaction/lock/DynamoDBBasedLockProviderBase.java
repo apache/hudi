@@ -79,16 +79,15 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
   protected volatile LockItem lock;
 
   protected DynamoDBBasedLockProviderBase(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
-    if (dynamoDB == null) {
-      dynamoDB = getDynamoDBClient();
-    }
     this.dynamoDbBasedLockConfig = new DynamoDbBasedLockConfig.Builder()
         .fromProperties(lockConfiguration.getConfig())
         .build();
     this.tableName = dynamoDbBasedLockConfig.getString(DynamoDbBasedLockConfig.DYNAMODB_LOCK_TABLE_NAME);
     long leaseDuration = dynamoDbBasedLockConfig.getInt(DynamoDbBasedLockConfig.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY);
     dynamoDBPartitionKey = getDynamoDBPartitionKey(lockConfiguration);
-
+    if (dynamoDB == null) {
+      dynamoDB = getDynamoDBClient(dynamoDbBasedLockConfig);
+    }
     // build the dynamoDb lock client
     this.client = new AmazonDynamoDBLockClient(
         AmazonDynamoDBLockClientOptions.builder(dynamoDB, tableName)
@@ -163,7 +162,7 @@ public abstract class DynamoDBBasedLockProviderBase implements LockProvider<Lock
     return lock;
   }
 
-  private DynamoDbClient getDynamoDBClient() {
+  private static DynamoDbClient getDynamoDBClient(DynamoDbBasedLockConfig dynamoDbBasedLockConfig) {
     String region = dynamoDbBasedLockConfig.getString(DYNAMODB_LOCK_REGION);
     String endpointURL = dynamoDbBasedLockConfig.contains(DYNAMODB_ENDPOINT_URL.key())
         ? dynamoDbBasedLockConfig.getString(DYNAMODB_ENDPOINT_URL)
