@@ -953,6 +953,10 @@
         <version>${avro.version}</version>
         <exclusions>
           <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.xerial.snappy</groupId>
             <artifactId>snappy-java</artifactId>
           </exclusion>
@@ -992,6 +996,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
 
@@ -1001,6 +1009,12 @@
         <artifactId>orc-core</artifactId>
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
 
       <!-- RoaringBitmap -->
@@ -1025,6 +1039,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1032,6 +1050,12 @@
         <artifactId>spark-sql_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
@@ -1043,6 +1067,10 @@
             <groupId>log4j</groupId>
             <artifactId>apache-log4j-extras</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1051,6 +1079,12 @@
         <classifier>tests</classifier>
         <version>${spark.version}</version>
         <scope>test</scope>
+        <exclusions>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
+        </exclusions>
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
@@ -1220,6 +1254,10 @@
             <artifactId>jaxb-api</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
           </exclusion>
@@ -1247,6 +1285,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1258,6 +1300,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1295,6 +1341,10 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1314,6 +1364,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1351,6 +1405,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1397,6 +1455,10 @@
           <exclusion>
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1445,6 +1507,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1522,6 +1588,10 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1562,6 +1632,10 @@
           <exclusion>
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1618,6 +1692,10 @@
           <exclusion>
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.jackson</groupId>
+            <artifactId>jackson-mapper-asl</artifactId>
           </exclusion>
         </exclusions>
       </dependency>

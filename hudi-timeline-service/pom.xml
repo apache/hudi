@@ -141,6 +141,10 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-mapper-asl</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>

@@ -271,6 +271,10 @@
                <groupId>javax.servlet</groupId>
                <artifactId>*</artifactId>
            </exclusion>
+          <exclusion>
+            <groupId>log4j</groupId>
+            <artifactId>log4j</artifactId>
+          </exclusion>
         </exclusions>
     </dependency>
     <dependency>
@@ -313,6 +317,10 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-mapper-asl</artifactId>
+        </exclusion>
       </exclusions>
       <scope>provided</scope>
     </dependency>
@@ -328,6 +336,10 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+         <exclusion>
+           <groupId>org.codehaus.jackson</groupId>
+           <artifactId>jackson-mapper-asl</artifactId>
+         </exclusion>
       </exclusions>
      <scope>provided</scope>
     </dependency>
@@ -373,6 +385,10 @@
         <exclusion>
           <groupId>org.apache.parquet</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.jackson</groupId>
+          <artifactId>jackson-mapper-asl</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
