@@ -118,7 +118,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
 
   private Option<HoodieFileReader> getBaseFileReader(FileSlice fileSlice) throws IOException {
     if (fileSlice.getBaseFile().isPresent()) {
-      return Option.of(createNewFileReader(fileSlice.getBaseFile().get()));
+      return Option.of(createNewFileReader(hoodieTable.getStorage(), config, fileSlice.getBaseFile().get()));
     }
     return Option.empty();
   }

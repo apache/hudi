@@ -156,8 +156,6 @@ public class HoodieSimpleIndex
     int fetchParallelism = Math.max(1, Math.min(baseFiles.size(), parallelism));
 
     return context.parallelize(baseFiles, fetchParallelism)
-        .flatMap(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(config, hoodieTable, partitionPathBaseFile, keyGeneratorOpt)
-            .locations().iterator())
-        .mapToPair(e -> (Pair<HoodieKey, HoodieRecordLocation>) e);
+        .flatMapToPair(partitionPathBaseFile -> new HoodieKeyLocationFetchHandle(hoodieTable.getStorage(), partitionPathBaseFile, keyGeneratorOpt).locations());
   }
 }

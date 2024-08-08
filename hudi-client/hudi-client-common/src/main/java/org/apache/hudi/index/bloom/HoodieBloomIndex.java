@@ -39,6 +39,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
@@ -170,13 +171,14 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         .collect(toList());
 
     context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
+    final HoodieStorage storage = hoodieTable.getStorage();
     return context.map(partitionPathFileIDList, pf -> {
       try {
-        HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, Pair.of(pf.getKey(), pf.getValue().getKey()));
+        HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, storage);
         String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey(), minMaxKeys[0], minMaxKeys[1]));
       } catch (MetadataNotFoundException me) {
-        LOG.warn("Unable to find range metadata in file :" + pf);
+        LOG.warn("Unable to find range metadata in file: {}", pf);
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));

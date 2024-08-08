@@ -109,7 +109,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
     throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
   }
 
@@ -124,7 +124,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("HFileUtils does not support fetchRecordKeysWithPositions");
   }
 
