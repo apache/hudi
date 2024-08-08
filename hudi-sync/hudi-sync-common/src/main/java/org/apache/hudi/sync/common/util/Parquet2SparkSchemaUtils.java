@@ -141,7 +141,7 @@ public class Parquet2SparkSchemaUtils {
         ValidationUtils.checkArgument(field.getFieldCount() == 1, "Illegal List type: " + field);
         Type repeatedType = field.getType(0);
         if (isElementType(repeatedType, field.getName())) {
-          return arrayType(repeatedType, false);
+          return arrayType(repeatedType, true);
         } else {
           Type elementType = repeatedType.asGroupType().getType(0);
           boolean optional = elementType.isRepetition(OPTIONAL);
