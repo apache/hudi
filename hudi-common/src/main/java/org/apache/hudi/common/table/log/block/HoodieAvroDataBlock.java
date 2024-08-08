@@ -215,7 +215,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.dis.skipBytes(recordLength);
         this.readRecords++;
         if (this.promotedSchema.isPresent()) {
-          return  HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.promotedSchema.get());
+          return HoodieAvroUtils.rewriteRecordWithNewSchema(record, this.promotedSchema.get());
         }
         return record;
       } catch (IOException e) {
