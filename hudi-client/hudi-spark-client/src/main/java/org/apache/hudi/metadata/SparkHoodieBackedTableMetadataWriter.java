@@ -130,7 +130,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
 
@@ -141,10 +141,10 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void bulkCommit(
-      String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
+      String instantTime, String partitionName, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(partitioner));
   }
 
   @Override
