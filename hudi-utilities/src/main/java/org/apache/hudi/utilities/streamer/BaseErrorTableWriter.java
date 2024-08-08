@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
@@ -52,6 +53,14 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
 
   public BaseErrorTableWriter(HoodieStreamer.Config cfg, SparkSession sparkSession,
                               TypedProperties props, HoodieSparkEngineContext hoodieSparkContext, FileSystem fileSystem) {
+  }
+
+  public BaseErrorTableWriter(HoodieStreamer.Config cfg,
+                              SparkSession sparkSession,
+                              TypedProperties props,
+                              HoodieSparkEngineContext hoodieSparkContext,
+                              FileSystem fs,
+                              Option<HoodieIngestionMetrics> metrics) {
   }
 
   /**
