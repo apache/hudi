@@ -35,7 +35,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkParsePartitionUtil}
 import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -189,6 +189,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             storageConf, fileIndexProps, requiredSchema)
 
         case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+//        case _ => {
+//          val metaClient = HoodieTableMetaClient.builder().setBasePath(tableState.tablePath).setConf(storageConf).build()
+//          val partitionSchemaWithHandling = sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, tableSchema.structTypeSchema)
+//          parquetFileReader.value.read(file, requiredSchema, partitionSchemaWithHandling, internalSchemaOpt, filters, storageConf)
+//        }
       }
     }
   }

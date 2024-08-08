@@ -215,3 +215,4 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
   private def filterStaticPartitionValues(partitionsSpec: Map[String, Option[String]]): Map[String, String] =
     partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get).toMap
 }
+

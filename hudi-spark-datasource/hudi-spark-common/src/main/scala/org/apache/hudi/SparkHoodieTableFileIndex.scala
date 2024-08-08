@@ -27,13 +27,15 @@ import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperti
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.HoodieTableConfigUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
+import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
-import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
@@ -116,32 +118,55 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val partitionColumns = tableConfig.getPartitionFields
     val nameFieldMap = generateFieldMap(schema)
 
+    def validateAndGetPartitionFieldsStruct(partitionFields: Array[StructField]) = {
+      if (partitionFields.length != partitionColumns.get().length) {
+        val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
+        if (isBootstrapTable) {
+          // For bootstrapped tables its possible the schema does not contain partition field when source table
+          // is hive style partitioned. In this case we would like to treat the table as non-partitioned
+          // as opposed to failing
+          new StructType()
+        } else {
+          throw new IllegalArgumentException(s"Cannot find columns: " +
+            s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
+            s"in the schema[${schema.fields.mkString(",")}]")
+        }
+      } else {
+        new StructType(partitionFields)
+      }
+    }
+
     if (partitionColumns.isPresent) {
       // Note that key generator class name could be null
+      val keyGeneratorPartitionFieldsOpt = HoodieTableConfigUtils.getPartitionFieldPropForKeyGenerator(tableConfig)
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
       if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
+      } else if (keyGeneratorPartitionFieldsOpt.isPresent && (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+        || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))) {
+        val keyGeneratorPartitionFields = keyGeneratorPartitionFieldsOpt.get().split(BaseKeyGenerator.FIELD_SEPARATOR)
+        val structFields = keyGeneratorPartitionFields.map(field => CustomAvroKeyGenerator.getPartitionFieldAndKeyType(field))
+          .map(pair => {
+            val partitionField = pair.getLeft
+            val partitionKeyType = pair.getRight
+            partitionKeyType match {
+              case PartitionKeyType.SIMPLE => if (nameFieldMap.contains(partitionField)) {
+                nameFieldMap.apply(partitionField)
+              } else {
+                null
+              }
+              case PartitionKeyType.TIMESTAMP => StructField(partitionField, StringType)
+            }
+          })
+          .filter(structField => structField != null)
+          .array
+        validateAndGetPartitionFieldsStruct(structFields)
       } else {
         val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
           .map(column => nameFieldMap.apply(column))
-
-        if (partitionFields.length != partitionColumns.get().length) {
-          val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
-          if (isBootstrapTable) {
-            // For bootstrapped tables its possible the schema does not contain partition field when source table
-            // is hive style partitioned. In this case we would like to treat the table as non-partitioned
-            // as opposed to failing
-            new StructType()
-          } else {
-            throw new IllegalArgumentException(s"Cannot find columns: " +
-              s"'${partitionColumns.get().filter(col => !nameFieldMap.contains(col)).mkString(",")}' " +
-              s"in the schema[${schema.fields.mkString(",")}]")
-          }
-        } else {
-          new StructType(partitionFields)
-        }
+        validateAndGetPartitionFieldsStruct(partitionFields)
       }
     } else {
       // If the partition columns have not stored in hoodie.properties(the table that was
@@ -409,9 +434,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
-      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
-        configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-        sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema, tableConfig, configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone), sparkParsePartitionUtil, shouldValidatePartitionColumns(spark), false)
     }
   }
 

@@ -24,10 +24,10 @@ import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -108,7 +108,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
     //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
-    injectSQLConf(df.queryExecution.toRdd.mapPartitions (rows => {
+    injectSQLConf(df.queryExecution.toRdd.mapPartitionsWithIndex ((index, rows) => {
+      System.out.println(index)
       if (rows.isEmpty) {
         Iterator.empty
       } else {
@@ -236,13 +237,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     sparkAdapter.createSparkRowSerDe(structType)
   }
 
-  def parsePartitionColumnValues(partitionColumns: Array[String],
-                                 partitionPath: String,
-                                 basePath: StoragePath,
-                                 schema: StructType,
-                                 timeZoneId: String,
-                                 sparkParsePartitionUtil: SparkParsePartitionUtil,
-                                 shouldValidatePartitionCols: Boolean): Array[Object] = {
+  def parsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String, basePath: StoragePath, schema: StructType, tableConfig: HoodieTableConfig, timeZoneId: String, sparkParsePartitionUtil: SparkParsePartitionUtil, shouldValidatePartitionCols: Boolean, shouldUsePartitionSchema: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -294,7 +289,11 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         }.mkString(StoragePath.SEPARATOR)
 
         val pathWithPartitionName = new StoragePath(basePath, partitionWithName)
-        val partitionSchema = StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
+        val partitionSchema = if (shouldUsePartitionSchema) {
+          StructType(schema.fields.filter(f => partitionColumns.contains(f.name)))
+        } else {
+          sparkParsePartitionUtil.getPartitionSchema(tableConfig, schema)
+        }
         val partitionValues = parsePartitionPath(pathWithPartitionName, partitionSchema, timeZoneId,
           sparkParsePartitionUtil, basePath, shouldValidatePartitionCols)
         partitionValues.map(_.asInstanceOf[Object]).toArray

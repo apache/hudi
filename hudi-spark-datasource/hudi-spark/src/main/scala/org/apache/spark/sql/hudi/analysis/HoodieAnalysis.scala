@@ -22,17 +22,19 @@ import org.apache.hudi.common.util.ReflectionUtils.loadClass
 import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSeq, Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, UnresolvedCatalogRelation}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSeq, Expression, GenericInternalRow}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceExpressions
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CreateTable, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
+import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
@@ -270,20 +272,90 @@ object HoodieAnalysis extends SparkAdapterSupport {
               case _ => None
             }
 
+            val updatedRelation = updatedTargetTable
+            val relation1 = getPlanWithFSRelation(updatedRelation)
+
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
               sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis,
-                updatedTargetTable.getOrElse(targetTable), updatedQuery.getOrElse(query))
+                relation1.getOrElse(targetTable), getPlanWithFSRelation(updatedQuery).getOrElse(query))
             } else {
               iis
             }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            ut.copy(table = relation)
+            val isResolved = ut.resolved
+//            val updatedRelation = relation match {
+//              // In the receiving side of the IIS, we can't project meta-field attributes out,
+//              // and instead have to explicitly remove them
+//              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(relation))
+//              case _ => None
+//            }
+            val updatedRelation = Option.apply(relation)
+            val relation1: LogicalPlan = getPlanWithFSRelation(updatedRelation).get
+            if (!isResolved) {
+              ut.copy(table = relation1)
+            } else {
+              ut
+            }
+
+          case ut @ DeleteFromTable(relation @ ResolvesToHudiTable(_), condition) =>
+            val isResolved = ut.resolved
+            //            val updatedRelation = relation match {
+            //              // In the receiving side of the IIS, we can't project meta-field attributes out,
+            //              // and instead have to explicitly remove them
+            //              case ResolvesToHudiTable(_) => Some(stripMetaFieldsAttributes(relation))
+            //              case _ => None
+            //            }
+            val updatedRelation = Option.apply(relation)
+            val relation1 = getPlanWithFSRelation(updatedRelation).get
+            if (!isResolved) {
+              ut.copy(table = relation1)
+            } else {
+              ut
+            }
 
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
             sparkAdapter.getCatalystPlanUtils.maybeApplyForNewFileFormat(logicalPlan)
         }
       }
+
+    private def getPlanWithFSRelation(updatedRelation: Option[LogicalPlan]): Option[LogicalPlan] = {
+      updatedRelation.map(relation => {
+        relation transformUp {
+          case lr: LogicalRelation =>
+            val catalogTableOpt = sparkAdapter.resolveHoodieTable(relation)
+            val lrAttrs = lr.output
+            val attributesSet = lr.output.toSet
+            var finalAttrs: List[AttributeReference] = List.empty
+            if (catalogTableOpt.isDefined) {
+              for (attr <- lr.output) {
+                val origAttr: AttributeReference = attributesSet.collectFirst({ case a if a.name.equals(attr.name) => a }).get
+                val catalogAttr = catalogTableOpt.get.partitionSchema.toAttributes.collectFirst({ case a if a.name.equals(attr.name) => a })
+                val newAttr: AttributeReference = if (catalogAttr.isDefined) {
+                  origAttr.withDataType(catalogAttr.get.dataType).asInstanceOf[AttributeReference]
+                } else {
+                  origAttr
+                }
+                finalAttrs = finalAttrs :+ newAttr
+              }
+            }
+            //finalAttrs = removeMetaFields(finalAttrs).toList
+            val newFsRelation: BaseRelation = lr.relation match {
+              case fsRelation: HadoopFsRelation =>
+                if (catalogTableOpt.isDefined) {
+                  val partitionSchema1 = StructType(catalogTableOpt.get.schema.fields.filter(f => catalogTableOpt.get.partitionColumnNames.contains(f.name)))
+                  //                        val dataSchemaFields = fsRelation.dataSchema.fields.filter(f => !isMetaField(f.name))
+                  val dataSchemaFields = fsRelation.dataSchema.fields
+                  fsRelation.copy(partitionSchema = partitionSchema1, dataSchema = fsRelation.dataSchema.copy(fields = dataSchemaFields))(spark)
+                } else {
+                  fsRelation
+                }
+              case _ => lr.relation
+            }
+            lr.copy(relation = newFsRelation)
+        }
+      })
+    }
 
     private def projectOutMetaFieldsAttributes(plan: LogicalPlan, output: Seq[Attribute]): LogicalPlan = {
       if (plan.resolved) {
@@ -443,6 +515,28 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
             logWarning("An unexpected exception occurred while checking partition schema order. Proceeding with the plan.")
         }
         plan
+
+//      case ut: UpdateTable =>
+//        ut.resolved
+//        val attributesSet = ut.child.output.toSet
+//        val catalogTableOpt = sparkAdapter.resolveHoodieTable(ut.child)
+//        if (catalogTableOpt.isDefined && !ut.resolved) {
+//          var finalAttrs: List[Attribute] = List.empty
+//          for (attr <- catalogTableOpt.get.schema.toAttributes) {
+//            val origAttr: Attribute = attributesSet.collectFirst({case a if a.name.equals(attr.name) => a}).get
+//            val newAttr = origAttr.withDataType(attr.dataType)
+//            finalAttrs = finalAttrs :+ newAttr
+//          }
+//          //sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema()
+////          attributes = catalogTableOpt.get.schema.toAttributes
+//          UpdateTable(Project(finalAttrs, ut.child), ut.assignments, ut.condition)
+//        } else {
+//          ut
+//        }
+
+      case relation: UnresolvedCatalogRelation =>
+        relation.resolved
+        relation
 
       case _ => plan
     }
