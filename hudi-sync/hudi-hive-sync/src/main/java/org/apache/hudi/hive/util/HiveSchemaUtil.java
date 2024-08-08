@@ -112,7 +112,7 @@ public class HiveSchemaUtil {
         expectedType = expectedType.replaceAll("`", "");
 
         if (!tableColumnType.equalsIgnoreCase(expectedType)) {
-          schemaDiffBuilder.updateTableColumn(fieldName, getExpectedType(newTableSchema, tickSurroundedFieldName));
+          schemaDiffBuilder.updateTableColumn(fieldName, field.getValue(), getExpectedType(newTableSchema, tickSurroundedFieldName));
         }
       }
       tableColumns.add(tickSurroundedFieldName);
@@ -164,7 +164,7 @@ public class HiveSchemaUtil {
    * @param messageType : Parquet Schema
    * @return : Hive Table schema read from parquet file List[FieldSchema] without partitionField
    */
-  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) throws IOException {
+  public static List<FieldSchema> convertParquetSchemaToHiveFieldSchema(MessageType messageType, HiveSyncConfig syncConfig) {
     return convertMapSchemaToHiveFieldSchema(parquetSchemaToMapSchema(messageType, syncConfig.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), false), syncConfig);
   }
 
@@ -177,7 +177,7 @@ public class HiveSchemaUtil {
    *                 This value will be false for HMS but true for QueryBasedDDLExecutors
    * @return : Intermediate schema in the form of Map<String, String>
    */
-  public static LinkedHashMap<String, String> parquetSchemaToMapSchema(MessageType messageType, boolean supportTimestamp, boolean doFormat) throws IOException {
+  public static LinkedHashMap<String, String> parquetSchemaToMapSchema(MessageType messageType, boolean supportTimestamp, boolean doFormat) {
     LinkedHashMap<String, String> schema = new LinkedHashMap<>();
     List<Type> parquetFields = messageType.getFields();
     for (Type parquetType : parquetFields) {
@@ -194,7 +194,7 @@ public class HiveSchemaUtil {
     return schema;
   }
 
-  public static Map<String, String> convertMapSchemaToHiveSchema(LinkedHashMap<String, String> schema) throws IOException {
+  public static Map<String, String> convertMapSchemaToHiveSchema(LinkedHashMap<String, String> schema) {
     Map<String, String> hiveSchema = new LinkedHashMap<>();
     for (Map.Entry<String,String> entry: schema.entrySet()) {
       hiveSchema.put(hiveCompatibleFieldName(entry.getKey(), false, true), entry.getValue());
@@ -208,7 +208,7 @@ public class HiveSchemaUtil {
    * @return List of FieldSchema objects derived from schema without the partition fields as the HMS api expects them as different arguments for alter table commands.
    * @throws IOException
    */
-  public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) throws IOException {
+  public static List<FieldSchema> convertMapSchemaToHiveFieldSchema(LinkedHashMap<String, String> schema, HiveSyncConfig syncConfig) {
     return schema.keySet().stream()
         .map(key -> new FieldSchema(key, schema.get(key).toLowerCase(), ""))
         .filter(field -> !syncConfig.getSplitStrings(META_SYNC_PARTITION_FIELDS).contains(field.getName()))

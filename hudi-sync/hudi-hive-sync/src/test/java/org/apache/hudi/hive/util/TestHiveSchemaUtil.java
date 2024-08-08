@@ -19,6 +19,7 @@
 
 package org.apache.hudi.hive.util;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.SchemaDifference;
 
 import org.apache.parquet.schema.MessageType;
@@ -31,6 +32,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -148,5 +151,18 @@ public class TestHiveSchemaUtil {
     schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         schemaDifference.getAddColumnTypes(), Collections.emptyList(), true);
     assertTrue(schemaDifference.isEmpty());
+  }
+
+  @Test
+  public void testSchemaDiff() {
+    // verify promotion type
+    Map<String, String> previousSchema = new HashMap();
+    previousSchema.put("my_element", "int");
+    MessageType newSchema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.FLOAT)
+        .named("my_element").named("my_schema");
+    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(newSchema,
+        previousSchema, Collections.emptyList(), false);
+    assertEquals(1, schemaDifference.getUpdateColumnTypes().size());
+    assertEquals(Pair.of("int", "float"), schemaDifference.getUpdateColumnTypes().get("my_element"));
   }
 }

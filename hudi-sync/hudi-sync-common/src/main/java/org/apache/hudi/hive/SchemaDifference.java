@@ -18,6 +18,8 @@
 
 package org.apache.hudi.hive;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import org.apache.parquet.schema.MessageType;
 
 import java.util.ArrayList;
@@ -36,11 +38,11 @@ public class SchemaDifference {
   private final MessageType storageSchema;
   private final Map<String, String> tableSchema;
   private final List<String> deleteColumns;
-  private final Map<String, String> updateColumnTypes;
+  private final Map<String, Pair<String,String>> updateColumnTypes;
   private final Map<String, String> addColumnTypes;
 
   private SchemaDifference(MessageType storageSchema, Map<String, String> tableSchema, List<String> deleteColumns,
-      Map<String, String> updateColumnTypes, Map<String, String> addColumnTypes) {
+      Map<String, Pair<String, String>> updateColumnTypes, Map<String, String> addColumnTypes) {
     this.storageSchema = storageSchema;
     this.tableSchema = tableSchema;
     this.deleteColumns = Collections.unmodifiableList(deleteColumns);
@@ -52,7 +54,7 @@ public class SchemaDifference {
     return deleteColumns;
   }
 
-  public Map<String, String> getUpdateColumnTypes() {
+  public Map<String, Pair<String, String>> getUpdateColumnTypes() {
     return updateColumnTypes;
   }
 
@@ -84,7 +86,7 @@ public class SchemaDifference {
     private final MessageType storageSchema;
     private final Map<String, String> tableSchema;
     private List<String> deleteColumns;
-    private Map<String, String> updateColumnTypes;
+    private Map<String, Pair<String, String>> updateColumnTypes;
     private Map<String, String> addColumnTypes;
 
     public Builder(MessageType storageSchema, Map<String, String> tableSchema) {
@@ -100,8 +102,8 @@ public class SchemaDifference {
       return this;
     }
 
-    public Builder updateTableColumn(String column, String storageColumnType) {
-      updateColumnTypes.put(column, storageColumnType);
+    public Builder updateTableColumn(String column, String previousColumnType, String storageColumnType) {
+      updateColumnTypes.put(column, Pair.of(previousColumnType, storageColumnType));
       return this;
     }
 
