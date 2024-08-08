@@ -207,7 +207,6 @@
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
-            <version>${parquet.version}</version>
         </dependency>
 
         <!-- Avro -->

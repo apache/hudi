@@ -382,30 +382,12 @@
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-hadoop</artifactId>
-      <version>${parquet.version}</version>
       <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.xerial.snappy</groupId>
-          <artifactId>snappy-java</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
-      <version>${parquet.version}</version>
       <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-client</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>it.unimi.dsi</groupId>
-          <artifactId>fastutil</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.parquet</groupId>
@@ -450,94 +432,27 @@
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-service</artifactId>
-      <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.pentaho</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>
-      <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.pentaho</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-metastore</artifactId>
-      <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.datanucleus</groupId>
-          <artifactId>datanucleus-core</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet.jsp</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <artifactId>guava</artifactId>
-          <groupId>com.google.guava</groupId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
-      <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>javax.servlet</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>javax.servlet.jsp</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
-      <version>${hive.version}</version>
       <scope>${flink.bundle.hive.scope}</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.eclipse.jetty.orbit</groupId>
-          <artifactId>javax.servlet</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.eclipse.jetty</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.datanucleus</groupId>
