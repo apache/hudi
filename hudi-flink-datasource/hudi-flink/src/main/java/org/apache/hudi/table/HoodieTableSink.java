@@ -113,17 +113,26 @@ public class HoodieTableSink implements
       // bootstrap
       final DataStream<HoodieRecord> hoodieRecordDataStream =
           Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
+
       // write pipeline
       pipeline = Pipelines.hoodieStreamWrite(conf, hoodieRecordDataStream);
-      // compaction
+
+      // insert cluster mode
+      if (OptionsResolver.isInsertClusterMode(conf)) {
+        return Pipelines.clean(conf, pipeline);
+      }
+
+      // upsert mode
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
           conf.setBoolean(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
         return Pipelines.clean(conf, pipeline);
+      } else {
+        return Pipelines.dummySink(pipeline);
       }
     };
   }
