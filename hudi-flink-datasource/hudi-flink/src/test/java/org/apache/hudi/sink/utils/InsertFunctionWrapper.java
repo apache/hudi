@@ -127,6 +127,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
+    stateInitializationContext.getKeyedStateStore().checkpointBegin(checkpointId);
   }
 
   @Override
@@ -136,6 +137,7 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void checkpointComplete(long checkpointId) {
     stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
+    stateInitializationContext.getKeyedStateStore().checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
     if (asyncClustering) {
       try {

@@ -77,5 +77,6 @@ public class ConsistentBucketStreamWriteFunctionWrapper<I> extends BucketStreamW
     writeFunction.snapshotState(functionSnapshotContext);
     assignFunction.snapshotState(functionSnapshotContext);
     stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
+    stateInitializationContext.getKeyedStateStore().checkpointBegin(checkpointId);
   }
 }

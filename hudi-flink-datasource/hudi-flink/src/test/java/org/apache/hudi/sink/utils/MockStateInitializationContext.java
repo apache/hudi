@@ -17,7 +17,6 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
 import org.apache.flink.runtime.state.StateInitializationContext;
@@ -31,14 +30,11 @@ import java.util.OptionalLong;
 public class MockStateInitializationContext implements StateInitializationContext {
 
   private final MockOperatorStateStore operatorStateStore;
+  private final MockKeyedStateStore keyedStateStore;
 
   public MockStateInitializationContext() {
     operatorStateStore = new MockOperatorStateStore();
-  }
-
-  @Override
-  public boolean isRestored() {
-    return operatorStateStore.isRestored();
+    keyedStateStore = new MockKeyedStateStore();
   }
 
   @Override
@@ -47,8 +43,8 @@ public class MockStateInitializationContext implements StateInitializationContex
   }
 
   @Override
-  public KeyedStateStore getKeyedStateStore() {
-    return operatorStateStore;
+  public MockKeyedStateStore getKeyedStateStore() {
+    return keyedStateStore;
   }
 
   @Override
