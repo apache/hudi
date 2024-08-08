@@ -241,9 +241,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
                                        HoodieWriteConfig cfg,
                                        HoodieTestDataGenerator dataGen,
                                        boolean clusteringAsRow) {
-    if (clusteringAsRow) {
-      client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), "true");
-    }
+    client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), Boolean.toString(clusteringAsRow));
 
     client.cluster(clusteringCommitTime, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);

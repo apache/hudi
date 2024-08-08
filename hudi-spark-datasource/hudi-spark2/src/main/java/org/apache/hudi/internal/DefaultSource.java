@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieInternalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.apache.spark.sql.HoodieDataTypeUtils;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.sources.DataSourceRegister;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
@@ -35,8 +36,6 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Map;
 import java.util.Optional;
-
-import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty;
 
 /**
  * DataSource V2 implementation for managing internal write logic. Only called internally.
@@ -69,7 +68,7 @@ public class DefaultSource extends BaseDefaultSource implements DataSourceV2,
         HoodieTableConfig.POPULATE_META_FIELDS.defaultValue());
     Map<String, String> properties = options.asMap();
     // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-    tryOverrideParquetWriteLegacyFormatProperty(properties, schema);
+    HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty(properties, schema);
     // 1st arg to createHoodieConfig is not really required to be set. but passing it anyways.
     HoodieWriteConfig config = DataSourceUtils.createHoodieConfig(options.get(HoodieWriteConfig.AVRO_SCHEMA_STRING.key()).get(), path, tblName, properties);
     boolean arePartitionRecordsSorted = HoodieInternalConfig.getBulkInsertIsPartitionRecordsSorted(
