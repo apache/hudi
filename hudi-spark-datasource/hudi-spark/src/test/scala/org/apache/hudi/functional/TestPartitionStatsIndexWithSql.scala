@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{FileSlice, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
-import org.apache.hudi.metadata.HoodieMetadataPayload.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
