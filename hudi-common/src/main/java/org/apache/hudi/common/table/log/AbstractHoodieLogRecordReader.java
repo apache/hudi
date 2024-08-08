@@ -233,9 +233,6 @@ public abstract class AbstractHoodieLogRecordReader {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage,
@@ -261,11 +258,6 @@ public abstract class AbstractHoodieLogRecordReader {
           break;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || inflightInstantsTimeline.containsInstant(instantTime)) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
-            continue;
-          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;
@@ -381,9 +373,6 @@ public abstract class AbstractHoodieLogRecordReader {
     totalLogBlocks = new AtomicLong(0);
     totalLogRecords = new AtomicLong(0);
     HoodieLogFormatReader logFormatReaderWrapper = null;
-    HoodieTimeline commitsTimeline = this.hoodieTableMetaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage,
@@ -456,11 +445,6 @@ public abstract class AbstractHoodieLogRecordReader {
           break;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
-          if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
-              || inflightInstantsTimeline.containsInstant(instantTime)) {
-            // hit an uncommitted block possibly from a failed write, move to the next one and skip processing this one
-            continue;
-          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;

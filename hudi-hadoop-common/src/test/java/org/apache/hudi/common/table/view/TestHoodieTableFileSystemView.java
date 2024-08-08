@@ -919,6 +919,9 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
         commitTime2, commitTime3,
         commitTime4, fileId1, fileId2, fileId3, fileId4);
 
+    // Note: the separate archiving of clean and rollback actions is removed since 1.0.0,
+    // now all the instants archive continuously.
+
     // Now create a scenario where archiving deleted commits (1,2, and 3) but retained cleaner clean1. Now clean1 is
     // the lowest commit time. Scenario for HUDI-162 - Here clean is the earliest action in active timeline
     new File(basePath + "/.hoodie/" + commitTime1 + ".commit").delete();
@@ -962,8 +965,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
 
     filenames = new HashSet<>();
     List<HoodieLogFile> logFilesList = rtView.getLatestFileSlicesBeforeOrOn("2016/05/01", commitTime4, true)
-        .map(FileSlice::getLogFiles).flatMap(logFileList -> logFileList).collect(Collectors.toList());
-    assertEquals(logFilesList.size(), 4);
+        .flatMap(FileSlice::getLogFiles).collect(Collectors.toList());
+    assertEquals(4, logFilesList.size());
     for (HoodieLogFile logFile : logFilesList) {
       filenames.add(logFile.getFileName());
     }
@@ -1320,8 +1323,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     String fullPartitionPath3 = basePath + "/" + partitionPath3 + "/";
     new File(fullPartitionPath3).mkdirs();
     String instantTime1 = "1";
-    String deltaInstantTime1 = "2";
-    String deltaInstantTime2 = "3";
+    String deltaInstantTime1 = "3";
+    String deltaInstantTime2 = "4";
     String fileId = UUID.randomUUID().toString();
 
     String dataFileName = FSUtils.makeBaseFileName(instantTime1, TEST_WRITE_TOKEN, fileId, BASE_FILE_EXTENSION);
@@ -1399,8 +1402,8 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(requested);
 
     // Fake delta-ingestion after compaction-requested
-    String deltaInstantTime4 = "4";
-    String deltaInstantTime5 = "6";
+    String deltaInstantTime4 = "5";
+    String deltaInstantTime5 = "7";
     String fileName3 =
         FSUtils.makeLogFileName(fileId, HoodieLogFile.DELTA_EXTENSION, compactionRequestedTime, 0, TEST_WRITE_TOKEN);
     String fileName4 =

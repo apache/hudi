@@ -21,7 +21,6 @@ package org.apache.hudi.client;
 import org.apache.hudi.client.CompactionAdminClient.ValidationOpResult;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -283,7 +282,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
             .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
@@ -345,7 +344,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     // Ensure same number of log-files before and after renaming per fileId
     Map<String, Long> fileIdToCountsAfterRenaming =
-        newFsView.getAllFileGroups(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0]).flatMap(HoodieFileGroup::getAllFileSlices)
+        newFsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], ingestionInstant)
             .filter(fs -> fs.getBaseInstantTime().equals(ingestionInstant))
             .filter(fs -> fs.getFileId().equals(op.getFileId()))
             .map(fs -> Pair.of(fs.getFileId(), fs.getLogFiles().count()))
