@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.ColumnFamilyDefinition;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -35,6 +36,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -47,6 +50,7 @@ import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -218,5 +222,28 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
     assertArrayEquals(new String[] {"p1", "p2"}, config.getPartitionFields().get());
     assertEquals("p1,p2", config.getPartitionFieldProp());
+  }
+
+  @Test
+  public void testGetColumnFamilyDefinitions() {
+    Map<String, String> tableConfig = new HashMap<>();
+    tableConfig.put("hoodie.some.property", "val1");
+    tableConfig.put("hoodie.columnFamily.cf1", "id, col1, col2");
+    tableConfig.put("hoodie.some.property2", "val2");
+    tableConfig.put("hoodie.columnFamily.cf2", "id, col3, col4,ts;ts");
+    tableConfig.put("hoodie.some.property3", "val3");
+
+    Map<String, ColumnFamilyDefinition> cfDefinitions = HoodieTableConfig.getColumnFamilyDefinitions(tableConfig);
+    assertEquals(2, cfDefinitions.size());
+    ColumnFamilyDefinition cfd = cfDefinitions.get("cf1");
+    assertNotNull(cfd);
+    assertEquals("cf1", cfd.getName());
+    assertEquals("id,col1,col2", cfd.toConfigValue());
+    assertNull(cfd.getPreCombine());
+    cfd = cfDefinitions.get("cf2");
+    assertNotNull(cfd);
+    assertEquals("cf2", cfd.getName());
+    assertEquals("id,col3,col4,ts;ts", cfd.toConfigValue());
+    assertEquals("ts", cfd.getPreCombine());
   }
 }
