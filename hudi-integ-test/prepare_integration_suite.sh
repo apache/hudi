@@ -38,7 +38,7 @@ usage() {
 get_spark_command() {
   if [ -z "$scala" ]
   then
-    scala="2.11"
+    scala="2.12"
   else
     scala=$scala
   fi

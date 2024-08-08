@@ -19,10 +19,11 @@
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 WS_ROOT=`dirname $SCRIPT_PATH`
-COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244.yml"
-if [ "$HUDI_DEMO_ENV" = "--mac-aarch64" ]; then
-  COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml"
+PLATFORM_TYPE_ARG=$(uname -m)
+if [ "$PLATFORM_TYPE_ARG" = "aarch64" ]; then
+  PLATFORM_TYPE_ARG="arm64"
 fi
+COMPOSE_FILE_NAME="docker-compose_hadoop335_hive233_spark351_$PLATFORM_TYPE_ARG.yml"
 # restart cluster
 HUDI_WS=${WS_ROOT} docker-compose -f ${SCRIPT_PATH}/compose/${COMPOSE_FILE_NAME} down
 if [ "$HUDI_DEMO_ENV" != "dev" ]; then
@@ -35,3 +36,7 @@ sleep 15
 
 docker exec -it adhoc-1 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
 docker exec -it adhoc-2 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
+
+
+docker cp $WS_ROOT/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0-SNAPSHOT.jar  adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-utilities-slim.jar
+docker cp $WS_ROOT/packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0-SNAPSHOT.jar adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark.jar

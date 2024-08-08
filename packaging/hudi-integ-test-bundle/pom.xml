@@ -446,6 +446,10 @@
           <groupId>javax.servlet</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
 
@@ -492,6 +496,10 @@
         <exclusion>
           <groupId>org.pentaho</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.zookeeper</groupId>
+          <artifactId>zookeeper</artifactId>
         </exclusion>
       </exclusions>
     </dependency>

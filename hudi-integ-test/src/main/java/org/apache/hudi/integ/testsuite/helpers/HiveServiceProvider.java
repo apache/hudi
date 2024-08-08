@@ -27,6 +27,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hive.service.server.HiveServer2;
 
 import java.io.IOException;
+import java.sql.SQLException;
 
 /**
  * Hive Service provider.
@@ -41,7 +42,7 @@ public class HiveServiceProvider {
     this.config = config;
   }
 
-  public void startLocalHiveServiceIfNeeded(Configuration configuration) throws IOException {
+  public void startLocalHiveServiceIfNeeded(Configuration configuration) throws IOException, SQLException {
     if (config.isHiveLocal()) {
       hiveService = new HiveTestService(configuration);
       hiveServer = hiveService.start();

@@ -18,7 +18,7 @@
 #
 # Trino docker setup is adapted from https://github.com/Lewuathe/docker-trino-cluster
 
-ARG HADOOP_VERSION=2.8.4
+ARG HADOOP_VERSION=3.3.5
 ARG HIVE_VERSION=2.3.3
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-java11:latest as hadoop-base
 
@@ -32,12 +32,13 @@ RUN apt-get install -y \
     tar \
     sudo \
     rsync \
-    python \
+    python3 \
     wget \
     python3-pip \
-    python-dev \
+    python3-dev \
     build-essential \
     uuid-runtime \
+    python-is-python3 \
     less
 
 ENV JAVA_HOME /usr/java/default
@@ -49,11 +50,17 @@ RUN chmod +x trino-cli-${TRINO_VERSION}-executable.jar
 RUN mv trino-cli-${TRINO_VERSION}-executable.jar trino-cli
 
 WORKDIR /usr/local
-RUN wget -q ${BASE_URL}/io/trino/trino-server/${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz
-RUN tar xvzf trino-server-${TRINO_VERSION}.tar.gz -C /usr/local/
-RUN ln -s /usr/local/trino-server-${TRINO_VERSION} $TRINO_HOME
-
 ENV TRINO_BASE_WS /var/hoodie/ws/docker/hoodie/hadoop/trinobase
+RUN wget -q ${BASE_URL}/io/trino/trino-server/${TRINO_VERSION}/trino-server-${TRINO_VERSION}.tar.gz \
+    && tar xvzf trino-server-${TRINO_VERSION}.tar.gz -C /usr/local/ \
+    && rm trino-server-${TRINO_VERSION}.tar.gz \
+    && ln -s /usr/local/trino-server-${TRINO_VERSION} $TRINO_HOME \
+    && mkdir /usr/local/tmptrinospace \
+    && mv ${TRINO_HOME}/plugin/hive/ /usr/local/tmptrinospace/hive/ \
+    && rm -rf ${TRINO_HOME}/plugin/ \
+    && mkdir ${TRINO_HOME}/plugin/ \
+    && mv /usr/local/tmptrinospace/hive/ ${TRINO_HOME}/plugin/hive/
+
 RUN mkdir -p ${TRINO_BASE_WS}/target/
 ADD target/ ${TRINO_BASE_WS}/target/
 ENV HUDI_TRINO_BUNDLE ${TRINO_BASE_WS}/target/hudi-trino-bundle.jar

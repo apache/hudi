@@ -31,8 +31,6 @@
 
   <properties>
     <main.basedir>${project.parent.basedir}</main.basedir>
-
-    <jetty.version>7.6.0.v20120127</jetty.version>
   </properties>
 
   <dependencies>
@@ -185,6 +183,7 @@
     <dependency>
       <groupId>org.eclipse.jetty.aggregate</groupId>
       <artifactId>jetty-all</artifactId>
+      <type>pom</type>
       <scope>test</scope>
       <version>${jetty.version}</version>
     </dependency>

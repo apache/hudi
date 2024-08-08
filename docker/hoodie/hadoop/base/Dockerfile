@@ -15,28 +15,41 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM openjdk:8u212-jdk-slim-stretch
+FROM azul/zulu-openjdk-debian:8-latest AS base
 MAINTAINER Hoodie
 USER root
+
+ARG TARGETARCH
 
 # Default to UTF-8 file.encoding
 ENV LANG C.UTF-8
 
-ARG HADOOP_VERSION=2.8.4 
+ARG HADOOP_VERSION=3.3.5
+
+FROM base AS platform-arm64
+ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}-aarch64.tar.gz
+ENV HADOOP_VERSION ${HADOOP_VERSION}
+ENV HADOOP_URL ${HADOOP_URL}
+
+FROM base AS platform-amd64
 ARG HADOOP_URL=https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz
 ENV HADOOP_VERSION ${HADOOP_VERSION}
 ENV HADOOP_URL ${HADOOP_URL}
 
+
+FROM platform-${TARGETARCH} AS final
+# need to do this all in one step because it will double the image size to download and extract the hadoop.tar.gz in
+# separate commands
 RUN set -x \
-    && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat procps \
+    && DEBIAN_FRONTEND=noninteractive apt-get -yq update && apt-get -yq install curl wget netcat-traditional procps \
     && echo "Fetch URL2 is : ${HADOOP_URL}" \
     && curl -fSL "${HADOOP_URL}" -o /tmp/hadoop.tar.gz \
     && curl -fSL "${HADOOP_URL}.asc" -o /tmp/hadoop.tar.gz.asc \
     && mkdir -p /opt/hadoop-$HADOOP_VERSION/logs \
     && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
     && rm /tmp/hadoop.tar.gz* \
+    && rm -rf /opt/hadoop-$HADOOP_VERSION/share/doc/ \
     && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
-    && cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml \
     && mkdir /hadoop-data
 
 ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION
