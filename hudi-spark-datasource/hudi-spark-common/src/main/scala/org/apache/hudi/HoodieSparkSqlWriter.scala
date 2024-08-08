@@ -1018,6 +1018,11 @@ class HoodieSparkSqlWriterInternal {
       val metaSyncSuccess = metaSync(spark, HoodieWriterUtils.convertMapToHoodieConfig(parameters),
         tableInstantInfo.basePath, schema)
 
+      if (!metaSyncSuccess && commitSuccess) {
+        log.error("Metadata sync operation failed, rolling back current commit")
+        client.rollback(tableInstantInfo.instantTime)
+      }
+
       log.info(s"Is Async Compaction Enabled ? $asyncCompactionEnabled")
       (commitSuccess && metaSyncSuccess, compactionInstant, clusteringInstant)
     } else {
