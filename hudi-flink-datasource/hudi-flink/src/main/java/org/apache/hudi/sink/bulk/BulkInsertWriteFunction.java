@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.WriteResultEvent;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.meta.CkpMetadataFactory;
 import org.apache.hudi.sink.utils.TimeWait;
@@ -146,7 +147,7 @@ public class BulkInsertWriteFunction<I>
         .lastBatch(true)
         .endInput(true)
         .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, initInstant));
   }
 
   @Override
@@ -182,7 +183,7 @@ public class BulkInsertWriteFunction<I>
         .instantTime("")
         .bootstrap(true)
         .build();
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, initInstant));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
   }
 
