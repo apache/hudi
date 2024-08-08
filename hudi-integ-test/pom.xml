@@ -473,15 +473,15 @@
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
       <plugin>
-        <groupId>com.dkanejs.maven.plugins</groupId>
-        <artifactId>docker-compose-maven-plugin</artifactId>
-        <version>4.0.0</version>
+        <groupId>io.fabric8</groupId>
+        <artifactId>docker-maven-plugin</artifactId>
+        <version>0.45.0</version>
         <executions>
           <execution>
-            <id>up</id>
+            <id>start-docker-compose</id>
             <phase>pre-integration-test</phase>
             <goals>
-              <goal>up</goal>
+              <goal>start</goal>
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
@@ -492,10 +492,10 @@
             </configuration>
           </execution>
           <execution>
-            <id>down</id>
+            <id>stop-docker-compose</id>
             <phase>post-integration-test</phase>
             <goals>
-              <goal>down</goal>
+              <goal>stop</goal>
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
