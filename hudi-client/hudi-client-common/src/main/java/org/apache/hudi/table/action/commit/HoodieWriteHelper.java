@@ -22,17 +22,21 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestPartialUpdatesAvroPayload;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.IOException;
+import java.util.ArrayList;
 
 public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<HoodieRecord<T>>,
     HoodieData<HoodieKey>, HoodieData<WriteStatus>, R> {
@@ -60,7 +64,7 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       HoodieData<HoodieRecord<T>> records, HoodieIndex<?, ?> index, int parallelism, String schemaStr, TypedProperties props, HoodieRecordMerger merger) {
     boolean isIndexingGlobal = index.isGlobal();
     final SerializableSchema schema = new SerializableSchema(schemaStr);
-    return records.mapToPair(record -> {
+    HoodiePairData<Object, HoodieRecord<T>> recordPairs = records.mapToPair(record -> {
       HoodieKey hoodieKey = record.getKey();
       // If index used is global, then records are expected to differ in their partitionPath
       Object key = isIndexingGlobal ? hoodieKey.getRecordKey() : hoodieKey;
@@ -68,17 +72,41 @@ public class HoodieWriteHelper<T, R> extends BaseWriteHelper<T, HoodieData<Hoodi
       //       Here we have to make a copy of the incoming record, since it might be holding
       //       an instance of [[InternalRow]] pointing into shared, mutable buffer
       return Pair.of(key, record.copy());
-    }).reduceByKey((rec1, rec2) -> {
-      HoodieRecord<T> reducedRecord;
-      try {
-        reducedRecord = merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
-      } catch (IOException e) {
-        throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
-      }
-      boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
-      HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
-      HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
-      return reducedRecord.newInstance(reducedKey, operation);
-    }, parallelism).map(Pair::getRight);
+    });
+
+    if (props.containsKey(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key())
+        && OverwriteWithLatestPartialUpdatesAvroPayload.class.getCanonicalName().equals(props.getString(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()))) {
+      return recordPairs.groupByKeyAndReduce(pr -> {
+        ArrayList<HoodieRecord<T>> sortedRecords = new ArrayList<>();
+        pr.forEach(sortedRecords::add);
+        sortedRecords.sort(new SortedPrecombineComparator<>(schema.get(), props));
+        return sortedRecords.stream().reduce((rec1, rec2) -> {
+          HoodieRecord<T> reducedRecord;
+          try {
+            reducedRecord = merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
+          } catch (IOException e) {
+            throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+          }
+          boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
+          HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+          HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+          return reducedRecord.newInstance(reducedKey, operation);
+
+        }).get();
+      }).map(Pair::getRight);
+    } else {
+      return recordPairs.reduceByKey((rec1, rec2) -> {
+        HoodieRecord<T> reducedRecord;
+        try {
+          reducedRecord = merger.merge(rec1, schema.get(), rec2, schema.get(), props).get().getLeft();
+        } catch (IOException e) {
+          throw new HoodieException(String.format("Error to merge two records, %s, %s", rec1, rec2), e);
+        }
+        boolean choosePrev = rec1.getData().equals(reducedRecord.getData());
+        HoodieKey reducedKey = choosePrev ? rec1.getKey() : rec2.getKey();
+        HoodieOperation operation = choosePrev ? rec1.getOperation() : rec2.getOperation();
+        return reducedRecord.newInstance(reducedKey, operation);
+      }, parallelism).map(Pair::getRight);
+    }
   }
 }
