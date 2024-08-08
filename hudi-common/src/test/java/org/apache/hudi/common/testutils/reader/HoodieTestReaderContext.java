@@ -37,8 +37,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -65,11 +63,6 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       Option<String> payloadClass) {
     this.customMerger = customMerger;
     this.payloadClass = payloadClass;
-  }
-
-  @Override
-  public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
-    return HoodieStorageUtils.getStorage(path, conf);
   }
 
   @Override
