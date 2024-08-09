@@ -471,9 +471,6 @@
                 <argument>-c</argument>
                 <argument>docker compose -d -f ${dockerCompose.file} -H unix:///var/run/docker.sock up</argument>
               </arguments>
-              <environmentVariables>
-                <HUDI_WS>${project.parent.basedir}</HUDI_WS>
-              </environmentVariables>
             </configuration>
           </execution>
           <execution>
@@ -489,9 +486,6 @@
                 <argument>-c</argument>
                 <argument>docker compose -v -f ${dockerCompose.file} down</argument>
               </arguments>
-              <environmentVariables>
-                <HUDI_WS>${project.parent.basedir}</HUDI_WS>
-              </environmentVariables>
             </configuration>
           </execution>
         </executions>
