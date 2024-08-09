@@ -314,7 +314,7 @@ public class StreamerUtil {
    * Generates the bucket ID using format {partition path}_{fileID}.
    */
   public static String generateBucketKey(String partitionPath, String fileId) {
-    return String.format("%s_%s", partitionPath, fileId);
+    return partitionPath + "_" + fileId;
   }
 
   /**
