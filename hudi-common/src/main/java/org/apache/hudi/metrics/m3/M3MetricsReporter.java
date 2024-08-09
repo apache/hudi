@@ -77,7 +77,8 @@ public class M3MetricsReporter extends MetricsReporter {
   }
 
   @Override
-  public void start() {}
+  public void start() {
+  }
 
   @Override
   public void report() {
@@ -112,7 +113,8 @@ public class M3MetricsReporter extends MetricsReporter {
   }
 
   @Override
-  public void stop() {}
+  public void stop() {
+  }
 }
 
 

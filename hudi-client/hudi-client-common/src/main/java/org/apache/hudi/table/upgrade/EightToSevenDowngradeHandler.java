@@ -40,7 +40,6 @@ import java.util.Map;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
 
-
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.

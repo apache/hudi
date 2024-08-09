@@ -76,8 +76,7 @@ public class PartitionFilterGenerator {
         throw new IllegalArgumentException(String.format(UNSUPPORTED_TYPE_ERROR, fieldType));
     }
   }
-
-
+  
   /**
    * Build expression from the Partition list. Here we're trying to match all partitions.
    *

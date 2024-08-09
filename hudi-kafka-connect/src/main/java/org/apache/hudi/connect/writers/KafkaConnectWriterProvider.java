@@ -72,9 +72,9 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
         KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
 
     try {
-      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
-          : (SchemaProvider) ReflectionUtils.loadClass(connectConfigs.getSchemaProviderClass(),
-          new TypedProperties(connectConfigs.getProps()));
+      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null :
+          (SchemaProvider) ReflectionUtils.loadClass(
+              connectConfigs.getSchemaProviderClass(), new TypedProperties(connectConfigs.getProps()));
 
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           new TypedProperties(connectConfigs.getProps()));

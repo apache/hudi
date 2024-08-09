@@ -64,7 +64,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTableConfig.DROP_PARTITION_COLUMNS;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION;
 
-
 /**
  * Util class for HoodieStreamer.
  */

@@ -115,10 +115,12 @@ public abstract class HoodieLazyInsertIterable<T>
   }
 
   @Override
-  protected void start() {}
+  protected void start() {
+  }
 
   @Override
-  protected void end() {}
+  protected void end() {
+  }
 
   protected CopyOnWriteInsertHandler getInsertHandler() {
     return new CopyOnWriteInsertHandler(hoodieConfig, instantTime, areRecordsSorted, hoodieTable, idPrefix,
