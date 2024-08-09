@@ -195,7 +195,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
   protected static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     //only testing row-writer enabled for now
-    for (Boolean rowWriterEnable : new Boolean[]{true}) {
+    for (Boolean rowWriterEnable : new Boolean[]{false, true}) {
       for (Boolean addFilegroups : new Boolean[]{false, true}) {
         for (Boolean multiLogFiles : new Boolean[]{false, true}) {
           for (Boolean shouldCluster : new Boolean[]{false, true}) {
