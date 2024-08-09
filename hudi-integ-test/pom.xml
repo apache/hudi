@@ -165,6 +165,11 @@
         </exclusion>
       </exclusions>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>docker-compose-plugin</artifactId>
+      <version>${project.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.apache.curator</groupId>
@@ -473,15 +478,15 @@
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
       <plugin>
-        <groupId>io.fabric8</groupId>
-        <artifactId>docker-maven-plugin</artifactId>
-        <version>0.45.0</version>
+        <groupId>org.apache.hudi</groupId>
+        <artifactId>docker-compose-plugin</artifactId>
+        <version>${project.version}</version>
         <executions>
           <execution>
-            <id>start-docker-compose</id>
+            <id>up</id>
             <phase>pre-integration-test</phase>
             <goals>
-              <goal>start</goal>
+              <goal>up</goal>
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
@@ -492,10 +497,10 @@
             </configuration>
           </execution>
           <execution>
-            <id>stop-docker-compose</id>
+            <id>down</id>
             <phase>post-integration-test</phase>
             <goals>
-              <goal>stop</goal>
+              <goal>down</goal>
             </goals>
             <configuration>
               <skip>${docker.compose.skip}</skip>
