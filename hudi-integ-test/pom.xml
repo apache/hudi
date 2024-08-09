@@ -443,6 +443,21 @@
         <artifactId>exec-maven-plugin</artifactId>
         <version>3.2.0</version>
         <executions>
+          <execution><!-- setup HUDI_WS variable in docker compose env file -->
+            <id>Setup HUDI_WS</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <executable>/bin/bash</executable>
+              <arguments>
+                <argument>-c</argument>
+                <argument>echo HUDI_WS=`dirname ${project.basedir}`</argument>
+              </arguments>
+              <outputFile>${dockerCompose.envFile}</outputFile>
+            </configuration>
+          </execution>
           <execution>
             <id>up</id>
             <phase>pre-integration-test</phase>
