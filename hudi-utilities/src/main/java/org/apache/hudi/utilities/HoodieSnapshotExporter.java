@@ -242,7 +242,7 @@ public class HoodieSnapshotExporter {
           executorOutputFs,
           new Path(toPartitionPath, sourceFilePath.getName()),
           false,
-          false,
+          true,
           executorOutputFs.getConf());
     }, parallelism);
 
@@ -273,7 +273,7 @@ public class HoodieSnapshotExporter {
           executorOutputFs,
           targetFilePath,
           false,
-          false,
+          true,
           executorOutputFs.getConf());
     }, parallelism);
   }
