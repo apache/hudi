@@ -450,6 +450,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
+              <longModulepath>false</longModulepath>
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
@@ -465,6 +466,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
+              <longModulepath>false</longModulepath>
               <timeout>30000</timeout>
               <skip>${docker.compose.skip}</skip>
               <executable>/bin/bash</executable>
@@ -484,6 +486,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
+              <longModulepath>false</longModulepath>
               <skip>${docker.compose.skip}</skip>
               <executable>/bin/bash</executable>
               <arguments>
