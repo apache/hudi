@@ -1017,9 +1017,19 @@ public class HoodieAvroUtils {
   public static String createFullName(Deque<String> fieldNames) {
     String result = "";
     if (!fieldNames.isEmpty()) {
-      List<String> parentNames = new ArrayList<>();
-      fieldNames.descendingIterator().forEachRemaining(parentNames::add);
-      result = parentNames.stream().collect(Collectors.joining("."));
+      Iterator<String> iter = fieldNames.descendingIterator();
+      result = iter.next();
+      if (!iter.hasNext()) {
+        return result;
+      }
+
+      StringBuilder sb = new StringBuilder();
+      sb.append(result);
+      while (iter.hasNext()) {
+        sb.append(".");
+        sb.append(iter.next());
+      }
+      result = sb.toString();
     }
     return result;
   }
