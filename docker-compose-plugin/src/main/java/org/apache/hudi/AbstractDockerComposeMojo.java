@@ -182,8 +182,9 @@ abstract class AbstractDockerComposeMojo extends AbstractMojo {
 
       int ec = p.waitFor();
 
-      if (ec != 0)
+      if (ec != 0) {
         throw new DockerComposeException(IOUtil.toString(p.getErrorStream()));
+      }
 
     } catch (Exception e) {
       throw new MojoExecutionException(e.getMessage());
@@ -224,8 +225,9 @@ abstract class AbstractDockerComposeMojo extends AbstractMojo {
       cmd.add(composeFilePath);
     });
 
-    if (verbose)
+    if (verbose) {
       cmd.add("--verbose");
+    }
 
     if (host != null) {
       cmd.add("-H");

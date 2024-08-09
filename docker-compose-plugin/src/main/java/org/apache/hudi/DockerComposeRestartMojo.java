@@ -39,8 +39,9 @@ public class DockerComposeRestartMojo extends AbstractDockerComposeMojo {
 
     args.add(Command.RESTART.getValue());
 
-    if (services != null && !services.isEmpty())
+    if (services != null && !services.isEmpty()) {
       args.addAll(services);
+    }
 
     super.execute(args);
   }

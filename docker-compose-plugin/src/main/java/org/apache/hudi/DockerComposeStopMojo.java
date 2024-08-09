@@ -39,8 +39,9 @@ public class DockerComposeStopMojo extends AbstractDockerComposeMojo {
 
     args.add(Command.STOP.getValue());
 
-    if (services != null && !services.isEmpty())
+    if (services != null && !services.isEmpty()) {
       args.addAll(services);
+    }
 
     super.execute(args);
   }

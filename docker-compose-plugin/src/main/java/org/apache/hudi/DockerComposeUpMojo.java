@@ -55,8 +55,9 @@ public class DockerComposeUpMojo extends AbstractDockerComposeMojo {
 
     args.add("--no-color");
 
-    if (services != null && !services.isEmpty())
+    if (services != null && !services.isEmpty()) {
       args.addAll(services);
+    }
 
     super.execute(args);
 
