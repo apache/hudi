@@ -56,6 +56,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
+import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BooleanWritable;
@@ -104,6 +105,10 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 public class TestHoodieRealtimeRecordReader {
 
   private static final String PARTITION_COLUMN = "datestr";
+  private static final String COLUMNS =
+      "_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,field1,field2,name,favorite_number,favorite_color,favorite_movie";
+  private static final String COLUMN_TYPES = "string,string,string,string,string,string,string,string,int,string,string";
+
   private JobConf baseJobConf;
   private FileSystem fs;
   private Configuration hadoopConf;
@@ -115,6 +120,8 @@ public class TestHoodieRealtimeRecordReader {
     hadoopConf.set("fs.file.impl", org.apache.hadoop.fs.LocalFileSystem.class.getName());
     baseJobConf = new JobConf(hadoopConf);
     baseJobConf.set(HoodieRealtimeConfig.MAX_DFS_STREAM_BUFFER_SIZE_PROP, String.valueOf(1024 * 1024));
+    baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
+    baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
     fs = FSUtils.getFs(basePath.toUri().toString(), baseJobConf);
   }
 
@@ -123,9 +130,15 @@ public class TestHoodieRealtimeRecordReader {
     if (fs != null) {
       fs.delete(new Path(basePath.toString()), true);
       fs.close();
+      fs = null;
     }
     if (baseJobConf != null) {
       baseJobConf.clear();
+      baseJobConf = null;
+    }
+    if (hadoopConf != null) {
+      hadoopConf.clear();
+      hadoopConf = null;
     }
   }
 
@@ -378,6 +391,8 @@ public class TestHoodieRealtimeRecordReader {
                                                    boolean isCompressionEnabled) throws Exception {
     // initial commit
     Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getComplexEvolvedSchema());
+    baseJobConf.unset(serdeConstants.LIST_COLUMNS);
+    baseJobConf.unset(serdeConstants.LIST_COLUMN_TYPES);
     HoodieTestUtils.init(hadoopConf, basePath.toString(), HoodieTableType.MERGE_ON_READ);
     String instantTime = "100";
     int numberOfRecords = 100;

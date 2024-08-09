@@ -48,6 +48,7 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -64,6 +65,7 @@ import static org.apache.hudi.hadoop.testutils.InputFormatTestUtil.writeDataBloc
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Disabled("Enable after fixing https://app.clickup.com/t/18029943/ENG-12709")
 public class TestHoodieMergeOnReadSnapshotReader {
 
   private static final int TOTAL_RECORDS = 100;
@@ -95,6 +97,15 @@ public class TestHoodieMergeOnReadSnapshotReader {
     if (fs != null) {
       fs.delete(new Path(basePath.toString()), true);
       fs.close();
+      fs = null;
+    }
+    if (baseJobConf != null) {
+      baseJobConf.clear();
+      baseJobConf = null;
+    }
+    if (hadoopConf != null) {
+      hadoopConf.clear();
+      hadoopConf = null;
     }
   }
 
@@ -145,7 +156,8 @@ public class TestHoodieMergeOnReadSnapshotReader {
             action.equals(HoodieTimeline.ROLLBACK_ACTION) ? String.valueOf(baseInstantTs + logVersion - 2)
                 : instantTime;
 
-        HoodieLogFormat.Writer writer = writeDataBlockToLogFile(
+        long size;
+        try (HoodieLogFormat.Writer writer = writeDataBlockToLogFile(
             partitionDir,
             fs,
             schema,
@@ -155,14 +167,15 @@ public class TestHoodieMergeOnReadSnapshotReader {
             120,
             0,
             logVersion,
-            logBlockType);
-        long size = writer.getCurrentSize();
-        writer.close();
-        assertTrue(size > 0, "block - size should be > 0");
-        FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
-        fileSlice.addLogFile(writer.getLogFile());
+            logBlockType)) {
+          size = writer.getCurrentSize();
+          writer.close();
+          assertTrue(size > 0, "block - size should be > 0");
+          FileCreateUtils.createDeltaCommit(basePath.toString(), instantTime, commitMetadata);
+          fileSlice.addLogFile(writer.getLogFile());
+        }
 
-        HoodieMergeOnReadSnapshotReader snapshotReader = new HoodieMergeOnReadSnapshotReader(
+        try (HoodieMergeOnReadSnapshotReader snapshotReader = new HoodieMergeOnReadSnapshotReader(
             basePath.toString(),
             fileSlice.getBaseFile().get().getPath(),
             fileSlice.getLogFiles().collect(Collectors.toList()),
@@ -170,10 +183,10 @@ public class TestHoodieMergeOnReadSnapshotReader {
             schema,
             baseJobConf,
             0,
-            size);
-        Map<String, HoodieRecord> records = snapshotReader.getRecordsByKey();
-        assertEquals(TOTAL_RECORDS, records.size());
-        snapshotReader.close();
+            size)) {
+          Map<String, HoodieRecord> records = snapshotReader.getRecordsByKey();
+          assertEquals(TOTAL_RECORDS, records.size());
+        }
       } catch (Exception ioe) {
         throw new HoodieException(ioe.getMessage(), ioe);
       }

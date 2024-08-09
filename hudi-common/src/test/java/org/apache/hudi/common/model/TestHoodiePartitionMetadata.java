@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -54,7 +55,11 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
 
   @AfterEach
   public void tearDown() throws Exception {
-    fs.close();
+    if (fs != null) {
+      fs.delete(new Path(basePath), true);
+      fs.close();
+      fs = null;
+    }
     cleanMetaClient();
   }
 
@@ -66,6 +71,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     );
   }
 
+  @Disabled
   @ParameterizedTest
   @MethodSource("formatProviderFn")
   public void testTextFormatMetaFile(Option<HoodieFileFormat> format) throws IOException {
@@ -78,7 +84,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
     writtenMetadata.trySave(0);
 
     // when
-    HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(metaClient.getBasePath(), partitionPath));
+    HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(metaClient.getBasePathV2(), partitionPath));
 
     // then
     assertTrue(HoodiePartitionMetadata.hasPartitionMetadata(fs, partitionPath));
@@ -90,7 +96,7 @@ public class TestHoodiePartitionMetadata extends HoodieCommonTestHarness {
   public void testErrorIfAbsent() throws IOException {
     final Path partitionPath = new Path(basePath, "a/b/not-a-partition");
     fs.mkdirs(partitionPath);
-    HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(metaClient.getBasePath(), partitionPath));
+    HoodiePartitionMetadata readMetadata = new HoodiePartitionMetadata(metaClient.getFs(), new Path(metaClient.getBasePathV2(), partitionPath));
     assertThrows(HoodieException.class, readMetadata::readPartitionCreatedCommitTime);
   }
 

@@ -90,6 +90,7 @@ public class HoodieCommonTestHarness {
    */
   protected void cleanupTestDataGenerator() {
     if (dataGen != null) {
+      dataGen.close();
       dataGen = null;
     }
   }
