@@ -117,18 +117,23 @@ public class CloudDataFetcher implements Serializable {
 
     long bytesPerPartition = props.containsKey(SOURCE_MAX_BYTES_PER_PARTITION.key()) ? props.getLong(SOURCE_MAX_BYTES_PER_PARTITION.key()) :
         props.getLong(PARQUET_MAX_FILE_SIZE.key(), Long.parseLong(PARQUET_MAX_FILE_SIZE.defaultValue()));
+    int numSourcePartitions = 0;
     if (isSourceProfileSupplierAvailable) {
       long bytesPerPartitionFromProfile = (long) sourceProfileSupplier.get().getSourceProfile().getSourceSpecificContext();
       if (bytesPerPartitionFromProfile > 0) {
         LOG.debug("Using bytesPerPartition from source profile bytesPerPartitionFromConfig {} bytesPerPartitionFromProfile {}", bytesPerPartition, bytesPerPartitionFromProfile);
         bytesPerPartition = bytesPerPartitionFromProfile;
       }
+      numSourcePartitions = sourceProfileSupplier.get().getSourceProfile().getSourcePartitions();
     }
-    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition);
+    Option<Dataset<Row>> datasetOption = getCloudObjectDataDF(cloudObjectMetadata, schemaProvider, bytesPerPartition, numSourcePartitions);
     return Pair.of(datasetOption, checkPointAndDataset.getLeft().toString());
   }
 
-  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata, Option<SchemaProvider> schemaProviderOption, long bytesPerPartition) {
+  private Option<Dataset<Row>> getCloudObjectDataDF(List<CloudObjectMetadata> cloudObjectMetadata,
+                                                    Option<SchemaProvider> schemaProviderOption,
+                                                    long bytesPerPartition,
+                                                    int numSourcePartitions) {
     long totalSize = 0;
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
@@ -137,6 +142,10 @@ public class CloudDataFetcher implements Serializable {
     double totalSizeWithHoodieMetaFields = totalSize * 1.1;
     metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
     int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
+    // If the number of source partitions is configured to be greater, then use it instead.
+    if (numPartitions < numSourcePartitions) {
+      numPartitions = numSourcePartitions;
+    }
     metrics.updateStreamerSourceParallelism(numPartitions);
     return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
   }
