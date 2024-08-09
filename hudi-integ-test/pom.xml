@@ -441,7 +441,7 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
-        <version>3.2.0</version>
+        <version>1.6.0</version>
         <executions>
           <execution><!-- setup HUDI_WS variable in docker compose env file -->
             <id>Setup HUDI_WS</id>
@@ -450,7 +450,6 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <longModulepath>false</longModulepath>
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
@@ -466,8 +465,6 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <longModulepath>false</longModulepath>
-              <timeout>30000</timeout>
               <skip>${docker.compose.skip}</skip>
               <executable>/bin/bash</executable>
               <arguments>
@@ -486,7 +483,6 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <longModulepath>false</longModulepath>
               <skip>${docker.compose.skip}</skip>
               <executable>/bin/bash</executable>
               <arguments>
