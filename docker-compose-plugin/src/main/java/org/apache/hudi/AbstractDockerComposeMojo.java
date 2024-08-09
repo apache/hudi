@@ -177,8 +177,10 @@ abstract class AbstractDockerComposeMojo extends AbstractMojo {
 
       String line;
 
-      while ((line = br.readLine()) != null)
+      while ((line = br.readLine()) != null) {
         getLog().info(line);
+
+      }
 
       int ec = p.waitFor();
 
