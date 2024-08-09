@@ -139,4 +139,12 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("When enabled, the dataframe generated from reading source data is wrapped with an exception handler to explicitly surface exceptions.");
+
+  // Temporary internal flag
+  public static final ConfigProperty<Boolean> SPARK_DECIMAL_FLOW = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.spark.decimal.flow")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("By default, decimals in JSON are parsed through the MercifulJsonConverter. "
+          + "Enabling this flag will force the ingestion to go through the spark path while we work on getting parity with Spark processing.");
 }
