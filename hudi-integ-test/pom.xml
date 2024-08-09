@@ -469,7 +469,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -d -f ${dockerCompose.file} -H unix:///var/run/docker.sock up</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose up -d -f ${dockerCompose.file} -H unix:///var/run/docker.sock</argument>
               </arguments>
             </configuration>
           </execution>
@@ -484,7 +484,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -v -f ${dockerCompose.file} down</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose down -v -f ${dockerCompose.file}</argument>
               </arguments>
             </configuration>
           </execution>
