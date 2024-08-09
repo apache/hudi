@@ -156,9 +156,17 @@ public abstract class ITTestBase {
       }
     }
 
+    if (containerList.isEmpty()) {
+      throw new HoodieException("No running containers from the container list");
+    }
+
     if (runningContainers == null) {
       runningContainers = containerList.stream().map(c -> Pair.of(c.getNames()[0], c))
           .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    }
+
+    if (runningContainers.isEmpty()) {
+      throw new HoodieException("No running containers from the docker client");
     }
 
     return checkHealth(ADHOC_1_CONTAINER, "namenode", 8020);
