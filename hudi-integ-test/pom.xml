@@ -441,21 +441,43 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>
-        <version>1.6.0</version>
+        <version>3.4.0</version>
         <executions>
-          <execution><!-- setup HUDI_WS variable in docker compose env file -->
-            <id>Setup HUDI_WS</id>
-            <phase>generate-sources</phase>
+          <execution>
+            <id>up</id>
+            <phase>pre-integration-test</phase>
             <goals>
               <goal>exec</goal>
             </goals>
             <configuration>
+              <timeout>30000</timeout>
+              <skip>${docker.compose.skip}</skip>
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>echo HUDI_WS=`dirname ${project.basedir}`</argument>
+                <argument>docker compose -d -f ${dockerCompose.file} -H unix:///var/run/docker.sock up</argument>
               </arguments>
-              <outputFile>${dockerCompose.envFile}</outputFile>
+              <environmentVariables>
+                <HUDI_WS>${project.parent.basedir}</HUDI_WS>
+              </environmentVariables>
+            </configuration>
+          </execution>
+          <execution>
+            <id>down</id>
+            <phase>post-integration-test</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${docker.compose.skip}</skip>
+              <executable>/bin/bash</executable>
+              <arguments>
+                <argument>-c</argument>
+                <argument>docker compose -v -f ${dockerCompose.file} down</argument>
+              </arguments>
+              <environmentVariables>
+                <HUDI_WS>${project.parent.basedir}</HUDI_WS>
+              </environmentVariables>
             </configuration>
           </execution>
         </executions>
@@ -471,39 +493,6 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>com.dkanejs.maven.plugins</groupId>
-        <artifactId>docker-compose-maven-plugin</artifactId>
-        <version>2.0.1</version>
-        <executions>
-          <execution>
-            <id>up</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>up</goal>
-            </goals>
-            <configuration>
-              <skip>${docker.compose.skip}</skip>
-              <host>unix:///var/run/docker.sock</host>
-              <composeFile>${dockerCompose.file}</composeFile>
-              <detachedMode>true</detachedMode>
-              <envFile>${dockerCompose.envFile}</envFile>
-            </configuration>
-          </execution>
-          <execution>
-            <id>down</id>
-            <phase>post-integration-test</phase>
-            <goals>
-              <goal>down</goal>
-            </goals>
-            <configuration>
-              <skip>${docker.compose.skip}</skip>
-              <composeFile>${dockerCompose.file}</composeFile>
-              <removeVolumes>true</removeVolumes>
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.rat</groupId>
