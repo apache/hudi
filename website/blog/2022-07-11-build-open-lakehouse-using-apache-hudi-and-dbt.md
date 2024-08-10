@@ -107,7 +107,7 @@ To use incremental models, you need to perform these two activities:
 
 dbt provides you a macro `is_incremental()` which is very useful to define the filters exclusively for incremental materializations.
 
-Often, you'll want to filter for "new" rows, as in, rows that have been created since the last time dbt ran this model. The best way to find the timestamp of the most recent run of this model is by checking the most recent timestamp in your target table. dbt makes it easy to query your target table by using the "[{{ this }}](https://docs.getdbt.com/reference/dbt-jinja-functions/this)" variable.
+Often, you'll want to filter for "new" rows, as in, rows that have been created since the last time dbt ran this model. The best way to find the timestamp of the most recent run of this model is by checking the most recent timestamp in your target table. dbt makes it easy to query your target table by using the "[\{{ this }}](https://docs.getdbt.com/reference/dbt-jinja-functions/this)" variable.
 
 ```sql title="models/my_model.sql"
 {{

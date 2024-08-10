@@ -33,9 +33,9 @@ Hide toggle in small viewports
   background: var(--ifm-color-primary-light-grey);
 }
 
-.navbarLogo {
-  max-width: 148px;
-}
+/*.navbarLogo {*/
+/*  max-width: 148px;*/
+/*}*/
 
 @media(max-width:1820px){
   .navbarFontSize{

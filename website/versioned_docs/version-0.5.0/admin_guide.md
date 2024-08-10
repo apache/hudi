@@ -250,7 +250,7 @@ To manually schedule or run a compaction, use the below command. This command us
 operations. 
 
 **NOTE:** Make sure no other application is scheduling compaction for this dataset concurrently
-{: .notice--info}
+\{: .notice--info}
 
 ```java
 hoodie:trips->help compaction schedule
@@ -336,7 +336,7 @@ hoodie:stock_ticks_mor->compaction validate --instant 20181005222601
 ```
 
 **NOTE:** The following commands must be executed without any other writer/ingestion application running.
-{: .notice--warning}
+\{: .notice--warning}
 
 Sometimes, it becomes necessary to remove a fileId from a compaction-plan inorder to speed-up or unblock compaction
 operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed
@@ -402,7 +402,7 @@ Section below generally aids in debugging Hudi failures. Off the bat, the follow
  - **_hoodie_partition_path** - Path from basePath that identifies the partition containing this record
 
 **NOTE:** As of now, Hudi assumes the application passes in the same deterministic partitionpath for a given recordKey. i.e the uniqueness of record key is only enforced within each partition.
-{: .notice--info}
+\{: .notice--info}
 
 ### Missing records
 

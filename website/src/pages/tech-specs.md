@@ -34,21 +34,21 @@ Note that, unlike Hive style partitioning, partition columns are not removed fro
 A special file `hoodie.properties` persists table level configurations, shared by writers and readers of the table. These configurations are explained [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java), 
 and any config without a default value needs to be specified during table creation.
 
-	/data/hudi_trips/ 					<== Base Path
-	├── .hoodie/      					<== Meta Path
-    |   └── hoodie.properties           <== Table Configs
-	│   └── metadata/                   <== Table Metadata
+	/data/hudi_trips/ 					\<== Base Path
+	├── .hoodie/      					\<== Meta Path
+    |   └── hoodie.properties           \<== Table Configs
+	│   └── metadata/                   \<== Table Metadata
 	├── americas/
 	│   ├── brazil/
-	│   │   └── sao_paulo/				<== Partition Path 
-	│   │       ├── <data_files>
+	│   │   └── sao_paulo/				\<== Partition Path 
+	│   │       ├── \<data_files>
 	│   └── united_states/
 	│       └── san_francisco/
-	│           ├── <data_files>
+	│           ├── \<data_files>
 	└── asia/
 	    └── india/
 	        └── chennai/
-	            ├── <data_files>
+	            ├── \<data_files>
 
 ### Table Types 
 
@@ -210,9 +210,9 @@ file pruning for filters and join conditions in the query. The payload is an ins
 | HoodieRecordIndexInfo   | `partitionName`      | string     | partition name to which the record belongs                                                                                                                                                                                    |
 |                         | `fileIdEncoding`     | int        | determines the fields used to deduce file id. When the encoding is 0, file Id can be deduced from fileIdLowBits, fileIdHighBits and fileIndex. When encoding is 1, file Id is available in raw string format in fileId field  |
 |                         | `fileId`             | string     | file id in raw string format is available when encoding is set to 1                                                                                                                                                           |
-|                         | `fileIdHighBits`     | long       | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
-|                         | `fileIdLowBits`      | long       | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
-|                         | `fileIndex`          | int        | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIdHighBits`     | long       | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIdLowBits`      | long       | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIndex`          | int        | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
 |                         | `instantTime`        | long       | Epoch time in millisecond representing the commit time at which record was added                                                                                                                                              |
 
 

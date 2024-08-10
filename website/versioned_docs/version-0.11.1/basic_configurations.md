@@ -130,7 +130,7 @@ the dot notation eg: `a.b.c`<br></br>
 
 > #### hoodie.datasource.write.hive_style_partitioning
 > Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+If set true, the names of partition folders follow \<partition_column_name>=\<partition_value> format.
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING`<br></br>
@@ -489,7 +489,7 @@ Configurations that control compaction (merging of log files onto new base files
 ---
 
 > #### hoodie.parquet.small.file.limit
-> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.<br></br>
+> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage becomes a candidate to be selected as such a `small file`. By default, treat any file \<= 100MB as a small file.<br></br>
 > **Default Value**: 104857600 (Optional)<br></br>
 > `Config Param: PARQUET_SMALL_FILE_LIMIT`<br></br>
 

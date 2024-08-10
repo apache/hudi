@@ -1,0 +1,23 @@
+.authorCol {
+  max-width: inherit !important;
+  flex-grow: 1 !important;
+}
+
+.imageOnlyAuthorRow {
+  display: flex;
+  flex-flow: row wrap;
+}
+
+.imageOnlyAuthorCol {
+  margin-left: 0.3rem;
+  margin-right: 0.3rem;
+}
+
+.autherName {
+  height: 100%;
+}
+:global(.avatar__name) {
+  font-size: 1.1rem;
+  font-weight: 400;
+  margin-left: 5px;
+}

@@ -11,31 +11,31 @@ import BlogsSlider from "@site/src/components/BlogsSlider";
 import styles from './styles.module.css';
 
 function NewReleaseMessage() {
-  return (
-    <div className="container">
-      <div className="wrapper">
-        <br />
-      </div>
-    </div>
-  );
+    return (
+        <div className="container">
+            <div className="wrapper">
+                <br />
+            </div>
+        </div>
+    );
 }
 
 export default function Home() {
-  const { siteConfig } = useDocusaurusContext();
-  return (
-    <Layout
-      title={`Apache Hudi | An Open Source Data Lake Platform`}
-      shouldShowOnlyTitle={true}
-      description="Description will go into a meta tag in <head />">
-      <NewReleaseMessage />
-      <HomepageHeader />
-      <main>
-        <DataLake />
-        <HomepageFeatures />
-        <WhyHudi />
-        <BlogsSlider />
-        <JoinCommunity />
-      </main>
-    </Layout>
-  );
+    const { siteConfig } = useDocusaurusContext();
+    return (
+        <Layout
+            title={`Apache Hudi | An Open Source Data Lake Platform`}
+            shouldShowOnlyTitle={true}
+            description="Description will go into a meta tag in <head />">
+            <NewReleaseMessage />
+            <HomepageHeader />
+            <main>
+                <DataLake />
+                <HomepageFeatures />
+                <WhyHudi />
+                <BlogsSlider />
+                <JoinCommunity />
+            </main>
+        </Layout>
+    );
 }

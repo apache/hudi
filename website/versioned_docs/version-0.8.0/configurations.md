@@ -219,7 +219,7 @@ If the table type is MERGE_ON_READ, you can also specify the asynchronous compac
 | `read.avro-schema` | N | N/A |  Avro schema string, the parsed schema is used for deserialization, if not specified, the avro schema is inferred from the table DDL  |
 | `hoodie.datasource.query.type` | N | snapshot |  Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row & columnar data); 2) incremental mode (new data since an instantTime), not supported yet; 3) Read Optimized mode (obtain latest view, based on columnar data). Default: snapshot  |
 | `hoodie.datasource.merge.type` | N | payload_combine |  For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the log file records(combines the two records with same key for base and log file records), then read the left log file records  |
-| `hoodie.datasource.hive_style_partition` | N | false |  Whether the partition path is with Hive style, e.g. '{partition key}={partition value}', default false  |
+| `hoodie.datasource.hive_style_partition` | N | false |  Whether the partition path is with Hive style, e.g. '\{partition key}=\{partition value}', default false  |
 | `read.utc-timezone` | N | true |  Use UTC timezone or local timezone to the conversion between epoch time and LocalDateTime. Hive 0.x/1.x/2.x use local timezone. But Hive 3.x use UTC timezone, by default true  |
 
 If the table type is MERGE_ON_READ, streaming read is supported through options:

@@ -1,0 +1,20 @@
+/*
+Hide color mode toggle in small viewports
+ */
+@media (max-width: 996px) {
+  .colorModeToggle {
+    display: none;
+  }
+}
+
+@media(max-width: 1350px) {
+  .navbarInnerStyle {
+    margin: 0 auto;
+    max-width: var(--ifm-container-width) !important;
+    padding: 0 var(--ifm-spacing-horizontal) !important;
+    width: 100%;
+  }
+}
+.navbarSideMenu:global(.navbar__logo){
+  backdrop-filter: unset;
+}

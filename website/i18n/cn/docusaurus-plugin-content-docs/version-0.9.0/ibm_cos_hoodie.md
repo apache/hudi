@@ -33,38 +33,38 @@ For example, using HMAC keys and service name `myCOS`:
   </property>
 
   <property>
-	  <name>fs.stocator.scheme.list</name>
-	  <value>cos</value>
+      <name>fs.stocator.scheme.list</name>
+      <value>cos</value>
   </property>
 
   <property>
-	  <name>fs.cos.impl</name>
-	  <value>com.ibm.stocator.fs.ObjectStoreFileSystem</value>
+      <name>fs.cos.impl</name>
+      <value>com.ibm.stocator.fs.ObjectStoreFileSystem</value>
   </property>
 
   <property>
-	  <name>fs.stocator.cos.impl</name>
-	  <value>com.ibm.stocator.fs.cos.COSAPIClient</value>
+      <name>fs.stocator.cos.impl</name>
+      <value>com.ibm.stocator.fs.cos.COSAPIClient</value>
   </property>
 
   <property>
-	  <name>fs.stocator.cos.scheme</name>
-	  <value>cos</value>
+      <name>fs.stocator.cos.scheme</name>
+      <value>cos</value>
   </property>
 
   <property>
-	  <name>fs.cos.myCos.access.key</name>
-	  <value>ACCESS KEY</value>
+      <name>fs.cos.myCos.access.key</name>
+      <value>ACCESS KEY</value>
   </property>
 
   <property>
-	  <name>fs.cos.myCos.endpoint</name>
-	  <value>http://s3-api.us-geo.objectstorage.softlayer.net</value>
+      <name>fs.cos.myCos.endpoint</name>
+      <value>http://s3-api.us-geo.objectstorage.softlayer.net</value>
   </property>
 
   <property>
-	  <name>fs.cos.myCos.secret.key</name>
-	  <value>SECRET KEY</value>
+      <name>fs.cos.myCos.secret.key</name>
+      <value>SECRET KEY</value>
   </property>
 
 ```

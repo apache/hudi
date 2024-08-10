@@ -4,6 +4,9 @@ keywords: [hudi, spark, flink, streaming, processing]
 last_modified_at: 2024-03-13T15:59:57-04:00
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## Spark Streaming
 
 You can write Hudi tables using spark's structured streaming.

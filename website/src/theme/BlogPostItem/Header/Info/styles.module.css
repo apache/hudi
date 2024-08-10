@@ -1,0 +1,12 @@
+.container {
+  color: #1c1e21;
+  display: flex;
+  flex-direction: row;
+  font-size: 1.1rem;
+  margin-left: 2px;
+}
+
+.spacer {
+  font-size: 35px;
+  line-height: 28px;
+}

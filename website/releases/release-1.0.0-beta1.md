@@ -38,9 +38,9 @@ changes in this release:
 - Now all commit metadata is serialized to avro. This allows us to add new fields in the future without breaking
   compatibility and also maintain uniformity in metadata across all actions.
 - All completed commit metadata file name will also have completion time. All the actions in requested/inflight states
-  are stored in the active timeline as files named <begin_instant_time>.<action_type>.<requested|inflight>. Completed
+  are stored in the active timeline as files named \<begin_instant_time>.\<action_type>.\<requested|inflight>. Completed
   actions are stored along with a time that denotes when the action was completed, in a file named <
-  begin_instant_time>_<completion_instant_time>.<action_type>. This allows us to implement file slicing for non-blocking
+  begin_instant_time>_\<completion_instant_time>.\<action_type>. This allows us to implement file slicing for non-blocking
   concurrecy control.
 - Completed actions, their plans and completion metadata are stored in a more
   scalable [LSM tree](https://en.wikipedia.org/wiki/Log-structured_merge-tree) based timeline organized in an *

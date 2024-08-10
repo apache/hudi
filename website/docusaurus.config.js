@@ -1,4 +1,4 @@
-const darkCodeTheme = require('prism-react-renderer/themes/dracula');
+const {  themes } = require('prism-react-renderer');
 const versions = require('./versions.json');
 const VersionsArchived = require('./versionsArchived.json');
 const allDocHomesPaths = [
@@ -134,6 +134,7 @@ module.exports = {
       apiKey: 'e300f1558b703c001c515c0e7f8e0908',
       indexName: 'apache_hudi',
       contextualSearch: true,
+      appId: 'BH4D9OD16A',
     },
     navbar: {
       logo: {
@@ -444,7 +445,7 @@ module.exports = {
           'Copyright © 2021 <a href="https://apache.org">The Apache Software Foundation</a>, Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0"> Apache License, Version 2.0</a>. <br />Hudi, Apache and the Apache feather logo are trademarks of The Apache Software Foundation.',
     },
     prism: {
-      theme: darkCodeTheme,
+      theme: themes.dracula,
       additionalLanguages: ['java', 'scala'],
       prismPath: require.resolve('./src/theme/prism-include-languages.js'),
     },

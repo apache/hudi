@@ -401,7 +401,7 @@ To manually schedule or run a compaction, use the below command. This command us
 operations. 
 
 **NOTE:** Make sure no other application is scheduling compaction for this table concurrently
-{: .notice--info}
+\{: .notice--info}
 
 ```java
 hudi:trips->help compaction schedule
@@ -487,7 +487,7 @@ hudi:stock_ticks_mor->compaction validate --instant 20181005222601
 ```
 
 **NOTE:** The following commands must be executed without any other writer/ingestion application running.
-{: .notice--warning}
+\{: .notice--warning}
 
 Sometimes, it becomes necessary to remove a fileId from a compaction-plan inorder to speed-up or unblock compaction
 operation. Any new log-files that happened on this file after the compaction got scheduled will be safely renamed

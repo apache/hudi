@@ -27,10 +27,10 @@ All you need to do is to edit the table type property in hoodie.properties(locat
 But manually changing it will result in checksum errors. So, we have to go via hudi-cli.
 
 1. Copy existing hoodie.properties to a new location.
-2. Edit table type to MERGE\_ON\_READ
+2. Edit table type to MERGE_ON_READ
 3. launch hudi-cli
-  1. connect --path hudi\_table\_path
-  2. repair overwrite-hoodie-props --new-props-file new\_hoodie.properties
+  1. connect --path hudi_table_path
+  2. repair overwrite-hoodie-props --new-props-file new_hoodie.properties
 
 ### How can I find the average record size in a commit?
 
@@ -101,9 +101,9 @@ By generating a commit time ahead of time, Hudi is able to stamp each record wit
 
 Hudi supports customizable partition values which could be a derived value of another field. Also, storing the partition value only as part of the field results in losing type information when queried by various query engines.
 
-### How do I configure Bloom filter (when Bloom/Global\_Bloom index is used)?
+### How do I configure Bloom filter (when Bloom/Global_Bloom index is used)?
 
-Bloom filters are used in bloom indexes to look up the location of record keys in write path. Bloom filters are used only when the index type is chosen as “BLOOM” or “GLOBAL\_BLOOM”. Hudi has few config knobs that users can use to tune their bloom filters.
+Bloom filters are used in bloom indexes to look up the location of record keys in write path. Bloom filters are used only when the index type is chosen as “BLOOM” or “GLOBAL_BLOOM”. Hudi has few config knobs that users can use to tune their bloom filters.
 
 On a high level, hudi has two types of blooms: Simple and Dynamic.
 
@@ -113,19 +113,19 @@ Simple, as the name suggests, is simple. Size is statically allocated based on f
 
 `hoodie.index.bloom.num_entries` refers to the total number of entries per bloom filter, which refers to one file slice. Default value is 60000.
 
-`hoodie.index.bloom.fpp` refers to the false positive probability with the bloom filter. Default value: 1\*10^-9.
+`hoodie.index.bloom.fpp` refers to the false positive probability with the bloom filter. Default value: 1*10^-9.
 
-Size of the bloom filter depends on these two values. This is statically allocated and here is the formula that determines the size of bloom. Until the total number of entries added to the bloom is within the configured `hoodie.index.bloom.num_entries` value, the fpp will be honored. i.e. with default values of 60k and 1\*10^-9, bloom filter serialized size = 430kb. But if more entries are added, then the false positive probability will not be honored. Chances that more false positives could be returned if you add more number of entries than the configured value. So, users are expected to set the right values for both num\_entries and fpp.
+Size of the bloom filter depends on these two values. This is statically allocated and here is the formula that determines the size of bloom. Until the total number of entries added to the bloom is within the configured `hoodie.index.bloom.num_entries` value, the fpp will be honored. i.e. with default values of 60k and 1*10^-9, bloom filter serialized size = 430kb. But if more entries are added, then the false positive probability will not be honored. Chances that more false positives could be returned if you add more number of entries than the configured value. So, users are expected to set the right values for both num_entries and fpp.
 
 Hudi suggests to have roughly 100 to 120 mb sized files for better query performance. So, based on the record size, one could determine how many records could fit into one data file.
 
-Lets say your data file max size is 128Mb and default avg record size is 1024 bytes. Hence, roughly this translates to 130k entries per data file. For this config, you should set num\_entries to ~130k.
+Lets say your data file max size is 128Mb and default avg record size is 1024 bytes. Hence, roughly this translates to 130k entries per data file. For this config, you should set num_entries to ~130k.
 
 Dynamic bloom filter:
 
 `hoodie.bloom.index.filter.type` : DYNAMIC
 
-This is an advanced version of the bloom filter which grows dynamically as the number of entries grows. So, users are expected to set two values wrt num\_entries. `hoodie.index.bloom.num_entries` will determine the starting size of the bloom. `hoodie.bloom.index.filter.dynamic.max.entries` will determine the max size to which the bloom can grow upto. And fpp needs to be set similar to “Simple” bloom filter. Bloom size will be allotted based on the first config `hoodie.index.bloom.num_entries`. Once the number of entries reaches this value, bloom will dynamically grow its size to 2X. This will go on until the size reaches a max of `hoodie.bloom.index.filter.dynamic.max.entries` value. Until the size reaches this max value, fpp will be honored. If the entries added exceeds the max value, then the fpp may not be honored.
+This is an advanced version of the bloom filter which grows dynamically as the number of entries grows. So, users are expected to set two values wrt num_entries. `hoodie.index.bloom.num_entries` will determine the starting size of the bloom. `hoodie.bloom.index.filter.dynamic.max.entries` will determine the max size to which the bloom can grow upto. And fpp needs to be set similar to “Simple” bloom filter. Bloom size will be allotted based on the first config `hoodie.index.bloom.num_entries`. Once the number of entries reaches this value, bloom will dynamically grow its size to 2X. This will go on until the size reaches a max of `hoodie.bloom.index.filter.dynamic.max.entries` value. Until the size reaches this max value, fpp will be honored. If the entries added exceeds the max value, then the fpp may not be honored.
 
 ### How do I verify datasource schema reconciliation in Hudi?
 
@@ -167,13 +167,13 @@ spark.sql("select * from hudi.test_recon1;").show()
 
 After first write:
 
-| \_hoodie\_commit\_time | \_hoodie\_commit\_seqno | \_hoodie\_record\_key | \_hoodie\_partition\_path | \_hoodie\_file\_name | Url | ts | uuid |
+| _hoodie_commit_time | _hoodie_commit_seqno | _hoodie_record_key | _hoodie_partition_path | _hoodie_file_name | Url | ts | uuid |
 | ---| ---| ---| ---| ---| ---| ---| --- |
 | 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | [hudi.apache.com](http://hudi.apache.com) | 1 | 1 |
 
 After the second write:
 
-| \_hoodie\_commit\_time | \_hoodie\_commit\_seqno | \_hoodie\_record\_key | \_hoodie\_partition\_path | \_hoodie\_file\_name | Url | ts | uuid |
+| _hoodie_commit_time | _hoodie_commit_seqno | _hoodie_record_key | _hoodie_partition_path | _hoodie_file_name | Url | ts | uuid |
 | ---| ---| ---| ---| ---| ---| ---| --- |
 | 20220622204044318 | 20220622204044318... | 1 |  | 890aafc0-d897-44d... | [hudi.apache.com](http://hudi.apache.com) | 1 | 1 |
 | 20220622204208997 | 20220622204208997... | 2 |  | 890aafc0-d897-44d... | null | 1 | 2 |

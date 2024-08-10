@@ -48,7 +48,7 @@ val dataGen = new DataGenerator
 
 The [DataGenerator](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50) 
 can generate sample inserts and updates based on the the sample trip schema [here](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
-{: .notice--info}
+\{: .notice--info}
 
 
 ## Insert data
@@ -76,7 +76,7 @@ You can check the data generated under `/tmp/hudi_trips_cow/<region>/<country>/<
 and for info on ways to ingest data into Hudi, refer to [Writing Hudi Tables](/docs/writing_data).
 Here we are using the default write operation : `upsert`. If you have a workload without updates, you can also issue 
 `insert` or `bulk_insert` operations which could be faster. To know more, refer to [Write operations](/docs/writing_data#write-operations)
-{: .notice--info}
+\{: .notice--info}
  
 ## Query data 
 
@@ -96,7 +96,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 This query provides snapshot querying of the ingested data. Since our partition path (`region/country/city`) is 3 levels nested 
 from base path we ve used `load(basePath + "/*/*/*/*")`. 
 Refer to [Table types and queries](/docs/concepts#table-types--queries) for more info on all table types and query types supported.
-{: .notice--info}
+\{: .notice--info}
 
 ## Update data
 
@@ -119,7 +119,7 @@ df.write.format("hudi").
 Notice that the save mode is now `Append`. In general, always use append mode unless you are trying to create the table for the first time.
 [Querying](#query-data) the data again will now show updated trips. Each write operation generates a new [commit](http://hudi.incubator.apache.org/docs/concepts) 
 denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `driver` fields for the same `_hoodie_record_key`s in previous commit. 
-{: .notice--info}
+\{: .notice--info}
 
 ## Incremental query
 
@@ -150,7 +150,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 
 This will give all changes that happened after the beginTime commit with the filter of fare > 20.0. The unique thing about this
 feature is that it now lets you author streaming pipelines on batch data.
-{: .notice--info}
+\{: .notice--info}
 
 ## Point in time query
 

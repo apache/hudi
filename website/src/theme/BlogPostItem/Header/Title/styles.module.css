@@ -1,0 +1,19 @@
+.title {
+  font-size: 2rem;
+  color: #0db1f9;
+}
+.titleBlock {
+  font-size: 1rem;
+}
+.titleBlock a {
+  font-size: 1rem;
+}
+
+/**
+  Blog post title should be smaller on smaller devices
+**/
+@media (max-width: 576px) {
+  .title {
+    font-size: 2rem;
+  }
+}
