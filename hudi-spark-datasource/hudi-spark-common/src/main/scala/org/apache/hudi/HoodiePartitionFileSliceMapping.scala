@@ -31,4 +31,8 @@ class HoodiePartitionFileSliceMapping(values: InternalRow,
   }
 
   def getPartitionValues: InternalRow = values
+
+  def getFileSlices(): Map[String, FileSlice] = {
+    slices
+  }
 }

@@ -35,10 +35,10 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
@@ -268,9 +268,32 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
 
   override def buildOptions(): Map[String, String] = optParams
   override def build(): HadoopFsRelation = {
+    val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+    val keyGeneratorClasses = Seq(KeyGeneratorType.TIMESTAMP.getClassName, KeyGeneratorType.TIMESTAMP_AVRO.getClassName,
+      KeyGeneratorType.CUSTOM.getClassName, KeyGeneratorType.CUSTOM_AVRO.getClassName)
+    val fileIndex =  if (keyGeneratorClasses.contains(keyGeneratorClassName)) {
+      new HoodieFileIndexTimestampKeyGen(
+        sparkSession,
+        metaClient,
+        Some(tableStructSchema),
+        optParams,
+        FileStatusCache.getOrCreate(sparkSession),
+        includeLogFiles = true,
+        shouldEmbedFileSlices = true)
+    } else {
+      HoodieFileIndex(
+        sparkSession,
+        metaClient,
+        Some(tableStructSchema),
+        optParams,
+        FileStatusCache.getOrCreate(sparkSession),
+        includeLogFiles = true,
+        shouldEmbedFileSlices = true)
+    }
+
     HadoopFsRelation(
-      location = buildFileIndex(),
-      partitionSchema = buildPartitionSchema(),
+      location = fileIndex,
+      partitionSchema = fileIndex.partitionSchema,
       dataSchema = buildDataSchema(),
       bucketSpec = buildBucketSpec(),
       fileFormat = buildFileFormat(),
