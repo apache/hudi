@@ -3,7 +3,7 @@ title: Developer Setup
 sidebar_position: 4
 keywords: [ hudi, ide, developer, setup]
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2024-08-12T10:47:57-07:00
 ---
 
 ## Pre-requisites
@@ -47,24 +47,24 @@ so that IntelliJ re-indexes the code.
    ![IDE setup reload](/assets/images/contributing/IDE_setup_reload.png)
 
 - \[Recommended\] We have embraced the code style largely based on [google format](https://google.github.io/styleguide/javaguide.html). Please set up your IDE with style files from [\<project root\>/style/](https://github.com/apache/hudi/tree/master/style). These instructions have been tested on IntelliJ.
-    * Open Project Preferences in IntelliJ
+    * Open `Settings` in IntelliJ
     * Install and activate CheckStyle plugin
 
       ![IDE_setup_checkstyle_1](/assets/images/contributing/IDE_setup_checkstyle_1.png)
-    * Open Preferences -> Tools -> checkstyle
+    * In `Settings` > `Tools` > `Checkstyle`, use a recent version, e.g., 10.17.0
 
       ![IDE_setup_checkstyle_2](/assets/images/contributing/IDE_setup_checkstyle_2.png)
-    * Change checkstyle version to 8.20
+    * Click on `+`, add the style/checkstyle.xml file, and name the configuration as "Hudi Checks"
 
       ![IDE_setup_checkstyle_3](/assets/images/contributing/IDE_setup_checkstyle_3.png)
-    * Click on + and add the style/checkstyle.xml file
+    * Activate the checkstyle configuration by checking `Active`
 
       ![IDE_setup_checkstyle_4](/assets/images/contributing/IDE_setup_checkstyle_4.png)
-    * Open Preferences -> Editor -> Code Style -> Java
-    * Select "Project" as the "Scheme".  Then, go to the settings, open "Import Scheme" -> "CheckStyle Configuration", select `style/checkstyle.xml` to load
+    * Open `Settings` > `Editor` > `Code Style` > `Java`
+    * Select "Project" as the "Scheme".  Then, go to the settings, open `Import Scheme` > `CheckStyle Configuration`, select `style/checkstyle.xml` to load
 
       ![IDE_setup_code_style_java_before](/assets/images/contributing/IDE_setup_code_style_java_before.png)
-    * After loading the configuration, you should see that the "Indent" and "Continuation indent" become 2 and 4, from 4 and 8, respectively
+    * After loading the configuration, you should see that the `Indent` and `Continuation indent` become 2 and 4, from 4 and 8, respectively
 
       ![IDE_setup_code_style_java_after](/assets/images/contributing/IDE_setup_code_style_java_after.png)
     * Apply/Save the changes
