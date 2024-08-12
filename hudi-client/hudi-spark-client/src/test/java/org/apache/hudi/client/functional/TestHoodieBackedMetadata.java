@@ -703,7 +703,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
   }
 
-  @Disabled
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
   public void testTableOperationsWithMetadataIndex(HoodieTableType tableType) throws Exception {
