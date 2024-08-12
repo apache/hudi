@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.util
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -112,7 +113,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
           0,
           allBaseFiles.get(0).getLength)
       val iterator = new CloseableInternalRowIterator(reader.read(fileInfo, requiredSchema,
-        StructType(Seq.empty), Seq.empty, new HadoopStorageConfiguration(hadoopConf)))
+        StructType(Seq.empty), util.Option.empty(), Seq.empty, new HadoopStorageConfiguration(hadoopConf)))
       var rowIndices: Set[Long] = Set()
       while (iterator.hasNext) {
         val row = iterator.next()

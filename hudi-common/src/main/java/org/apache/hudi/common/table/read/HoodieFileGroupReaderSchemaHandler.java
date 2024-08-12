@@ -58,6 +58,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final InternalSchema internalSchema;
 
+  protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -84,6 +85,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = hoodieTableConfig;
     this.requiredSchema = prepareRequiredSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
+    this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
   }
 
@@ -103,6 +105,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return this.internalSchema;
   }
 
+  public Option<InternalSchema> getInternalSchemaOpt() {
+    return this.internalSchemaOpt;
+  }
+
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!requestedSchema.equals(requiredSchema)) {
       return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
@@ -110,7 +116,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return Option.empty();
   }
 
-  private static InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
+  private InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
     if (!internalSchemaOption.isPresent()) {
       return InternalSchema.getEmptyInternalSchema();
     }
@@ -119,7 +125,15 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       return InternalSchema.getEmptyInternalSchema();
     }
 
-    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, notPruned);
+    return doPruneInternalSchema(requiredSchema, notPruned);
+  }
+
+  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
+    return internalSchemaOpt;
+  }
+
+  protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
+    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
   }
 
   private Schema generateRequiredSchema() {

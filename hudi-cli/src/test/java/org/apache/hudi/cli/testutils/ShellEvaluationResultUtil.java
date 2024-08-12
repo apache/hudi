@@ -23,7 +23,9 @@ import org.slf4j.LoggerFactory;
 
 public class ShellEvaluationResultUtil {
   private static final Logger LOGGER = LoggerFactory.getLogger(ShellEvaluationResultUtil.class);
-  private ShellEvaluationResultUtil() {}
+
+  private ShellEvaluationResultUtil() {
+  }
 
   public static boolean isSuccess(Object shellEvaluationResult) {
     boolean hasError = shellEvaluationResult instanceof Throwable;

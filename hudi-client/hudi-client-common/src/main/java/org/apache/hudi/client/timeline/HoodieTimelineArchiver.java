@@ -208,7 +208,8 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // Meanwhile, when inline or async clustering is enabled, we need to ensure that there is a commit in the active timeline
     // to check whether the file slice generated in pending clustering after archive isn't committed.
     Option<HoodieInstant> earliestInstantToRetainForClustering =
-        ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
+        ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient(),
+            config.getCleanerPolicy());
     earliestInstantToRetainCandidates.add(earliestInstantToRetainForClustering);
 
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the

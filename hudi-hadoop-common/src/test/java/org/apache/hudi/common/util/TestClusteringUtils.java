@@ -165,7 +165,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieInstant inflightInstant3 = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant3, Option.empty());
     HoodieInstant completedInstant3 = metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
-    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
+    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient, null);
     assertTrue(actual.isPresent());
     assertEquals(clusterTime1, actual.get().getTimestamp(), "no clean in timeline, retain first replace commit");
 
@@ -187,7 +187,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().transitionCleanInflightToComplete(true, inflightInstant4,
         TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
     metaClient.reloadActiveTimeline();
-    actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
+    actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient, null);
     assertEquals(clusterTime3, actual.get().getTimestamp(),
         "retain the first replace commit after the earliestInstantToRetain ");
   }
@@ -225,7 +225,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     metaClient.getActiveTimeline().transitionClusterInflightToComplete(true, inflightInstant3, Option.empty());
     metaClient.reloadActiveTimeline();
 
-    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient);
+    Option<HoodieInstant> actual = ClusteringUtils.getEarliestInstantToRetainForClustering(metaClient.getActiveTimeline(), metaClient, HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS);
     assertEquals(clusterTime2, actual.get().getTimestamp(),
         "retain the first replace commit after the last complete clean ");
   }

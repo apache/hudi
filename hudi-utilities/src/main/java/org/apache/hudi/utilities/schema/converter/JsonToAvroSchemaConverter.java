@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.schema.converter;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -29,6 +30,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 
 import java.io.IOException;
 import java.net.URI;
@@ -58,9 +61,14 @@ public class JsonToAvroSchemaConverter implements SchemaRegistryProvider.SchemaC
   }).collect(Collectors.collectingAndThen(Collectors.toMap(p -> p[0], p -> p[1]), Collections::<String, String>unmodifiableMap));
   private static final Pattern SYMBOL_REGEX = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
+  public JsonToAvroSchemaConverter(TypedProperties properties) {
+    // properties unused in this converter
+  }
+
   @Override
-  public String convert(String jsonSchema) throws IOException {
-    JsonNode jsonNode = MAPPER.readTree(jsonSchema);
+  public String convert(ParsedSchema parsedSchema) throws IOException {
+    JsonSchema jsonSchema = (JsonSchema) parsedSchema;
+    JsonNode jsonNode = MAPPER.readTree(jsonSchema.canonicalString());
     ObjectNode avroRecord = MAPPER.createObjectNode()
         .put("type", "record")
         .put("name", getAvroSchemaRecordName(jsonNode))

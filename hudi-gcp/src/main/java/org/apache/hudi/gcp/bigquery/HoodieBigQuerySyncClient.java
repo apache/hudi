@@ -19,6 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncClient;
@@ -297,6 +298,7 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
 
   /**
    * Checks for the existence of a table that uses the manifest file approach and matches other requirements.
+   *
    * @param tableName name of the table
    * @return Returns true if the table does not exist or if the table does exist but does not use the manifest file or table base path is outdated. False otherwise.
    */
@@ -310,15 +312,8 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     boolean manifestDoesNotExist =
         externalTableDefinition.getSourceUris() == null
             || externalTableDefinition.getSourceUris().stream().noneMatch(uri -> uri.contains(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
-    String basePathInTableDefinition = externalTableDefinition.getHivePartitioningOptions() == null ? "" :
-        externalTableDefinition.getHivePartitioningOptions().getSourceUriPrefix();
-    // remove trailing slash
-    basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
-    String basePath = getBasePath();
-    basePath = StringUtils.stripEnd(basePath, "/");
-    if (!basePathInTableDefinition.equals(basePath)) {
+    if (isBasePathUpdated(externalTableDefinition)) {
       // if table base path is outdated, we need to replace the table.
-      LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
       return true;
     }
     if (!StringUtils.isNullOrEmpty(config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID))) {
@@ -326,6 +321,28 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
       return manifestDoesNotExist || externalTableDefinition.getConnectionId() == null;
     }
     return manifestDoesNotExist;
+  }
+
+  private boolean isBasePathUpdated(ExternalTableDefinition externalTableDefinition) {
+    String basePath = StringUtils.stripEnd(getBasePath(), "/");
+    if (externalTableDefinition.getHivePartitioningOptions() == null) {
+      List<String> sourceUris = Option.ofNullable(externalTableDefinition.getSourceUris()).orElse(Collections.emptyList());
+      // compare source uris with trailing slash to make sure the unwanted prefix matches are avoided
+      String basePathWithTrailingSlash = String.format("%s/", basePath);
+      boolean isTableBasePathUpdated = sourceUris.stream()
+          .noneMatch(sourceUri -> sourceUri.startsWith(basePathWithTrailingSlash));
+      if (isTableBasePathUpdated) {
+        LOG.warn("Base path in table source uris: {}, new base path: {}", sourceUris, basePathWithTrailingSlash);
+      }
+      return isTableBasePathUpdated;
+    }
+    String basePathInTableDefinition = externalTableDefinition.getHivePartitioningOptions().getSourceUriPrefix();
+    basePathInTableDefinition = StringUtils.stripEnd(basePathInTableDefinition, "/");
+    boolean isTableBasePathUpdated = !basePathInTableDefinition.equals(basePath);
+    if (isTableBasePathUpdated) {
+      LOG.warn("Base path in table definition: {}, new base path: {}", basePathInTableDefinition, basePath);
+    }
+    return isTableBasePathUpdated;
   }
 
   @Override

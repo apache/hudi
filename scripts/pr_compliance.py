@@ -31,7 +31,7 @@ import inspect
 
 #validator for titles
 def validate_title(title: str):
-    return len(re.findall('(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
+    return len(re.findall(r'(\[HUDI\-[0-9]{1,}\]|\[MINOR\])',title)) == 1
 
 #runs an individual title test
 #

@@ -270,7 +270,7 @@ public class ConsistentBucketIndexUtils {
   private static boolean recommitMetadataFile(HoodieTable table, FileStatus metaFile, String partition) {
     Path partitionPath = new Path(FSUtils.constructAbsolutePath(table.getMetaClient().getBasePath(), partition).toUri());
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
-    if (table.getPendingCommitTimeline().containsInstant(timestamp)) {
+    if (table.getPendingCommitsTimeline().containsInstant(timestamp)) {
       return false;
     }
     Option<HoodieConsistentHashingMetadata> hoodieConsistentHashingMetadataOption = loadMetadataFromGivenFile(table, metaFile);

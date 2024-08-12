@@ -56,7 +56,7 @@
         "precision": 20,
         "scale": 0
       },
-      "default": "\u0000"
+      "default": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
     },
     {
       "name": "primitive_signed_int",

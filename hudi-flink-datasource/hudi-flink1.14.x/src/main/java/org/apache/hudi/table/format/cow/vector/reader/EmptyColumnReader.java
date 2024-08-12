@@ -32,7 +32,8 @@ import java.io.IOException;
  */
 public class EmptyColumnReader implements ColumnReader<WritableColumnVector> {
 
-  public EmptyColumnReader() {}
+  public EmptyColumnReader() {
+  }
 
   @Override
   public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {

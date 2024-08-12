@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   process-new-and-updated-prs:
+    if: github.repository == 'apache/hudi'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

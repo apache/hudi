@@ -625,6 +625,17 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testMinTimestamp() {
+    String timestamp1 = "20240601040632402";
+    String timestamp2 = "20250601040632402";
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(null, timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp("", timestamp1));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, null));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, ""));
+    assertEquals(timestamp1, HoodieTimeline.minTimestamp(timestamp1, timestamp2));
+  }
+
+  @Test
   public void testParseDateFromInstantTime() throws ParseException {
     // default second granularity instant ID
     String secondGranularityInstant = "20210101120101123";
@@ -708,6 +719,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertNull(instants.get(0).getCompletionTime(), "Requested instant does not have completion time");
     assertNull(instants.get(1).getCompletionTime(), "Inflight instant does not have completion time");
     assertNotNull(instants.get(2).getCompletionTime(), "Completed instant has modification time as completion time for 0.x release");
+    assertEquals(instants.get(2).getTimestamp() + HoodieTimeline.COMMIT_EXTENSION, instants.get(2).getFileName(), "Instant file name should not have completion time");
   }
 
   /**

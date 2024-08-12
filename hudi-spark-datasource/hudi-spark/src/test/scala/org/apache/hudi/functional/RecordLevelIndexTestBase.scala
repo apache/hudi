@@ -42,6 +42,7 @@ import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
+import scala.util.Using
 
 class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   var spark: SparkSession = _
@@ -282,8 +283,9 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getFileGroupCountForRecordIndex(writeConfig: HoodieWriteConfig): Long = {
-    val tableMetadata = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata]
-    tableMetadata.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
+    Using(getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata]) { metadataTable =>
+      metadataTable.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count
+    }.get
   }
 
   protected def validateDataAndRecordIndices(hudiOpts: Map[String, String],

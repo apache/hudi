@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
-import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
@@ -427,6 +427,22 @@ case class ResolveImplementationsEarly() extends Rule[LogicalPlan] {
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
         CreateHoodieTableAsSelectCommand(table, mode, query)
+
+      case ct: CreateTable =>
+        try {
+          // NOTE: In case of CreateTable with schema and multiple partition fields,
+          // we have to make sure that partition fields are ordered in the same way as they are in the schema.
+          val tableSchema = ct.query.map(_.schema).getOrElse(ct.tableDesc.schema)
+          HoodieSchemaUtils.checkPartitionSchemaOrder(tableSchema, ct.tableDesc.partitionColumnNames)
+        } catch {
+          case e: IllegalArgumentException =>
+            throw e
+          case _: Exception =>
+            // NOTE: This case is when query is unresolved but table is a managed table and already exists.
+            // In this case, create table will fail post-analysis (see [[HoodieCatalogTable.parseSchemaAndConfigs]]).
+            logWarning("An unexpected exception occurred while checking partition schema order. Proceeding with the plan.")
+        }
+        plan
 
       case _ => plan
     }

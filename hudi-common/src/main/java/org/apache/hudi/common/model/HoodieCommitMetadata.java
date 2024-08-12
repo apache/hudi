@@ -28,8 +28,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -248,30 +245,16 @@ public class HoodieCommitMetadata implements Serializable {
    * parse the bytes of deltacommit, and get the base file and the log files belonging to this
    * provided file group.
    */
-  // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
     try {
-      String jsonStr = fromUTF8Bytes(
-          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class));
-      if (jsonStr.isEmpty()) {
-        return Option.empty();
-      }
-      JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
-      Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
-      while (pts.hasNext()) {
-        Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
-        if (ptToWriteStats.getValue().isArray()) {
-          for (JsonNode writeStat : ptToWriteStats.getValue()) {
-            HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
-            if (fgId.equals(fileGroupId)) {
-              String baseFile = writeStat.get("baseFile").asText();
-              ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
-              List<String> logFiles = new ArrayList<>();
-              for (JsonNode logFile : logFilesNode) {
-                logFiles.add(logFile.asText());
-              }
-              return Option.of(Pair.of(baseFile, logFiles));
-            }
+      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = deserializeCommitMetadata(bytes);
+      Map<String,List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap =
+              commitMetadata.getPartitionToWriteStats();
+      for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStat: partitionToWriteStatsMap.entrySet()) {
+        for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: partitionToWriteStat.getValue()) {
+          HoodieFileGroupId fgId = new HoodieFileGroupId(partitionToWriteStat.getKey(), writeStat.getFileId());
+          if (fgId.equals(fileGroupId)) {
+            return Option.of(Pair.of(writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile(), writeStat.getLogFiles()));
           }
         }
       }

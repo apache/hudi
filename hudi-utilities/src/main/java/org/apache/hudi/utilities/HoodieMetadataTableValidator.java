@@ -78,7 +78,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1038,6 +1037,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                       String basePath,
                                                                       String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
         .load(getMetadataTableBasePath(basePath))
         .filter("type = 5")
         .select(functions.col("key"),
@@ -1058,18 +1058,11 @@ public class HoodieMetadataTableValidator implements Serializable {
               row.getInt(row.fieldIndex("fileIndex")),
               row.getString(row.fieldIndex("fileId")),
               row.getLong(row.fieldIndex("instantTime")));
-          // handle false positive case. a commit was pending when FS based locations were fetched, but committed when MDT was polled.
-          if (HoodieTimeline.compareTimestamps(location.getInstantTime(), GREATER_THAN, latestCompletedCommit)) {
-            return new Tuple2<>(row, Option.empty());
-          } else {
-            return new Tuple2<>(row, Option.of(location));
-          }
+          return new Tuple2<>(row, Option.of(location));
         }).filter(tuple2 -> tuple2._2.isPresent()) // filter the false positives
-        .mapToPair(tuple2 -> {
-          Tuple2<Row, Option<HoodieRecordGlobalLocation>> rowAndLocation = (Tuple2<Row, Option<HoodieRecordGlobalLocation>>) tuple2;
-          return new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
-              Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId()));
-        }).cache();
+        .mapToPair(rowAndLocation -> new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
+            Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId())))
+        .cache();
   }
 
   private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,

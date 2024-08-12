@@ -115,8 +115,7 @@ public class ZookeeperBasedLockProvider implements LockProvider<InterProcessMute
       }
     }
   }
-
-
+  
   // Only used for testing
   public ZookeeperBasedLockProvider(
       final LockConfiguration lockConfiguration, final CuratorFramework curatorFrameworkClient) {

@@ -50,7 +50,8 @@ public class AvroSchemaUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(AvroSchemaUtils.class);
 
-  private AvroSchemaUtils() {}
+  private AvroSchemaUtils() {
+  }
 
   /**
    * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details

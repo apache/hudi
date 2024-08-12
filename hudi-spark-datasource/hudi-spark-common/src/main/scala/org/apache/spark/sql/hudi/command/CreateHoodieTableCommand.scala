@@ -145,8 +145,8 @@ object CreateHoodieTableCommand {
     var newTblProperties =
       hoodieCatalogTable.catalogProperties.--(needFilterProps) ++ HoodieOptionConfig.extractSqlOptions(properties)
 
-    // Add provider -> hudi as a table property
-    newTblProperties = newTblProperties + ("provider" -> "hudi")
+    // Add provider -> hudi and path as a table property
+    newTblProperties = newTblProperties + ("provider" -> "hudi") + ("path" -> path)
 
     val newTable = table.copy(
       identifier = newTableIdentifier,

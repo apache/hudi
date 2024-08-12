@@ -187,6 +187,11 @@ public class TestHoodieBigQuerySyncClient {
     assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 
     // manifest exists but base path is outdated
+    when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(
+        basePath + "/.hoodie/" + ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
+    assertFalse(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
+
+    // manifest exists but base path is outdated
     when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
     when(externalTableDefinition.getHivePartitioningOptions()).thenReturn(
         HivePartitioningOptions.newBuilder().setSourceUriPrefix(basePath + "1").build());
