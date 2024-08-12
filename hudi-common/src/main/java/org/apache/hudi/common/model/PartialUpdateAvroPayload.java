@@ -18,17 +18,19 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.GenericRecordBuilder;
-import org.apache.avro.generic.IndexedRecord;
-
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.GenericRecordBuilder;
+import org.apache.avro.generic.IndexedRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -117,6 +119,8 @@ import java.util.Properties;
  */
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
 
+  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateAvroPayload.class);
+
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
   }
@@ -132,7 +136,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return this;
     }
     // pick the payload with greater ordering value as insert record
-    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
+    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     try {
       GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);
@@ -141,6 +145,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
+      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;

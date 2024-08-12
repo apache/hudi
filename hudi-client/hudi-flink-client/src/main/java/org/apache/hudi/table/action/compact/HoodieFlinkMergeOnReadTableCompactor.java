@@ -45,10 +45,9 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
-    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
-      throw new UnsupportedOperationException("Log compaction is not supported for this execution engine.");
-    }
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
+    HoodieInstant inflightInstant = WriteOperationType.COMPACT.equals(operationType)
+        ? HoodieTimeline.getCompactionInflightInstant(instantTime)
+        : HoodieTimeline.getLogCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();

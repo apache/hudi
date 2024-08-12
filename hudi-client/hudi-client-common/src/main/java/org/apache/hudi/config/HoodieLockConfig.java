@@ -36,6 +36,8 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_NUM_RETRIES;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS;
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS;
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_EXPIRE_PROP_KEY;
@@ -49,6 +51,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_R
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_HEARTBEAT_INTERVAL_MS_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_BASE_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
@@ -106,10 +109,16 @@ public class HoodieLockConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> LOCK_ACQUIRE_WAIT_TIMEOUT_MS = ConfigProperty
       .key(LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY)
-      .defaultValue(60 * 1000)
+      .defaultValue(DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS)
       .markAdvanced()
       .sinceVersion("0.8.0")
       .withDocumentation("Timeout in ms, to wait on an individual lock acquire() call, at the lock provider.");
+
+  public static final ConfigProperty<Integer> LOCK_HEARTBEAT_INTERVAL_MS = ConfigProperty
+      .key(LOCK_HEARTBEAT_INTERVAL_MS_KEY)
+      .defaultValue(DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS)
+      .sinceVersion("0.15.0")
+      .withDocumentation("Heartbeat interval in ms, to send a heartbeat to indicate that hive client holding locks.");
 
   public static final ConfigProperty<String> FILESYSTEM_LOCK_PATH = ConfigProperty
       .key(FILESYSTEM_LOCK_PATH_PROP_KEY)
@@ -217,16 +226,24 @@ public class HoodieLockConfig extends HoodieConfig {
       .withDocumentation("Lock provider class name, this should be subclass of "
           + "org.apache.hudi.client.transaction.ConflictResolutionStrategy");
 
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_PROP = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key();
-  /** @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS = WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.defaultValue();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String LOCK_PROVIDER_CLASS_PROP = LOCK_PROVIDER_CLASS_NAME.key();
-  /** @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead */
+  /**
+   * @deprecated Use {@link #LOCK_PROVIDER_CLASS_NAME} and its methods instead
+   */
   @Deprecated
   public static final String DEFAULT_LOCK_PROVIDER_CLASS = LOCK_PROVIDER_CLASS_NAME.defaultValue();
 
@@ -331,6 +348,11 @@ public class HoodieLockConfig extends HoodieConfig {
 
     public HoodieLockConfig.Builder withLockWaitTimeInMillis(Long waitTimeInMillis) {
       lockConfig.setValue(LOCK_ACQUIRE_WAIT_TIMEOUT_MS, String.valueOf(waitTimeInMillis));
+      return this;
+    }
+
+    public HoodieLockConfig.Builder withHeartbeatIntervalInMillis(Long intervalInMillis) {
+      lockConfig.setValue(LOCK_HEARTBEAT_INTERVAL_MS, String.valueOf(intervalInMillis));
       return this;
     }
 

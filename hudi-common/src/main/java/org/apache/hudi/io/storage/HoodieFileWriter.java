@@ -18,15 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.avro.Schema;
-
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+
+import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Properties;
 
-public interface HoodieFileWriter {
+public interface HoodieFileWriter extends AutoCloseable {
   boolean canWrite();
 
   void writeWithMetadata(HoodieKey key, HoodieRecord record, Schema schema, Properties props) throws IOException;

@@ -19,12 +19,11 @@
 package org.apache.hudi.internal;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.sources.v2.DataSourceOptions;
@@ -52,7 +51,7 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
   private final Boolean arePartitionRecordsSorted;
 
   public HoodieDataSourceInternalWriter(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-                                        SparkSession sparkSession, Configuration configuration, DataSourceOptions dataSourceOptions,
+                                        SparkSession sparkSession, StorageConfiguration<?> configuration, DataSourceOptions dataSourceOptions,
                                         boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
@@ -87,9 +86,9 @@ public class HoodieDataSourceInternalWriter implements DataSourceWriter {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
-    List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
-        .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
-    dataSourceInternalWriterHelper.commit(writeStatList);
+    List<WriteStatus> writeStatuses = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
+        .flatMap(m -> m.getWriteStatuses().stream()).collect(Collectors.toList());
+    dataSourceInternalWriterHelper.commit(writeStatuses);
   }
 
   @Override

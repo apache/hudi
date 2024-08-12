@@ -109,6 +109,8 @@ public class TestDefaultHoodieRecordPayload {
 
     DefaultHoodieRecordPayload payload1 = new DefaultHoodieRecordPayload(record1, 1);
     DefaultHoodieRecordPayload payload2 = new DefaultHoodieRecordPayload(delRecord1, 2);
+    assertFalse(payload1.isDeleted(schema, props));
+    assertTrue(payload2.isDeleted(schema, props));
     assertEquals(payload1.preCombine(payload2, props), payload2);
     assertEquals(payload2.preCombine(payload1, props), payload2);
 
@@ -145,9 +147,13 @@ public class TestDefaultHoodieRecordPayload {
     DefaultHoodieRecordPayload deletePayload = new DefaultHoodieRecordPayload(delRecord, 2);
     DefaultHoodieRecordPayload defaultDeletePayload = new DefaultHoodieRecordPayload(defaultDeleteRecord, 2);
 
+    assertFalse(payload.isDeleted(schema, props));
+    assertTrue(deletePayload.isDeleted(schema, props));
+    assertFalse(defaultDeletePayload.isDeleted(schema, props)); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
+
     assertEquals(record, payload.getInsertValue(schema, props).get());
-    assertEquals(defaultDeleteRecord, defaultDeletePayload.getInsertValue(schema, props).get());
     assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
+    assertTrue(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
     assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
     assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
@@ -174,6 +180,7 @@ public class TestDefaultHoodieRecordPayload {
     }
 
     try {
+      payload = new DefaultHoodieRecordPayload(record, 1);
       payload.combineAndGetUpdateValue(record, schema, props).get();
       fail("Should fail");
     } catch (IllegalArgumentException e) {

@@ -44,7 +44,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            HoodieInstant commitInstant,
                                            boolean deleteInstants,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipLocking, false);
   }
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
@@ -55,7 +55,7 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
                                            boolean deleteInstants,
                                            boolean skipTimelinePublish,
                                            boolean skipLocking) {
-    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking);
+    super(context, config, table, instantTime, commitInstant, deleteInstants, skipTimelinePublish, skipLocking, false);
   }
 
   @Override

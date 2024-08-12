@@ -24,18 +24,21 @@ import org.apache.hudi.metaserver.thrift.TAction;
 import org.apache.hudi.metaserver.thrift.THoodieInstant;
 import org.apache.hudi.metaserver.thrift.TState;
 import org.apache.hudi.metaserver.thrift.Table;
+
 import org.apache.thrift.TException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests on metadata store base on relation database of hoodie meta server.
@@ -46,10 +49,14 @@ public class TestRelationalDBBasedStore {
   private final String db = "test_db";
   private final String tb = "test_tb";
 
-  @Test
-  public void testAPIs() throws TException {
+  @BeforeEach
+  public void setUp() {
     HoodieMetaserver.getEmbeddedMetaserver();
     store = HoodieMetaserver.getMetaserverStorage();
+  }
+
+  @Test
+  public void testAPIs() throws TException {
     testTableRelatedAPIs();
     testTimelineRelatedAPIs();
   }
@@ -94,8 +101,8 @@ public class TestRelationalDBBasedStore {
     assertTrue(store.scanInstants(tableId, Arrays.asList(TState.REQUESTED, TState.INFLIGHT), -1).isEmpty());
 
     // instant meta CRUD
-    byte[] requestedMeta = "requested".getBytes(StandardCharsets.UTF_8);
-    byte[] inflightMeta = "inflight".getBytes(StandardCharsets.UTF_8);
+    byte[] requestedMeta = getUTF8Bytes("requested");
+    byte[] inflightMeta = getUTF8Bytes("inflight");
     store.saveInstantMetadata(tableId, requested, requestedMeta);
     store.saveInstantMetadata(tableId, inflight, inflightMeta);
     assertTrue(store.deleteInstantMetadata(tableId, requested));
@@ -107,6 +114,15 @@ public class TestRelationalDBBasedStore {
     assertTrue(store.deleteInstantAllMeta(tableId, ts));
     assertFalse(store.getInstantMetadata(tableId, requested).isPresent());
     assertFalse(store.getInstantMetadata(tableId, inflight).isPresent());
+  }
+
+  @AfterEach
+  public void tearDown() throws MetaserverStorageException {
+    Long tableId = store.getTableId(db, tb);
+    store.deleteTableTimestamp(tableId);
+    store.deleteTable(tableId);
+    Long dbId = store.getDatabaseId(db);
+    store.deleteDatabase(dbId);
   }
 
 }

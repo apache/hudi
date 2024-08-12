@@ -68,4 +68,3 @@ class Spark32ResolveHudiAlterTableCommand(sparkSession: SparkSession) extends Ru
     }
   }
 }
-

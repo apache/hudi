@@ -26,40 +26,48 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
  * Pulsar Source Configs
  */
 @Immutable
 @ConfigClassProperty(name = "Pulsar Source Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
     subGroupName = ConfigGroups.SubGroupNames.DELTA_STREAMER_SOURCE,
-    description = "Configurations controlling the behavior of Pulsar source in Deltastreamer.")
+    description = "Configurations controlling the behavior of Pulsar source in Hudi Streamer.")
 public class PulsarSourceConfig extends HoodieConfig {
 
   public static final ConfigProperty<Long> PULSAR_SOURCE_MAX_RECORDS_PER_BATCH_THRESHOLD = ConfigProperty
-      .key("hoodie.deltastreamer.source.pulsar.maxRecords")
+      .key(STREAMER_CONFIG_PREFIX + "source.pulsar.maxRecords")
       .defaultValue(5_000_000L)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.pulsar.maxRecords")
       .markAdvanced()
       .withDocumentation("Max number of records obtained in a single each batch");
 
   public static final ConfigProperty<String> PULSAR_SOURCE_TOPIC_NAME = ConfigProperty
-      .key("hoodie.deltastreamer.source.pulsar.topic")
+      .key(STREAMER_CONFIG_PREFIX + "source.pulsar.topic")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.pulsar.topic")
       .withDocumentation("Name of the target Pulsar topic to source data from");
 
   public static final ConfigProperty<String> PULSAR_SOURCE_SERVICE_ENDPOINT_URL = ConfigProperty
-      .key("hoodie.deltastreamer.source.pulsar.endpoint.service.url")
+      .key(STREAMER_CONFIG_PREFIX + "source.pulsar.endpoint.service.url")
       .defaultValue("pulsar://localhost:6650")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.pulsar.endpoint.service.url")
       .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
 
   public static final ConfigProperty<String> PULSAR_SOURCE_ADMIN_ENDPOINT_URL = ConfigProperty
-      .key("hoodie.deltastreamer.source.pulsar.endpoint.admin.url")
+      .key(STREAMER_CONFIG_PREFIX + "source.pulsar.endpoint.admin.url")
       .defaultValue("http://localhost:8080")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.pulsar.endpoint.admin.url")
       .withDocumentation("URL of the target Pulsar endpoint (of the form 'pulsar://host:port'");
 
   public static final ConfigProperty<OffsetAutoResetStrategy> PULSAR_SOURCE_OFFSET_AUTO_RESET_STRATEGY = ConfigProperty
-      .key("hoodie.deltastreamer.source.pulsar.offset.autoResetStrategy")
+      .key(STREAMER_CONFIG_PREFIX + "source.pulsar.offset.autoResetStrategy")
       .defaultValue(OffsetAutoResetStrategy.LATEST)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.pulsar.offset.autoResetStrategy")
       .markAdvanced()
       .withDocumentation("Policy determining how offsets shall be automatically reset in case there's "
           + "no checkpoint information present");

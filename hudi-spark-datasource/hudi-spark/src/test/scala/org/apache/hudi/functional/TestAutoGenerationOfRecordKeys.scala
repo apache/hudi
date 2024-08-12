@@ -19,33 +19,32 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.util
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.exception.{HoodieException, HoodieKeyGeneratorException}
 import org.apache.hudi.functional.CommonOptionUtils._
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
-import org.apache.hudi.keygen.{ComplexKeyGenerator, KeyGenUtils, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions.Config
+import org.apache.hudi.keygen.{ComplexKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceWriteOptions, HoodieDataSourceHelpers, ScalaAssertionSupport}
+
+import org.apache.hadoop.fs.FileSystem
+import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions._
+
 import scala.collection.JavaConverters._
 
 class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -53,7 +52,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -64,7 +63,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -124,16 +123,12 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
       options = options -- Seq(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
     }
 
-    // add partition Id and instant time
-    options += KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG -> "1"
-    options += KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG -> "100"
-
     // NOTE: In this test we deliberately removing record-key configuration
     //       to validate Hudi is handling this case appropriately
     val writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
 
@@ -148,7 +143,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     //
     // Step #2: Persist *same* batch with auto-gen'd record-keys (new record keys should
@@ -170,20 +165,21 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     val recordKeys = readDF.select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
       .distinct()
       .collectAsList()
+      .asScala
       .map(_.getString(0))
 
     // Validate auto-gen'd keys are globally unique
     assertEquals(10, recordKeys.size)
 
     // validate entire batch is present in snapshot read
-    val expectedInputDf = inputDF.union(inputDF2).drop("partition","rider","_hoodie_is_deleted")
-    val actualDf = readDF.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*).drop("partition","rider","_hoodie_is_deleted")
+    val expectedInputDf = inputDF.union(inputDF2).drop("partition", "rider", "_hoodie_is_deleted")
+    val actualDf = readDF.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*).drop("partition", "rider", "_hoodie_is_deleted")
     assertEquals(expectedInputDf.except(actualDf).count, 0)
   }
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "hoodie.populate.meta.fields,false","hoodie.combine.before.insert,true","hoodie.datasource.write.insert.drop.duplicates,true"
+    "hoodie.populate.meta.fields,false", "hoodie.combine.before.insert,true", "hoodie.datasource.write.insert.drop.duplicates,true"
   ))
   def testRecordKeysAutoGenInvalidParams(configKey: String, configValue: String): Unit = {
     val (writeOpts, _) = getWriterReaderOpts(HoodieRecordType.AVRO)
@@ -192,12 +188,8 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     //       to validate Hudi is handling this case appropriately
     var opts = writeOpts -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
-    // add partition Id and instant time
-    opts += KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG -> "1"
-    opts += KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG -> "100"
-
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 1)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 1)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     val e = assertThrows(classOf[HoodieKeyGeneratorException]) {
       inputDF.write.format("hudi")
@@ -211,7 +203,6 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     assertTrue(getRootCause(e).getMessage.contains(configKey + " is not supported with auto generation of record keys"))
   }
 
-
   @Test
   def testRecordKeysAutoGenEnableToDisable(): Unit = {
     val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
@@ -224,14 +215,9 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
-    val records = recordsToStrings(dataGen.generateInserts("000", 5)).toList
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
     inputDF.cache
-
-
-    // add partition Id and instant time
-    writeOpts += KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG -> "1"
-    writeOpts += KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG -> "100"
 
     //
     // Step #1: Persist first batch with auto-gen'd record-keys
@@ -242,7 +228,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
 
     //
     // Step #2: Insert w/ explicit record key config. Should fail since we can't modify this property.
@@ -260,5 +246,73 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
 
     val expectedMsg = s"RecordKey:\t_row_key\tnull"
     assertTrue(getRootCause(e).getMessage.contains(expectedMsg))
+  }
+
+  @Test
+  def testWriteToHudiWithoutAnyConfigs(): Unit = {
+    val records = recordsToStrings(dataGen.generateInserts("000", 5)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.cache
+
+    inputDF.write.format("hudi")
+      .option("hoodie.table.name","hudi_tbl")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+    val snapshot0 = spark.read.format("hudi").load(basePath)
+    assertEquals(5, snapshot0.count())
+  }
+
+  @Test
+  def testUpsertsAndDeletesWithPkLess(): Unit = {
+    val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
+
+    var options: Map[String, String] = vanillaWriteOpts ++ Map(
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+
+    var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+
+    // Insert Operation
+    val records = recordsToStrings(dataGen.generateInserts("000", 20)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.cache
+
+    inputDF.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, "insert")
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
+
+    val snapshotDf = spark.read.format("hudi").load(basePath)
+    snapshotDf.cache()
+    assertEquals(snapshotDf.count(), 20)
+
+    val updateDf = snapshotDf.limit(5).withColumn("rider", lit("rider-123456"))
+    updateDf.write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDf1 = spark.read.format("hudi").load(basePath)
+    snapshotDf1.cache()
+
+    assertEquals(20, snapshotDf1.count())
+    assertEquals(5, snapshotDf1.filter("rider == 'rider-123456'").count())
+
+    // delete the same 5 records.
+    snapshotDf1.filter("rider == 'rider-123456'")
+      .write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, "delete")
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val snapshotDf2 = spark.read.format("hudi").load(basePath)
+    snapshotDf2.cache()
+    assertEquals(15, snapshotDf2.count())
+    assertEquals(0, snapshotDf2.filter("rider == 'rider-123456'").count())
   }
 }

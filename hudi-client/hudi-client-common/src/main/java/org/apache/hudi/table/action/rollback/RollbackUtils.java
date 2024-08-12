@@ -27,8 +27,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,15 +81,17 @@ public class RollbackUtils {
     checkArgument(stat1.getPartitionPath().equals(stat2.getPartitionPath()));
     final List<String> successDeleteFiles = new ArrayList<>();
     final List<String> failedDeleteFiles = new ArrayList<>();
-    final Map<FileStatus, Long> commandBlocksCount = new HashMap<>();
-    final Map<FileStatus, Long> writtenLogFileSizeMap = new HashMap<>();
+    final Map<StoragePathInfo, Long> commandBlocksCount = new HashMap<>();
+    final Map<String, Long> logFilesFromFailedCommit = new HashMap<>();
     Option.ofNullable(stat1.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat2.getSuccessDeleteFiles()).ifPresent(successDeleteFiles::addAll);
     Option.ofNullable(stat1.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat2.getFailedDeleteFiles()).ifPresent(failedDeleteFiles::addAll);
     Option.ofNullable(stat1.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
     Option.ofNullable(stat2.getCommandBlocksCount()).ifPresent(commandBlocksCount::putAll);
-    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+    Option.ofNullable(stat1.getLogFilesFromFailedCommit()).ifPresent(logFilesFromFailedCommit::putAll);
+    Option.ofNullable(stat2.getLogFilesFromFailedCommit()).ifPresent(logFilesFromFailedCommit::putAll);
+    return new HoodieRollbackStat(stat1.getPartitionPath(), successDeleteFiles, failedDeleteFiles, commandBlocksCount, logFilesFromFailedCommit);
   }
 
 }

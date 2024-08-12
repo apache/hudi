@@ -18,11 +18,8 @@
 
 package org.apache.hudi.index;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.HoodieGlobalBloomIndex;
@@ -33,16 +30,17 @@ import org.apache.hudi.index.hbase.SparkHoodieHBaseIndex;
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
 import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
 import org.apache.hudi.index.simple.HoodieSimpleIndex;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
-
-import java.io.IOException;
 
 /**
  * A factory to generate Spark {@link HoodieIndex}.
  */
 public final class SparkHoodieIndexFactory {
   public static HoodieIndex createIndex(HoodieWriteConfig config) {
+    boolean sqlMergeIntoPrepped = config.getProps().getBoolean(HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, false);
+    if (sqlMergeIntoPrepped) {
+      return new HoodieInternalProxyIndex(config);
+    }
     // first use index class config to create index.
     if (!StringUtils.isNullOrEmpty(config.getIndexClass())) {
       return HoodieIndexUtils.createUserDefinedIndex(config);
@@ -58,9 +56,9 @@ public final class SparkHoodieIndexFactory {
       case GLOBAL_BLOOM:
         return new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
       case SIMPLE:
-        return new HoodieSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config));
       case GLOBAL_SIMPLE:
-        return new HoodieGlobalSimpleIndex(config, getKeyGeneratorForSimpleIndex(config));
+        return new HoodieGlobalSimpleIndex(config, HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config));
       case BUCKET:
         switch (config.getBucketIndexEngineType()) {
           case SIMPLE:
@@ -70,6 +68,8 @@ public final class SparkHoodieIndexFactory {
           default:
             throw new HoodieIndexException("Unknown bucket index engine type: " + config.getBucketIndexEngineType());
         }
+      case RECORD_INDEX:
+        return new SparkMetadataTableRecordIndex(config);
       default:
         throw new HoodieIndexException("Index type unspecified, set " + config.getIndexType());
     }
@@ -96,17 +96,10 @@ public final class SparkHoodieIndexFactory {
         return true;
       case BUCKET:
         return false;
+      case RECORD_INDEX:
+        return true;
       default:
         return createIndex(config).isGlobal();
-    }
-  }
-
-  private static Option<BaseKeyGenerator> getKeyGeneratorForSimpleIndex(HoodieWriteConfig config) {
-    try {
-      return config.populateMetaFields() ? Option.empty()
-          : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
-    } catch (IOException e) {
-      throw new HoodieIOException("KeyGenerator instantiation failed ", e);
     }
   }
 }

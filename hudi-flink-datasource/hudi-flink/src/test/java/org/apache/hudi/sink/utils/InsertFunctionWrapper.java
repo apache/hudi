@@ -38,7 +38,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
 import org.apache.flink.runtime.operators.testutils.MockEnvironmentBuilder;
 import org.apache.flink.streaming.api.graph.StreamConfig;
-import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockFunctionSnapshotContext;
 import org.apache.flink.streaming.api.operators.collect.utils.MockOperatorEventGateway;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
@@ -57,10 +56,10 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final Configuration conf;
   private final RowType rowType;
 
-  private final StreamingRuntimeContext runtimeContext;
+  private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
+  private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
 
   private final boolean asyncClustering;
@@ -102,6 +101,8 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
 
     setupWriteFunction();
+    // handle the bootstrap event
+    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncClustering) {
       clusteringFunctionWrapper.openFunction();
@@ -145,6 +146,30 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
   }
 
+  public void coordinatorFails() throws Exception {
+    this.coordinator.close();
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
+  public void restartCoordinator() throws Exception {
+    this.coordinator.close();
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
+  public void checkpointFails(long checkpointId) {
+    coordinator.notifyCheckpointAborted(checkpointId);
+  }
+
+  public void subTaskFails(int taskID, int attemptNumber) throws Exception {
+    coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
+    // reset the attempt number to simulate the task failover/retries
+    this.runtimeContext.setAttemptNumber(attemptNumber);
+    setupWriteFunction();
+  }
+
   public StreamWriteOperatorCoordinator getCoordinator() {
     return coordinator;
   }
@@ -171,8 +196,5 @@ public class InsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
-
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
   }
 }

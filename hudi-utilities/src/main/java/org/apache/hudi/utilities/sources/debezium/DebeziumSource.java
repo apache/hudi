@@ -19,13 +19,12 @@
 package org.apache.hudi.utilities.sources.debezium;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
@@ -53,10 +52,13 @@ import org.apache.spark.streaming.kafka010.OffsetRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS;
 
 /**
  * Base class for Debezium streaming source which expects change events as Kafka Avro records.
@@ -84,15 +86,14 @@ public abstract class DebeziumSource extends RowSource {
     super(props, sparkContext, sparkSession, schemaProvider);
 
     props.put(NATIVE_KAFKA_KEY_DESERIALIZER_PROP, StringDeserializer.class.getName());
-    deserializerClassName = props.getString(DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().key(),
-        DataSourceWriteOptions.KAFKA_AVRO_VALUE_DESERIALIZER_CLASS().defaultValue());
+    deserializerClassName = getStringWithAltKeys(props, KAFKA_AVRO_VALUE_DESERIALIZER_CLASS, true);
 
     try {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
       LOG.error(error);
-      throw new HoodieException(error, e);
+      throw new HoodieReadFromSourceException(error, e);
     }
 
     // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
@@ -120,14 +121,14 @@ public abstract class DebeziumSource extends RowSource {
       return Pair.of(Option.of(sparkSession.emptyDataFrame()), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
     } else {
       try {
-        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(props.getString(HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL.key()));
+        String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
         Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
         LOG.info(String.format("Spark schema of Kafka Payload for topic %s:\n%s", offsetGen.getTopicName(), dataset.schema().treeString()));
         LOG.info(String.format("New checkpoint string: %s", CheckpointUtils.offsetsToStr(offsetRanges)));
         return Pair.of(Option.of(dataset), overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr);
-      } catch (IOException exc) {
-        LOG.error("Fatal error reading and parsing incoming debezium event", exc);
-        throw new HoodieException("Fatal error reading and parsing incoming debezium event", exc);
+      } catch (Exception e) {
+        LOG.error("Fatal error reading and parsing incoming debezium event", e);
+        throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
       }
     }
   }
@@ -243,8 +244,7 @@ public abstract class DebeziumSource extends RowSource {
 
   @Override
   public void onCommit(String lastCkptStr) {
-    if (this.props.getBoolean(KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.key(),
-        KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET.defaultValue())) {
+    if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET)) {
       offsetGen.commitOffsetToKafka(lastCkptStr);
     }
   }

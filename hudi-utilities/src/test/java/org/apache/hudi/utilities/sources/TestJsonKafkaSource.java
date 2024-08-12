@@ -18,20 +18,23 @@
 
 package org.apache.hudi.utilities.sources;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.utilities.config.HoodieDeltaStreamerConfig;
+import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
-import org.apache.hudi.utilities.deltastreamer.BaseErrorTableWriter;
-import org.apache.hudi.utilities.deltastreamer.ErrorEvent;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
-import org.apache.hudi.utilities.deltastreamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.BaseErrorTableWriter;
+import org.apache.hudi.utilities.streamer.DefaultStreamContext;
+import org.apache.hudi.utilities.streamer.ErrorEvent;
+import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.generic.GenericRecord;
@@ -59,10 +62,13 @@ import scala.Tuple2;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TARGET_TABLE;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecords;
+import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitions;
+import static org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers.jsonifyRecordsByPartitionsWithNullKafkaKey;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -70,28 +76,28 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 public class TestJsonKafkaSource extends BaseTestKafkaSource {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-  static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("delta-streamer-config/source_short_trip_uber.avsc");
+  static final URL SCHEMA_FILE_URL = TestJsonKafkaSource.class.getClassLoader().getResource("streamer-config/source_short_trip_uber.avsc");
 
   @BeforeEach
   public void init() throws Exception {
     String schemaFilePath = Objects.requireNonNull(SCHEMA_FILE_URL).toURI().getPath();
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
     schemaProvider = new FilebasedSchemaProvider(props, jsc());
   }
 
   @Override
-  TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
+  protected TypedProperties createPropsForKafkaSource(String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     return createPropsForJsonKafkaSource(testUtils.brokerAddress(), topic, maxEventsToReadFromKafkaSource, resetStrategy);
   }
 
   static TypedProperties createPropsForJsonKafkaSource(String brokerAddress, String topic, Long maxEventsToReadFromKafkaSource, String resetStrategy) {
     TypedProperties props = new TypedProperties();
-    props.setProperty("hoodie.deltastreamer.source.kafka.topic", topic);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topic);
     props.setProperty("bootstrap.servers", brokerAddress);
     props.setProperty("auto.offset.reset", resetStrategy);
     props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.setProperty("hoodie.deltastreamer.kafka.source.maxEvents",
+    props.setProperty("hoodie.streamer.kafka.source.maxEvents",
         maxEventsToReadFromKafkaSource != null ? String.valueOf(maxEventsToReadFromKafkaSource) :
             String.valueOf(KafkaSourceConfig.MAX_EVENTS_FROM_KAFKA_SOURCE.defaultValue()));
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString());
@@ -99,8 +105,8 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  SourceFormatAdapter createSource(TypedProperties props) {
-    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+  protected SourceFormatAdapter createSource(TypedProperties props) {
+    return new SourceFormatAdapter(new JsonKafkaSource(props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile)));
   }
 
   // test whether empty messages can be filtered
@@ -198,9 +204,14 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Override
-  void sendMessagesToKafka(String topic, int count, int numPartitions) {
+  protected void sendMessagesToKafka(String topic, int count, int numPartitions) {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
-    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+    testUtils.sendMessages(topic, jsonifyRecordsByPartitions(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA), numPartitions));
+  }
+
+  void sendNullKafkaKeyMessagesToKafka(String topic, int count, int numPartitions) {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topic, jsonifyRecordsByPartitionsWithNullKafkaKey(dataGenerator.generateInsertsAsPerSchema("000", count, HoodieTestDataGenerator.SHORT_TRIP_SCHEMA), numPartitions));
   }
 
   void sendJsonSafeMessagesToKafka(String topic, int count, int numPartitions) {
@@ -248,7 +259,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
     assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
     assertEquals(2,((JavaRDD)errorTableWriter.get().getErrorEvents(
-        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+        InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
   }
 
   @Test
@@ -280,12 +291,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
     assertEquals(1000,fetch1.getBatch().get().count());
     assertEquals(2, ((JavaRDD)errorTableWriter.get().getErrorEvents(
-        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+        InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
   }
 
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
-        spark(), props, jsc(), fs()) {
+        spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
       List<JavaRDD<HoodieAvroRecord>> errorEvents = new LinkedList();
 
       @Override
@@ -294,7 +305,8 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      public Option<JavaRDD<HoodieAvroRecord>> getErrorEvents(String baseTableInstantTime,
+                                                              Option commitedInstantTime) {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 
@@ -304,34 +316,59 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
     };
   }
-  
+
   @Test
   public void testAppendKafkaOffset() {
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
-    int numPartitions = 3;
-    int numMessages = 15;
+    int numPartitions = 2;
+    int numMessages = 30;
     testUtils.createTopic(topic, numPartitions);
     sendMessagesToKafka(topic, numMessages, numPartitions);
 
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource);
-    Dataset<Row> c = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get();
-    assertEquals(numMessages, c.count());
-    List<String> columns = Arrays.stream(c.columns()).collect(Collectors.toList());
+    Dataset<Row> dfNoOffsetInfo = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().cache();
+    assertEquals(numMessages, dfNoOffsetInfo.count());
+    List<String> columns = Arrays.stream(dfNoOffsetInfo.columns()).collect(Collectors.toList());
 
-    props.put(HoodieDeltaStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
+    props.put(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(), "true");
     jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     kafkaSource = new SourceFormatAdapter(jsonSource);
-    Dataset<Row> d = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get();
-    assertEquals(numMessages, d.count());
+    Dataset<Row> dfWithOffsetInfo = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().cache();
+    assertEquals(numMessages, dfWithOffsetInfo.count());
     for (int i = 0; i < numPartitions; i++) {
-      assertEquals(numMessages / numPartitions, d.filter("_hoodie_kafka_source_partition=" + i).collectAsList().size());
+      assertEquals(numMessages / numPartitions, dfWithOffsetInfo.filter("_hoodie_kafka_source_partition=" + i).count());
     }
-    assertEquals(0, d.drop(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN).except(c).count());
-    List<String> withKafkaOffsetColumns = Arrays.stream(d.columns()).collect(Collectors.toList());
-    assertEquals(3, withKafkaOffsetColumns.size() - columns.size());
-    List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN);
-    assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 3, withKafkaOffsetColumns.size()));
+    assertEquals(0, dfWithOffsetInfo
+        .drop(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN, KAFKA_SOURCE_KEY_COLUMN)
+        .except(dfNoOffsetInfo).count());
+    List<String> withKafkaOffsetColumns = Arrays.stream(dfWithOffsetInfo.columns()).collect(Collectors.toList());
+    assertEquals(4, withKafkaOffsetColumns.size() - columns.size());
+    List<String> appendList = Arrays.asList(KAFKA_SOURCE_OFFSET_COLUMN, KAFKA_SOURCE_PARTITION_COLUMN, KAFKA_SOURCE_TIMESTAMP_COLUMN, KAFKA_SOURCE_KEY_COLUMN);
+    assertEquals(appendList, withKafkaOffsetColumns.subList(withKafkaOffsetColumns.size() - 4, withKafkaOffsetColumns.size()));
+
+    // scenario with null kafka key
+    sendNullKafkaKeyMessagesToKafka(topic, numMessages, numPartitions);
+    jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    kafkaSource = new SourceFormatAdapter(jsonSource);
+    Dataset<Row> dfWithOffsetInfoAndNullKafkaKey = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().cache();
+    // total of 2 * numMessages are in the topic at this point, half with a key and half with a null key. All should have the source offset.
+    assertEquals(numMessages, dfWithOffsetInfoAndNullKafkaKey.toDF().filter("_hoodie_kafka_source_key is null").count());
+    assertEquals(numMessages, dfWithOffsetInfoAndNullKafkaKey.toDF().filter("_hoodie_kafka_source_key is not null").count());
+    assertEquals(numMessages * 2, dfWithOffsetInfoAndNullKafkaKey.toDF().filter("_hoodie_kafka_source_offset is not null").count());
+
+    dfNoOffsetInfo.unpersist();
+    dfWithOffsetInfo.unpersist();
+    dfWithOffsetInfoAndNullKafkaKey.unpersist();
+  }
+
+  @Test
+  public void testCreateSource() throws IOException {
+    final String topic = TEST_TOPIC_PREFIX + "testJsonKafkaSourceCreation";
+    testUtils.createTopic(topic, 2);
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    Source jsonKafkaSource = UtilHelpers.createSource(JsonKafkaSource.class.getName(), props, jsc(), spark(), metrics, new DefaultStreamContext(schemaProvider, sourceProfile));
+    assertEquals(Source.SourceType.JSON, jsonKafkaSource.getSourceType());
   }
 }

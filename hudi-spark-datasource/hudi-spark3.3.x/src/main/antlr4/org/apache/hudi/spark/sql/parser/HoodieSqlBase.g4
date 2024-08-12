@@ -29,5 +29,12 @@ statement
     | createTableHeader ('(' colTypeList ')')? tableProvider?
         createTableClauses
         (AS? query)?                                                   #createTable
+    | CREATE INDEX (IF NOT EXISTS)? identifier ON TABLE?
+          tableIdentifier (USING indexType=identifier)?
+          LEFT_PAREN columns=multipartIdentifierPropertyList RIGHT_PAREN
+          (OPTIONS indexOptions=propertyList)?                         #createIndex
+    | DROP INDEX (IF EXISTS)? identifier ON TABLE? tableIdentifier     #dropIndex
+    | SHOW INDEXES (FROM | IN) TABLE? tableIdentifier                  #showIndexes
+    | REFRESH INDEX identifier ON TABLE? tableIdentifier               #refreshIndex
     | .*?                                                              #passThrough
     ;

@@ -201,9 +201,8 @@ public class AdbSyncConfig extends HiveSyncConfig {
       props.setPropertyIfNonNull(ADB_SYNC_PASS.key(), hiveSyncConfigParams.hivePass);
       props.setPropertyIfNonNull(ADB_SYNC_JDBC_URL.key(), hiveSyncConfigParams.jdbcUrl);
       props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), hiveSyncConfigParams.hoodieSyncConfigParams.basePath);
-      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), String.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), hiveSyncConfigParams.hoodieSyncConfigParams.partitionValueExtractorClass);
-      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.assumeDatePartitioning));
       props.setPropertyIfNonNull(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(hiveSyncConfigParams.skipROSuffix));
       props.setPropertyIfNonNull(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(skipRTSync));
       props.setPropertyIfNonNull(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(useHiveStylePartitioning));

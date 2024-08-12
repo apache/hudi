@@ -233,7 +233,7 @@ public class ConfigProperty<T> implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Key: '%s' , default: %s , isAdvanced: %s , description: %s since version: %s deprecated after: %s)",
+        "Key: '%s' , default: %s , isAdvanced: %s , description: %s since version: %s deprecated after: %s",
         key, defaultValue, advanced, doc, sinceVersion.isPresent() ? sinceVersion.get() : "version is not defined",
         deprecatedVersion.isPresent() ? deprecatedVersion.get() : "version is not defined");
   }

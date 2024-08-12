@@ -20,8 +20,8 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -162,7 +162,7 @@ public class HoodieJavaGenerateApp {
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
 
     // Generate some input..
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
     List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts(instantTime/* ignore */, 100));
     List<String> records1 = recordsToStrings(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));

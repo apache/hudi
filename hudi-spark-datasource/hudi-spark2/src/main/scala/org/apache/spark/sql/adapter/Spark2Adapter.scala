@@ -18,31 +18,31 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieBaseRelation, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
-import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.{QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24HoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark24LegacyHoodieParquetFileFormat, Spark24ParquetReader, SparkParquetReader}
 import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
-import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 
@@ -80,6 +80,10 @@ class Spark2Adapter extends SparkAdapter {
 
   override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark2CatalystExpressionUtils
 
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark2SchemaUtils
+
+  override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark2PartitionedFileUtils
+
   override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
     new HoodieSpark2_4AvroSerializer(rootCatalystType, rootAvroType, nullable)
 
@@ -89,7 +93,7 @@ class Spark2Adapter extends SparkAdapter {
   override def getAvroSchemaConverters: HoodieAvroSchemaConverters = HoodieSparkAvroSchemaConverters
 
   override def createSparkRowSerDe(schema: StructType): SparkRowSerDe = {
-    val encoder = RowEncoder(schema).resolveAndBind()
+    val encoder = getCatalystExpressionUtils.getEncoder(schema)
     new Spark2RowSerDe(encoder)
   }
 
@@ -142,8 +146,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark24HoodieParquetFileFormat(appendPartitionValues))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
@@ -153,7 +157,7 @@ class Spark2Adapter extends SparkAdapter {
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
                               schema: Schema,
-                              globPaths: Array[Path],
+                              globPaths: Array[StoragePath],
                               parameters: java.util.Map[String, String]): BaseRelation = {
     val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, globPaths, parameters.asScala.toMap)
@@ -185,5 +189,46 @@ class Spark2Adapter extends SparkAdapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  /**
+   * Spark2 doesn't support nestedPredicatePushdown,
+   * so fail it if [[supportNestedPredicatePushdown]] is true here.
+   */
+  override def translateFilter(predicate: Expression,
+                               supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
+    if (supportNestedPredicatePushdown) {
+      throw new UnsupportedOperationException("Nested predicate push down is not supported")
+    }
+
+    DataSourceStrategy.translateFilter(predicate)
+  }
+
+  override def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch = {
+    val batch = new ColumnarBatch(vectors)
+    batch.setNumRows(numRows)
+    batch
+  }
+
+  /**
+   * Get parquet file reader
+   *
+   * @param vectorized true if vectorized reading is not prohibited due to schema, reading mode, etc
+   * @param sqlConf    the [[SQLConf]] used for the read
+   * @param options    passed as a param to the file format
+   * @param hadoopConf some configs will be set for the hadoopConf
+   * @return parquet file reader
+   */
+  override def createParquetFileReader(vectorized: Boolean,
+                                       sqlConf: SQLConf,
+                                       options: Map[String, String],
+                                       hadoopConf: Configuration): SparkParquetReader = {
+    Spark24ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+  }
+
+  override def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                                 queryExecution: QueryExecution,
+                                                 name: Option[String])(body: => T): T = {
+    SQLExecution.withNewExecutionId(sparkSession, queryExecution)(body)
   }
 }

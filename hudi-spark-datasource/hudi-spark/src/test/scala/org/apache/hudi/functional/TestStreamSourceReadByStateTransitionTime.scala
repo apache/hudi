@@ -20,20 +20,23 @@ package org.apache.hudi.functional
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.EngineType
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.model.{HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.api.java.JavaRDD
 
-import scala.collection.JavaConversions.asScalaBuffer
-import scala.jdk.CollectionConverters.mapAsJavaMapConverter
+import scala.collection.JavaConverters._
 
 class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
-  override val useTransitionTime: Boolean = true
+  override val handlingMode: HollowCommitHandling = USE_TRANSITION_TIME
 
   private val dataGen = new HoodieTestDataGenerator(System.currentTimeMillis())
 
@@ -46,7 +49,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           .setTableName(s"test_stream_${tableType.name()}")
           .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)
           .setPreCombineField("timestamp")
-          .initTable(spark.sessionState.newHadoopConf(), tablePath)
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
 
         val writeConfig = HoodieWriteConfig.newBuilder()
           .withEngineType(EngineType.SPARK)
@@ -63,15 +66,15 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
         val instantTime1 = makeNewCommitTime(1, "%09d")
         val instantTime2 = makeNewCommitTime(2,"%09d")
 
-        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).toSeq, 2)
-        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).toSeq, 2)
+        val records1 = sparkContext.parallelize(dataGen.generateInserts(instantTime1, 10).asScala.toSeq, 2)
+        val records2 = sparkContext.parallelize(dataGen.generateInserts(instantTime2, 15).asScala.toSeq, 2)
 
         writeClient.startCommitWithTime(instantTime1)
         writeClient.startCommitWithTime(instantTime2)
         writeClient.insert(records2.toJavaRDD().asInstanceOf[JavaRDD[HoodieRecord[Nothing]]], instantTime2)
         val df = spark.readStream
           .format("hudi")
-          .option(DataSourceReadOptions.READ_BY_STATE_TRANSITION_TIME.key(), useTransitionTime)
+          .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
           .load(tablePath)
 
         testStream(df) (
@@ -89,6 +92,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
           assertCountMatched(10, true),
           StopStream
         )
+        writeClient.close()
       }
     }
   }

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,6 +27,8 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
+
+import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
@@ -59,21 +60,20 @@ public class JavaLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
   @Override
   protected List<WriteStatus> computeNext() {
     // Executor service used for launching writer thread.
-    HoodieExecutor<List<WriteStatus>> bufferedIteratorExecutor =
+    HoodieExecutor<List<WriteStatus>> executor =
         null;
     try {
       final Schema schema = new Schema.Parser().parse(hoodieConfig.getSchema());
-      bufferedIteratorExecutor =
-          ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getTransformer(schema, hoodieConfig));
-      final List<WriteStatus> result = bufferedIteratorExecutor.execute();
+      executor = ExecutorFactory.create(hoodieConfig, inputItr, getInsertHandler(), getTransformer(schema, hoodieConfig));
+      final List<WriteStatus> result = executor.execute();
       checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
-      if (null != bufferedIteratorExecutor) {
-        bufferedIteratorExecutor.shutdownNow();
-        bufferedIteratorExecutor.awaitTermination();
+      if (executor != null) {
+        executor.shutdownNow();
+        executor.awaitTermination();
       }
     }
   }

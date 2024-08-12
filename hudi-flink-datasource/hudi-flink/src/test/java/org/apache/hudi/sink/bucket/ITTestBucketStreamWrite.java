@@ -18,34 +18,25 @@
 
 package org.apache.hudi.sink.bucket;
 
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.api.EnvironmentSettings;
-import org.apache.flink.table.api.TableEnvironment;
-import org.apache.flink.table.api.internal.TableEnvironmentImpl;
-
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex.IndexType;
-import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
-import org.apache.hudi.util.CompactionUtil;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.TableEnvironment;
+import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,6 +50,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -91,33 +84,15 @@ public class ITTestBucketStreamWrite {
 
     if (isCow) {
       TestData.checkWrittenData(tempFile, EXPECTED, 4);
-    } else  {
-      FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-      TestData.checkWrittenDataMOR(fs, tempFile, EXPECTED, 4);
+    } else {
+      HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
+      TestData.checkWrittenDataMOR(storage, tempFile, EXPECTED, 4);
     }
   }
 
   private static void doDeleteCommit(String tablePath, boolean isCow) throws Exception {
-    // make configuration and setAvroSchema
-    FlinkClusteringConfig cfg = new FlinkClusteringConfig();
-    cfg.path = tablePath;
-    Configuration conf = FlinkClusteringConfig.toFlinkConfig(cfg);
-
     // create metaClient
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-
-    conf.setString(FlinkOptions.TABLE_TYPE, metaClient.getTableType().name());
-
-    // set the table name
-    conf.setString(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
-
-    // set record key field
-    conf.setString(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
-    // set partition field
-    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, metaClient.getTableConfig().getPartitionFieldProp());
-
-    // set table schema
-    CompactionUtil.setAvroSchema(conf, metaClient);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
 
     // should only contain one instant
     HoodieTimeline activeCompletedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
@@ -129,24 +104,22 @@ public class ITTestBucketStreamWrite {
     String filename = activeCompletedTimeline.getInstants().get(0).getFileName();
 
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        .fromBytes(metaClient.getActiveTimeline().getInstantDetails(instant).get(),
+            HoodieCommitMetadata.class);
 
     // delete successful commit to simulate an unsuccessful write
-    FileSystem fs = metaClient.getFs();
-    Path path = new Path(metaClient.getMetaPath() + Path.SEPARATOR + filename);
-    fs.delete(path);
-
-    // marker types are different for COW and MOR
-    IOType ioType = isCow ? IOType.CREATE : IOType.APPEND;
+    HoodieStorage storage = metaClient.getStorage();
+    StoragePath path = new StoragePath(metaClient.getMetaPath(), filename);
+    storage.deleteDirectory(path);
 
     commitMetadata.getFileIdAndRelativePaths().forEach((fileId, relativePath) -> {
       // hacky way to reconstruct markers ¯\_(ツ)_/¯
       String[] partitionFileNameSplit = relativePath.split("/");
-      String fileInstant = FSUtils.getCommitTime(partitionFileNameSplit[1]);
       String partition = partitionFileNameSplit[0];
-      String writeToken = isCow ? getWriteToken(partitionFileNameSplit[1]) : FSUtils.getWriteTokenFromLogPath(new Path(relativePath));
+      String fileName = partitionFileNameSplit[1];
       try {
-        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, fileInstant, fileId, ioType, writeToken);
+        String markerFileName = FileCreateUtils.markerFileName(fileName, IOType.CREATE);
+        FileCreateUtils.createMarkerFile(tablePath, partition, commitInstant, markerFileName);
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

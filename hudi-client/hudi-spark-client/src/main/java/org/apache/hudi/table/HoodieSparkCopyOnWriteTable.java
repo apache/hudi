@@ -31,7 +31,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -42,9 +41,9 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
@@ -58,15 +57,16 @@ import org.apache.hudi.table.action.clean.CleanActionExecutor;
 import org.apache.hudi.table.action.clean.CleanPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.SparkExecuteClusteringCommitActionExecutor;
-import org.apache.hudi.table.action.commit.HoodieMergeHelper;
 import org.apache.hudi.table.action.commit.SparkBulkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkBulkInsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeleteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkDeletePartitionCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkDeletePreppedCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertOverwriteTableCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkInsertPreppedCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkPartitionTTLActionExecutor;
 import org.apache.hudi.table.action.commit.SparkUpsertCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkUpsertPreppedCommitActionExecutor;
 import org.apache.hudi.table.action.index.RunIndexActionExecutor;
@@ -85,6 +85,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable;
 
 /**
  * Implementation of a very heavily read-optimized Hoodie Table where, all data is stored in base files, with
@@ -123,6 +125,11 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> delete(HoodieEngineContext context, String instantTime, HoodieData<HoodieKey> keys) {
     return new SparkDeleteCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, keys).execute();
+  }
+
+  @Override
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> deletePrepped(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> preppedRecords) {
+    return new SparkDeletePreppedCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, preppedRecords).execute();
   }
 
   @Override
@@ -190,6 +197,13 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public void rollbackBootstrap(HoodieEngineContext context, String instantTime) {
+    // Delete metadata table to rollback a failed bootstrap. re-attempt of bootstrap will re-initialize the mdt.
+    try {
+      LOG.info("Deleting metadata table because we are rolling back failed bootstrap. ");
+      deleteMetadataTable(config.getBasePath(), context);
+    } catch (HoodieMetadataException e) {
+      throw new HoodieException("Failed to delete metadata table.", e);
+    }
     new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
     new CopyOnWriteRestoreActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
@@ -202,9 +216,20 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
-                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers) {
+                                                     HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
+                                                     boolean isRestore) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers).execute();
+        shouldRollbackUsingMarkers, isRestore).execute();
+  }
+
+  /**
+   * Delete expired partition by config
+   * @param context HoodieEngineContext
+   * @param instantTime Instant Time for the action
+   * @return HoodieWriteMetadata
+   */
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> managePartitionTTL(HoodieEngineContext context, String instantTime) {
+    return new SparkPartitionTTLActionExecutor<>(context, config, this, instantTime).execute();
   }
 
   @Override
@@ -218,33 +243,13 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   protected Iterator<List<WriteStatus>> handleUpdateInternal(HoodieMergeHandle<?, ?, ?, ?> upsertHandle, String instantTime,
                                                              String fileId) throws IOException {
-    if (upsertHandle.getOldFilePath() == null) {
-      throw new HoodieUpsertException(
-          "Error in finding the old file path at commit " + instantTime + " for fileId: " + fileId);
-    } else {
-      HoodieMergeHelper.newInstance().runMerge(this, upsertHandle);
-    }
-
-    // TODO(vc): This needs to be revisited
-    if (upsertHandle.getPartitionPath() == null) {
-      LOG.info("Upsert Handle has partition path as null " + upsertHandle.getOldFilePath() + ", "
-          + upsertHandle.writeStatuses());
-    }
-
-    return Collections.singletonList(upsertHandle.writeStatuses()).iterator();
+    runMerge(upsertHandle, instantTime, fileId);
+    return upsertHandle.getWriteStatusesAsIterator();
   }
 
   protected HoodieMergeHandle getUpdateHandle(String instantTime, String partitionPath, String fileId,
       Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile dataFileToBeMerged) {
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-    if (!config.populateMetaFields()) {
-      try {
-        keyGeneratorOpt = Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(config.getProps())));
-      } catch (IOException e) {
-        throw new HoodieIOException("Only BaseKeyGenerator (or any key generator that extends from BaseKeyGenerator) are supported when meta "
-            + "columns are disabled. Please choose the right key generator if you wish to disable meta fields.", e);
-      }
-    }
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(config);
     return HoodieMergeHandleFactory.create(config, instantTime, this, keyToNewRecords, partitionPath, fileId,
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
   }
@@ -272,8 +277,8 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex) {
-    return new ScheduleIndexActionExecutor<>(context, config, this, indexInstantTime, partitionsToIndex).execute();
+  public Option<HoodieIndexPlan> scheduleIndexing(HoodieEngineContext context, String indexInstantTime, List<MetadataPartitionType> partitionsToIndex, List<String> partitionPaths) {
+    return new ScheduleIndexActionExecutor<>(context, config, this, indexInstantTime, partitionsToIndex, partitionPaths).execute();
   }
 
   @Override
@@ -295,4 +300,5 @@ public class HoodieSparkCopyOnWriteTable<T>
   public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
     return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
   }
+
 }

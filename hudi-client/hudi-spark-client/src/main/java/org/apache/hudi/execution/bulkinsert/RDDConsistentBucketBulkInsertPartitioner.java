@@ -18,14 +18,23 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
+import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
+import org.apache.hudi.io.HoodieWriteHandle;
+import org.apache.hudi.io.WriteHandleFactory;
+import org.apache.hudi.table.ConsistentHashingBucketInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 
@@ -40,7 +49,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * A partitioner for (consistent hashing) bucket index used in bulk_insert
  */
-public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> {
+public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexPartitioner<T> implements ConsistentHashingBucketInsertPartitioner {
 
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
 
@@ -50,6 +59,8 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     super(table,
         strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), null),
         preserveHoodieMetadata);
+    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
+        "Consistent hash bucket index doesn't support CoW table");
     this.hashingChildrenNodes = new HashMap<>();
   }
 
@@ -88,6 +99,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
     });
   }
 
+  @Override
   public void addHashingChildrenNodes(String partition, List<ConsistentHashingNode> nodes) {
     ValidationUtils.checkState(nodes.stream().noneMatch(n -> n.getTag() == ConsistentHashingNode.NodeTag.NORMAL), "children nodes should not be tagged as NORMAL");
     hashingChildrenNodes.put(partition, nodes);
@@ -98,7 +110,7 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
    */
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
-    HoodieConsistentHashingMetadata metadata = index.loadOrCreateMetadata(this.table, partition);
+    HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
     if (hashingChildrenNodes.containsKey(partition)) {
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
@@ -111,26 +123,26 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
    */
   private Map<String, ConsistentBucketIdentifier> initializeBucketIdentifier(JavaRDD<HoodieRecord<T>> records) {
     return records.map(HoodieRecord::getPartitionPath).distinct().collect().stream()
-        .collect(Collectors.toMap(p -> p, p -> getBucketIdentifier(p)));
+        .collect(Collectors.toMap(p -> p, this::getBucketIdentifier));
   }
 
   /**
    * Initialize fileIdPfx for each data partition. Specifically, the following fields is constructed:
    * - fileIdPfxList: the Nth element corresponds to the Nth data partition, indicating its fileIdPfx
-   * - doAppend: represents if the Nth data partition should use AppendHandler
    * - partitionToFileIdPfxIdxMap (return value): (table partition) -> (fileIdPfx -> idx) mapping
+   * - doAppend: represents if the Nth data partition should use AppendHandler
    *
    * @param partitionToIdentifier Mapping from table partition to bucket identifier
    */
   private Map<String, Map<String, Integer>> generateFileIdPfx(Map<String, ConsistentBucketIdentifier> partitionToIdentifier) {
-    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = new HashMap(partitionToIdentifier.size() * 2);
+    Map<String, Map<String, Integer>> partitionToFileIdPfxIdxMap = ConsistentBucketIndexUtils.generatePartitionToFileIdPfxIdxMap(partitionToIdentifier);
     int count = 0;
     for (ConsistentBucketIdentifier identifier : partitionToIdentifier.values()) {
+      fileIdPfxList.addAll(identifier.getNodes().stream().map(ConsistentHashingNode::getFileIdPrefix).collect(Collectors.toList()));
       Map<String, Integer> fileIdPfxToIdx = new HashMap();
       for (ConsistentHashingNode node : identifier.getNodes()) {
         fileIdPfxToIdx.put(node.getFileIdPrefix(), count++);
       }
-      fileIdPfxList.addAll(identifier.getNodes().stream().map(ConsistentHashingNode::getFileIdPrefix).collect(Collectors.toList()));
       if (identifier.getMetadata().isFirstCreated()) {
         // Create new file group when the hashing metadata is new (i.e., first write to the partition)
         doAppend.addAll(Collections.nCopies(identifier.getNodes().size(), false));
@@ -140,9 +152,20 @@ public class RDDConsistentBucketBulkInsertPartitioner<T> extends RDDBucketIndexP
       }
       partitionToFileIdPfxIdxMap.put(identifier.getMetadata().getPartitionPath(), fileIdPfxToIdx);
     }
-
     ValidationUtils.checkState(fileIdPfxList.size() == partitionToIdentifier.values().stream().mapToInt(ConsistentBucketIdentifier::getNumBuckets).sum(),
         "Error state after constructing fileId & idx mapping");
     return partitionToFileIdPfxIdxMap;
+  }
+
+  @Override
+  public Option<WriteHandleFactory> getWriteHandleFactory(int idx) {
+    return super.getWriteHandleFactory(idx).map(writeHandleFactory -> new WriteHandleFactory() {
+      @Override
+      public HoodieWriteHandle create(HoodieWriteConfig config, String commitTime, HoodieTable hoodieTable, String partitionPath, String fileIdPrefix, TaskContextSupplier taskContextSupplier) {
+        // Ensure we do not create append handle for consistent hashing bulk_insert, align with `ConsistentBucketBulkInsertDataInternalWriterHelper`
+        ValidationUtils.checkArgument(!doAppend.get(idx), "Consistent Hashing bulk_insert only support write to new file group");
+        return writeHandleFactory.create(config, commitTime, hoodieTable, partitionPath, fileIdPrefix, taskContextSupplier);
+      }
+    });
   }
 }

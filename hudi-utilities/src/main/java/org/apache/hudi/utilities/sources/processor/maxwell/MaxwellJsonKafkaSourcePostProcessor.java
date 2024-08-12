@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.DATE_STRING;
 import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.EPOCHMILLISECONDS;
 import static org.apache.hudi.utilities.sources.processor.maxwell.PreCombineFieldType.NON_TIMESTAMP;
@@ -55,8 +56,8 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
 
   public MaxwellJsonKafkaSourcePostProcessor(TypedProperties props) {
     super(props);
-    databaseRegex = Option.ofNullable(props.getString(JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX.key(), null));
-    tableRegex = props.getString(JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX.key());
+    databaseRegex = Option.ofNullable(getStringWithAltKeys(props, JsonKafkaPostProcessorConfig.DATABASE_NAME_REGEX, true));
+    tableRegex = getStringWithAltKeys(props, JsonKafkaPostProcessorConfig.TABLE_NAME_REGEX);
   }
 
   // ------------------------------------------------------------------------
@@ -114,8 +115,8 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
     result.put(HoodieRecord.HOODIE_IS_DELETED_FIELD, true);
 
     PreCombineFieldType preCombineFieldType =
-        valueOf(this.props.getString(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.key(),
-            JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE.defaultValue()).toUpperCase(Locale.ROOT));
+        valueOf(getStringWithAltKeys(
+            this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_TYPE, true).toUpperCase(Locale.ROOT));
 
     // maxwell won't update the `update_time`(delete time) field of the record which is tagged as delete. so if we
     // want to delete this record correctly, we should update its `update_time` to a time closer to where the
@@ -132,8 +133,7 @@ public class MaxwellJsonKafkaSourcePostProcessor extends JsonKafkaSourcePostProc
       // convert the `update_time`(delete time) to the proper format.
       if (preCombineFieldType.equals(DATE_STRING)) {
         // DATE_STRING format
-        String timeFormat = this.props.getString(JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.key(),
-            JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT.defaultValue());
+        String timeFormat = getStringWithAltKeys(this.props, JsonKafkaPostProcessorConfig.PRECOMBINE_FIELD_FORMAT, true);
         result.put(preCombineField, DateTimeUtils.formatUnixTimestamp(ts, timeFormat));
       } else if (preCombineFieldType.equals(EPOCHMILLISECONDS)) {
         // EPOCHMILLISECONDS format

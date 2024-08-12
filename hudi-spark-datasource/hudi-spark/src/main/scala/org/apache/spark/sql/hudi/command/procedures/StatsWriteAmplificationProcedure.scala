@@ -18,12 +18,13 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.HoodieTableMetaClient
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.text.DecimalFormat
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuilder {
@@ -44,9 +45,9 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
     val table = getArgValueOrDefault(args, parameters(0))
     val limit: Int = getArgValueOrDefault(args, parameters(1)).get.asInstanceOf[Int]
     val basePath = getBasePath(table)
-    val client = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val client = createMetaClient(jsc, basePath)
     val activeTimeline = client.getActiveTimeline
-    val timeline = activeTimeline.getCommitTimeline.filterCompletedInstants()
+    val timeline = activeTimeline.getCommitAndReplaceTimeline.filterCompletedInstants()
 
     val rows = new java.util.ArrayList[Row]
     val df = new DecimalFormat("#.00")

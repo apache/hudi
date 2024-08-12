@@ -21,6 +21,8 @@ package org.apache.hudi.sink.bucket;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
@@ -40,7 +42,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A stream write function with bucket hash index.
+ * A stream write function with simple bucket hash index.
  *
  * <p>The task holds a fresh new local index: {(partition + bucket number) &rarr fileId} mapping, this index
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
@@ -58,6 +60,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   private String indexKeyFields;
 
+  private boolean isNonBlockingConcurrencyControl;
+
   /**
    * BucketID to file group mapping in each partition.
    * Map(partition -> Map(bucketId, fileID)).
@@ -70,6 +74,11 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
    * all the records in one bucket should have the same bucket type.
    */
   private Set<String> incBucketIndex;
+
+  /**
+   * Functions for calculating the task partition to dispatch.
+   */
+  private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
 
   /**
    * Constructs a BucketStreamWriteFunction.
@@ -85,10 +94,12 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     super.open(parameters);
     this.bucketNum = config.getInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS);
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = getRuntimeContext().getIndexOfThisSubtask();
     this.parallelism = getRuntimeContext().getNumberOfParallelSubtasks();
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, parallelism);
   }
 
   @Override
@@ -119,7 +130,7 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     } else if (bucketToFileId.containsKey(bucketNum)) {
       location = new HoodieRecordLocation("U", bucketToFileId.get(bucketNum));
     } else {
-      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum);
+      String newFileId = BucketIdentifier.newBucketFileIdPrefix(bucketNum, isNonBlockingConcurrencyControl);
       location = new HoodieRecordLocation("I", newFileId);
       bucketToFileId.put(bucketNum, newFileId);
       incBucketIndex.add(bucketId);
@@ -132,12 +143,10 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
 
   /**
    * Determine whether the current fileID belongs to the current task.
-   * (partition + curBucket) % numPartitions == this taskID belongs to this task.
+   * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
-    final int partitionIndex = (partition.hashCode() & Integer.MAX_VALUE) % parallelism;
-    int globalIndex = partitionIndex + bucketNumber;
-    return BucketIdentifier.mod(globalIndex, parallelism)  == taskID;
+    return this.partitionIndexFunc.apply(partition, bucketNumber) == taskID;
   }
 
   /**
@@ -152,8 +161,8 @@ public class BucketStreamWriteFunction<I> extends StreamWriteFunction<I> {
     if (bucketIndex.containsKey(partition)) {
       return;
     }
-    LOG.info(String.format("Loading Hoodie Table %s, with path %s", this.metaClient.getTableConfig().getTableName(),
-        this.metaClient.getBasePath() + "/" + partition));
+    LOG.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
+        this.metaClient.getBasePath(), partition);
 
     // Load existing fileID belongs to this task
     Map<Integer, String> bucketToFileIDMap = new HashMap<>();

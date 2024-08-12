@@ -18,6 +18,8 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.connector.catalog.TableCapability._
@@ -45,7 +47,7 @@ case class HoodieInternalV2Table(spark: SparkSession,
   } else {
     val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
       .setBasePath(path)
-      .setConf(SparkSession.active.sessionState.newHadoopConf)
+      .setConf(HadoopFSUtils.getStorageConf(SparkSession.active.sessionState.newHadoopConf))
       .build()
 
     val tableConfig: HoodieTableConfig = metaClient.getTableConfig
@@ -106,8 +108,14 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
     override def toInsertableRelation: InsertableRelation = {
       new InsertableRelation {
         override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+          val mode = if (overwriteTable || overwritePartition) {
+            SaveMode.Overwrite
+          } else {
+            SaveMode.Append
+          }
+
           data.write.format("org.apache.hudi")
-            .mode(SaveMode.Append)
+            .mode(mode)
             .options(buildHoodieConfig(hoodieCatalogTable) ++
               buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))
             .save()

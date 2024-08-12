@@ -88,24 +88,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
           + " archive log. This config controls such archival batch size.");
 
-  public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
-      .key("hoodie.archive.merge.files.batch.size")
+  public static final ConfigProperty<Integer> TIMELINE_COMPACTION_BATCH_SIZE = ConfigProperty
+      .key("hoodie.timeline.compaction.batch.size")
       .defaultValue(10)
       .markAdvanced()
-      .withDocumentation("The number of small archive files to be merged at once.");
-
-  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
-      .key("hoodie.archive.merge.small.file.limit.bytes")
-      .defaultValue(20L * 1024 * 1024)
-      .markAdvanced()
-      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
-
-  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
-      .key("hoodie.archive.merge.enable")
-      .defaultValue(false)
-      .markAdvanced()
-      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
-          + " useful when storage scheme doesn't support append operation.");
+      .withDocumentation("The number of small files to compact at once.");
 
   public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
       .key("hoodie.archive.beyond.savepoint")
@@ -186,18 +173,8 @@ public class HoodieArchivalConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieArchivalConfig.Builder withArchiveMergeFilesBatchSize(int number) {
-      archivalConfig.setValue(ARCHIVE_MERGE_FILES_BATCH_SIZE, String.valueOf(number));
-      return this;
-    }
-
-    public HoodieArchivalConfig.Builder withArchiveMergeSmallFileLimit(long size) {
-      archivalConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
-      return this;
-    }
-
-    public HoodieArchivalConfig.Builder withArchiveMergeEnable(boolean enable) {
-      archivalConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
+    public HoodieArchivalConfig.Builder withTimelineCompactionBatchSize(int number) {
+      archivalConfig.setValue(TIMELINE_COMPACTION_BATCH_SIZE, String.valueOf(number));
       return this;
     }
 

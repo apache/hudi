@@ -20,9 +20,13 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -38,7 +42,6 @@ import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.types.DataType;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
@@ -55,6 +58,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +69,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -89,9 +94,9 @@ public class TestHoodieTableSource {
   void testGetReadPaths() throws Exception {
     beforeEach();
     HoodieTableSource tableSource = getEmptyStreamingSource();
-    FileStatus[] fileStatuses = tableSource.getReadFiles();
-    assertNotNull(fileStatuses);
-    assertThat(fileStatuses.length, is(4));
+    List<StoragePathInfo> fileList = tableSource.getReadFiles();
+    assertNotNull(fileList);
+    assertThat(fileList.size(), is(4));
     // apply partition pruning
     FieldReferenceExpression partRef = new FieldReferenceExpression("partition", DataTypes.STRING(), 4, 4);
     ValueLiteralExpression partLiteral = new ValueLiteralExpression("par1", DataTypes.STRING().notNull());
@@ -102,9 +107,9 @@ public class TestHoodieTableSource {
     HoodieTableSource tableSource2 = getEmptyStreamingSource();
     tableSource2.applyFilters(Arrays.asList(partFilter));
 
-    FileStatus[] fileStatuses2 = tableSource2.getReadFiles();
-    assertNotNull(fileStatuses2);
-    assertThat(fileStatuses2.length, is(1));
+    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
+    assertNotNull(fileList2);
+    assertThat(fileList2.size(), is(1));
   }
 
   @Test
@@ -114,8 +119,8 @@ public class TestHoodieTableSource {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
@@ -173,11 +178,12 @@ public class TestHoodieTableSource {
     // test single primary key filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf1);
     HoodieTableSource tableSource1 = createHoodieTableSource(conf1);
-    tableSource1.applyFilters(Collections.singletonList(createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    tableSource1.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
     assertThat(tableSource1.getDataBucket(), is(1));
-    FileStatus[] fileStatuses = tableSource1.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileStatuses.length, CoreMatchers.is(2));
+    List<StoragePathInfo> fileList = tableSource1.getReadFiles();
+    assertThat("Files should be pruned by bucket id 1", fileList.size(), CoreMatchers.is(2));
 
     // test multiple primary keys filtering
     Configuration conf2 = conf1.clone();
@@ -191,8 +197,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1"),
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
     assertThat(tableSource2.getDataBucket(), is(3));
-    FileStatus[] fileStatuses2 = tableSource2.getReadFiles();
-    assertThat("Files should be pruned by bucket id 3", fileStatuses2.length, CoreMatchers.is(3));
+    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
+    assertThat("Files should be pruned by bucket id 3", fileList2.size(), CoreMatchers.is(3));
 
     // apply the filters in different order and test again.
     tableSource2.reset();
@@ -200,7 +206,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny"),
         createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
     assertThat(tableSource2.getDataBucket(), is(3));
-    assertThat("Files should be pruned by bucket id 3", tableSource2.getReadFiles().length, CoreMatchers.is(3));
+    assertThat("Files should be pruned by bucket id 3", tableSource2.getReadFiles().size(),
+        CoreMatchers.is(3));
 
     // test partial primary keys filtering
     Configuration conf3 = conf1.clone();
@@ -210,11 +217,13 @@ public class TestHoodieTableSource {
     conf3.setString(FlinkOptions.KEYGEN_TYPE, "COMPLEX");
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
-    tableSource3.applyFilters(Collections.singletonList(createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
+    tableSource3.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr("uuid", 0, DataTypes.STRING().notNull(), "id1")));
 
     assertThat(tableSource3.getDataBucket(), is(PrimaryKeyPruners.BUCKET_ID_NO_PRUNING));
-    FileStatus[] fileStatuses3 = tableSource3.getReadFiles();
-    assertThat("Partial pk filtering does not prune any files", fileStatuses3.length, CoreMatchers.is(7));
+    List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
+    assertThat("Partial pk filtering does not prune any files", fileList3.size(),
+        CoreMatchers.is(7));
 
     // test single primary keys filtering together with non-primary key predicate
     Configuration conf4 = conf1.clone();
@@ -227,8 +236,8 @@ public class TestHoodieTableSource {
         createLitEquivalenceExpr("name", 1, DataTypes.STRING().notNull(), "Danny")));
 
     assertThat(tableSource4.getDataBucket(), is(1));
-    FileStatus[] fileStatuses4 = tableSource4.getReadFiles();
-    assertThat("Files should be pruned by bucket id 1", fileStatuses4.length, CoreMatchers.is(2));
+    List<StoragePathInfo> fileList4 = tableSource4.getReadFiles();
+    assertThat("Files should be pruned by bucket id 1", fileList4.size(), CoreMatchers.is(2));
   }
 
   @ParameterizedTest
@@ -246,11 +255,13 @@ public class TestHoodieTableSource {
     // test timestamp filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf1);
     HoodieTableSource tableSource1 = createHoodieTableSource(conf1);
-    tableSource1.applyFilters(Collections.singletonList(createLitEquivalenceExpr(f1, 0, DataTypes.TIMESTAMP(3).notNull(), LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
+    tableSource1.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr(f1, 0, DataTypes.TIMESTAMP(3).notNull(),
+            LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
 
     assertThat(tableSource1.getDataBucket(), is(logicalTimestamp ? 1 : 0));
-    FileStatus[] fileStatuses = tableSource1.getReadFiles();
-    assertThat("Files should be pruned", fileStatuses.length, CoreMatchers.is(1));
+    List<StoragePathInfo> fileList = tableSource1.getReadFiles();
+    assertThat("Files should be pruned", fileList.size(), CoreMatchers.is(1));
 
     // test date filtering
     Configuration conf2 = conf1.clone();
@@ -261,11 +272,12 @@ public class TestHoodieTableSource {
     conf2.setString(FlinkOptions.PRECOMBINE_FIELD, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
     HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
-    tableSource2.applyFilters(Collections.singletonList(createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
+    tableSource2.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
 
     assertThat(tableSource2.getDataBucket(), is(1));
-    FileStatus[] fileStatuses2 = tableSource2.getReadFiles();
-    assertThat("Files should be pruned", fileStatuses2.length, CoreMatchers.is(1));
+    List<StoragePathInfo> fileList2 = tableSource2.getReadFiles();
+    assertThat("Files should be pruned", fileList2.size(), CoreMatchers.is(1));
 
     // test decimal filtering
     Configuration conf3 = conf1.clone();
@@ -276,11 +288,13 @@ public class TestHoodieTableSource {
     conf3.setString(FlinkOptions.PRECOMBINE_FIELD, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
     HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
-    tableSource3.applyFilters(Collections.singletonList(createLitEquivalenceExpr(f3, 1, DataTypes.DECIMAL(3, 2).notNull(), new BigDecimal("1.11"))));
+    tableSource3.applyFilters(Collections.singletonList(
+        createLitEquivalenceExpr(f3, 1, DataTypes.DECIMAL(3, 2).notNull(),
+            new BigDecimal("1.11"))));
 
     assertThat(tableSource3.getDataBucket(), is(0));
-    FileStatus[] fileStatuses3 = tableSource3.getReadFiles();
-    assertThat("Files should be pruned", fileStatuses3.length, CoreMatchers.is(1));
+    List<StoragePathInfo> fileList3 = tableSource3.getReadFiles();
+    assertThat("Files should be pruned", fileList3.size(), CoreMatchers.is(1));
   }
 
   @Test
@@ -289,6 +303,26 @@ public class TestHoodieTableSource {
     HoodieTableMetaClient metaClient = tableSource.getMetaClient();
     HoodieTableSource tableSourceCopy = (HoodieTableSource) tableSource.copy();
     assertThat(metaClient, is(tableSourceCopy.getMetaClient()));
+  }
+
+  @Test
+  void testFilterPushDownWithParquetPredicates() {
+    HoodieTableSource tableSource = getEmptyStreamingSource();
+    List<ResolvedExpression> expressions = new ArrayList<>();
+    expressions.add(new FieldReferenceExpression("f_int", DataTypes.INT(), 0, 0));
+    expressions.add(new ValueLiteralExpression(10));
+    ResolvedExpression equalsExpression = new CallExpression(
+        BuiltInFunctionDefinitions.EQUALS, expressions, DataTypes.BOOLEAN());
+    CallExpression greaterThanExpression = new CallExpression(
+        BuiltInFunctionDefinitions.GREATER_THAN, expressions, DataTypes.BOOLEAN());
+    CallExpression orExpression = new CallExpression(
+        BuiltInFunctionDefinitions.OR,
+        Arrays.asList(equalsExpression, greaterThanExpression),
+        DataTypes.BOOLEAN());
+    List<ResolvedExpression> expectedFilters = Arrays.asList(equalsExpression, greaterThanExpression, orExpression);
+    tableSource.applyFilters(expectedFilters);
+    String actualPredicates = tableSource.getPredicates().toString();
+    assertEquals(ExpressionPredicates.fromExpression(expectedFilters).toString(), actualPredicates);
   }
 
   private HoodieTableSource getEmptyStreamingSource() {
@@ -302,8 +336,8 @@ public class TestHoodieTableSource {
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
     return new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(conf.getString(FlinkOptions.PATH)),
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(conf.getString(FlinkOptions.PATH)),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);

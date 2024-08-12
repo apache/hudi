@@ -93,7 +93,7 @@ public class HoodieMetaserver {
     if (metaserverStorage == null) {
       synchronized (HoodieMetaserver.class) {
         if (metaserverStorage == null) {
-          // TODO: add metastore factory.
+          // TODO: add metaserver factory.
           metaserverStorage = new RelationalDBBasedStorage();
           try {
             metaserverStorage.initStorage();

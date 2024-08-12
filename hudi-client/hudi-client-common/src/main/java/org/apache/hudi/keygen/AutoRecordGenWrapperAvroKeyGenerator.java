@@ -43,24 +43,24 @@ import java.util.List;
  * PartitionId refers to spark's partition Id.
  * RowId refers to the row index within the spark partition.
  */
-public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator {
+public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator implements AutoRecordKeyGeneratorWrapper {
 
   private final BaseKeyGenerator keyGenerator;
-  private final int partitionId;
-  private final String instantTime;
+  private Integer partitionId;
+  private String instantTime;
   private int rowId;
 
   public AutoRecordGenWrapperAvroKeyGenerator(TypedProperties config, BaseKeyGenerator keyGenerator) {
     super(config);
     this.keyGenerator = keyGenerator;
     this.rowId = 0;
-    this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
-    this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    partitionId = null;
+    instantTime = null;
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
+    return generateSequenceId(rowId++);
   }
 
   @Override
@@ -79,5 +79,20 @@ public class AutoRecordGenWrapperAvroKeyGenerator extends BaseKeyGenerator {
 
   public boolean isConsistentLogicalTimestampEnabled() {
     return keyGenerator.isConsistentLogicalTimestampEnabled();
+  }
+
+  @Override
+  public BaseKeyGenerator getPartitionKeyGenerator() {
+    return keyGenerator;
+  }
+
+  private String generateSequenceId(long recordIndex) {
+    if (partitionId == null) {
+      this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
+    }
+    if (instantTime == null) {
+      this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    }
+    return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
   }
 }

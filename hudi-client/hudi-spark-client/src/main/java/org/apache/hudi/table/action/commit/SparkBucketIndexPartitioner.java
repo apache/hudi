@@ -18,6 +18,20 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordLocation;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.HoodieBucketIndex;
+import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.WorkloadStat;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,21 +41,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.index.bucket.BucketIdentifier;
 import scala.Tuple2;
-
-import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.index.bucket.HoodieBucketIndex;
-import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.WorkloadProfile;
-import org.apache.hudi.table.WorkloadStat;
 
 import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE_TABLE;
@@ -68,6 +68,8 @@ public class SparkBucketIndexPartitioner<T> extends
    */
   private Map<String, Set<String>> updatePartitionPathFileIds;
 
+  private final boolean isNonBlockingConcurrencyControl;
+
   public SparkBucketIndexPartitioner(WorkloadProfile profile,
                                      HoodieEngineContext context,
                                      HoodieTable table,
@@ -91,6 +93,7 @@ public class SparkBucketIndexPartitioner<T> extends
     assignUpdates(profile);
     WriteOperationType operationType = profile.getOperationType();
     this.isOverwrite = INSERT_OVERWRITE.equals(operationType) || INSERT_OVERWRITE_TABLE.equals(operationType);
+    this.isNonBlockingConcurrencyControl = config.isNonBlockingConcurrencyControl();
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -124,7 +127,10 @@ public class SparkBucketIndexPartitioner<T> extends
     if (fileIdOption.isPresent()) {
       return new BucketInfo(BucketType.UPDATE, fileIdOption.get(), partitionPath);
     } else {
-      return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketId), partitionPath);
+      // Always write into log file instead of base file if using NB-CC
+      BucketType bucketType = isNonBlockingConcurrencyControl ? BucketType.UPDATE : BucketType.INSERT;
+      String fileIdPrefix = BucketIdentifier.newBucketFileIdPrefix(bucketId, isNonBlockingConcurrencyControl);
+      return new BucketInfo(bucketType, fileIdPrefix, partitionPath);
     }
   }
 

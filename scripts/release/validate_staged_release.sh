@@ -40,7 +40,7 @@ if [[ $# -lt 1 ]]; then
 else
     for param in "$@"
     do
-	if [[ $param =~ --release\=([0-9]\.[0-9]*\.[0-9]) ]]; then
+	if [[ $param =~ --release\=([0-9]\.[0-9]*\.[0-9].*) ]]; then
 		RELEASE_VERSION=${BASH_REMATCH[1]}
 	fi
 	if [[ $param =~ --rc_num\=([0-9]*) ]]; then

@@ -18,40 +18,50 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS_INFLIGHT;
 
 /**
  * Downgrade handle to assist in downgrading hoodie table from version 6 to 5.
  * To ensure compatibility, we need recreate the compaction requested file to
  * .aux folder.
+ * Since version 6 includes a new schema field for metadata table(MDT),
+ * the MDT needs to be deleted during downgrade to avoid column drop error.
+ * Also log block version was upgraded in version 6, therefore full compaction needs
+ * to be completed during downgrade to avoid both read and future compaction failures.
  */
 public class SixToFiveDowngradeHandler implements DowngradeHandler {
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    // sync compaction requested file to .aux
-    HoodieTimeline compactionTimeline = new HoodieActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
-        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
-    compactionTimeline.getInstantsAsStream().forEach(instant -> {
-      String fileName = instant.getFileName();
-      FileIOUtils.copy(metaClient.getFs(),
-          new Path(metaClient.getMetaPath(), fileName),
-          new Path(metaClient.getMetaAuxiliaryPath(), fileName));
-    });
-    return Collections.emptyMap();
+    final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
+
+    // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
+    HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+    // The log block version has been upgraded in version six so compaction is required for downgrade.
+    UpgradeDowngradeUtils.runCompaction(table, context, config, upgradeDowngradeHelper);
+    UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
+    Map<ConfigProperty, String> updatedTableProps = new HashMap<>();
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS))
+        .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS, v));
+    Option.ofNullable(tableConfig.getString(TABLE_METADATA_PARTITIONS_INFLIGHT))
+        .ifPresent(v -> updatedTableProps.put(TABLE_METADATA_PARTITIONS_INFLIGHT, v));
+    return updatedTableProps;
   }
+
 }

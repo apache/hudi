@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -42,6 +41,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case HoodieTimeline.CLUSTERING_ACTION:
         // TODO : Get file status and create a rollback stat and file
         // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
         // delete these files when it does not see a corresponding instant file under .hoodie
@@ -50,8 +50,8 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
         throw new IllegalArgumentException("invalid action name " + instantToRollback.getAction());
     }
     table.getMetaClient().reloadActiveTimeline();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
-    table.scheduleRollback(context, instantTime, instantToRollback, false, false);
+    String instantTime = table.getMetaClient().createNewInstantTime();
+    table.scheduleRollback(context, instantTime, instantToRollback, false, false, true);
     table.getMetaClient().reloadActiveTimeline();
     MergeOnReadRollbackActionExecutor rollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
         context,

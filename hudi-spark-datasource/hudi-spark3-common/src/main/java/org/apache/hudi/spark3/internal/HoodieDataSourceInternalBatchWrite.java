@@ -19,13 +19,12 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.DataSourceUtils;
-import org.apache.hudi.client.HoodieInternalWriteStatus;
-import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.DataSourceInternalWriterHelper;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
@@ -54,7 +53,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
   private Map<String, String> extraMetadata = new HashMap<>();
 
   public HoodieDataSourceInternalBatchWrite(String instantTime, HoodieWriteConfig writeConfig, StructType structType,
-      SparkSession jss, Configuration hadoopConfiguration, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
+                                            SparkSession jss, StorageConfiguration<?> storageConf, Map<String, String> properties, boolean populateMetaFields, boolean arePartitionRecordsSorted) {
     this.instantTime = instantTime;
     this.writeConfig = writeConfig;
     this.structType = structType;
@@ -62,7 +61,7 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
     this.arePartitionRecordsSorted = arePartitionRecordsSorted;
     this.extraMetadata = DataSourceUtils.getExtraMetadata(properties);
     this.dataSourceInternalWriterHelper = new DataSourceInternalWriterHelper(instantTime, writeConfig, structType,
-        jss, hadoopConfiguration, extraMetadata);
+        jss, storageConf, extraMetadata);
   }
 
   @Override
@@ -88,9 +87,9 @@ public class HoodieDataSourceInternalBatchWrite implements BatchWrite {
 
   @Override
   public void commit(WriterCommitMessage[] messages) {
-    List<HoodieWriteStat> writeStatList = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
-        .flatMap(m -> m.getWriteStatuses().stream().map(HoodieInternalWriteStatus::getStat)).collect(Collectors.toList());
-    dataSourceInternalWriterHelper.commit(writeStatList);
+    List<WriteStatus> writeStatuses = Arrays.stream(messages).map(m -> (HoodieWriterCommitMessage) m)
+        .flatMap(m -> m.getWriteStatuses().stream()).collect(Collectors.toList());
+    dataSourceInternalWriterHelper.commit(writeStatuses);
   }
 
   @Override

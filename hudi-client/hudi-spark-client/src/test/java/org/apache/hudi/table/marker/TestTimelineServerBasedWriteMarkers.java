@@ -20,9 +20,7 @@ package org.apache.hudi.table.marker;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -30,19 +28,18 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,26 +58,24 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.jsc = new JavaSparkContext(
         HoodieClientTestUtils.getSparkConfForTest(TestTimelineServerBasedWriteMarkers.class.getName()));
     this.context = new HoodieSparkEngineContext(jsc);
-    this.fs = FSUtils.getFs(metaClient.getBasePath(), metaClient.getHadoopConf());
-    this.markerFolderPath =  new Path(metaClient.getMarkerFolderPath("000"));
+    this.storage = metaClient.getStorage();
+    this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     FileSystemViewStorageConfig storageConf =
         FileSystemViewStorageConfig.newBuilder().withStorageType(FileSystemViewStorageType.SPILLABLE_DISK).build();
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().build();
-    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
       timelineService = new TimelineService(localEngineContext, new Configuration(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
-          FileSystem.get(new Configuration()),
-          FileSystemViewManager.createViewManager(
-              localEngineContext, metadataConfig, storageConf, HoodieCommonConfig.newBuilder().build()));
+          storage,
+          FileSystemViewManager.createViewManager(localEngineContext, storageConf, HoodieCommonConfig.newBuilder().build()));
       timelineService.startService();
     } catch (Exception ex) {
       throw new RuntimeException(ex);
     }
     this.writeMarkers = new TimelineServerBasedWriteMarkers(
-        metaClient.getBasePath(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
+        metaClient.getBasePath().toString(), markerFolderPath.toString(), "000", "localhost", timelineService.getServerPort(), 300);
   }
 
   @AfterEach
@@ -96,7 +91,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   void verifyMarkersInFileSystem(boolean isTablePartitioned) throws IOException {
     // Verifies the markers
     List<String> allMarkers = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
-            markerFolderPath.toString(), fs, context, 1)
+            markerFolderPath.toString(), storage, context, 1)
         .values().stream().flatMap(Collection::stream).sorted()
         .collect(Collectors.toList());
     assertEquals(3, allMarkers.size());
@@ -108,12 +103,12 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
         "file1.marker.MERGE", "file2.marker.APPEND", "file3.marker.CREATE");
     assertIterableEquals(expectedMarkers, allMarkers);
     // Verifies the marker type file
-    Path markerTypeFilePath = new Path(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
-    assertTrue(MarkerUtils.doesMarkerTypeFileExist(fs, markerFolderPath.toString()));
-    FSDataInputStream fsDataInputStream = fs.open(markerTypeFilePath);
+    StoragePath markerTypeFilePath = new StoragePath(markerFolderPath, MarkerUtils.MARKER_TYPE_FILENAME);
+    assertTrue(MarkerUtils.doesMarkerTypeFileExist(storage, markerFolderPath.toString()));
+    InputStream inputStream = storage.open(markerTypeFilePath);
     assertEquals(MarkerType.TIMELINE_SERVER_BASED.toString(),
-        FileIOUtils.readAsUTFString(fsDataInputStream));
-    closeQuietly(fsDataInputStream);
+        FileIOUtils.readAsUTFString(inputStream));
+    closeQuietly(inputStream);
   }
 
   /**

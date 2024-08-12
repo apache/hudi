@@ -28,6 +28,7 @@ import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 import java.io.IOException;
@@ -44,7 +45,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
 
   private Map<Integer, WritableColumnVector> idToColumnVectors;
 
-  private WritableColumnVector[] columnVectors;
+  private ColumnVector[] columnVectors;
 
   // The capacity of vectorized batch.
   private int capacity;
@@ -81,7 +82,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
   public void initBatch(StructType partitionColumns, InternalRow partitionValues) {
     super.initBatch(partitionColumns, partitionValues);
     if (columnVectors == null) {
-      columnVectors = new WritableColumnVector[sparkSchema.length() + partitionColumns.length()];
+      columnVectors = new ColumnVector[sparkSchema.length() + partitionColumns.length()];
     }
     if (idToColumnVectors == null) {
       idToColumnVectors = new HashMap<>();
@@ -129,7 +130,7 @@ public class Spark32PlusHoodieVectorizedParquetRecordReader extends VectorizedPa
         // fill other vector
         for (int i = 0; i < columnVectors.length; i++) {
           if (columnVectors[i] == null) {
-            columnVectors[i] = (WritableColumnVector) currentColumnBatch.column(i);
+            columnVectors[i] = currentColumnBatch.column(i);
           }
         }
         columnarBatch = new ColumnarBatch(columnVectors);

@@ -17,12 +17,13 @@
 
 package org.apache.spark.sql.parser
 
+import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser.{NonReservedContext, QuotedIdentifierContext}
+import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseListener, HoodieSqlBaseLexer, HoodieSqlBaseParser}
+
 import org.antlr.v4.runtime._
 import org.antlr.v4.runtime.atn.PredictionMode
 import org.antlr.v4.runtime.misc.{Interval, ParseCancellationException}
 import org.antlr.v4.runtime.tree.TerminalNodeImpl
-import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser.{NonReservedContext, QuotedIdentifierContext}
-import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseListener, HoodieSqlBaseLexer, HoodieSqlBaseParser}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
@@ -123,7 +124,11 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
     normalized.contains("system_time as of") ||
       normalized.contains("timestamp as of") ||
       normalized.contains("system_version as of") ||
-      normalized.contains("version as of")
+      normalized.contains("version as of") ||
+      normalized.contains("create index") ||
+      normalized.contains("drop index") ||
+      normalized.contains("show indexes") ||
+      normalized.contains("refresh index")
   }
 }
 

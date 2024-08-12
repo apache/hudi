@@ -26,21 +26,26 @@ import org.apache.hudi.common.config.HoodieConfig;
 
 import javax.annotation.concurrent.Immutable;
 
+import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
+import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
+
 /**
- * DeltaStreamer SQL Transformer Configs
+ * Hudi Streamer SQL Transformer Configs
  */
 @Immutable
-@ConfigClassProperty(name = "DeltaStreamer SQL Transformer Configs",
-    groupName = ConfigGroups.Names.DELTA_STREAMER,
-    description = "Configurations controlling the behavior of SQL transformer in Deltastreamer.")
+@ConfigClassProperty(name = "Hudi Streamer SQL Transformer Configs",
+    groupName = ConfigGroups.Names.HUDI_STREAMER,
+    description = "Configurations controlling the behavior of SQL transformer in Hudi Streamer.")
 public class SqlTransformerConfig extends HoodieConfig {
   public static final ConfigProperty<String> TRANSFORMER_SQL_FILE = ConfigProperty
-      .key("hoodie.deltastreamer.transformer.sql.file")
+      .key(STREAMER_CONFIG_PREFIX + "transformer.sql.file")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "transformer.sql.file")
       .withDocumentation("File with a SQL script to be executed during write");
 
   public static final ConfigProperty<String> TRANSFORMER_SQL = ConfigProperty
-      .key("hoodie.deltastreamer.transformer.sql")
+      .key(STREAMER_CONFIG_PREFIX + "transformer.sql")
       .noDefaultValue()
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "transformer.sql")
       .withDocumentation("SQL Query to be executed during write");
 }

@@ -132,7 +132,7 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
     // for new inserts, compute buckets depending on how many records we have for each partition
     Set<String> partitionPaths = profile.getPartitionPaths();
     long averageRecordSize =
-        averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitTimeline().filterCompletedInstants(),
+        averageBytesPerRecord(table.getMetaClient().getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants(),
             config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
@@ -253,9 +253,8 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -336,5 +335,10 @@ public class JavaUpsertPartitioner<T> implements Partitioner  {
       LOG.error("Error trying to compute average bytes/record ", t);
     }
     return avgSize;
+  }
+
+  public List<String> getSmallFileIds() {
+    return smallFiles.stream().map(smallFile -> smallFile.location.getFileId())
+        .collect(Collectors.toList());
   }
 }

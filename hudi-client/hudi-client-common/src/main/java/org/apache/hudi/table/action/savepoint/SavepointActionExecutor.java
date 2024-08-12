@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -44,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeCleanerPlan;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeHoodieCleanMetadata;
@@ -90,7 +90,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         } catch (IOException e) {
           throw new HoodieSavepointException("Failed to savepoint " + instantTime, e);
         }
-      }).orElse(table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
+      }).orElseGet(() -> table.getCompletedCommitsTimeline().firstInstant().get().getTimestamp());
 
       // Cannot allow savepoint time on a commit that could have been cleaned
       ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.GREATER_THAN_OR_EQUALS, lastCommitRetained),
@@ -108,7 +108,7 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
       // (2) using direct file system listing:  we parallelize the partition listing so that
       // each partition can be listed on the file system concurrently through Spark.
       // Note that
-      if (shouldUseBatchLookup(config)) {
+      if (shouldUseBatchLookup(table.getMetaClient().getTableConfig(), config)) {
         latestFilesMap = view.getAllLatestFileSlicesBeforeOrOn(instantTime).entrySet().stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,
@@ -123,7 +123,8 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
                   return latestFiles;
                 }));
       } else {
-        List<String> partitions = FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), table.getMetaClient().getBasePath());
+        List<String> partitions = FSUtils.getAllPartitionPaths(
+            context, table.getStorage(), config.getMetadataConfig(), table.getMetaClient().getBasePath());
         latestFilesMap = context.mapToPair(partitions, partitionPath -> {
           // Scan all partitions files with this commit time
           LOG.info("Collecting latest files in partition path " + partitionPath);
@@ -152,21 +153,4 @@ public class SavepointActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     }
   }
 
-  /**
-   * Whether to use batch lookup for listing the latest base files in metadata table.
-   * <p>
-   * Note that metadata table has to be enabled, and the storage type of the file system view
-   * cannot be EMBEDDED_KV_STORE or SPILLABLE_DISK (these two types are not integrated with
-   * metadata table, see HUDI-5612).
-   *
-   * @param config Write configs.
-   * @return {@code true} if using batch lookup; {@code false} otherwise.
-   */
-  private boolean shouldUseBatchLookup(HoodieWriteConfig config) {
-    FileSystemViewStorageType storageType =
-        config.getClientSpecifiedViewStorageConfig().getStorageType();
-    return config.getMetadataConfig().enabled()
-        && !FileSystemViewStorageType.EMBEDDED_KV_STORE.equals(storageType)
-        && !FileSystemViewStorageType.SPILLABLE_DISK.equals(storageType);
-  }
 }

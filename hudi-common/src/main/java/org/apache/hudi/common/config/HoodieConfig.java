@@ -32,6 +32,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.getRawValueWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.loadGlobalProperties;
+
 /**
  * This class deals with {@link ConfigProperty} and provides get/set functionalities.
  */
@@ -40,6 +43,10 @@ public class HoodieConfig implements Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
+  // Number of retries while reading the properties file to deal with parallel updates
+  protected static final int MAX_READ_RETRIES = 5;
+  // Delay between retries while reading the properties file
+  protected static final int READ_RETRY_DELAY_MSEC = 1000;
 
   protected TypedProperties props;
 
@@ -106,25 +113,18 @@ public class HoodieConfig implements Serializable {
   }
 
   public <T> boolean contains(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
+    return contains(configProperty, this);
+  }
+
+  public static <T> boolean contains(ConfigProperty<T> configProperty, HoodieConfig config) {
+    if (config.getProps().containsKey(configProperty.key())) {
       return true;
     }
-    return configProperty.getAlternatives().stream().anyMatch(props::containsKey);
+    return configProperty.getAlternatives().stream().anyMatch(k -> config.getProps().containsKey(k));
   }
 
   private <T> Option<Object> getRawValue(ConfigProperty<T> configProperty) {
-    if (props.containsKey(configProperty.key())) {
-      return Option.ofNullable(props.get(configProperty.key()));
-    }
-    for (String alternative : configProperty.getAlternatives()) {
-      if (props.containsKey(alternative)) {
-        LOG.warn(String.format("The configuration key '%s' has been deprecated "
-                + "and may be removed in the future. Please use the new key '%s' instead.",
-            alternative, configProperty.key()));
-        return Option.ofNullable(props.get(alternative));
-      }
-    }
-    return Option.empty();
+    return getRawValueWithAltKeys(props, configProperty);
   }
 
   protected void setDefaults(String configClassName) {
@@ -169,7 +169,7 @@ public class HoodieConfig implements Serializable {
   public <T> Integer getIntOrDefault(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(v -> Integer.parseInt(v.toString()))
-        .orElse(Integer.parseInt(configProperty.defaultValue().toString()));
+        .orElseGet(() -> Integer.parseInt(configProperty.defaultValue().toString()));
   }
 
   public <T> Boolean getBoolean(ConfigProperty<T> configProperty) {
@@ -238,12 +238,12 @@ public class HoodieConfig implements Serializable {
   }
 
   public TypedProperties getProps() {
-    return getProps(false);
+    return props;
   }
 
   public TypedProperties getProps(boolean includeGlobalProps) {
     if (includeGlobalProps) {
-      TypedProperties mergedProps = DFSPropertiesConfiguration.getGlobalProps();
+      TypedProperties mergedProps = loadGlobalProperties();
       mergedProps.putAll(props);
       return mergedProps;
     } else {

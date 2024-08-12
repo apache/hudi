@@ -18,20 +18,20 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils.{convertStructTypeToAvroSchema, createInternalRowToAvroConverter}
-import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{OverwriteWithLatestAvroPayloadWithEquality, cloneUsingKryo, convertToAvroRecord, toUnsafeRow}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
-import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions.objects.SerializerSupport
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, UnsafeRow}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.addMetaFields
 import org.apache.spark.sql.types.{Decimal, StructType}
+import org.apache.spark.sql.{HoodieInternalRowUtils, Row}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -80,8 +80,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val hoodieInternalRow = new HoodieInternalRow(new Array[UTF8String](5), unsafeRow, false)
 
     Seq(
-      (unsafeRow, rowSchema, 87),
-      (hoodieInternalRow, addMetaFields(rowSchema), 127)
+      (unsafeRow, rowSchema, 89),
+      (hoodieInternalRow, addMetaFields(rowSchema), 129)
     ) foreach { case (row, schema, expectedSize) => routine(row, schema, expectedSize) }
   }
 
@@ -106,11 +106,15 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     val key = new HoodieKey("rec-key", "part-path")
 
     val legacyRecord = toLegacyAvroRecord(avroRecord, key)
+    legacyRecord.setIgnoreIndexUpdate(true)
     val avroIndexedRecord = new HoodieAvroIndexedRecord(key, avroRecord)
+    avroIndexedRecord.setIgnoreIndexUpdate(true)
+
+    val expectedLagacyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 536 else 530
 
     Seq(
-      (legacyRecord, 528),
-      (avroIndexedRecord, 389)
+      (legacyRecord, expectedLagacyRecordSize),
+      (avroIndexedRecord, 391)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 
@@ -129,10 +133,12 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     }
 
     val key = new HoodieKey("rec-key", "part-path")
-
+    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 32 else 29
     Seq(
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO), 27),
-      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK), 27)
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO),
+        expectedEmptyRecordSize),
+      (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 2, HoodieRecordType.SPARK),
+        expectedEmptyRecordSize)
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 

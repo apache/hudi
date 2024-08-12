@@ -18,8 +18,8 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -48,7 +48,7 @@ public final class ArchiveExecutorUtils {
        int maxCommits,
        int commitsRetained,
        boolean enableMetadata,
-       String basePath) {
+       String basePath) throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
@@ -61,8 +61,8 @@ public final class ArchiveExecutorUtils {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
-      LOG.error("Failed to archive with IOException: " + ioe);
-      return -1;
+      LOG.error("Failed to archive with IOException: {}", ioe.getMessage());
+      throw ioe;
     }
     return 0;
   }

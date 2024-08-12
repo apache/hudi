@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -75,6 +76,13 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.6.0")
       .withDocumentation("Callback timeout in seconds.");
+
+  public static final ConfigProperty<String> CALLBACK_HTTP_CUSTOM_HEADERS = ConfigProperty
+      .key(CALLBACK_PREFIX + "http.custom.headers")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.15.0")
+      .withDocumentation("Http callback custom headers. Format: HeaderName1:HeaderValue1;HeaderName2:HeaderValue2");
 
   /**
    * @deprecated Use {@link #TURN_CALLBACK_ON} and its methods instead
@@ -168,6 +176,13 @@ public class HoodieWriteCommitCallbackConfig extends HoodieConfig {
 
     public Builder withCallbackHttpApiKey(String apiKey) {
       writeCommitCallbackConfig.setValue(CALLBACK_HTTP_API_KEY_VALUE, apiKey);
+      return this;
+    }
+
+    public Builder withCustomHeaders(String customHeaders) {
+      if (!StringUtils.isNullOrEmpty(customHeaders)) {
+        writeCommitCallbackConfig.setValue(CALLBACK_HTTP_CUSTOM_HEADERS, customHeaders);
+      }
       return this;
     }
 

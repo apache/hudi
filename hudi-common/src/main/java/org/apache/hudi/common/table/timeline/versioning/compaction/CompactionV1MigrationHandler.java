@@ -24,8 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.ValidationUtils;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,7 +55,7 @@ public class CompactionV1MigrationHandler extends AbstractMigratorBase<HoodieCom
   public HoodieCompactionPlan downgradeFrom(HoodieCompactionPlan input) {
     ValidationUtils.checkArgument(input.getVersion() == 2, "Input version is " + input.getVersion() + ". Must be 2");
     HoodieCompactionPlan compactionPlan = new HoodieCompactionPlan();
-    final Path basePath = new Path(metaClient.getBasePath());
+    final StoragePath basePath = metaClient.getBasePath();
     List<HoodieCompactionOperation> v1CompactionOperationList = new ArrayList<>();
     if (null != input.getOperations()) {
       v1CompactionOperationList = input.getOperations().stream().map(inp ->
@@ -73,11 +72,11 @@ public class CompactionV1MigrationHandler extends AbstractMigratorBase<HoodieCom
     return compactionPlan;
   }
 
-  private static String convertToV1Path(Path basePath, String partitionPath, String fileName) {
+  private static String convertToV1Path(StoragePath basePath, String partitionPath, String fileName) {
     if ((fileName == null) || (fileName.isEmpty())) {
       return fileName;
     }
 
-    return new Path(FSUtils.getPartitionPath(basePath, partitionPath), fileName).toString();
+    return new StoragePath(FSUtils.constructAbsolutePath(basePath, partitionPath), fileName).toString();
   }
 }

@@ -34,13 +34,13 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndexUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 import org.apache.hudi.testutils.HoodieFlinkWriteableTestTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -246,14 +246,13 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    List<String> results = HoodieIndexUtils.filterKeysFromFile(
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
+        new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, metaClient.getStorage());
     assertEquals(results.size(), 2);
-    assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
-    assertTrue(results.get(0).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
-        || results.get(1).equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));
+    assertTrue(results.get(0).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0")
+        || results.get(1).getLeft().equals("2eb5b87b-1feu-4edd-87b4-6ec96dc405a0"));
     // TODO(vc): Need more coverage on actual filenames
     // assertTrue(results.get(0)._2().equals(filename));
     // assertTrue(results.get(1)._2().equals(filename));

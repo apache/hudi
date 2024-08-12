@@ -1,0 +1,203 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+{
+  "type": "record",
+  "name": "SchemaName",
+  "namespace": "SchemaNS",
+  "fields": [
+    {
+      "name": "key",
+      "type": "string"
+    },
+    {
+      "name": "version",
+      "type": [
+        "string",
+        "null"
+      ],
+      "doc": "versionComment"
+    },
+    {
+      "name": "data1",
+      "type": {
+        "type": "record",
+        "name": "data1",
+        "namespace": "SchemaNS.SchemaName",
+        "fields": [
+          {
+            "name": "innerKey",
+            "type": "string",
+            "doc": "innerKeyComment"
+          },
+          {
+            "name": "value",
+            "type": [
+              "long",
+              "null"
+            ],
+            "doc": "valueComment"
+          }
+        ]
+      }
+    },
+    {
+      "name": "data2",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "data2",
+          "namespace": "SchemaNS.SchemaName",
+          "fields": [
+            {
+              "name": "innerKey",
+              "type": "string",
+              "doc": "innerKeyComment"
+            },
+            {
+              "name": "value",
+              "type": [
+                "long",
+                "null"
+              ],
+              "doc": "valueComment"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nullableMap",
+      "type": [
+        {
+          "type": "map",
+          "values": [
+            {
+              "type": "record",
+              "name": "nullableMap",
+              "namespace": "SchemaNS.SchemaName",
+              "fields": [
+                {
+                  "name": "mapKey",
+                  "type": "string",
+                  "doc": "mapKeyComment"
+                },
+                {
+                  "name": "mapVal",
+                  "type": [
+                    "int",
+                    "null"
+                  ]
+                }
+              ]
+            },
+            "null"
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "map",
+      "type": {
+        "type": "map",
+        "values": [
+          {
+            "type": "record",
+            "name": "map",
+            "namespace": "SchemaNS.SchemaName",
+            "fields": [
+              {
+                "name": "mapKey",
+                "type": "string",
+                "doc": "mapKeyComment"
+              },
+              {
+                "name": "mapVal",
+                "type": [
+                  "int",
+                  "null"
+                ]
+              }
+            ]
+          },
+          "null"
+        ]
+      }
+    },
+    {
+      "name": "nullableArray",
+      "type": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": "record",
+              "name": "nullableArray",
+              "namespace": "SchemaNS.SchemaName",
+              "fields": [
+                {
+                  "name": "arrayKey",
+                  "type": "string"
+                },
+                {
+                  "name": "arrayVal",
+                  "type": [
+                    "int",
+                    "null"
+                  ],
+                  "doc": "arrayValComment"
+                }
+              ]
+            },
+            "null"
+          ]
+        },
+        "null"
+      ]
+    },
+    {
+      "name": "array",
+      "type": {
+        "type": "array",
+        "items": [
+          {
+            "type": "record",
+            "name": "array",
+            "namespace": "SchemaNS.SchemaName",
+            "fields": [
+              {
+                "name": "arrayKey",
+                "type": "string"
+              },
+              {
+                "name": "arrayVal",
+                "type": [
+                  "int",
+                  "null"
+                ],
+                "doc": "arrayValComment"
+              }
+            ]
+          },
+          "null"
+        ]
+      }
+    }
+  ]
+}

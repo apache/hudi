@@ -108,6 +108,27 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Get the latest file slices for a given partition including the inflight ones.
+     *
+     * @param partitionPath The partition path of interest
+     * @return Stream of latest {@link FileSlice} in the partition path.
+     */
+    Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath);
+
+    /**
+     * Stream all the latest file slices in the given partition
+     * without caching the file group mappings.
+     *
+     * <p>This is useful for some table services such as compaction and clustering, these services may search around the files to clean
+     * within some ancient data partitions, if there triggers a full table service for enormous number of partitions, the cache could
+     * cause a huge memory pressure to the timeline server which induces an OOM exception.
+     *
+     * <p>The caching of these file groups does not benefit to writers most often because the writers
+     * write to recent data partitions usually.
+     */
+    Stream<FileSlice> getLatestFileSlicesStateless(String partitionPath);
+
+    /**
      * Get Latest File Slice for a given fileId in a given partition.
      */
     Option<FileSlice> getLatestFileSlice(String partitionPath, String fileId);
@@ -169,16 +190,28 @@ public interface TableFileSystemView {
   Stream<HoodieFileGroup> getAllFileGroups(String partitionPath);
 
   /**
+   * Stream all the file groups for a given partition without caching the file group mappings.
+   *
+   * <p>This is useful for some table services such as cleaning, the cleaning service may search around the files to clean
+   * within some ancient data partitions, if there triggers a full table cleaning for enormous number of partitions, the cache could
+   * cause a huge memory pressure to the timeline server which induces an OOM exception.
+   *
+   * <p>The caching of these file groups does not benefit to writers most often because the writers
+   * write to recent data partitions usually.
+   */
+  Stream<HoodieFileGroup> getAllFileGroupsStateless(String partitionPath);
+
+  /**
    * Return Pending Compaction Operations.
    *
-   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingCompactionOperations();
 
   /**
    * Return Pending Compaction Operations.
    *
-   * @return Pair<Pair<InstantTime,CompactionOperation>>
+   * @return Stream<Pair<InstantTime,CompactionOperation>>
    */
   Stream<Pair<String, CompactionOperation>> getPendingLogCompactionOperations();
 
@@ -203,6 +236,11 @@ public interface TableFileSystemView {
   Stream<HoodieFileGroup> getReplacedFileGroupsBefore(String maxCommitTime, String partitionPath);
 
   /**
+   * Stream all the replaced file groups after or on minCommitTime.
+   */
+  Stream<HoodieFileGroup> getReplacedFileGroupsAfterOrOn(String minCommitTime, String partitionPath);
+
+  /**
    * Stream all the replaced file groups for given partition.
    */
   Stream<HoodieFileGroup> getAllReplacedFileGroups(String partitionPath);
@@ -211,4 +249,16 @@ public interface TableFileSystemView {
    * Filegroups that are in pending clustering.
    */
   Stream<Pair<HoodieFileGroupId, HoodieInstant>> getFileGroupsInPendingClustering();
+
+
+  /**
+   * Load all partition and file slices into view
+   */
+  void loadAllPartitions();
+
+  /**
+   * Load all partition and file slices into view for the provided partition paths
+   * @param partitionPaths List of partition paths to load
+   */
+  void loadPartitions(List<String> partitionPaths);
 }

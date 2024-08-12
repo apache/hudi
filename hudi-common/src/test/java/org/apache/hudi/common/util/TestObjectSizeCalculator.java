@@ -29,6 +29,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getJavaVersion;
 import static org.apache.hudi.common.util.ObjectSizeCalculator.getObjectSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -59,12 +60,29 @@ public class TestObjectSizeCalculator {
     String name = "Alice Bob";
     Person person = new Person(name);
 
+    if (getJavaVersion() == 11 || getJavaVersion() == 17) {
+      assertEquals(48, getObjectSize(string));
+      assertEquals(168, getObjectSize(stringArray));
+      assertEquals(144, getObjectSize(stringBuilder));
+      assertEquals(72, getObjectSize(DayOfWeek.TUESDAY));
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1256 : 1176,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(96, getObjectSize(person));
+    } else {
+      assertEquals(56, getObjectSize(string));
+      assertEquals(184, getObjectSize(stringArray));
+      assertEquals(240, getObjectSize(stringBuilder));
+      assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
+      // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
+      // implement props, which will change the size of the object.
+      assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
+          getObjectSize(Schema.create(Schema.Type.STRING)));
+      assertEquals(104, getObjectSize(person));
+    }
+
     assertEquals(40, getObjectSize(emptyString));
-    assertEquals(56, getObjectSize(string));
-    assertEquals(184, getObjectSize(stringArray));
     assertEquals(416, getObjectSize(anotherStringArray));
     assertEquals(40, getObjectSize(stringList));
-    assertEquals(240, getObjectSize(stringBuilder));
     assertEquals(16, getObjectSize(maxIntPrimitive));
     assertEquals(16, getObjectSize(minIntPrimitive));
     assertEquals(16, getObjectSize(maxInteger));
@@ -72,16 +90,10 @@ public class TestObjectSizeCalculator {
     assertEquals(24, getObjectSize(zeroLong));
     assertEquals(24, getObjectSize(zeroDouble));
     assertEquals(16, getObjectSize(booleanField));
-    assertEquals(80, getObjectSize(DayOfWeek.TUESDAY));
     assertEquals(16, getObjectSize(object));
     assertEquals(32, getObjectSize(emptyClass));
     assertEquals(40, getObjectSize(stringClass));
     assertEquals(40, getObjectSize(payloadClass));
-    // Since avro 1.9, Schema use ConcurrentHashMap instead of LinkedHashMap to
-    // implement props, which will change the size of the object.
-    assertEquals(HoodieAvroUtils.gteqAvro1_9() ? 1320 : 1240,
-        getObjectSize(Schema.create(Schema.Type.STRING)));
-    assertEquals(104, getObjectSize(person));
   }
 
   class EmptyClass {

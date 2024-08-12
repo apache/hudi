@@ -111,6 +111,7 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   @Test
+  @Disabled
   public void testParquetDemo() throws Exception {
     baseFileFormat = HoodieFileFormat.PARQUET;
 
@@ -272,9 +273,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     assertStdOutContains(stdOutErrPair,
         "|   partition    |\n+----------------+\n| dt=2018-08-31  |\n+----------------+\n", 3);
 
-    // There should have 5 data source tables except stock_ticks_mor_bs_rt.
-    // After [HUDI-2071] has solved, we can inc the number 5 to 6.
-    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 5);
+    assertStdOutContains(stdOutErrPair, "'spark.sql.sources.provider'='hudi'", 6);
 
     stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"

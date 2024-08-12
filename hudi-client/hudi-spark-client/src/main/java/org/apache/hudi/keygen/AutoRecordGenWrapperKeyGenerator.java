@@ -47,62 +47,76 @@ import java.util.List;
  * PartitionId refers to spark's partition Id.
  * RowId refers to the row index within the spark partition.
  */
-public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator {
+public class AutoRecordGenWrapperKeyGenerator extends BuiltinKeyGenerator implements AutoRecordKeyGeneratorWrapper {
 
-  private final BuiltinKeyGenerator builtinKeyGenerator;
-  private final int partitionId;
-  private final String instantTime;
+  private final BuiltinKeyGenerator keyGenerator;
+  private Integer partitionId;
+  private String instantTime;
   private int rowId;
 
-  public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator builtinKeyGenerator) {
+  public AutoRecordGenWrapperKeyGenerator(TypedProperties config, BuiltinKeyGenerator keyGenerator) {
     super(config);
-    this.builtinKeyGenerator = builtinKeyGenerator;
+    this.keyGenerator = keyGenerator;
     this.rowId = 0;
-    this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
-    this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    partitionId = null;
+    instantTime = null;
   }
 
   @Override
   public String getRecordKey(GenericRecord record) {
-    return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
+    return generateSequenceId(rowId++);
   }
 
   @Override
   public String getPartitionPath(GenericRecord record) {
-    return builtinKeyGenerator.getPartitionPath(record);
+    return keyGenerator.getPartitionPath(record);
   }
 
   @Override
   public String getRecordKey(Row row) {
-    return HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++);
+    return generateSequenceId(rowId++);
   }
 
   @Override
   public UTF8String getRecordKey(InternalRow internalRow, StructType schema) {
-    return UTF8String.fromString(HoodieRecord.generateSequenceId(instantTime, partitionId, rowId++));
+    return UTF8String.fromString(generateSequenceId(rowId++));
   }
 
   @Override
   public String getPartitionPath(Row row) {
-    return builtinKeyGenerator.getPartitionPath(row);
+    return keyGenerator.getPartitionPath(row);
   }
 
   @Override
   public UTF8String getPartitionPath(InternalRow internalRow, StructType schema) {
-    return builtinKeyGenerator.getPartitionPath(internalRow, schema);
+    return keyGenerator.getPartitionPath(internalRow, schema);
   }
 
   @Override
   public List<String> getRecordKeyFieldNames() {
-    return builtinKeyGenerator.getRecordKeyFieldNames();
+    return keyGenerator.getRecordKeyFieldNames();
   }
 
   public List<String> getPartitionPathFields() {
-    return builtinKeyGenerator.getPartitionPathFields();
+    return keyGenerator.getPartitionPathFields();
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
-    return builtinKeyGenerator.isConsistentLogicalTimestampEnabled();
+    return keyGenerator.isConsistentLogicalTimestampEnabled();
   }
 
+  @Override
+  public BuiltinKeyGenerator getPartitionKeyGenerator() {
+    return keyGenerator;
+  }
+
+  private String generateSequenceId(long recordIndex) {
+    if (partitionId == null) {
+      this.partitionId = config.getInteger(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG);
+    }
+    if (instantTime == null) {
+      this.instantTime = config.getString(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG);
+    }
+    return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+  }
 }

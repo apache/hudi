@@ -24,8 +24,6 @@ import java.util.Iterator;
  * An iterator that give a chance to release resources.
  *
  * @param <R> The return type
- *
- * TODO move under common.util.collection
  */
 public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
   @Override

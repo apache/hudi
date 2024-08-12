@@ -50,6 +50,6 @@ public class OneToZeroDowngradeHandler implements DowngradeHandler {
       WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, inflightInstant.getTimestamp());
       writeMarkers.quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
     }
-    return Collections.EMPTY_MAP;
+    return Collections.emptyMap();
   }
 }

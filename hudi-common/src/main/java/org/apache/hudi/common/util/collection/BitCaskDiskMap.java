@@ -218,8 +218,8 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
     try {
       byte[] val = isCompressionEnabled ? DISK_COMPRESSION_REF.get().compressBytes(SerializationUtils.serialize(value)) :
           SerializationUtils.serialize(value);
-      Integer valueSize = val.length;
-      Long timestamp = System.currentTimeMillis();
+      int valueSize = val.length;
+      long timestamp = System.currentTimeMillis();
       this.valueMetadataMap.put(key,
           new BitCaskDiskMap.ValueMetadata(this.filePath, valueSize, filePosition.get(), timestamp));
       byte[] serializedKey = SerializationUtils.serialize(key);
@@ -271,6 +271,7 @@ public final class BitCaskDiskMap<T extends Serializable, R extends Serializable
         fileOutputStream.getChannel().force(false);
         writeOnlyFileHandle.close();
       }
+      fileOutputStream.close();
 
       while (!openedAccessFiles.isEmpty()) {
         BufferedRandomAccessFile file = openedAccessFiles.poll();

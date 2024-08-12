@@ -24,20 +24,22 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.TableHeader;
+import org.apache.hudi.cli.utils.CLIUtils;
 import org.apache.hudi.cli.utils.InputStreamConsumer;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -46,6 +48,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to show cleans options.
@@ -57,12 +61,18 @@ public class CleansCommand {
   public String showCleans(
       @ShellOption(value = {"--limit"}, help = "Limit commits", defaultValue = "-1") final Integer limit,
       @ShellOption(value = {"--sortBy"}, help = "Sorting Field", defaultValue = "") final String sortByField,
+      @ShellOption(value = {"--startTs"}, help = "start time for cleans, default: now - 10 days",
+          defaultValue = ShellOption.NULL) String startTs,
+      @ShellOption(value = {"--endTs"}, help = "end time for clean, default: upto latest",
+          defaultValue = ShellOption.NULL) String endTs,
+      @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
+          defaultValue = "false") final boolean includeArchivedTimeline,
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") final boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
           defaultValue = "false") final boolean headerOnly)
       throws IOException {
 
-    HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline();
+    HoodieDefaultTimeline activeTimeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     HoodieTimeline timeline = activeTimeline.getCleanerTimeline().filterCompletedInstants();
     List<HoodieInstant> cleans = timeline.getReverseOrderedInstants().collect(Collectors.toList());
     List<Comparable[]> rows = new ArrayList<>();
@@ -137,7 +147,7 @@ public class CleansCommand {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     String cmd = SparkMain.SparkCommand.CLEAN.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, metaClient.getBasePath(), propsFilePath);
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, HoodieCLI.basePath, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

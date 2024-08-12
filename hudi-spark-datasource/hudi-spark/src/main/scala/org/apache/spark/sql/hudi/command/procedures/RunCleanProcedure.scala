@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.config.HoodieCleanConfig
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -94,12 +94,12 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
     }
 
     val basePath = getBasePath(tableName, Option.empty)
-    val cleanInstantTime = HoodieActiveTimeline.createNewInstantTime()
 
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
+      val cleanInstantTime = client.createNewInstantTime()
       val hoodieCleanMeta = client.clean(cleanInstantTime, scheduleInLine, skipLocking)
 
       if (hoodieCleanMeta == null) Seq.empty

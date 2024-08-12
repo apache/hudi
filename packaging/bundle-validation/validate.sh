@@ -26,16 +26,21 @@
 #################################################################################################
 
 JAVA_RUNTIME_VERSION=$1
+SCALA_PROFILE=$2
 DEFAULT_JAVA_HOME=${JAVA_HOME}
 WORKDIR=/opt/bundle-validation
 JARS_DIR=${WORKDIR}/jars
 # link the jar names to easier to use names
 ln -sf $JARS_DIR/hudi-hadoop-mr*.jar $JARS_DIR/hadoop-mr.jar
-ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
+  # For Scala 2.13, Flink is not support, so skipping the Flink and Kafka Connect bundle validation
+  # (Note that Kafka Connect bundle pulls in hudi-flink dependency)
+  ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
+  ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
+fi
 ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
-ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
 ##
@@ -55,7 +60,7 @@ change_java_runtime_version () {
 # Function to change Java runtime version to default Java 8
 ##
 use_default_java_runtime () {
-  echo "Use default java runtime under ${DEFAULT_JAVA_HOME}"
+  echo "::warning:: Use default java runtime under ${DEFAULT_JAVA_HOME}"
   export JAVA_HOME=${DEFAULT_JAVA_HOME}
 }
 
@@ -80,8 +85,7 @@ test_spark_hadoop_mr_bundles () {
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
-      -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/validate.scala
     numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
     if [ "$numRecords" -ne 10 ]; then
         echo "::error::validate.sh Spark SQL validation failed."
@@ -89,6 +93,7 @@ test_spark_hadoop_mr_bundles () {
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
     use_default_java_runtime
+    if [[ $HIVE_HOME =~ 'hive-2' ]]; then return; fi # skipping hive2 for HiveQL query due to setup issue
     # save HiveQL query results
     hiveqlresultsdir=/tmp/hadoop-mr-bundle/hiveql/trips/results
     mkdir -p $hiveqlresultsdir
@@ -187,7 +192,6 @@ test_flink_bundle() {
     fi
     echo "::warning::validate.sh done validating Flink bundle validation was successful."
 }
-
 
 ##
 # Function to test the kafka-connect bundle.
@@ -295,7 +299,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating utilities slim bundle"
 
-if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
+if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' && ${SCALA_PROFILE} != 'scala-2.13' && ! "${FLINK_HOME}" == *"1.18"* ]]; then
   echo "::warning::validate.sh validating flink bundle"
   test_flink_bundle
   if [ "$?" -ne 0 ]; then
@@ -304,16 +308,18 @@ if [[ ${JAVA_RUNTIME_VERSION} == 'openjdk8' ]]; then
   echo "::warning::validate.sh done validating flink bundle"
 fi
 
-echo "::warning::validate.sh validating kafka connect bundle"
-test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
-if [ "$?" -ne 0 ]; then
-    exit 1
-fi
-echo "::warning::validate.sh done validating kafka connect bundle"
+if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
+  echo "::warning::validate.sh validating kafka connect bundle"
+  test_kafka_connect_bundle $JARS_DIR/kafka-connect.jar
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating kafka connect bundle"
 
-echo "::warning::validate.sh validating metaserver bundle"
-test_metaserver_bundle
-if [ "$?" -ne 0 ]; then
-    exit 1
+  echo "::warning::validate.sh validating metaserver bundle"
+  test_metaserver_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  echo "::warning::validate.sh done validating metaserver bundle"
 fi
-echo "::warning::validate.sh done validating metaserver bundle"

@@ -32,6 +32,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +61,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        getFileSystem(),
+        (FileSystem) getStorage().getFileSystem(),
         getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -81,7 +82,7 @@ public class FlinkMergeHandleWithChangeLog<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);

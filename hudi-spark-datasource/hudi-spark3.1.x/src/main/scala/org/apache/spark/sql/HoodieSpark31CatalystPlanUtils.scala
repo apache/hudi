@@ -20,10 +20,13 @@ package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeSet, ProjectionOverSchema}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
+import org.apache.spark.sql.catalyst.planning.ScanOperation
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, MergeIntoTable}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog}
 import org.apache.spark.sql.execution.command.AlterTableRecoverPartitionsCommand
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
@@ -33,6 +36,25 @@ object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       case ResolvedTable(catalog, identifier, table) => Some((catalog, identifier, table))
       case _ => None
     }
+
+  override def unapplyMergeIntoTable(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] = {
+    plan match {
+      case MergeIntoTable(targetTable, sourceTable, mergeCondition, _, _) =>
+        Some((targetTable, sourceTable, mergeCondition))
+      case _ => None
+    }
+  }
+
+  override def maybeApplyForNewFileFormat(plan: LogicalPlan): LogicalPlan = {
+    plan match {
+      case s@ScanOperation(_, _,
+      l@LogicalRelation(fs: HadoopFsRelation, _, _, _))
+        if fs.fileFormat.isInstanceOf[ParquetFileFormat with HoodieFormatTrait]
+          && !fs.fileFormat.asInstanceOf[ParquetFileFormat with HoodieFormatTrait].isProjected =>
+        FileFormatUtilsForFileGroupReader.applyNewFileFormatChanges(s, l, fs)
+      case _ => plan
+    }
+  }
 
   override def projectOverSchema(schema: StructType, output: AttributeSet): ProjectionOverSchema = ProjectionOverSchema(schema)
 
@@ -47,6 +69,26 @@ object HoodieSpark31CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
       // AlterTableRecoverPartitionsCommand's behavior
       case c: AlterTableRecoverPartitionsCommand =>
         Some((c.tableName, true, false, c.cmd))
+    }
+  }
+
+  /**
+   * Managing Indexes commands are not supported for Spark3.1
+   */
+  override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = None
+
+  override def unapplyDropIndex(plan: LogicalPlan): Option[(LogicalPlan, String, Boolean)] = None
+
+  override def unapplyShowIndexes(plan: LogicalPlan): Option[(LogicalPlan, Seq[Attribute])] = None
+
+  override def unapplyRefreshIndex(plan: LogicalPlan): Option[(LogicalPlan, String)] = None
+
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some((insert.table, Seq.empty, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+      case _ =>
+        None
     }
   }
 }

@@ -30,9 +30,10 @@ import org.apache.spark.api.java.JavaRDD;
 import java.util.Arrays;
 
 /**
- * A partitioner that does sort based on specified column values for each RDD partition.
+ * A partitioner that globally sorts a {@link JavaRDD<HoodieRecord>} based on partition path column and custom columns.
  *
- * @param <T> HoodieRecordPayload type
+ * @see GlobalSortPartitioner
+ * @see BulkInsertSortMode#GLOBAL_SORT
  */
 public class RDDCustomColumnsSortPartitioner<T>
     implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
@@ -47,10 +48,10 @@ public class RDDCustomColumnsSortPartitioner<T>
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
-  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public RDDCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
     this.sortColumnNames = columnNames;
     this.serializableSchema = new SerializableSchema(schema);
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
   }
 
   @Override
@@ -60,11 +61,11 @@ public class RDDCustomColumnsSortPartitioner<T>
     final SerializableSchema schema = this.serializableSchema;
     final boolean consistentLogicalTimestampEnabled = this.consistentLogicalTimestampEnabled;
     return records.sortBy(
-        record -> {
-          Object[] columnValues = record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled);
-          return FlatLists.ofComparableArray(columnValues);
-        },
-        true, outputSparkPartitions);
+        record -> FlatLists.ofComparableArray(
+            BulkInsertPartitioner.prependPartitionPath(
+                record.getPartitionPath(),
+                record.getColumnValues(schema.get(), sortColumns, consistentLogicalTimestampEnabled))
+        ), true, outputSparkPartitions);
   }
 
   @Override

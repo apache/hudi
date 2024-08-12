@@ -21,6 +21,7 @@ package org.apache.hudi.client;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +41,13 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
   @Override
   public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
     LOG.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),
-            optionalRecordMetadata.orElse(Collections.emptyMap()), t));
-    throw new HoodieException("Error writing record " + record + ": " + t.getMessage());
+        optionalRecordMetadata.orElse(Collections.emptyMap())), t);
+    throw new HoodieException("Error writing record " + record, t);
+  }
+
+  @Override
+  public void markFailure(String recordKey, String partitionPath, Throwable t) {
+    LOG.error(String.format("Error writing record %s and partition %s", recordKey, partitionPath), t);
+    throw new HoodieException("Error writing record `" + recordKey + "` partitionPath `" + partitionPath + "`", t);
   }
 }

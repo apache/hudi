@@ -28,12 +28,12 @@ profile: 'spark'
 # These configurations specify where dbt should look for different types of files.
 # The `source-paths` config, for example, states that models in this project can be
 # found in the "models/" directory. You probably won't need to change these!
-model-paths: ["models"]
+model-paths: [ "models" ]
 
 target-path: "target"  # directory which will store compiled SQL files
-clean-targets:         # directories to be removed by `dbt clean`
-    - "target"
-    - "dbt_modules"
+clean-targets: # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_modules"
 
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
@@ -44,6 +44,9 @@ clean-targets:         # directories to be removed by `dbt clean`
 models:
   +file_format: hudi
   hudi_examples_dbt:
+    example:
       # Applies to all files under models/example/
-      example:
-          materialized: table
+      materialized: table
+    example_cdc:
+      # Applies to all files under models/example_cdc/
+      materialized: table

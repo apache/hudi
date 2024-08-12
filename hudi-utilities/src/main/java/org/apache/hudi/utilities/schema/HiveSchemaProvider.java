@@ -20,10 +20,9 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.AvroConversionUtils;
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.HiveSchemaProviderConfig;
-import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
+import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 
 import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -35,6 +34,10 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.Collections;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * A schema provider to get data schema through user specified hive table.
  */
@@ -45,9 +48,9 @@ public class HiveSchemaProvider extends SchemaProvider {
 
   public HiveSchemaProvider(TypedProperties props, JavaSparkContext jssc) {
     super(props, jssc);
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE.key()));
-    String sourceSchemaDatabaseName = props.getString(HiveSchemaProviderConfig.SOURCE_SCHEMA_DATABASE.key(), "default");
-    String sourceSchemaTableName = props.getString(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE.key());
+    checkRequiredConfigProperties(props, Collections.singletonList(HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE));
+    String sourceSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.SOURCE_SCHEMA_DATABASE, true);
+    String sourceSchemaTableName = getStringWithAltKeys(props, HiveSchemaProviderConfig.SOURCE_SCHEMA_TABLE);
     SparkSession spark = SparkSession.builder().config(jssc.getConf()).enableHiveSupport().getOrCreate();
 
     // source schema
@@ -59,13 +62,13 @@ public class HiveSchemaProvider extends SchemaProvider {
           sourceSchemaTableName,
           "hoodie." + sourceSchemaDatabaseName);
     } catch (NoSuchTableException | NoSuchDatabaseException e) {
-      throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
+      throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", sourceSchemaDatabaseName, sourceSchemaTableName), e);
     }
 
     // target schema
-    if (props.containsKey(HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE.key())) {
-      String targetSchemaDatabaseName = props.getString(HiveSchemaProviderConfig.TARGET_SCHEMA_DATABASE.key(), "default");
-      String targetSchemaTableName = props.getString(HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE.key());
+    if (containsConfigProperty(props, HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE)) {
+      String targetSchemaDatabaseName = getStringWithAltKeys(props, HiveSchemaProviderConfig.TARGET_SCHEMA_DATABASE, true);
+      String targetSchemaTableName = getStringWithAltKeys(props, HiveSchemaProviderConfig.TARGET_SCHEMA_TABLE);
       try {
         TableIdentifier targetSchemaTable = new TableIdentifier(targetSchemaTableName, scala.Option.apply(targetSchemaDatabaseName));
         StructType targetSchema = spark.sessionState().catalog().getTableMetadata(targetSchemaTable).schema();
@@ -74,7 +77,7 @@ public class HiveSchemaProvider extends SchemaProvider {
             targetSchemaTableName,
             "hoodie." + targetSchemaDatabaseName);
       } catch (NoSuchDatabaseException | NoSuchTableException e) {
-        throw new HoodieSchemaProviderException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
+        throw new HoodieSchemaFetchException(String.format("Can't find Hive table: %s.%s", targetSchemaDatabaseName, targetSchemaTableName), e);
       }
     }
   }

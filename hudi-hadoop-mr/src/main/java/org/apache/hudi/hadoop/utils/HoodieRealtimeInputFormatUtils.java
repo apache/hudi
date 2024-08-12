@@ -86,7 +86,7 @@ public class HoodieRealtimeInputFormatUtils extends HoodieInputFormatUtils {
 
   public static void addProjectionField(Configuration conf, String[] fieldName) {
     if (fieldName.length > 0) {
-      List<String> columnNameList = Arrays.stream(conf.get(serdeConstants.LIST_COLUMNS).split(",")).collect(Collectors.toList());
+      List<String> columnNameList = Arrays.stream(conf.get(serdeConstants.LIST_COLUMNS, "").split(",")).collect(Collectors.toList());
       Arrays.stream(fieldName).forEach(field -> {
         int index = columnNameList.indexOf(field);
         if (index != -1) {

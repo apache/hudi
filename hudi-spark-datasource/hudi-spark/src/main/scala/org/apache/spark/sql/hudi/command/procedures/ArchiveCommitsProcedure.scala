@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.cli.ArchiveExecutorUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
@@ -35,7 +36,7 @@ class ArchiveCommitsProcedure extends BaseProcedure
     ProcedureParameter.optional(2, "min_commits", DataTypes.IntegerType, 20),
     ProcedureParameter.optional(3, "max_commits", DataTypes.IntegerType, 30),
     ProcedureParameter.optional(4, "retain_commits", DataTypes.IntegerType, 10),
-    ProcedureParameter.optional(5, "enable_metadata", DataTypes.BooleanType, false)
+    ProcedureParameter.optional(5, "enable_metadata", DataTypes.BooleanType, true)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](

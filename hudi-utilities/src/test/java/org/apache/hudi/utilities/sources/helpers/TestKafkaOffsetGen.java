@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -31,12 +32,15 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_STRING;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,25 +53,25 @@ import static org.mockito.Mockito.mock;
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
-  private static KafkaTestUtils testUtils;
   private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private KafkaTestUtils testUtils;
 
-  @BeforeAll
-  public static void setup() throws Exception {
+  @BeforeEach
+  public void setup() throws Exception {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterAll
-  public static void teardown() throws Exception {
+  @AfterEach
+  public void teardown() throws Exception {
     testUtils.teardown();
   }
 
   private TypedProperties getConsumerConfigs(String autoOffsetReset, String kafkaCheckpointType) {
     TypedProperties props = new TypedProperties();
-    props.put("hoodie.deltastreamer.source.kafka.checkpoint.type", kafkaCheckpointType);
+    props.put("hoodie.streamer.source.kafka.checkpoint.type", kafkaCheckpointType);
     props.put("auto.offset.reset", autoOffsetReset);
-    props.put("hoodie.deltastreamer.source.kafka.topic", testTopicName);
+    props.put("hoodie.streamer.source.kafka.topic", testTopicName);
     props.setProperty("bootstrap.servers", testUtils.brokerAddress());
     props.setProperty("key.deserializer", StringDeserializer.class.getName());
     props.setProperty("value.deserializer", StringDeserializer.class.getName());
@@ -81,7 +85,7 @@ public class TestKafkaOffsetGen {
     testUtils.createTopic(testTopicName, 1);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
 
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", "string"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
@@ -98,7 +102,7 @@ public class TestKafkaOffsetGen {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", "string"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_STRING));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
     assertEquals(1000, nextOffsetRanges[0].fromOffset());
@@ -111,7 +115,7 @@ public class TestKafkaOffsetGen {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", "string"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_STRING));
 
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
@@ -125,7 +129,7 @@ public class TestKafkaOffsetGen {
     testUtils.createTopic(testTopicName, 1);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
 
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", "timestamp"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_TIMESTAMP));
 
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(String.valueOf(System.currentTimeMillis() - 100000)), 500, metrics);
     assertEquals(1, nextOffsetRanges.length);
@@ -134,25 +138,69 @@ public class TestKafkaOffsetGen {
   }
 
   @Test
+  public void testGetNextOffsetRangesFromSingleOffsetCheckpoint() {
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.createTopic(testTopicName, 1);
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET));
+
+    // long positive value of offset => get it
+    String lastCheckpointString = "250";
+    OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
+    assertEquals(1, nextOffsetRanges.length);
+    assertEquals(250, nextOffsetRanges[0].fromOffset());
+    assertEquals(750, nextOffsetRanges[0].untilOffset());
+
+    // negative offset value => get by autoOffsetReset config
+    lastCheckpointString = "-2";
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics);
+    assertEquals(1, nextOffsetRanges.length);
+    assertEquals(1000, nextOffsetRanges[0].fromOffset());
+    assertEquals(1000, nextOffsetRanges[0].untilOffset());
+
+    // incorrect offset value => get by autoOffsetReset config
+    kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET));
+    lastCheckpointString = "garbage";
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 5000, metrics);
+    assertEquals(1, nextOffsetRanges.length);
+    assertEquals(0, nextOffsetRanges[0].fromOffset());
+    assertEquals(1000, nextOffsetRanges[0].untilOffset());
+  }
+
+  @Test
+  public void testGetNextOffsetRangesFromSingleOffsetCheckpointNotApplicable() {
+    testUtils.createTopic(testTopicName, 2);
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET));
+
+    // incorrect number of partitions => exception (number of partitions is more than 1)
+    String lastCheckpointString = "250";
+    Exception exception = assertThrows(HoodieException.class,
+        () -> kafkaOffsetGen.getNextOffsetRanges(Option.of(lastCheckpointString), 500, metrics));
+    assertTrue(exception.getMessage().startsWith("Kafka topic " + testTopicName + " has 2 partitions (more than 1)"));
+  }
+
+  @Test
   public void testGetNextOffsetRangesFromMultiplePartitions() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", "string"));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
     OffsetRange[] nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 499, metrics);
-    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(3, nextOffsetRanges.length);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
-    assertEquals(250, nextOffsetRanges[0].untilOffset());
-    assertEquals(0, nextOffsetRanges[1].fromOffset());
-    assertEquals(249, nextOffsetRanges[1].untilOffset());
+    assertEquals(249, nextOffsetRanges[0].untilOffset());
+    assertEquals(249, nextOffsetRanges[1].fromOffset());
+    assertEquals(250, nextOffsetRanges[1].untilOffset());
+    assertEquals(0, nextOffsetRanges[2].fromOffset());
+    assertEquals(249, nextOffsetRanges[2].untilOffset());
   }
 
   @Test
   public void testGetNextOffsetRangesFromGroup() {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
-    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
+    testUtils.sendMessages(testTopicName, Helpers.jsonifyRecordsByPartitions(dataGenerator.generateInserts("000", 1000), 2));
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", KAFKA_CHECKPOINT_TYPE_STRING));
     String lastCheckpointString = testTopicName + ",0:250,1:249";
     kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
     // don't pass lastCheckpointString as we want to read from group committed offset
@@ -162,8 +210,34 @@ public class TestKafkaOffsetGen {
     assertEquals(249, nextOffsetRanges[1].fromOffset());
     assertEquals(399, nextOffsetRanges[1].untilOffset());
 
+    // try w/ 1 partition already exhausted. both partitions need to be returned as part of offset ranges
+    lastCheckpointString = testTopicName + ",0:400,1:500";
+    kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(3, nextOffsetRanges.length);
+    assertEquals(400, nextOffsetRanges[0].fromOffset());
+    assertEquals(450, nextOffsetRanges[0].untilOffset());
+    assertEquals(450, nextOffsetRanges[1].fromOffset());
+    assertEquals(500, nextOffsetRanges[1].untilOffset());
+    assertEquals(0, nextOffsetRanges[1].partition());
+    assertEquals(500, nextOffsetRanges[2].fromOffset());
+    assertEquals(500, nextOffsetRanges[2].untilOffset());
+    assertEquals(1, nextOffsetRanges[2].partition());
+
+    // if there is just 1 msg to consume from just 1 partition.
+    lastCheckpointString = testTopicName + ",0:499,1:500";
+    kafkaOffsetGen.commitOffsetToKafka(lastCheckpointString);
+    nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
+    assertEquals(2, nextOffsetRanges.length);
+    assertEquals(499, nextOffsetRanges[0].fromOffset());
+    assertEquals(500, nextOffsetRanges[0].untilOffset());
+    assertEquals(0, nextOffsetRanges[0].partition());
+    assertEquals(500, nextOffsetRanges[1].fromOffset());
+    assertEquals(500, nextOffsetRanges[1].untilOffset());
+    assertEquals(1, nextOffsetRanges[1].partition());
+
     // committed offsets are not present for the consumer group
-    kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", "string"));
+    kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("group", KAFKA_CHECKPOINT_TYPE_STRING));
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
     assertEquals(500, nextOffsetRanges[0].fromOffset());
     assertEquals(500, nextOffsetRanges[0].untilOffset());
@@ -176,7 +250,7 @@ public class TestKafkaOffsetGen {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 1);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    TypedProperties props = getConsumerConfigs("earliest", "string");
+    TypedProperties props = getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING);
 
     // default no minPartition set
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
@@ -185,6 +259,8 @@ public class TestKafkaOffsetGen {
     assertEquals(300, nextOffsetRanges[0].untilOffset());
 
     props.put(KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), 2L);
+    // just to check warn-message manually if props contains deprecated config
+    props.put(KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT.key(), 1L);
     kafkaOffsetGen = new KafkaOffsetGen(props);
     nextOffsetRanges = kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 300, metrics);
     assertEquals(0, nextOffsetRanges[0].fromOffset());
@@ -198,7 +274,7 @@ public class TestKafkaOffsetGen {
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
     testUtils.createTopic(testTopicName, 2);
     testUtils.sendMessages(testTopicName, Helpers.jsonifyRecords(dataGenerator.generateInserts("000", 1000)));
-    TypedProperties props = getConsumerConfigs("earliest", "string");
+    TypedProperties props = getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING);
 
     // default no minPartition or minPartition less than TopicPartitions
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
@@ -243,12 +319,12 @@ public class TestKafkaOffsetGen {
 
   @Test
   public void testCheckTopicExists() {
-    TypedProperties props = getConsumerConfigs("latest", "string");
+    TypedProperties props = getConsumerConfigs("latest", KAFKA_CHECKPOINT_TYPE_STRING);
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(props);
     testUtils.createTopic(testTopicName, 1);
     boolean topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertTrue(topicExists);
-    props.put("hoodie.deltastreamer.source.kafka.topic", "random");
+    props.put("hoodie.streamer.source.kafka.topic", "random");
     kafkaOffsetGen = new KafkaOffsetGen(props);
     topicExists = kafkaOffsetGen.checkTopicExists(new KafkaConsumer(props));
     assertFalse(topicExists);

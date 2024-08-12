@@ -20,10 +20,11 @@ package org.apache.hudi.client.transaction;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -37,9 +38,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
-
 /**
  * This class is a basic implementation of a conflict resolution strategy for concurrent writes {@link ConflictResolutionStrategy}.
  */
@@ -49,9 +47,9 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
   private static final Logger LOG = LoggerFactory.getLogger(SimpleConcurrentFileWritesConflictResolutionStrategy.class);
 
   @Override
-  public Stream<HoodieInstant> getCandidateInstants(HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant,
-                                                 Option<HoodieInstant> lastSuccessfulInstant) {
-
+  public Stream<HoodieInstant> getCandidateInstants(HoodieTableMetaClient metaClient, HoodieInstant currentInstant,
+                                                    Option<HoodieInstant> lastSuccessfulInstant) {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     // To find which instants are conflicting, we apply the following logic
     // 1. Get completed instants timeline only for commits that have happened since the last successful write.
     // 2. Get any scheduled or completed compaction or clustering operations that have started and/or finished
@@ -64,9 +62,10 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
         .getInstantsAsStream();
 
     Stream<HoodieInstant> compactionAndClusteringPendingTimeline = activeTimeline
-        .getTimelineOfActions(CollectionUtils.createSet(REPLACE_COMMIT_ACTION, COMPACTION_ACTION))
+        .filterPendingReplaceClusteringAndCompactionTimeline()
+        .filter(instant -> ClusteringUtils.isClusteringInstant(activeTimeline, instant)
+            || HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()))
         .findInstantsAfter(currentInstant.getTimestamp())
-        .filterInflightsAndRequested()
         .getInstantsAsStream();
     return Stream.concat(completedCommitsInstantStream, compactionAndClusteringPendingTimeline);
   }
@@ -108,6 +107,11 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
     }
     // just abort the current write if conflicts are found
     throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes"));
+  }
+
+  @Override
+  public boolean isPreCommitRequired() {
+    return false;
   }
 
 }

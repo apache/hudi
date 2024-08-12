@@ -54,7 +54,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  private final HoodieTable<T,I,K,O> hoodieTable;
+  protected final HoodieTable<T,I,K,O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
 
@@ -121,7 +121,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
             .collect(Collectors.toSet());
     fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
-    return hoodieTable.getSliceView().getLatestFileSlices(partition)
+    return hoodieTable.getSliceView().getLatestFileSlicesStateless(partition)
         // file ids already in clustering are not eligible
         .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }

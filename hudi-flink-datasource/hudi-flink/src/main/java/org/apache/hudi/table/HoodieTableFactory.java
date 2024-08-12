@@ -19,20 +19,21 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.ConfigOption;
@@ -49,7 +50,6 @@ import org.apache.flink.table.factories.DynamicTableSinkFactory;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,13 +82,13 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
-    Path path = new Path(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
+    StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.getString(FlinkOptions.PATH), conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
     return new HoodieTableSource(
-        schema,
+        SerializableSchema.create(schema),
         path,
         context.getCatalogTable().getPartitionKeys(),
         conf.getString(FlinkOptions.PARTITION_DEFAULT_NAME),
@@ -126,6 +126,27 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.HIVE_STYLE_PARTITIONING)) {
             conf.setBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING, tableConfig.getBoolean(HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE));
           }
+          if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
+            if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
+              LOG.warn(
+                  String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
+                      tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
+                      conf.get(FlinkOptions.TABLE_TYPE)));
+              conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+            }
+          }
+          if (tableConfig.contains(HoodieTableConfig.TYPE)
+              && !conf.contains(FlinkOptions.TABLE_TYPE)) {
+            conf.setString(FlinkOptions.TABLE_TYPE, tableConfig.getString(HoodieTableConfig.TYPE));
+          }
+          if (tableConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)
+              && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+            conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
+          }
+          if (tableConfig.contains(HoodieTableConfig.PAYLOAD_TYPE)
+              && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
+            conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getPayloadClass());
+          }
         });
   }
 
@@ -156,10 +177,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
+    checkIndexType(conf);
 
     if (!OptionsResolver.isAppendMode(conf)) {
       checkRecordKey(conf, schema);
-      checkPreCombineKey(conf, schema);
+    }
+    StreamerUtil.checkPreCombineKey(conf, schema.getColumnNames());
+  }
+
+  /**
+   * Validate the index type.
+   */
+  private void checkIndexType(Configuration conf) {
+    String indexType = conf.get(FlinkOptions.INDEX_TYPE);
+    if (!StringUtils.isNullOrEmpty(indexType)) {
+      HoodieIndexConfig.INDEX_TYPE.checkValues(indexType);
     }
   }
 
@@ -188,8 +220,9 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (recordKeys.length == 1
           && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
           && !fields.contains(recordKeys[0])) {
-        throw new HoodieValidationException("Primary key definition is required, use either PRIMARY KEY syntax "
-            + "or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+        throw new HoodieValidationException("Primary key definition is required, the default primary key field "
+            + "'" + FlinkOptions.RECORD_KEY_FIELD.defaultValue() + "' does not exist in the table schema, "
+            + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to speciy.");
       }
 
       Arrays.stream(recordKeys)
@@ -199,26 +232,6 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
             throw new HoodieValidationException("Field '" + f + "' specified in option "
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
-    }
-  }
-
-  /**
-   * Validate pre_combine key.
-   */
-  private void checkPreCombineKey(Configuration conf, ResolvedSchema schema) {
-    List<String> fields = schema.getColumnNames();
-    String preCombineField = conf.get(FlinkOptions.PRECOMBINE_FIELD);
-    if (!fields.contains(preCombineField)) {
-      if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
-        throw new HoodieValidationException("Option '" + FlinkOptions.PRECOMBINE_FIELD.key()
-            + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
-      }
-      if (preCombineField.equals(FlinkOptions.PRECOMBINE_FIELD.defaultValue())) {
-        conf.setString(FlinkOptions.PRECOMBINE_FIELD, FlinkOptions.NO_PRE_COMBINE);
-      } else if (!preCombineField.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + preCombineField + " does not exist in the table schema."
-            + "Please check '" + FlinkOptions.PRECOMBINE_FIELD.key() + "' option.");
-      }
     }
   }
 
@@ -237,6 +250,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       ResolvedSchema schema) {
     // table name
     conf.setString(FlinkOptions.TABLE_NAME.key(), tablePath.getObjectName());
+    // database name
+    conf.setString(FlinkOptions.DATABASE_NAME.key(), tablePath.getDatabaseName());
     // hoodie key about options
     setupHoodieKeyOptions(conf, table);
     // compaction options
@@ -303,11 +318,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       }
     }
     boolean complexHoodieKey = pks.length > 1 || partitions.length > 1;
-    if (complexHoodieKey && FlinkOptions.isDefaultValueDefined(conf, FlinkOptions.KEYGEN_CLASS_NAME)) {
-      conf.setString(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
-      LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
-          FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
-    }
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 
   /**

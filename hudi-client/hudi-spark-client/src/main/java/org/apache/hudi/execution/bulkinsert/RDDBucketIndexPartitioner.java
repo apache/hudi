@@ -18,25 +18,24 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BucketIndexBulkInsertPartitioner;
-
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
-import scala.Tuple2;
 
 import java.io.Serializable;
 import java.util.Comparator;
+
+import scala.Tuple2;
 
 /**
  * Abstract of bucket index bulk_insert partitioner
@@ -48,8 +47,6 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
 
   public RDDBucketIndexPartitioner(HoodieTable table, String sortString, boolean preserveHoodieMetadata) {
     super(table, sortString, preserveHoodieMetadata);
-    ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
-        "CoW table with bucket index doesn't support bulk_insert");
   }
 
   /**

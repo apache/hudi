@@ -24,7 +24,6 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
@@ -72,7 +71,7 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString())
-        .withProps(CollectionUtils.createImmutableMap(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test_table"))
+        .withProps(Collections.singletonMap(HoodieWriteConfig.TBL_NAME.key(), "hoodie_test_table"))
         .build();
     return new HoodieJavaWriteClient<>(context, config);
   }

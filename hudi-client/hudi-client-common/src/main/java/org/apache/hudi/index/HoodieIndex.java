@@ -141,6 +141,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
   public boolean requiresTagging(WriteOperationType operationType) {
     switch (operationType) {
       case DELETE:
+      case DELETE_PREPPED:
       case UPSERT:
         return true;
       default:
@@ -192,8 +193,14 @@ public abstract class HoodieIndex<I, O> implements Serializable {
         + "hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to "
         + "choose bucket engine type, i.e., how buckets are generated.")
     BUCKET,
+
     @EnumFieldDescription("Internal Config for indexing based on Flink state.")
-    FLINK_STATE
+    FLINK_STATE,
+
+    @EnumFieldDescription("Index which saves the record key to location mappings in the "
+        + "HUDI Metadata Table. Record index is a global index, enforcing key uniqueness across all "
+        + "partitions in the table. Supports sharding to achieve very high scale.")
+    RECORD_INDEX
   }
 
   @EnumDescription("Determines the type of bucketing or hashing to use when `hoodie.index.type`"

@@ -32,6 +32,7 @@ import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +78,10 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
+    if (keyType == KeyGeneratorType.CUSTOM) {
+      // input needs to be properly formatted
+      props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp:timestamp");
+    }
     KeyGenerator keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
     switch (keyType) {
       case SIMPLE:

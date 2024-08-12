@@ -543,30 +543,50 @@ public class ExpressionEvaluators {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIME_WITHOUT_TIME_ZONE:
       case DATE:
-        return ((Long) val1).compareTo((Long) val2);
+        return ((Long) val1).compareTo((Long) val2); 
       case BOOLEAN:
         return ((Boolean) val1).compareTo((Boolean) val2);
       case TINYINT:
       case SMALLINT:
       case INTEGER:
-        return ((Integer) val1).compareTo((Integer) val2);
+      case BIGINT:
       case FLOAT:
-        return ((Float) val1).compareTo((Float) val2);
       case DOUBLE:
-        return ((Double) val1).compareTo((Double) val2);
+      case DECIMAL:
+        return getBigDecimal(val1).compareTo(getBigDecimal(val2));
       case BINARY:
       case VARBINARY:
         return compareBytes((byte[]) val1, (byte[]) val2);
       case CHAR:
       case VARCHAR:
         return ((String) val1).compareTo((String) val2);
-      case DECIMAL:
-        return ((BigDecimal) val1).compareTo((BigDecimal) val2);
       default:
         throw new UnsupportedOperationException("Unsupported type: " + logicalType);
     }
   }
 
+  private static BigDecimal getBigDecimal(@NotNull Object value) {
+    if (value instanceof BigDecimal) {
+      return (BigDecimal) value;
+    } else if (value instanceof Double) {
+      // new BigDecimal() are used instead of BigDecimal.valueOf() due to
+      // receive exact decimal representation of the double's binary floating-point value
+      return new BigDecimal((Double) value);
+    } else if (value instanceof Float) {
+      return new BigDecimal(((Float) value).doubleValue());
+    } else if (value instanceof Long) {
+      return new BigDecimal((Long) value);
+    } else if (value instanceof Integer) {
+      return new BigDecimal((Integer) value);
+    } else if (value instanceof Short) {
+      return new BigDecimal((Short) value);
+    } else if (value instanceof Byte) {
+      return new BigDecimal((Byte) value);
+    } else {
+      throw new UnsupportedOperationException("Unable convert to BigDecimal: " + value);
+    }
+  }
+  
   private static int compareBytes(byte[] v1, byte[] v2) {
     int len1 = v1.length;
     int len2 = v2.length;

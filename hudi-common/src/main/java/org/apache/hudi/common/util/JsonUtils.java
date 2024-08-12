@@ -26,6 +26,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 /**
  * Utils for JSON serialization and deserialization.
@@ -43,6 +44,8 @@ public class JsonUtils {
     MAPPER.setVisibility(PropertyAccessor.IS_GETTER, JsonAutoDetect.Visibility.NONE);
     MAPPER.setVisibility(PropertyAccessor.SETTER, JsonAutoDetect.Visibility.NONE);
     MAPPER.setVisibility(PropertyAccessor.CREATOR, JsonAutoDetect.Visibility.NONE);
+
+    registerModules();
   }
 
   public static ObjectMapper getObjectMapper() {
@@ -56,5 +59,10 @@ public class JsonUtils {
       throw new HoodieIOException(
           "Fail to convert the class: " + value.getClass().getName() + " to Json String", e);
     }
+  }
+
+  public static void registerModules() {
+    // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.2)
+    MAPPER.registerModules(new JavaTimeModule());
   }
 }

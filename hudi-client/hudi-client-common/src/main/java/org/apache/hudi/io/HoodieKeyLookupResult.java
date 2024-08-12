@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import java.util.List;
 
 /**
@@ -27,15 +29,15 @@ public class HoodieKeyLookupResult {
 
   private final String fileId;
   private final String baseInstantTime;
-  private final List<String> matchingRecordKeys;
+  private final List<Pair<String, Long>> matchingRecordKeysAndPositions;
   private final String partitionPath;
 
   public HoodieKeyLookupResult(String fileId, String partitionPath, String baseInstantTime,
-                               List<String> matchingRecordKeys) {
+                               List<Pair<String, Long>> matchingRecordKeysAndPositions) {
     this.fileId = fileId;
     this.partitionPath = partitionPath;
     this.baseInstantTime = baseInstantTime;
-    this.matchingRecordKeys = matchingRecordKeys;
+    this.matchingRecordKeysAndPositions = matchingRecordKeysAndPositions;
   }
 
   public String getFileId() {
@@ -50,8 +52,8 @@ public class HoodieKeyLookupResult {
     return partitionPath;
   }
 
-  public List<String> getMatchingRecordKeys() {
-    return matchingRecordKeys;
+  public List<Pair<String, Long>> getMatchingRecordKeysAndPositions() {
+    return matchingRecordKeysAndPositions;
   }
 }
 

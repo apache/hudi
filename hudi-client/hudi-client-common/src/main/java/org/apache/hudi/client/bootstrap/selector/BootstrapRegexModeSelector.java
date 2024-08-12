@@ -31,6 +31,9 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+/**
+ * A bootstrap selector which employs bootstrap mode by specified partitions.
+ */
 public class BootstrapRegexModeSelector extends BootstrapModeSelector {
 
   private static final long serialVersionUID = 1L;

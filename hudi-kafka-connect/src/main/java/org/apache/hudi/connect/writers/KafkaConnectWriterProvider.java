@@ -40,6 +40,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 import org.apache.hudi.schema.SchemaProvider;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.kafka.common.TopicPartition;
@@ -67,12 +68,13 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
       KafkaConnectConfigs connectConfigs,
       TopicPartition partition) throws HoodieException {
     this.connectConfigs = connectConfigs;
-    Configuration hadoopConf = KafkaConnectUtils.getDefaultHadoopConf(connectConfigs);
+    StorageConfiguration<Configuration> storageConf =
+        KafkaConnectUtils.getDefaultStorageConf(connectConfigs);
 
     try {
-      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null
-          : (SchemaProvider) ReflectionUtils.loadClass(connectConfigs.getSchemaProviderClass(),
-          new TypedProperties(connectConfigs.getProps()));
+      this.schemaProvider = StringUtils.isNullOrEmpty(connectConfigs.getSchemaProviderClass()) ? null :
+          (SchemaProvider) ReflectionUtils.loadClass(
+              connectConfigs.getSchemaProviderClass(), new TypedProperties(connectConfigs.getProps()));
 
       this.keyGenerator = HoodieAvroKeyGeneratorFactory.createKeyGenerator(
           new TypedProperties(connectConfigs.getProps()));
@@ -93,9 +95,10 @@ public class KafkaConnectWriterProvider implements ConnectWriterProvider<WriteSt
           .withCleanConfig(HoodieCleanConfig.newBuilder().withAutoClean(false).build())
           .withCompactionConfig(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build())
           .withClusteringConfig(HoodieClusteringConfig.newBuilder().withInlineClustering(false).build())
+          .withWritesFileIdEncoding(1)
           .build();
 
-      context = new HoodieJavaEngineContext(hadoopConf);
+      context = new HoodieJavaEngineContext(storageConf);
 
       hudiJavaClient = new HoodieJavaWriteClient<>(context, writeConfig);
     } catch (Throwable e) {

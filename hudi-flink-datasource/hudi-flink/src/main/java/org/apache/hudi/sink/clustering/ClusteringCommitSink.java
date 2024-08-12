@@ -21,11 +21,12 @@ package org.apache.hudi.sink.clustering;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metrics.FlinkClusteringMetrics;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -41,6 +43,7 @@ import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,6 +90,8 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
    */
   private transient Map<String, HoodieClusteringPlan> clusteringPlanCache;
 
+  private transient FlinkClusteringMetrics clusteringMetrics;
+
   public ClusteringCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -101,6 +106,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     this.commitBuffer = new HashMap<>();
     this.clusteringPlanCache = new HashMap<>();
     this.table = writeClient.getHoodieTable();
+    registerMetrics();
   }
 
   @Override
@@ -121,13 +127,20 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   private void commitIfNecessary(String instant, Collection<ClusteringCommitEvent> events) {
     HoodieClusteringPlan clusteringPlan = clusteringPlanCache.computeIfAbsent(instant, k -> {
       try {
-        Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
-            this.writeClient.getHoodieTable().getMetaClient(), HoodieTimeline.getReplaceCommitInflightInstant(instant));
-        return clusteringPlanOption.get().getRight();
+        HoodieTableMetaClient metaClient = this.writeClient.getHoodieTable().getMetaClient();
+        return ClusteringUtils.getInflightClusteringInstant(instant, metaClient.getActiveTimeline())
+            .flatMap(pendingInstant -> ClusteringUtils.getClusteringPlan(
+            metaClient, pendingInstant))
+            .map(Pair::getRight)
+            .orElse(null);
       } catch (Exception e) {
         throw new HoodieException(e);
       }
     });
+
+    if (clusteringPlan == null) {
+      return;
+    }
 
     boolean isReady = clusteringPlan.getInputGroups().size() == events.size();
     if (!isReady) {
@@ -191,10 +204,11 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     // commit the clustering
     this.table.getMetaClient().reloadActiveTimeline();
     this.writeClient.completeTableService(
-        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant);
+        TableServiceType.CLUSTER, writeMetadata.getCommitMetadata().get(), table, instant, Option.of(HoodieListData.lazy(writeMetadata.getWriteStatuses())));
 
+    clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
-    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+    if (!conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       LOG.info("Running inline clean");
       this.writeClient.clean();
     }
@@ -227,5 +241,11 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     return ClusteringUtils.getFileGroupsFromClusteringPlan(clusteringPlan)
         .filter(fg -> !newFilesWritten.contains(fg))
         .collect(Collectors.groupingBy(HoodieFileGroupId::getPartitionPath, Collectors.mapping(HoodieFileGroupId::getFileId, Collectors.toList())));
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    clusteringMetrics = new FlinkClusteringMetrics(metrics);
+    clusteringMetrics.registerMetrics();
   }
 }

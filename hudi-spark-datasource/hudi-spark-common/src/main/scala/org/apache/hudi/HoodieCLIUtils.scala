@@ -21,16 +21,20 @@ package org.apache.hudi
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
 import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.withSparkConf
+import org.apache.spark.sql.hudi.HoodieOptionConfig
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.filterHoodieConfigs
 
-import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
+import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
 object HoodieCLIUtils {
 
@@ -39,17 +43,23 @@ object HoodieCLIUtils {
                               conf: Map[String, String],
                               tableName: Option[String]): SparkRDDWriteClient[_] = {
     val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
-      .setConf(sparkSession.sessionState.newHadoopConf()).build()
+      .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
     val schemaStr = schemaUtil.getTableAvroSchema(false).toString
+
     // If tableName is provided, we need to add catalog props
     val catalogProps = tableName match {
-      case Some(value) => getHoodieCatalogTable(sparkSession, value).catalogProperties
+      case Some(value) => HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(
+        getHoodieCatalogTable(sparkSession, value).catalogProperties)
       case None => Map.empty
     }
+
+    // Priority: defaults < catalog props < table config < sparkSession conf < specified conf
     val finalParameters = HoodieWriterUtils.parametersWithWriteDefaults(
-      withSparkConf(sparkSession, Map.empty)(
-        catalogProps ++ conf + (DataSourceWriteOptions.TABLE_TYPE.key() -> metaClient.getTableType.name()))
+      (catalogProps ++
+        metaClient.getTableConfig.getProps.asScala.toMap ++
+        filterHoodieConfigs(sparkSession.sqlContext.getAllConfs) ++
+        conf).toMap
     )
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
@@ -96,6 +106,13 @@ object HoodieCLIUtils {
     StringUtils.split(s, ",").asScala
       .map(split => StringUtils.split(split, "="))
       .map(pair => pair.get(0) -> pair.get(1))
+      .toMap
+  }
+
+  def getLockOptions(tablePath: String): Map[String, String] = {
+    val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
+    props.stringPropertyNames.asScala
+      .map(key => key -> props.getString(key))
       .toMap
   }
 }

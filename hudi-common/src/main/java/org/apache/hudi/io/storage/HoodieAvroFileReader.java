@@ -18,10 +18,32 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+
+import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
+import java.io.IOException;
+
+import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+
 /**
- * Marker interface for every {@link HoodieFileReader} reading in Avro (ie
- * producing {@link IndexedRecord}s)
+ * Base class for every Avro file reader
  */
-public interface HoodieAvroFileReader extends HoodieFileReader<IndexedRecord> {}
+public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRecord> {
+
+  @Override
+  public ClosableIterator<HoodieRecord<IndexedRecord>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    ClosableIterator<IndexedRecord> iterator = getIndexedRecordIterator(readerSchema, requestedSchema);
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieAvroIndexedRecord(data)));
+  }
+
+  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema) throws IOException {
+    return getIndexedRecordIterator(readerSchema, readerSchema);
+  }
+
+  public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException;
+}

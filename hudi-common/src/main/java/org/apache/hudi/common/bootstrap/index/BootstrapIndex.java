@@ -7,18 +7,20 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.common.bootstrap.index;
 
 import org.apache.hudi.common.model.BootstrapFileMapping;
+import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -160,7 +162,8 @@ public abstract class BootstrapIndex implements Serializable {
   }
 
   public static BootstrapIndex getBootstrapIndex(HoodieTableMetaClient metaClient) {
-    return ((BootstrapIndex)(ReflectionUtils.loadClass(
-        metaClient.getTableConfig().getBootstrapIndexClass(), new Class[]{HoodieTableMetaClient.class}, metaClient)));
+    return ((BootstrapIndex) (ReflectionUtils.loadClass(
+        BootstrapIndexType.getBootstrapIndexClassName(metaClient.getTableConfig()),
+        new Class[] {HoodieTableMetaClient.class}, metaClient)));
   }
 }

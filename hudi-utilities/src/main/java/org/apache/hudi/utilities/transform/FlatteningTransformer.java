@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -45,14 +46,17 @@ public class FlatteningTransformer implements Transformer {
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
-
-    // tmp table name doesn't like dashes
-    String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    LOG.info("Registering tmp table : " + tmpTable);
-    rowDataset.createOrReplaceTempView(tmpTable);
-    Dataset<Row> transformed = sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
-    sparkSession.catalog().dropTempView(tmpTable);
-    return transformed;
+    try {
+      // tmp table name doesn't like dashes
+      String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
+      LOG.info("Registering tmp table : " + tmpTable);
+      rowDataset.createOrReplaceTempView(tmpTable);
+      Dataset<Row> transformed = sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
+      sparkSession.catalog().dropTempView(tmpTable);
+      return transformed;
+    }  catch (Exception e) {
+      throw new HoodieTransformExecutionException("Failed to apply flattening transformer", e);
+    }
   }
 
   public String flattenSchema(StructType schema, String prefix) {

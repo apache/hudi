@@ -21,6 +21,7 @@ package org.apache.hudi.io;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -33,11 +34,11 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -62,13 +63,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @SuppressWarnings("unchecked")
-public class TestHoodieMergeHandle extends HoodieClientTestHarness {
+public class TestHoodieMergeHandle extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initTestDataGenerator();
     initMetaClient();
   }
@@ -120,7 +121,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
       // verify that there is a commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(1, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(),
           "Expecting a single commit.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 001");
@@ -146,7 +147,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
       // verify that there are 2 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(2, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting two commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 002");
       Dataset<Row> dataSet = getRecords();
@@ -166,7 +167,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
 
       // verify that there are now 3 commits
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(3, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting three commits.");
       assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(), "Latest commit should be 003");
       dataSet = getRecords();
@@ -196,7 +197,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
       assertNoWriteErrors(statuses);
 
       // verify there are now 4 commits
-      timeline = new HoodieActiveTimeline(metaClient).getCommitTimeline();
+      timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
       assertEquals(4, timeline.findInstantsAfter("000", Integer.MAX_VALUE).countInstants(), "Expecting four commits.");
       assertEquals(timeline.lastInstant().get().getTimestamp(), newCommitTime, "Latest commit should be 004");
 
@@ -331,7 +332,7 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
           (long) statuses.stream().map(status -> status.getStat().getNumInserts()).reduce((a, b) -> a + b).get());
       // Verify all records have location set
       statuses.forEach(writeStatus -> {
-        writeStatus.getWrittenRecords().forEach(r -> {
+        writeStatus.getWrittenRecordDelegates().forEach(r -> {
           // Ensure New Location is set
           assertTrue(r.getNewLocation().isPresent());
         });
@@ -345,11 +346,12 @@ public class TestHoodieMergeHandle extends HoodieClientTestHarness {
     for (int i = 0; i < fullPartitionPaths.length; i++) {
       fullPartitionPaths[i] = Paths.get(basePath, dataGen.getPartitionPaths()[i], "*").toString();
     }
-    Dataset<Row> dataSet = HoodieClientTestUtils.read(jsc, basePath, sqlContext, fs, fullPartitionPaths);
+    Dataset<Row> dataSet =
+        HoodieClientTestUtils.read(jsc, basePath, sqlContext, storage, fullPartitionPaths);
     return dataSet;
   }
 
-  HoodieWriteConfig.Builder getConfigBuilder() {
+  protected HoodieWriteConfig.Builder getConfigBuilder() {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withDeleteParallelism(2)

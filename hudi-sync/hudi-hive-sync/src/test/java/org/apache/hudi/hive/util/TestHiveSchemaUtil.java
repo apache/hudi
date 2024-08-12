@@ -26,6 +26,8 @@ import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -113,10 +115,11 @@ public class TestHiveSchemaUtil {
     assertEquals("`map_list` ARRAY< MAP< string, int>>", schemaString);
   }
 
-  @Test
-  public void testSchemaConvertTimestampMicros() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
+  public void testSchemaConvertTimestamp(String type) throws IOException {
     MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
+        .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
     String schemaString = HiveSchemaUtil.generateSchemaString(schema);
     // verify backward compatibility - int64 converted to bigint type
     assertEquals("`my_element` bigint", schemaString);
@@ -125,10 +128,11 @@ public class TestHiveSchemaUtil {
     assertEquals("`my_element` TIMESTAMP", schemaString);
   }
 
-  @Test
-  public void testSchemaDiffForTimestampMicros() {
+  @ParameterizedTest
+  @ValueSource(strings = {"TIMESTAMP_MICROS", "TIMESTAMP_MILLIS"})
+  public void testSchemaDiffForTimestamp(String type) {
     MessageType schema = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64)
-        .as(OriginalType.TIMESTAMP_MICROS).named("my_element").named("my_timestamp");
+        .as(OriginalType.valueOf(type)).named("my_element").named("my_timestamp");
     // verify backward compatibility - int64 converted to bigint type
     SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schema,
         Collections.emptyMap(), Collections.emptyList(), false);

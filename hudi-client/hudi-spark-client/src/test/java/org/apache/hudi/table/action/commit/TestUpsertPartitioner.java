@@ -30,7 +30,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.testutils.ClusteringTestUtils;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -44,6 +43,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.WorkloadProfile;
+import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -53,7 +53,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,10 +63,10 @@ import java.util.Map;
 
 import scala.Tuple2;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodieWriteStat;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -104,7 +103,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     records.addAll(insertRecords);
     records.addAll(updateRecords);
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(records)));
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
     assertEquals(0, partitioner.getPartition(
         new Tuple2<>(updateRecords.get(0).getKey(), Option.ofNullable(updateRecords.get(0).getCurrentLocation()))),
         "Update record should have gone to the 1 update partition");
@@ -150,17 +149,17 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   private static LinkedList<Option<byte[]>> generateCommitMetadataList() throws IOException {
     LinkedList<Option<byte[]>> commits = new LinkedList<>();
     // First commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(2000, 10000).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2000, 10000)));
     // Second commit with non zero records and bytes
-    commits.push(Option.of(generateCommitMetadataWith(1500, 7500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(1500, 7500)));
     // Third commit with a small file
-    commits.push(Option.of(generateCommitMetadataWith(100, 500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(100, 500)));
     // Fourth commit with both zero records and zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(0, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 0)));
     // Fifth commit with zero records
-    commits.push(Option.of(generateCommitMetadataWith(0, 1500).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(0, 1500)));
     // Sixth commit with zero bytes
-    commits.push(Option.of(generateCommitMetadataWith(2500, 0).toJsonString().getBytes(StandardCharsets.UTF_8)));
+    commits.push(serializeCommitMetadata(generateCommitMetadataWith(2500, 0)));
     return commits;
   }
 
@@ -175,7 +174,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     LinkedList<Option<byte[]>> commits = generateCommitMetadataList();
     when(commitTimeLine.getInstantDetails(any(HoodieInstant.class))).thenAnswer(invocationOnMock -> commits.pop());
     long expectAvgSize = (long) Math.ceil((1.0 * 7500) / 1500);
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -185,7 +184,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder().build();
     when(commitTimeLine.empty()).thenReturn(true);
     long expectAvgSize = config.getCopyOnWriteRecordSizeEstimate();
-    long actualAvgSize = averageBytesPerRecord(commitTimeLine, config);
+    long actualAvgSize = AverageRecordSizeUtils.averageBytesPerRecord(commitTimeLine, config);
     assertEquals(expectAvgSize, actualAvgSize);
   }
 
@@ -229,7 +228,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     List<HoodieRecord> insertRecords = dataGenerator.generateInserts("001", totalInsertNum);
 
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
     List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     float bucket0Weight = 0.2f;
@@ -346,7 +345,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
     assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
@@ -371,7 +370,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     // create requested replace commit
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
             .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
-    FileCreateUtils.createRequestedReplaceCommit(basePath,"002", Option.of(requestedReplaceMetadata));
+    FileCreateUtils.createRequestedClusterCommit(basePath,"002", requestedReplaceMetadata);
 
     // create file slice 003
     FileCreateUtils.createBaseFile(basePath, testPartitionPath, "003", "3", 1);
@@ -386,7 +385,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
     // create UpsertPartitioner
-    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config);
+    UpsertPartitioner partitioner = new UpsertPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     // for now we have file slice1 and file slice3 and file slice1 is contained in pending clustering plan
     // So that only file slice3 can be used for ingestion.
@@ -424,7 +423,7 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     WorkloadProfile profile = new WorkloadProfile(buildProfile(jsc.parallelize(insertRecords)));
 
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner partitioner = new SparkUpsertDeltaCommitPartitioner(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(1, partitioner.numPartitions(), "Should have 1 partitions");
     assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
@@ -464,14 +463,14 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
     HoodieSparkTable<?> table = HoodieSparkTable.create(config, context, reloadedMetaClient);
 
-    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
+    SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config, WriteOperationType.UPSERT);
 
     assertEquals(3, partitioner.numPartitions());
     assertEquals(
         Arrays.asList(
-            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
+            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath),
             new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath)
         ),
         partitioner.getBucketInfos());
   }

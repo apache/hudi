@@ -19,7 +19,7 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 
@@ -28,6 +28,7 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
 
+import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
@@ -52,6 +53,11 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     syncClient = new AWSGlueCatalogSyncClient(hiveSyncConfig);
   }
 
+  @Override
+  protected boolean shouldRecreateAndSyncTable() {
+    return config.getBooleanOrDefault(RECREATE_GLUE_TABLE_ON_ERROR);
+  }
+
   public static void main(String[] args) {
     final HiveSyncConfig.HiveSyncConfigParams params = new HiveSyncConfig.HiveSyncConfigParams();
     JCommander cmd = JCommander.newBuilder().addObject(params).build();
@@ -62,7 +68,7 @@ public class AwsGlueCatalogSyncTool extends HiveSyncTool {
     }
     // HiveConf needs to load fs conf to allow instantiation via AWSGlueClientFactory
     TypedProperties props = params.toProps();
-    Configuration hadoopConf = FSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
+    Configuration hadoopConf = HadoopFSUtils.getFs(props.getString(META_SYNC_BASE_PATH.key()), new Configuration()).getConf();
     try (AwsGlueCatalogSyncTool tool = new AwsGlueCatalogSyncTool(props, hadoopConf)) {
       tool.syncHoodieTable();
     }

@@ -19,15 +19,13 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.deltastreamer.TestSourceFormatAdapter;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -43,8 +41,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateProperFormattedSchema;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithConfiguredReplacement;
 import static org.apache.hudi.utilities.testutils.SanitizationTestUtils.generateRenamedSchemaWithDefaultReplacement;
@@ -61,9 +61,7 @@ public class TestSanitizationUtils {
   public static void start() {
     spark = SparkSession
         .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .config(getSparkConfForTest(TestSanitizationUtils.class.getName()))
         .getOrCreate();
     jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
   }
@@ -100,33 +98,33 @@ public class TestSanitizationUtils {
 
   @Test
   public void testGoodAvroSchema() {
-    String goodJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_valid.avsc");
+    String goodJson = getJson("src/test/resources/streamer-config/file_schema_provider_valid.avsc");
     testSanitizeSchema(goodJson,generateProperFormattedSchema());
   }
 
   @Test
   public void testBadAvroSchema() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement());
   }
 
   @Test
   public void testBadAvroSchemaAltCharMask() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     testSanitizeSchema(badJson,generateRenamedSchemaWithConfiguredReplacement(),true, "_");
   }
 
   @Test
   public void testBadAvroSchemaDisabledTest() {
-    String badJson = getJson("src/test/resources/delta-streamer-config/file_schema_provider_invalid.avsc");
+    String badJson = getJson("src/test/resources/streamer-config/file_schema_provider_invalid.avsc");
     assertThrows(SchemaParseException.class, () -> testSanitizeSchema(badJson,generateRenamedSchemaWithDefaultReplacement(), false));
   }
 
   @Test
   private String getJson(String path) {
-    FileSystem fs = FSUtils.getFs(path, jsc.hadoopConfiguration(), true);
+    FileSystem fs = HadoopFSUtils.getFs(path, jsc.hadoopConfiguration(), true);
     String schemaStr;
-    try (FSDataInputStream in = fs.open(new Path(path))) {
+    try (InputStream in = fs.open(new Path(path))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException e) {
       throw new HoodieIOException("can't read schema file", e);

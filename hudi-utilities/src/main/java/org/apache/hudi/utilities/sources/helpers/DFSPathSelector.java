@@ -18,15 +18,14 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -45,6 +44,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 public class DFSPathSelector implements Serializable {
 
@@ -67,9 +69,11 @@ public class DFSPathSelector implements Serializable {
   protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()));
+    checkRequiredConfigProperties(
+        props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.fs = FSUtils.getFs(props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()), hadoopConf);
+    this.fs = HadoopFSUtils.getFs(
+        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), hadoopConf);
   }
 
   /**
@@ -78,11 +82,11 @@ public class DFSPathSelector implements Serializable {
    */
   public static DFSPathSelector createSourceSelector(TypedProperties props,
                                                      Configuration conf) {
-    String sourceSelectorClass = props.getString(DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key(),
-        DFSPathSelector.class.getName());
+    String sourceSelectorClass = getStringWithAltKeys(
+        props, DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
     try {
       DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
-          new Class<?>[]{TypedProperties.class, Configuration.class},
+          new Class<?>[] {TypedProperties.class, Configuration.class},
           props, conf);
 
       log.info("Using path selector " + selector.getClass().getName());
@@ -117,9 +121,11 @@ public class DFSPathSelector implements Serializable {
                                                                              long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
-      log.info("Root path => " + props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key()) + " source limit => " + sourceLimit);
+      log.info("Root path => " + getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)
+          + " source limit => " + sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
-      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(DFSPathSelectorConfig.ROOT_INPUT_PATH.key())), lastCheckpointTime);
+      List<FileStatus> eligibleFiles = listEligibleFiles(
+          fs, new Path(getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)), lastCheckpointTime);
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed
@@ -159,9 +165,9 @@ public class DFSPathSelector implements Serializable {
   protected List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     FileStatus[] statuses = fs.listStatus(path, file ->
-      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+        IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
     List<FileStatus> res = new ArrayList<>();
-    for (FileStatus status: statuses) {
+    for (FileStatus status : statuses) {
       if (status.isDirectory()) {
         // avoid infinite loop
         if (!status.isSymlink()) {

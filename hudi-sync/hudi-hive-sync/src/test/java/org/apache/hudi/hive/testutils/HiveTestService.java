@@ -20,9 +20,9 @@ package org.apache.hudi.hive.testutils;
 
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
@@ -220,7 +220,7 @@ public class HiveTestService {
   }
 
   private static String getHiveLocation(String baseLocation) {
-    return baseLocation + Path.SEPARATOR + "hive";
+    return baseLocation + StoragePath.SEPARATOR + "hive";
   }
 
   private HiveServer2 startHiveServer(HiveConf serverConf) {

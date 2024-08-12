@@ -18,9 +18,9 @@
 
 package org.apache.hudi.aws.credentials;
 
-import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.AWSCredentialsProviderChain;
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,16 +30,26 @@ import java.util.Properties;
  * Factory class for Hoodie AWSCredentialsProvider.
  */
 public class HoodieAWSCredentialsProviderFactory {
-  public static AWSCredentialsProvider getAwsCredentialsProvider(Properties props) {
+  public static AwsCredentialsProvider getAwsCredentialsProvider(Properties props) {
     return getAwsCredentialsProviderChain(props);
   }
 
-  private static AWSCredentialsProvider getAwsCredentialsProviderChain(Properties props) {
-    List<AWSCredentialsProvider> providers = new ArrayList<>();
-    providers.add(new HoodieConfigAWSCredentialsProvider(props));
-    providers.add(new DefaultAWSCredentialsProviderChain());
-    AWSCredentialsProviderChain providerChain = new AWSCredentialsProviderChain(providers);
-    providerChain.setReuseLastProvider(true);
+  private static AwsCredentialsProvider getAwsCredentialsProviderChain(Properties props) {
+    List<AwsCredentialsProvider> providers = new ArrayList<>();
+    if (HoodieConfigAWSAssumedRoleCredentialsProvider.validConf(props)) {
+      providers.add(new HoodieConfigAWSAssumedRoleCredentialsProvider(props));
+    }
+    HoodieConfigAWSCredentialsProvider hoodieConfigAWSCredentialsProvider = new HoodieConfigAWSCredentialsProvider(props);
+    if (hoodieConfigAWSCredentialsProvider.resolveCredentials() != null) {
+      providers.add(hoodieConfigAWSCredentialsProvider);
+    }
+    providers.add(DefaultCredentialsProvider.builder()
+            .reuseLastProviderEnabled(true)
+            .build());
+    AwsCredentialsProviderChain providerChain = AwsCredentialsProviderChain.builder()
+            .credentialsProviders(providers)
+            .reuseLastProviderEnabled(true)
+            .build();
     return providerChain;
   }
 }

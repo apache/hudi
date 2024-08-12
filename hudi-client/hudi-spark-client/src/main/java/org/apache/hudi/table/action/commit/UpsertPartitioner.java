@@ -22,10 +22,10 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -46,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -56,6 +55,8 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 
 /**
  * Packs incoming records to be upserted, into buckets (1 bucket = 1 RDD partition).
@@ -86,18 +87,24 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   private HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieWriteConfig config;
+  private final WriteOperationType operationType;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
-      HoodieWriteConfig config) {
+                           HoodieWriteConfig config, WriteOperationType operationType) {
     super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
     this.config = config;
+    this.operationType = operationType;
     assignUpdates(profile);
-    assignInserts(profile, context);
+    long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
+    if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
+      assignInserts(profile, context);
+    }
 
-    LOG.info("Total Buckets: " + totalBuckets);
+    LOG.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
+        totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());
     if (LOG.isDebugEnabled()) {
       LOG.debug("Buckets info => " + bucketInfoMap + ", \n"
               + "Partition to insert buckets => " + partitionPathToInsertBucketInfos + ", \n"
@@ -169,8 +176,9 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
      * created by clustering, which has smaller average record size, which affects assigning inserts and
      * may result in OOM by making spark underestimate the actual input record sizes.
      */
-    long averageRecordSize = averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
-        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION)).filterCompletedInstants(), config);
+    long averageRecordSize = AverageRecordSizeUtils.averageBytesPerRecord(table.getMetaClient().getActiveTimeline()
+        .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
+        .filterCompletedInstants(), config);
     LOG.info("AvgRecordSize => " + averageRecordSize);
 
     Map<String, List<SmallFile>> partitionSmallFilesMap =
@@ -185,11 +193,12 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
+                partitionSmallFilesMap.getOrDefault(partitionPath, Collections.emptyList()));
 
         this.smallFiles.addAll(smallFiles);
 
-        LOG.debug("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+        LOG.info("For partitionPath : {} Total Small Files => {}", partitionPath, smallFiles.size());
+        LOG.debug("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -226,11 +235,11 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
         if (totalUnassignedInserts > 0) {
           long insertRecordsPerBucket = config.getCopyOnWriteInsertSplitSize();
           if (config.shouldAutoTuneInsertSplits()) {
-            insertRecordsPerBucket = config.getParquetMaxFileSize() / averageRecordSize;
+            insertRecordsPerBucket = (int) Math.ceil((1.0 * config.getParquetMaxFileSize()) / averageRecordSize);
           }
 
           int insertBuckets = (int) Math.ceil((1.0 * totalUnassignedInserts) / insertRecordsPerBucket);
-          LOG.debug("After small file assignment: unassignedInserts => " + totalUnassignedInserts
+          LOG.info("After small file assignment: unassignedInserts => " + totalUnassignedInserts
               + ", totalInsertBuckets => " + insertBuckets + ", recordsPerBucket => " + insertRecordsPerBucket);
           for (int b = 0; b < insertBuckets; b++) {
             bucketNumbers.add(totalBuckets);
@@ -258,7 +267,7 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
           currentCumulativeWeight += bkt.weight;
           insertBuckets.add(new InsertBucketCumulativeWeightPair(bkt, currentCumulativeWeight));
         }
-        LOG.debug("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
+        LOG.info("Total insert buckets for partition path " + partitionPath + " => " + insertBuckets);
         partitionPathToInsertBucketInfos.put(partitionPath, insertBuckets);
       }
       if (profile.hasOutputWorkLoadStats()) {
@@ -268,12 +277,16 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return Collections.emptyMap();
+    }
+
+    if (table.getMetaClient().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      return Collections.emptyMap();
+    }
+
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (config.getParquetSmallFileLimit() <= 0) {
-      return partitionSmallFilesMap;
-    }
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());
@@ -302,9 +315,8 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
       for (HoodieBaseFile file : allFiles) {
         if (file.getFileSize() < config.getParquetSmallFileLimit()) {
-          String filename = file.getFileName();
           SmallFile sf = new SmallFile();
-          sf.location = new HoodieRecordLocation(FSUtils.getCommitTime(filename), FSUtils.getFileId(filename));
+          sf.location = new HoodieRecordLocation(file.getCommitTime(), file.getFileId());
           sf.sizeBytes = file.getFileSize();
           smallFileLocations.add(sf);
         }
@@ -364,35 +376,5 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
       // return first one, by default
       return targetBuckets.get(0).getKey().bucketNumber;
     }
-  }
-
-  /**
-   * Obtains the average record size based on records written during previous commits. Used for estimating how many
-   * records pack into one file.
-   */
-  protected static long averageBytesPerRecord(HoodieTimeline commitTimeline, HoodieWriteConfig hoodieWriteConfig) {
-    long avgSize = hoodieWriteConfig.getCopyOnWriteRecordSizeEstimate();
-    long fileSizeThreshold = (long) (hoodieWriteConfig.getRecordSizeEstimationThreshold() * hoodieWriteConfig.getParquetSmallFileLimit());
-    try {
-      if (!commitTimeline.empty()) {
-        // Go over the reverse ordered commits to get a more recent estimate of average record size.
-        Iterator<HoodieInstant> instants = commitTimeline.getReverseOrderedInstants().iterator();
-        while (instants.hasNext()) {
-          HoodieInstant instant = instants.next();
-          HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-              .fromBytes(commitTimeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-          long totalBytesWritten = commitMetadata.fetchTotalBytesWritten();
-          long totalRecordsWritten = commitMetadata.fetchTotalRecordsWritten();
-          if (totalBytesWritten > fileSizeThreshold && totalRecordsWritten > 0) {
-            avgSize = (long) Math.ceil((1.0 * totalBytesWritten) / totalRecordsWritten);
-            break;
-          }
-        }
-      }
-    } catch (Throwable t) {
-      // make this fail safe.
-      LOG.error("Error trying to compute average bytes/record ", t);
-    }
-    return avgSize;
   }
 }

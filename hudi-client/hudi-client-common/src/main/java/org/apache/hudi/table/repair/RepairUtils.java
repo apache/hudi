@@ -29,8 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 
 import java.io.IOException;
@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -55,19 +56,19 @@ public final class RepairUtils {
   /**
    * Tags the instant time of each base or log file from the input file paths.
    *
-   * @param basePath          Base path of the table.
-   * @param allPaths          A {@link List} of file paths to tag.
+   * @param basePath Base path of the table.
+   * @param allPaths A {@link List} of file paths to tag.
    * @return A {@link Map} of instant time in {@link String} to a {@link List} of relative file paths.
    */
   public static Map<String, List<String>> tagInstantsOfBaseAndLogFiles(
-      String basePath, List<Path> allPaths) {
+      String basePath, List<StoragePath> allPaths) {
     // Instant time -> Set of base and log file paths
     Map<String, List<String>> instantToFilesMap = new HashMap<>();
     allPaths.forEach(path -> {
       String instantTime = FSUtils.getCommitTime(path.getName());
       instantToFilesMap.computeIfAbsent(instantTime, k -> new ArrayList<>());
       instantToFilesMap.get(instantTime).add(
-          FSUtils.getRelativePartitionPath(new Path(basePath), path));
+          FSUtils.getRelativePartitionPath(new StoragePath(basePath), path));
     });
     return instantToFilesMap;
   }
@@ -98,6 +99,7 @@ public final class RepairUtils {
         return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       case REPLACE_COMMIT_ACTION:
+      case CLUSTERING_ACTION:
         final HoodieReplaceCommitMetadata replaceCommitMetadata =
             HoodieReplaceCommitMetadata.fromBytes(
                 timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);

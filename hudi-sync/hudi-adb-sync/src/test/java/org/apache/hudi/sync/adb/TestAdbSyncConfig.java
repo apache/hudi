@@ -19,7 +19,7 @@
 
 package org.apache.hudi.sync.adb;
 
-import org.apache.hudi.sync.common.util.ConfigUtils;
+import org.apache.hudi.common.util.ConfigUtils;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +35,6 @@ import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SERDE_PROPERTIES;
 import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_SKIP_RO_SUFFIX;
 import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_TABLE_PROPERTIES;
 import static org.apache.hudi.sync.adb.AdbSyncConfig.ADB_SYNC_USER;
-import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
@@ -49,7 +48,6 @@ public class TestAdbSyncConfig {
     Properties props = new Properties();
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "a,b");
     props.setProperty(META_SYNC_BASE_PATH.key(), "/tmp");
-    props.setProperty(META_SYNC_ASSUME_DATE_PARTITION.key(), "true");
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "test");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "test");
     props.setProperty(ADB_SYNC_USER.key(), "adb");
@@ -68,7 +66,6 @@ public class TestAdbSyncConfig {
     AdbSyncConfig config = new AdbSyncConfig(props);
     assertEquals(Arrays.asList("a", "b"), config.getSplitStrings(META_SYNC_PARTITION_FIELDS));
     assertEquals("/tmp", config.getString(META_SYNC_BASE_PATH));
-    assertEquals(true, config.getBoolean(META_SYNC_ASSUME_DATE_PARTITION));
     assertEquals("test", config.getString(META_SYNC_DATABASE_NAME));
     assertEquals("test", config.getString(META_SYNC_TABLE_NAME));
     assertEquals("adb", config.getString(ADB_SYNC_USER));

@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -79,8 +80,8 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     val srcBasePath = getBasePath(srcTable, Option.empty)
     val dstBasePath = getBasePath(dstTable, Option.empty)
 
-    val srcMetaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(srcBasePath).build
-    val targetMetaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(dstBasePath).build
+    val srcMetaClient = createMetaClient(jsc, srcBasePath)
+    val targetMetaClient = createMetaClient(jsc, dstBasePath)
 
     val targetTimeline = targetMetaClient.getActiveTimeline.getCommitsTimeline
     val sourceTimeline = srcMetaClient.getActiveTimeline.getCommitsTimeline
@@ -190,7 +191,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   @throws[IOException]
   def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[String]): Long = {
     var totalNew: Long = 0
-    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitTimeline.filterCompletedInstants
+    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants
     for (commit <- commitsToCatchup) {
       val c: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get, classOf[HoodieCommitMetadata])
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten

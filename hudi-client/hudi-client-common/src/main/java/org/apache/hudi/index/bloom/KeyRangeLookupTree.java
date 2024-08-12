@@ -81,12 +81,8 @@ class KeyRangeLookupTree implements Serializable {
         root.setRightSubTreeMin(newNode.getMinRecordKey());
         root.setRight(newNode);
       } else {
-        if (root.getRightSubTreeMax().compareTo(newNode.getMaxRecordKey()) < 0) {
-          root.setRightSubTreeMax(newNode.getMaxRecordKey());
-        }
-        if (root.getRightSubTreeMin().compareTo(newNode.getMinRecordKey()) > 0) {
-          root.setRightSubTreeMin(newNode.getMinRecordKey());
-        }
+        root.setRightSubTreeMax(max(root.getRightSubTreeMax(), newNode.getMaxRecordKey()));
+        root.setRightSubTreeMin(min(root.getRightSubTreeMin(), newNode.getMinRecordKey()));
         insert(root.getRight(), newNode);
       }
     } else {
@@ -95,16 +91,20 @@ class KeyRangeLookupTree implements Serializable {
         root.setLeftSubTreeMin(newNode.getMinRecordKey());
         root.setLeft(newNode);
       } else {
-        if (root.getLeftSubTreeMax().compareTo(newNode.getMaxRecordKey()) < 0) {
-          root.setLeftSubTreeMax(newNode.getMaxRecordKey());
-        }
-        if (root.getLeftSubTreeMin().compareTo(newNode.getMinRecordKey()) > 0) {
-          root.setLeftSubTreeMin(newNode.getMinRecordKey());
-        }
+        root.setLeftSubTreeMax(max(root.getLeftSubTreeMax(), newNode.getMaxRecordKey()));
+        root.setLeftSubTreeMin(min(root.getLeftSubTreeMin(), newNode.getMinRecordKey()));
         insert(root.getLeft(), newNode);
       }
     }
     return root;
+  }
+
+  private static String max(String a, String b) {
+    return (a.compareTo(b) >= 0) ? a : b;
+  }
+
+  private static String min(String a, String b) {
+    return (a.compareTo(b) <= 0) ? a : b;
   }
 
   /**

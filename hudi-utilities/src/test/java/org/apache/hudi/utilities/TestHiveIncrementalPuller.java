@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
@@ -63,7 +65,7 @@ public class TestHiveIncrementalPuller {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HiveTestUtil.setUp();
+    HiveTestUtil.setUp(Option.empty(), true);
   }
 
   @AfterEach
@@ -166,6 +168,7 @@ public class TestHiveIncrementalPuller {
   }
 
   @Test
+  @EnabledIf(value = "org.apache.hudi.HoodieSparkUtils#isSpark2", disabledReason = "Disable due to hive not support avro 1.10.2.")
   public void testPuller() throws IOException, URISyntaxException {
     createTables();
     HiveIncrementalPuller.Config cfg = getHivePullerConfig("select name from testdb.test1 where `_hoodie_commit_time` > '%s'");

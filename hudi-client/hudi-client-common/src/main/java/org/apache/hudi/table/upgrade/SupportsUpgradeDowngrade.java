@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -41,4 +42,6 @@ public interface SupportsUpgradeDowngrade extends Serializable {
    * @return partition columns in String.
    */
   String getPartitionColumns(HoodieWriteConfig config);
+
+  BaseHoodieWriteClient getWriteClient(HoodieWriteConfig config, HoodieEngineContext context);
 }

@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.utilities.streamer.PostWriteTerminationStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,7 +110,7 @@ public abstract class HoodieIngestionService extends HoodieAsyncService {
    * Subclasses should implement the logic to make the decision. If the shutdown condition is met, the implementation
    * should call {@link #shutdown(boolean)} to indicate the request.
    *
-   * @see org.apache.hudi.utilities.deltastreamer.PostWriteTerminationStrategy
+   * @see PostWriteTerminationStrategy
    */
   protected boolean requestShutdownIfNeeded(Option<HoodieData<WriteStatus>> lastWriteStatus) {
     return false;

@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 
@@ -49,10 +50,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -166,8 +167,8 @@ public class TestHoodieHFileInputFormat {
   public void testInputFormatLoadWithEmptyTable() throws IOException {
     // initial hoodie table
     String bathPathStr = "/tmp/test_empty_table";
-    HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat);
+    HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), bathPathStr, HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat);
     // Add the paths
     FileInputFormat.setInputPaths(jobConf, bathPathStr);
 
@@ -248,8 +249,8 @@ public class TestHoodieHFileInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -263,8 +264,8 @@ public class TestHoodieHFileInputFormat {
     assertEquals(0, files.length,
         "We should exclude commit 100 when returning incremental pull with start commit time as 100");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -285,8 +286,8 @@ public class TestHoodieHFileInputFormat {
 
     InputFormatTestUtil.setupIncremental(jobConf, "100", 1, HoodieTestUtils.HOODIE_DATABASE, true);
 
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(),
-            HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(),
+        HoodieTableType.COPY_ON_WRITE, baseFileFormat);
     assertEquals(null, metaClient.getTableConfig().getDatabaseName(),
         "When hoodie.database.name is not set, it should default to null");
 
@@ -294,8 +295,8 @@ public class TestHoodieHFileInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is null, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, "");
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, "");
     assertEquals("", metaClient.getTableConfig().getDatabaseName(),
         "The hoodie.database.name should be empty");
 
@@ -303,8 +304,8 @@ public class TestHoodieHFileInputFormat {
     assertEquals(10, files.length,
         "When hoodie.database.name is empty, then the incremental query will not take effect");
 
-    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultHadoopConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
-            baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
+    metaClient = HoodieTestUtils.init(HoodieTestUtils.getDefaultStorageConf(), basePath.toString(), HoodieTableType.COPY_ON_WRITE,
+        baseFileFormat, HoodieTestUtils.HOODIE_DATABASE);
     assertEquals(HoodieTestUtils.HOODIE_DATABASE, metaClient.getTableConfig().getDatabaseName(),
         String.format("The hoodie.database.name should be %s ", HoodieTestUtils.HOODIE_DATABASE));
 
@@ -339,10 +340,11 @@ public class TestHoodieHFileInputFormat {
     List<HoodieWriteStat> writeStats = HoodieTestUtils.generateFakeHoodieWriteStat(1);
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
     writeStats.forEach(stat -> commitMetadata.addWriteStat(partitionPath, stat));
-    File file = basePath.resolve(".hoodie").resolve(commitNumber + ".commit").toFile();
+    File file = basePath.resolve(".hoodie")
+        .resolve(commitNumber + "_" + InProcessTimeGenerator.createNewInstantTime() + ".commit").toFile();
     file.createNewFile();
     FileOutputStream fileOutputStream = new FileOutputStream(file);
-    fileOutputStream.write(commitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8));
+    fileOutputStream.write(serializeCommitMetadata(commitMetadata).get());
     fileOutputStream.flush();
     fileOutputStream.close();
   }
@@ -516,6 +518,7 @@ public class TestHoodieHFileInputFormat {
         }
         totalCount++;
       }
+      recordReader.close();
     }
     assertEquals(expectedNumberOfRecordsInCommit, actualCount, msg);
     assertEquals(totalExpected, totalCount, msg);

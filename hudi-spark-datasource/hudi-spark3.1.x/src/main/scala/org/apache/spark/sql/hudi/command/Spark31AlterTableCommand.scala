@@ -17,38 +17,39 @@
 
 package org.apache.spark.sql.hudi.command
 
-import java.net.URI
-import java.nio.charset.StandardCharsets
-import java.util
-import java.util.concurrent.atomic.AtomicInteger
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper, DataSourceUtils}
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{CommitUtils, Option}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
 import org.apache.hudi.internal.schema.action.TableChanges
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
+import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
+import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.connector.catalog.{TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, DeleteColumn, RemoveProperty, SetProperty}
+import org.apache.spark.sql.connector.catalog.{TableCatalog, TableChange}
 import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.{Row, SparkSession}
 
+import java.net.URI
+import java.nio.charset.StandardCharsets
+import java.util
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
@@ -189,9 +190,9 @@ case class Spark31AlterTableCommand(table: CatalogTable, changes: Seq[TableChang
 
   def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
     val path = Spark31AlterTableCommand.getTableLocation(table, sparkSession)
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    val storageConf = HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
-      .setConf(hadoopConf).build()
+      .setConf(storageConf).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
 
     val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
@@ -218,14 +219,21 @@ object Spark31AlterTableCommand extends Logging {
 
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(jsc, schema.toString,
-      path, table.identifier.table, parametersWithWriteDefaults(table.storage.properties).asJava)
+      path, table.identifier.table, HoodieWriterUtils.parametersWithWriteDefaults(
+        HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties ++ table.properties) ++
+          sparkSession.sqlContext.conf.getAllConfs).asJava)
 
-    val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    val metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(hadoopConf).build()
+    val storageConf = HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(path)
+      .setConf(storageConf)
+      .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
+      .build()
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
-    val instantTime = HoodieActiveTimeline.createNewInstantTime
+    val instantTime = client.createNewInstantTime()
     client.startCommitWithTime(instantTime, commitActionType)
+    client.setOperationType(WriteOperationType.ALTER_SCHEMA)
 
     val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
     val timeLine = hoodieTable.getActiveTimeline
@@ -298,18 +306,6 @@ object Spark31AlterTableCommand extends Logging {
     } else ""
   }
 
-  def parametersWithWriteDefaults(parameters: Map[String, String]): Map[String, String] = {
-    Map(OPERATION.key -> OPERATION.defaultValue,
-      TABLE_TYPE.key -> TABLE_TYPE.defaultValue,
-      PRECOMBINE_FIELD.key -> PRECOMBINE_FIELD.defaultValue,
-      HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key ->  HoodieWriteConfig.DEFAULT_WRITE_PAYLOAD_CLASS,
-      INSERT_DROP_DUPS.key -> INSERT_DROP_DUPS.defaultValue,
-      ASYNC_COMPACT_ENABLE.key -> ASYNC_COMPACT_ENABLE.defaultValue,
-      INLINE_CLUSTERING_ENABLE.key -> INLINE_CLUSTERING_ENABLE.defaultValue,
-      ASYNC_CLUSTERING_ENABLE.key -> ASYNC_CLUSTERING_ENABLE.defaultValue
-    ) ++ DataSourceOptionsHelper.translateConfigurations(parameters)
-  }
-
   def checkSchemaChange(colNames: Seq[String], catalogTable: CatalogTable): Unit = {
     val primaryKeys = catalogTable.storage.properties.getOrElse("primaryKey", catalogTable.properties.getOrElse("primaryKey", "keyid")).split(",").map(_.trim)
     val preCombineKey = Seq(catalogTable.storage.properties.getOrElse("preCombineField", catalogTable.properties.getOrElse("preCombineField", "ts"))).map(_.trim)
@@ -322,4 +318,3 @@ object Spark31AlterTableCommand extends Logging {
     }
   }
 }
-

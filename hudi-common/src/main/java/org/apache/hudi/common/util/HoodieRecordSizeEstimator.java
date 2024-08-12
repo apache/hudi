@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import org.apache.avro.Schema;
@@ -30,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * 
  * @param <T>
  */
-public class HoodieRecordSizeEstimator<T> implements SizeEstimator<HoodieRecord<T>> {
+public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordSizeEstimator.class);
 
@@ -41,7 +40,7 @@ public class HoodieRecordSizeEstimator<T> implements SizeEstimator<HoodieRecord<
   }
 
   @Override
-  public long sizeEstimate(HoodieRecord<T> hoodieRecord) {
+  public long sizeEstimate(T hoodieRecord) {
     // Most HoodieRecords are bound to have data + schema. Although, the same schema object is shared amongst
     // all records in the JVM. Calculate and print the size of the Schema and of the Record to
     // note the sizes and differences. A correct estimation in such cases is handled in

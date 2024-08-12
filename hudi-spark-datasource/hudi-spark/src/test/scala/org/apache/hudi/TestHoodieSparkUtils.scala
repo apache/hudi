@@ -18,10 +18,13 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericRecord
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest
+
+import org.apache.avro.generic.GenericRecord
+import org.apache.spark.sql.types.{ArrayType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -88,11 +91,7 @@ class TestHoodieSparkUtils {
   @Test
   def testCreateRddSchemaEvol(): Unit = {
     val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
-      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+      .config(getSparkConfForTest("Hoodie Datasource test"))
       .getOrCreate
 
     val schema = DataSourceTestUtils.getStructTypeExampleSchema
@@ -126,11 +125,7 @@ class TestHoodieSparkUtils {
   @Test
   def testCreateRddWithNestedSchemas(): Unit = {
     val spark = SparkSession.builder
-      .appName("Hoodie Datasource test")
-      .master("local[2]")
-      .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
-      .config("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+      .config(getSparkConfForTest("Hoodie Datasource test"))
       .getOrCreate
 
     val innerStruct1 = new StructType().add("innerKey","string",false).add("innerValue", "long", true)
@@ -211,4 +206,42 @@ class TestHoodieSparkUtils {
 
   def convertRowListToSeq(inputList: java.util.List[Row]): Seq[Row] =
     JavaConverters.asScalaIteratorConverter(inputList.iterator).asScala.toSeq
+}
+
+object TestHoodieSparkUtils {
+
+
+  def setNullableRec(structType: StructType, columnName: Array[String], index: Int): StructType = {
+    StructType(structType.map {
+      case StructField(name, StructType(fields), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, setNullableRec(StructType(fields), columnName, index + 1), nullable, metadata)
+      case StructField(name, ArrayType(StructType(fields), _), nullable, metadata) if name.equals(columnName(index)) =>
+        StructField(name, ArrayType(setNullableRec(StructType(fields), columnName, index + 1)), nullable, metadata)
+      case StructField(name, dataType, _, metadata) if name.equals(columnName(index)) =>
+        StructField(name, dataType, nullable = false, metadata)
+      case y: StructField => y
+    })
+  }
+
+  def getSchemaColumnNotNullable(structType: StructType, columnName: String): StructType = {
+    setNullableRec(structType, columnName.split('.'), 0)
+  }
+
+  def setColumnNotNullable(df: DataFrame, columnName: String): DataFrame = {
+    // get schema
+    val schema = df.schema
+    // modify [[StructField] with name `cn`
+    val newSchema = setNullableRec(schema, columnName.split('.'), 0)
+    // apply new schema
+    df.sqlContext.createDataFrame(df.rdd, newSchema)
+  }
+
+  /**
+   * Utility method for dropping all hoodie meta related columns.
+   */
+  def dropMetaFields(df: DataFrame): DataFrame = {
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.get(0)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(1))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(2)).drop(HoodieRecord.HOODIE_META_COLUMNS.get(3))
+      .drop(HoodieRecord.HOODIE_META_COLUMNS.get(4))
+  }
 }

@@ -18,11 +18,10 @@
 
 package org.apache.hudi.execution;
 
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.queue.DisruptorExecutor;
@@ -35,14 +34,16 @@ import org.apache.hudi.common.util.queue.IteratorBasedQueueProducer;
 import org.apache.hudi.common.util.queue.WaitStrategyFactory;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import scala.Tuple2;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -56,15 +57,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import scala.Tuple2;
+
 import static org.apache.hudi.exception.ExceptionUtil.getRootCause;
-import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformer;
+import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformerInternal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
+public class TestDisruptorMessageQueue extends HoodieSparkClientTestHarness {
 
-  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  private final String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.DISRUPTOR.name())
@@ -92,7 +95,7 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   @SuppressWarnings("unchecked")
   @Test
   @Timeout(value = 60)
-  public void testRecordReading() throws Exception {
+  public void testRecordReading() {
 
     final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
     ArrayList<HoodieRecord> beforeRecord = new ArrayList<>();
@@ -112,13 +115,13 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
       }
     });
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           private int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieInsertValueGenResult<HoodieRecord> record) {
             count++;
             afterRecord.add((HoodieAvroRecord) record.getResult());
             try {
@@ -134,13 +137,13 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
           public Integer finish() {
             return count;
           }
-    };
+        };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = null;
 
     try {
       exec = new DisruptorExecutor(writeConfig.getWriteExecutorDisruptorWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
+          getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig), WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
       int result = exec.execute();
       // It should buffer and write 100 records
       assertEquals(100, result);
@@ -168,8 +171,8 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
     final int numProducers = 40;
     final List<List<HoodieRecord>> recs = new ArrayList<>();
 
-    final DisruptorMessageQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+    final DisruptorMessageQueue<HoodieRecord, HoodieInsertValueGenResult> queue =
+        new DisruptorMessageQueue(1024, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
             "BLOCKING_WAIT", numProducers, new Runnable() {
               @Override
           public void run() {
@@ -221,11 +224,11 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
         IntStream.range(0, numProducers).boxed().collect(Collectors.toMap(Function.identity(), x -> 0));
 
     // setup consumer and start disruptor
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+    HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
+          public void consume(HoodieInsertValueGenResult<HoodieRecord> payload) {
             // Read recs and ensure we have covered all producer recs.
             final HoodieRecord rec = payload.getResult();
             Pair<Integer, Integer> producerPos = keyToProducerAndIndexMap.get(rec.getRecordKey());
@@ -281,16 +284,6 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
   @Timeout(value = 60)
   public void testException() throws Exception {
     final int numRecords = 1000;
-    final int numProducers = 40;
-
-    final DisruptorMessageQueue<HoodieRecord, HoodieLazyInsertIterable.HoodieInsertValueGenResult> queue =
-        new DisruptorMessageQueue(1024, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
-            "BLOCKING_WAIT", numProducers, new Runnable() {
-              @Override
-          public void run() {
-              // do nothing.
-              }
-            });
 
     List<HoodieRecord> pRecs = dataGen.generateInserts(instantTime, numRecords);
 
@@ -308,26 +301,26 @@ public class TestDisruptorMessageQueue extends HoodieClientTestHarness {
       }
     }
 
+    HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+        new HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+          int count = 0;
 
-      int count = 0;
-      @Override
-      public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> payload) {
-        // Read recs and ensure we have covered all producer recs.
-        final HoodieRecord rec = payload.getResult();
-        count++;
-      }
+          @Override
+          public void consume(HoodieInsertValueGenResult<HoodieRecord> payload) {
+            // Read recs and ensure we have covered all producer recs.
+            final HoodieRecord rec = payload.getResult();
+            count++;
+          }
 
-      @Override
-      public Integer finish() {
-        return count;
-      }
-    };
+          @Override
+          public Integer finish() {
+            return count;
+          }
+        };
 
     DisruptorExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> exec = new DisruptorExecutor(1024,
-        producers, consumer, getTransformer(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
+        producers, consumer, getTransformerInternal(HoodieTestDataGenerator.AVRO_SCHEMA, writeConfig),
         WaitStrategyFactory.DEFAULT_STRATEGY, getPreExecuteRunnable());
 
     final Throwable thrown = assertThrows(HoodieException.class, exec::execute,
