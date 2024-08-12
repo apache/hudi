@@ -39,6 +39,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -78,7 +79,6 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   protected final JobConf jobConf;
   protected final Reporter reporter;
   protected final Schema writerSchema;
-  protected Map<String, String[]> hosts;
   protected final Map<String, TypeInfo> columnTypeMap;
   private final ObjectInspectorCache objectInspectorCache;
   private RecordReader<NullWritable, ArrayWritable> firstRecordReader = null;
@@ -93,14 +93,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
                                     JobConf jobConf,
                                     Reporter reporter,
                                     Schema writerSchema,
-                                    Map<String, String[]> hosts,
                                     HoodieTableMetaClient metaClient) {
     this.readerCreator = readerCreator;
     this.split = split;
     this.jobConf = jobConf;
     this.reporter = reporter;
     this.writerSchema = writerSchema;
-    this.hosts = hosts;
     this.partitionCols = getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
     this.partitionColSet = new HashSet<>(this.partitionCols);
     String tableName = metaClient.getTableConfig().getTableName();
@@ -148,14 +146,27 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
+                                                               Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
+  }
+
+  @Override
+  protected ClosableIterator<ArrayWritable> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(),start, length, dataSchema, requiredSchema, storage);
+  }
+
+  private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
+                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
     JobConf jobConfCopy = new JobConf(jobConf);
     //move the partition cols to the end, because in some cases it has issues if we don't do that
     Schema modifiedDataSchema = HoodieAvroUtils.generateProjectionSchema(dataSchema, Stream.concat(dataSchema.getFields().stream()
             .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
         partitionCols.stream().filter(c -> dataSchema.getField(c) != null)).collect(Collectors.toList()));
     setSchemas(jobConfCopy, modifiedDataSchema, requiredSchema);
-    InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts.get(filePath.toString()));
+    InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
     RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, reporter);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;

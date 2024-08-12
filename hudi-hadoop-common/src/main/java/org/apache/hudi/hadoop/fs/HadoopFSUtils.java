@@ -171,6 +171,17 @@ public class HadoopFSUtils {
         fileStatus.getModificationTime());
   }
 
+  public static StoragePathInfo convertToStoragePathInfo(FileStatus fileStatus, String[] locations) {
+    return new StoragePathInfo(
+        convertToStoragePath(fileStatus.getPath()),
+        fileStatus.getLen(),
+        fileStatus.isDirectory(),
+        fileStatus.getReplication(),
+        fileStatus.getBlockSize(),
+        fileStatus.getModificationTime(),
+        locations);
+  }
+
   /**
    * @param pathInfo {@link StoragePathInfo} instance.
    * @return the {@link FileStatus} instance after conversion.

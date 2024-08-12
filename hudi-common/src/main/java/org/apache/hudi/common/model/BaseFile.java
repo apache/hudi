@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.storage.StorageFile;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -28,7 +29,7 @@ import java.util.Objects;
  * Represents common metadata about base-file.
  * A base file can be Hudi base file or even an external (non-hudi) base file too.
  */
-public class BaseFile implements Serializable {
+public class BaseFile implements Serializable, StorageFile {
 
   private static final long serialVersionUID = 1L;
 

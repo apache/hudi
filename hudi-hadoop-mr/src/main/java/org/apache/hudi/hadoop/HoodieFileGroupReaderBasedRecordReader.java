@@ -54,10 +54,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -117,8 +115,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     String latestCommitTime = getLatestCommitTime(split, metaClient);
     Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
-    Map<String, String[]> hosts = new HashMap<>();
-    this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConfCopy, reporter, tableSchema, hosts, metaClient);
+    this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConfCopy, reporter, tableSchema, metaClient);
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {
@@ -128,7 +125,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     });
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
-        latestCommitTime, getFileSliceFromSplit(fileSplit, hosts, getFs(tableBasePath, jobConfCopy), tableBasePath),
+        latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
         fileSplit.getLength(), false);
     this.fileGroupReader.initRecordIterators();
@@ -208,8 +205,8 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   /**
    * Convert FileSplit to FileSlice, but save the locations in 'hosts' because that data is otherwise lost.
    */
-  private static FileSlice getFileSliceFromSplit(FileSplit split, Map<String, String[]> hosts, FileSystem fs, String tableBasePath) throws IOException {
-    BaseFile bootstrapBaseFile = createBootstrapBaseFile(split, hosts, fs);
+  private static FileSlice getFileSliceFromSplit(FileSplit split, FileSystem fs, String tableBasePath) throws IOException {
+    BaseFile bootstrapBaseFile = createBootstrapBaseFile(split, fs);
     if (split instanceof RealtimeSplit) {
       // MOR
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
@@ -227,26 +224,23 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       if (isLogFile) {
         return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles());
       }
-      hosts.put(realtimeSplit.getPath().toString(), realtimeSplit.getLocations());
-      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath())), bootstrapBaseFile);
+      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath()), realtimeSplit.getLocations()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
     // COW
     HoodieFileGroupId fileGroupId = new HoodieFileGroupId(getFileId(split.getPath().getName()), getRelativePartitionPath(new Path(tableBasePath), split.getPath()));
-    hosts.put(split.getPath().toString(), split.getLocations());
     return new FileSlice(
         fileGroupId,
         getCommitTime(split.getPath().toString()),
-        new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath())), bootstrapBaseFile),
+        new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath()), split.getLocations()), bootstrapBaseFile),
         Collections.emptyList());
   }
 
-  private static BaseFile createBootstrapBaseFile(FileSplit split, Map<String, String[]> hosts, FileSystem fs) throws IOException {
+  private static BaseFile createBootstrapBaseFile(FileSplit split, FileSystem fs) throws IOException {
     if (split instanceof BootstrapBaseFileSplit) {
       BootstrapBaseFileSplit bootstrapBaseFileSplit = (BootstrapBaseFileSplit) split;
       FileSplit bootstrapFileSplit = bootstrapBaseFileSplit.getBootstrapFileSplit();
-      hosts.put(bootstrapFileSplit.getPath().toString(), bootstrapFileSplit.getLocations());
-      return new BaseFile(convertToStoragePathInfo(fs.getFileStatus(bootstrapFileSplit.getPath())));
+      return new BaseFile(convertToStoragePathInfo(fs.getFileStatus(bootstrapFileSplit.getPath()), bootstrapFileSplit.getLocations()));
     }
     return null;
   }

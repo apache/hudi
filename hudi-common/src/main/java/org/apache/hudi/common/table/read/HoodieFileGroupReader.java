@@ -146,7 +146,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     return readerContext.getFileRecordIterator(
-        baseFile.getStoragePath(), start, length,
+        baseFile, start, length,
         readerContext.getSchemaHandler().getDataSchema(),
         readerContext.getSchemaHandler().getRequiredSchema(), storage);
   }
@@ -186,7 +186,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.empty();
     }
     Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
-    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
+    return Option.of(Pair.of(readerContext.getFileRecordIterator(file, 0, file.getFileLen(),
         readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
   }
 
