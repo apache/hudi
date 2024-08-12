@@ -340,7 +340,11 @@ public class HoodieTableConfig extends HoodieConfig {
     for (Map.Entry<String, String> entry: conf.entrySet()) {
       if (entry.getKey().startsWith(COLUMN_FAMILY_PREFIX)) {
         String name = entry.getKey().replace(COLUMN_FAMILY_PREFIX, "");
-        definitionsMap.put(name, ColumnFamilyDefinition.fromConfig(name, entry.getValue()));
+        if (StringUtils.isNullOrEmpty(entry.getValue())) {
+          definitionsMap.put(name, null); // mark family to be deleted
+        } else {
+          definitionsMap.put(name, ColumnFamilyDefinition.fromConfig(name, entry.getValue()));
+        }
       }
     }
     return definitionsMap;

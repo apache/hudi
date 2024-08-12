@@ -26,6 +26,7 @@ import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -59,7 +60,7 @@ public class ColumnFamilyDefinition implements Serializable {
       String[] fieldStrings = configValue.split(PRE_COMBINE_DELIMITER);
       String preCombine = null;
       if (fieldStrings.length > 2) {
-        throw new HoodieValidationException("Only one semicolon delimiter allowed to separate precombine column");
+        throw new HoodieValidationException("Only one semicolon delimiter allowed to separate preCombine column");
       } else if (fieldStrings.length == 2) {
         preCombine = fieldStrings[1].trim();
       }
@@ -106,6 +107,23 @@ public class ColumnFamilyDefinition implements Serializable {
 
   public String getPreCombine() {
     return preCombine;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    ColumnFamilyDefinition that = (ColumnFamilyDefinition) o;
+    return Objects.equals(name, that.name) && Objects.equals(columns, that.columns) && Objects.equals(preCombine, that.preCombine);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(name, columns, preCombine);
   }
 
   @Override

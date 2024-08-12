@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-
 /**
  * Tests hoodie write stat {@link ColumnFamilyDefinition}.
  */
@@ -50,8 +49,8 @@ public class TestColumnFamilyDefinition {
         Arguments.of("cf", "id,col1,ts,ts", "Family's columns must not contain duplicates"),
         Arguments.of("cf", "id,col1,col2;ts", "Family's columns must contain preCombine column: ts"),
         Arguments.of("cf", "id,col1,ts;ts,", "Family's columns must contain preCombine column: ts,"),
-        Arguments.of("cf", "id,col1,ts;;ts", "Only one semicolon delimiter allowed to separate precombine column"),
-        Arguments.of("cf", "id,col1,ts;ts; ", "Only one semicolon delimiter allowed to separate precombine column")
+        Arguments.of("cf", "id,col1,ts;;ts", "Only one semicolon delimiter allowed to separate preCombine column"),
+        Arguments.of("cf", "id,col1,ts;ts; ", "Only one semicolon delimiter allowed to separate preCombine column")
     );
   }
 
@@ -66,7 +65,7 @@ public class TestColumnFamilyDefinition {
 
   @Test
   public void testFromConfigSuccess() {
-    // without precombine column
+    // without preCombine column
     ColumnFamilyDefinition cfd = fromConfig("cf", "id , col1, col2  ");
     assertEquals("cf", cfd.getName());
     assertEquals(3, cfd.getColumns().size());
@@ -81,7 +80,7 @@ public class TestColumnFamilyDefinition {
     assertEquals("id,col1,col2", fromConfig("cf", "id,col1,col2;;").toConfigValue());
     assertEquals("id,col1,col2", fromConfig("cf", "id,col1,col2; ;").toConfigValue());
 
-    // with precombine column
+    // with preCombine column
     cfd = fromConfig("cf", " id, col1 , ts ; ts ");
     assertEquals("cf", cfd.getName());
     assertEquals(3, cfd.getColumns().size());

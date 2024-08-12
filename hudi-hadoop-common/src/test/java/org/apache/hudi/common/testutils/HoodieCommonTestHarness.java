@@ -173,7 +173,7 @@ public class HoodieCommonTestHarness {
     config.put("hoodie.columnFamily.cf1", "id, col1, col2");
     config.put("hoodie.some.property2", "val2");
     config.put("hoodie.columnFamily.cf2", "id, col3, col4,ts;ts");
-    config.put("hoodie.some.property3", "val3");
+    config.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
     return config;
   }
 
