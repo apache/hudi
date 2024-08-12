@@ -56,6 +56,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private Option<Schema> fileSchema;
 
   public HoodieAvroParquetReader(Configuration configuration, Path path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
@@ -63,6 +64,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     this.conf = tryOverrideDefaultConfigs(new Configuration(configuration));
     this.path = path;
     this.parquetUtils = BaseFileUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.fileSchema = Option.empty();
   }
 
   @Override
@@ -101,7 +103,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    if (!fileSchema.isPresent()) {
+      fileSchema = Option.ofNullable(parquetUtils.readAvroSchema(conf, path));
+    }
+    return fileSchema.get();
   }
 
   @Override
@@ -158,15 +163,24 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
-    if (!requestedSchema.isPresent()) {
-      AvroReadSupport.setAvroReadSchema(conf, schema);
-      AvroReadSupport.setRequestedProjection(conf, schema);
+    Schema intendedReadSchema = requestedSchema.isPresent() ? requestedSchema.get() : schema;
+    Option<Schema> promotedSchema = Option.empty();
+    if (HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(getSchema(), intendedReadSchema)) {
+      AvroReadSupport.setAvroReadSchema(conf, getSchema());
+      AvroReadSupport.setRequestedProjection(conf, getSchema());
+      promotedSchema = Option.of(intendedReadSchema);
     } else {
-      AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
-      AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
+      AvroReadSupport.setAvroReadSchema(conf, intendedReadSchema);
+      AvroReadSupport.setRequestedProjection(conf, intendedReadSchema);
     }
-    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
-    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
+    ParquetReader<IndexedRecord> reader =
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf)
+            .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
+            .set(ParquetInputFormat.STRICT_TYPE_CHECKING, conf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
+            .build();
+    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = promotedSchema.isPresent()
+        ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get())
+        : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }
