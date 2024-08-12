@@ -23,7 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.exception.HoodieException;
 
-abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
+public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
   @Override
   public HoodieRecord.HoodieRecordType getRecordType() {
     return HoodieRecord.HoodieRecordType.SPARK;

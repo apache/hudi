@@ -39,4 +39,9 @@ class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerge
   override def asPreCombiningMode(): HoodieRecordMerger = {
     HoodieRecordUtils.loadRecordMerger(classOf[DefaultSparkRecordMerger].getName)
   }
+
+  /**
+   * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+   */
+  override def getMergingStrategy: String = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID
 }
