@@ -50,7 +50,6 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.exec.Utilities;
 import org.apache.hadoop.hive.ql.exec.mr.ExecMapper;
@@ -170,10 +169,10 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     HoodieJavaClientTestHarness.TestJavaTaskContextSupplier taskContextSupplier = new HoodieJavaClientTestHarness.TestJavaTaskContextSupplier();
     HoodieJavaEngineContext context = new HoodieJavaEngineContext(getStorageConf(), taskContextSupplier);
     //init table if not exists
+    Path basePath = new Path(getBasePath());
     try {
-      try (RawLocalFileSystem lfs = new RawLocalFileSystem()) {
-        lfs.setConf(baseJobConf);
-        boolean basepathExists = lfs.exists(new Path(getBasePath()));
+      try (FileSystem lfs = basePath.getFileSystem(baseJobConf)) {
+        boolean basepathExists = lfs.exists(basePath);
         boolean operationIsInsert = operation.equalsIgnoreCase("insert");
         if (!basepathExists || operationIsInsert) {
           if (basepathExists) {
