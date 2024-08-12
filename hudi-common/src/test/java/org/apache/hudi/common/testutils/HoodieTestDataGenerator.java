@@ -380,7 +380,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
   }
 
-
   /**
    * Populate rec with values for TRIP_SCHEMA_PREFIX
    */
@@ -468,8 +467,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-
-
+  
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */

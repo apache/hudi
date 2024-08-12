@@ -74,7 +74,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   private static final SparkHoodieBloomIndexHelper SINGLETON_INSTANCE =
       new SparkHoodieBloomIndexHelper();
 
-  private SparkHoodieBloomIndexHelper() {}
+  private SparkHoodieBloomIndexHelper() {
+  }
 
   public static SparkHoodieBloomIndexHelper getInstance() {
     return SINGLETON_INSTANCE;

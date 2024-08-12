@@ -2344,8 +2344,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
     assertTrue(latestBaseFilesPerPartition.contains(fileId2));
     assertTrue(latestBaseFilesPerPartition.contains(fileId4));
   }
-
-
+  
   // Generate Hoodie WriteStat For Given Partition
   private List<HoodieWriteStat> buildWriteStats(HashMap<String, List<String>> partitionToFileIds, String commitTime) {
     HashMap<String, List<Pair<String, Integer>>> maps = new HashMap<>();

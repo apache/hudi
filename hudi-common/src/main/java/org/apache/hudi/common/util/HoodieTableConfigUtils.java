@@ -75,8 +75,7 @@ public class HoodieTableConfigUtils {
         ? partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
         : partitionField;
   }
-
-
+  
   /**
    * This function returns the hoodie.table.version from hoodie.properties file.
    */

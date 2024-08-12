@@ -290,18 +290,17 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.1.0</version>
+        <version>3.4.0</version>
         <dependencies>
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>8.18</version>
+            <version>9.3</version>
           </dependency>
         </dependencies>
         <configuration>
           <!-- Set consoleOutput to true to see minor checkstyle issues -->
           <consoleOutput>false</consoleOutput>
-          <encoding>UTF-8</encoding>
           <configLocation>style/checkstyle.xml</configLocation>
           <suppressionsLocation>style/checkstyle-suppressions.xml</suppressionsLocation>
           <suppressionsFileExpression>checkstyle.suppressions.file</suppressionsFileExpression>

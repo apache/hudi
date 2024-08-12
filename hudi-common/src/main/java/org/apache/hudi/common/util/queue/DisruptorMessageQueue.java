@@ -106,7 +106,8 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   }
 
   @Override
-  public void seal() {}
+  public void seal() {
+  }
 
   @Override
   public void close() {
