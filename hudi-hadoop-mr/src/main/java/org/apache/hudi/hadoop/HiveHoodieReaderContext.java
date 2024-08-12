@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
@@ -65,9 +64,6 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
 
 /**
  * {@link HoodieReaderContext} for Hive-specific {@link HoodieFileGroupReaderBasedRecordReader}.
@@ -155,14 +151,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
   @Override
   public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new HoodieHiveRecordMerger();
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return new OverwriteWithLatestHiveRecordMerger();
-      default:
-        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy);
-    }
+    return HoodieHiveRecordMerger.getRecordMerger(mergerStrategy);
   }
 
   @Override

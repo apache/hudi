@@ -114,11 +114,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ctx.setRecordMerger(new CustomMerger());
         break;
       case EVENT_TIME_ORDERING:
-        ctx.setRecordMerger(new HoodieSparkRecordMerger());
+        ctx.setRecordMerger(new DefaultSparkRecordMerger());
         break;
       case OVERWRITE_WITH_LATEST:
       default:
-        ctx.setRecordMerger(new OverwriteWithLatestSparkMerger());
+        ctx.setRecordMerger(new OverwriteWithLatestSparkRecordMerger());
         break;
     }
     ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,

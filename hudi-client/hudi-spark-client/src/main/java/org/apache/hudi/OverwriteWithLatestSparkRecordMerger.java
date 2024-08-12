@@ -31,7 +31,7 @@ import java.io.IOException;
 /**
  * Spark merger that always chooses the newer record
  */
-public class OverwriteWithLatestSparkMerger extends HoodieSparkRecordMerger {
+public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override
   public String getMergingStrategy() {
@@ -41,6 +41,11 @@ public class OverwriteWithLatestSparkMerger extends HoodieSparkRecordMerger {
   @Override
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
+  }
+
+  @Override
+  public HoodieRecord.HoodieRecordType getRecordType() {
+    return null;
   }
 
 }

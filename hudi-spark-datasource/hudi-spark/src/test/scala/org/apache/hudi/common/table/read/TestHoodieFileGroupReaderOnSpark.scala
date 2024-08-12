@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, O
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.{HoodieSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{DefaultSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
@@ -89,7 +89,7 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
     val metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build
-    val recordKeyField = new HoodieSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
+    val recordKeyField = new DefaultSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
     new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, Seq.empty)
   }
 

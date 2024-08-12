@@ -79,7 +79,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-
 import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
 import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getRecordKeyField;
@@ -90,8 +89,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBase<ArrayWritable> {
 
   @Override
-  @Disabled
-  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {}
+  @Disabled("[HUDI-8072]")
+  public void testReadLogFilesOnlyInMergeOnReadTable(RecordMergeMode recordMergeMode, String logDataBlockFormat) throws Exception {
+  }
 
   private static final String PARTITION_COLUMN = "datestr";
   private static JobConf baseJobConf;
@@ -133,7 +133,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
 
   @Override
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf) {
-    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (s, j) -> new MapredParquetInputFormat().getRecordReader(s, j, null);
+    HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build();
     String tableName = metaClient.getTableConfig().getTableName();
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
@@ -202,7 +202,6 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       throw new RuntimeException(e);
     }
 
-
     HoodieJavaWriteClient writeClient = new HoodieJavaWriteClient(context, writeConfig);
     String instantTime = writeClient.createNewInstantTime();
     writeClient.startCommitWithTime(instantTime);
@@ -224,47 +223,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
         recordMap.put(readerContext.getRecordKey(record, schema), record);
       }
 
-
-      JobConf jobConf = new JobConf(baseJobConf);
-      jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
-
-      TableDesc tblDesc = Utilities.defaultTd;
-      // Set the input format
-      tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
-      LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
-      LinkedHashMap<Path, ArrayList<String>> talias = new LinkedHashMap<>();
-
-      PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
-
-      pt.put(new Path(tablePath), partDesc);
-
-      ArrayList<String> arrayList = new ArrayList<>();
-      arrayList.add(tablePath);
-      talias.put(new Path(tablePath), arrayList);
-
-      MapredWork mrwork = new MapredWork();
-      mrwork.getMapWork().setPathToPartitionInfo(pt);
-      mrwork.getMapWork().setPathToAliases(talias);
-
-      Path mapWorkPath = new Path(tablePath);
-      Utilities.setMapRedWork(jobConf, mrwork, mapWorkPath);
-
-      // Add three partition path to InputPaths
-      Path[] partitionDirArray = new Path[HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length];
-      Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).map(s -> new Path(tablePath, s)).collect(Collectors.toList()).toArray(partitionDirArray);
-      FileInputFormat.setInputPaths(jobConf, partitionDirArray);
-      jobConf.set(HAS_MAP_WORK, "true");
-      // The following config tells Hive to choose ExecMapper to read the MAP_WORK
-      jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
-      // setting the split size to be 3 to create one split for 3 file groups
-      jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
-      setupJobconf(jobConf);
-
-      HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
-      InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
-
-      assertEquals(1, splits.length);
-      RecordReader<NullWritable, ArrayWritable> reader = combineHiveInputFormat.getRecordReader(splits[0], jobConf, Reporter.NULL);
+      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath);
       // use reader to read log file.
       NullWritable key = reader.createKey();
       ArrayWritable value = reader.createValue();
@@ -274,21 +233,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
           //hive to do this?
           ArrayWritable compVal = recordMap.remove(readerContext.getRecordKey(value, schema));
           assertNotNull(compVal);
-          for (Schema.Field field : schema.getFields()) {
-            switch (HoodieAvroUtils.getActualSchemaFromUnion(field.schema(), null).getType()) {
-              case UNION:
-                throw new IllegalStateException("we resolve unions so we should never be here");
-              case RECORD:
-              case MAP:
-              case ENUM:
-              case ARRAY:
-                //TODO: validate complex types
-                continue;
-              default:
-                assertEquals(value.get()[field.pos()], compVal.get()[field.pos()]);
-
-            }
-          }
+          assertArrayWritableEqual(schema, value, compVal);
         }
         key = reader.createKey();
         value = reader.createValue();
@@ -297,6 +242,67 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       assertEquals(0, recordMap.size());
     } catch (IOException e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  private RecordReader<NullWritable, ArrayWritable> createRecordReader(String tablePath) throws IOException {
+    JobConf jobConf = new JobConf(baseJobConf);
+    jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+
+    TableDesc tblDesc = Utilities.defaultTd;
+    // Set the input format
+    tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
+    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    LinkedHashMap<Path, ArrayList<String>> talias = new LinkedHashMap<>();
+
+    PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
+
+    pt.put(new Path(tablePath), partDesc);
+
+    ArrayList<String> arrayList = new ArrayList<>();
+    arrayList.add(tablePath);
+    talias.put(new Path(tablePath), arrayList);
+
+    MapredWork mrwork = new MapredWork();
+    mrwork.getMapWork().setPathToPartitionInfo(pt);
+    mrwork.getMapWork().setPathToAliases(talias);
+
+    Path mapWorkPath = new Path(tablePath);
+    Utilities.setMapRedWork(jobConf, mrwork, mapWorkPath);
+
+    // Add three partition path to InputPaths
+    Path[] partitionDirArray = new Path[HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS.length];
+    Arrays.stream(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS).map(s -> new Path(tablePath, s)).collect(Collectors.toList()).toArray(partitionDirArray);
+    FileInputFormat.setInputPaths(jobConf, partitionDirArray);
+    jobConf.set(HAS_MAP_WORK, "true");
+    // The following config tells Hive to choose ExecMapper to read the MAP_WORK
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+    // setting the split size to be 3 to create one split for 3 file groups
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
+    setupJobconf(jobConf);
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
+    InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
+
+    assertEquals(1, splits.length);
+    return  combineHiveInputFormat.getRecordReader(splits[0], jobConf, Reporter.NULL);
+  }
+
+  public void assertArrayWritableEqual(Schema schema, ArrayWritable expected, ArrayWritable actual) {
+    for (Schema.Field field : schema.getFields()) {
+      switch (HoodieAvroUtils.getActualSchemaFromUnion(field.schema(), null).getType()) {
+        case UNION:
+          throw new IllegalStateException("we resolve unions so we should never be here");
+        case RECORD:
+        case MAP:
+        case ENUM:
+        case ARRAY:
+          //TODO: validate complex types
+          continue;
+        default:
+          assertEquals(expected.get()[field.pos()], actual.get()[field.pos()]);
+
+      }
     }
   }
 
