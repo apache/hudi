@@ -28,9 +28,8 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.storage.{HoodieStorageUtils, StorageConfiguration}
+import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
 
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -38,9 +37,12 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
+import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchModifier}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
@@ -88,6 +90,27 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
     sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
     supportBatchResult
+  }
+
+  //for partition columns that we read from the file, we don't want them to be constant column vectors so we
+  //modify the vector types in this scenario
+  override def vectorTypes(requiredSchema: StructType,
+                           partitionSchema: StructType,
+                           sqlConf: SQLConf): Option[Seq[String]] = {
+    val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
+      classOf[OnHeapColumnVector].getName
+    } else {
+      classOf[OffHeapColumnVector].getName
+    }
+    super.vectorTypes(requiredSchema, partitionSchema, sqlConf).map {
+      o: Seq[String] => o.zipWithIndex.map(a => {
+        if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+          regularVectorType
+        } else {
+          a._1
+        }
+      })
+    }
   }
 
   private lazy val internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
@@ -268,19 +291,24 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
     if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+    } else if (remainingPartitionSchema.fields.length == 0) {
+      val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
+      val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      parquetFileReader.read(modifiedFile, outputSchema, new StructType(), internalSchemaOpt, filters, storageConf)
     } else {
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      if (supportBatchResult) {
-        //if we support batch then all partition columns need to be read
-        val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-        parquetFileReader.read(modifiedFile, outputSchema, new StructType(), internalSchemaOpt, filters, storageConf)
-      } else {
-        val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
-        val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-        val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
-        val unsafeProjection = generateUnsafeProjection(StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
-        iter.map(row => unsafeProjection(row))
-      }
+      val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+      val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+      val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
+      projectIter(iter, StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
     }
+  }
+
+  private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
+    val unsafeProjection = generateUnsafeProjection(from, to)
+    iter.map {
+      case ir: InternalRow => unsafeProjection(ir)
+      case cb: ColumnarBatch => ColumnarBatchModifier.projectBatch(cb, from, to)
+    }.asInstanceOf[Iterator[InternalRow]]
   }
 }
