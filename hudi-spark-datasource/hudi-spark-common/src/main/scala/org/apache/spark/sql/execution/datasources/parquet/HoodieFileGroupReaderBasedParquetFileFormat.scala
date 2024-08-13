@@ -266,15 +266,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                            remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
                            partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
                            storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
-    if (requestedSchema.equals(requiredSchema)) {
+    if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
     } else {
-      val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
-      val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-      val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
-      val unsafeProjection = generateUnsafeProjection(StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
-      iter.map(row => unsafeProjection(row))
+      if (supportBatchResult) {
+        //if we support batch then all partition columns need to be read
+        val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+        parquetFileReader.read(modifiedFile, outputSchema, new StructType(), internalSchemaOpt, filters, storageConf)
+      } else {
+        val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+        val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
+        val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
+        val unsafeProjection = generateUnsafeProjection(StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
+        iter.map(row => unsafeProjection(row))
+      }
     }
   }
 }
