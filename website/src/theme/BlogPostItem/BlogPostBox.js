@@ -5,7 +5,7 @@ import styles from './blogPostBoxStyles.module.css';
 import AuthorName from "@site/src/components/AuthorName";
 import { useBaseUrlUtils } from "@docusaurus/core/lib/client/exports/useBaseUrl";
 import Tag from "@theme/Tag";
-
+import {useLocation} from '@docusaurus/router';
 export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
     const { withBaseUrl } = useBaseUrlUtils();
     const {
@@ -15,6 +15,7 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
         title,
         authors,
     } = metadata;
+    const location = useLocation();
 
     const image = assets.image ?? frontMatter.image ?? '/assets/images/hudi-logo-medium.png';
 
