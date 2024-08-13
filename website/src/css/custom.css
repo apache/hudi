@@ -7,6 +7,7 @@
 
 /* You can override the default Infima variables here. */
 :root {
+  --ifm-menu-link-padding-horizontal: 1rem;
   --ifm-color-primary-text: rgb(13, 177, 249);
   --ifm-color-secondary-text: rgb(41, 85, 122);
   --ifm-color-black: rgba(28, 30, 33, 1);
@@ -449,6 +450,33 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   }
 }
 
+.theme-doc-sidebar-item-link .menu__link{
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.tagsListInline {
+  margin-top: 10px !important;
+}
+
+.tagsListInline b {
+  display: none;
+}
+
+.tagsListInline ul {
+  margin-left: 10px !important;
+  font-size: .875rem !important;
+  margin-top: 10px !important;
+}
+
+.tagsListInline ul li {
+  margin: -5px 20px 0 -10px;
+}
+
+.tagsListInline ul li a{
+  padding: 0.3rem 5px 0.3rem;
+}
+
 /* Docusaurus-specific utility class */
 .docusaurus-mt-lg {
   margin-top: 3rem;
@@ -459,4 +487,31 @@ div[class^="announcementBar"][role="banner"] {
   background-color: #29557A;
   padding: 5px 0;
   height: auto;
+}
+
+.theme-doc-sidebar-item-link .menu__link{
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.tagsListInline {
+  margin-top: 10px !important;
+}
+
+.tagsListInline b {
+  display: none;
+}
+
+.tagsListInline ul {
+  margin-left: 10px !important;
+  font-size: .875rem !important;
+  margin-top: 10px !important;
+}
+
+.tagsListInline ul li {
+  margin: -5px 20px 0 -10px;
+}
+
+.tagsListInline ul li a{
+  padding: 0.3rem 5px 0.3rem;
 }

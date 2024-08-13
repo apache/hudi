@@ -13,10 +13,3 @@
 .searchText {
   margin-right: 5px;
 }
-
-@media (max-width: 996px) {
-  .searchBox {
-    position: absolute;
-    right: var(--ifm-navbar-padding-horizontal);
-  }
-}

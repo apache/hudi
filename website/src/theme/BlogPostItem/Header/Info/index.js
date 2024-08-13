@@ -46,7 +46,7 @@ export default function BlogPostItemHeaderInfo({className}) {
   });
   const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
   return (
-    <div className={clsx(styles.container, 'margin-vert--md', className)}>
+    <div className={clsx(styles.container, 'margin-vert--sm', className)}>
       <DateTime date={date} formattedDate={formatDate(date)} />
       <BlogPostItemHeaderAuthors />
       {typeof readingTime !== 'undefined' && (

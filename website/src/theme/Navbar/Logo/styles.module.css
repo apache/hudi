@@ -1,3 +1,5 @@
-.navbarLogo {
-  max-width: 148px;
+@media (min-width: 1350px) {
+  .navbarLogo {
+    max-width: 148px;
+  }
 }

@@ -39,15 +39,15 @@ Hudi organizes a table as a collection of files (objects in cloud storage) that 
 Metadata about the table is stored at a location on storage, referred to as **_basepath_**, which contains a special reserved _.hoodie_ directory under the base path is used to store transaction logs, metadata and indexes. A special file [`hoodie.properties`](http://hoodie.properties/) under basepath persists table level configurations, shared by writers and readers of the table. These configurations are explained [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java), and any config without a default value needs to be specified during table creation.
 
 ```plain
-/data/hudi_trips/ 					\<-- Base Path
-├── .hoodie/      					\<-- Meta Path
-|   └── hoodie.properties           \<-- Table Configs
-│   └── metadata/                   \<-- Metadata
-|       └── files/                  \<-- Files that make up the table
-|       └── col_stats/              \<-- Statistics on files and columns
-├── americas/                       \<-- Data stored as folder tree
+/data/hudi_trips/                   <-- Base Path
+├── .hoodie/                        <-- Meta Path
+|   └── hoodie.properties           <-- Table Configs
+│   └── metadata/                   <-- Metadata
+|       └── files/                  <-- Files that make up the table
+|       └── col_stats/              <-- Statistics on files and columns
+├── americas/                       <-- Data stored as folder tree
 │   ├── brazil/
-│   │   └── sao_paulo/				\<-- Partition Path 
+│   │   └── sao_paulo               <-- Partition Path 
 │   │       ├── [data_files]
 │   └── united_states/
 │       └── san_francisco/
@@ -107,7 +107,7 @@ Completed actions, their plans and completion metadata are stored in a more scal
 
 ```bash
 /.hoodie/archived/ 					
-├── _version_      					        <-- stores the manifest version that is current
+├── _version_                               <-- stores the manifest version that is current
 ├── manifest_1                              <-- manifests store list of files in timeline
 ├── manifest_2                              <-- compactions, cleaning, writes produce new manifest files
 ├── ...                                      

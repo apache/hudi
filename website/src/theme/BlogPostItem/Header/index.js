@@ -22,7 +22,7 @@ export default function BlogPostItemHeader() {
         {tagsExists && (
             <div
                 className={clsx(
-                    'row',
+                    'row tagsListInline',
                     'margin-top--sm',
                     ThemeClassNames.blog.blogFooterEditMetaRow,
                 )}>
