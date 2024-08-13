@@ -44,7 +44,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class AvroSchemaUtils {
 
-  private AvroSchemaUtils() {}
+  private AvroSchemaUtils() {
+  }
 
   /**
    * See {@link #isSchemaCompatible(Schema, Schema, boolean, boolean)} doc for more details

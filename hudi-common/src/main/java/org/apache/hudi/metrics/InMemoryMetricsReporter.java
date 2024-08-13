@@ -24,10 +24,12 @@ package org.apache.hudi.metrics;
 public class InMemoryMetricsReporter extends MetricsReporter {
 
   @Override
-  public void start() {}
+  public void start() {
+  }
 
   @Override
-  public void report() {}
+  public void report() {
+  }
 
   @Override
   public void stop() {

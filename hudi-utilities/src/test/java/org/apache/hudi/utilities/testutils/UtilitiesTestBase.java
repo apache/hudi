@@ -235,9 +235,9 @@ public class UtilitiesTestBase {
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tempWriteablePath, "dummy");
     hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
-      .initTable(fs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
+        .initTable(fs.getConf(), hiveSyncConfig.getString(META_SYNC_BASE_PATH));
 
     QueryBasedDDLExecutor ddlExecutor = new JDBCExecutor(hiveSyncConfig);
     ddlExecutor.runSQL("drop database if exists " + hiveSyncConfig.getString(META_SYNC_DATABASE_NAME));

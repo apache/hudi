@@ -1095,8 +1095,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     final int insertSplitLimit = 100;
     // setup the small file handling params
     HoodieWriteConfig config = getSmallInsertWriteConfig(insertSplitLimit,
-        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, true
-            ? new Properties() : getPropertiesForKeyGen());
+        TRIP_EXAMPLE_SCHEMA, dataGen.getEstimatedFileSizeInBytes(150), true, new Properties());
     dataGen = new HoodieTestDataGenerator(new String[] {testPartitionPath});
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 

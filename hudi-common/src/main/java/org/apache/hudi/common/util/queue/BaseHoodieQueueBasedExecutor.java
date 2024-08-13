@@ -98,7 +98,8 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   protected abstract void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
 
-  protected void setUp() {}
+  protected void setUp() {
+  }
 
   /**
    * Start producing

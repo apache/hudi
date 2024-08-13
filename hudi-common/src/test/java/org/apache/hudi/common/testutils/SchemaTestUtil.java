@@ -71,7 +71,8 @@ public final class SchemaTestUtil {
 
   private final Random random = new Random(0xDEED);
 
-  public SchemaTestUtil() {}
+  public SchemaTestUtil() {
+  }
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));

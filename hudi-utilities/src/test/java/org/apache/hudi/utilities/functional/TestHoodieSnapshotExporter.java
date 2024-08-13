@@ -86,10 +86,10 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     lfs = (LocalFileSystem) FSUtils.getFs(basePath(), jsc().hadoopConfiguration());
 
     HoodieTableMetaClient.withPropertyBuilder()
-      .setTableType(HoodieTableType.COPY_ON_WRITE)
-      .setTableName(TABLE_NAME)
-      .setPayloadClass(HoodieAvroPayload.class)
-      .initTable(jsc().hadoopConfiguration(), sourcePath);
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(TABLE_NAME)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(jsc().hadoopConfiguration(), sourcePath);
 
     // Prepare data as source Hudi dataset
     HoodieWriteConfig cfg = getHoodieWriteConfig(sourcePath);

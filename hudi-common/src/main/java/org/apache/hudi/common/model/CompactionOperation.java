@@ -48,7 +48,8 @@ public class CompactionOperation implements Serializable {
 
   // Only for serialization/de-serialization
   @Deprecated
-  public CompactionOperation() {}
+  public CompactionOperation() {
+  }
 
   public CompactionOperation(String fileId, String partitionPath, String baseInstantTime,
                              Option<String> dataFileCommitTime, List<String> deltaFileNames, Option<String> dataFileName,

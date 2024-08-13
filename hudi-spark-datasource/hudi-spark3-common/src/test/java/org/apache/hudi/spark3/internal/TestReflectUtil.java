@@ -30,7 +30,6 @@ import java.util.Collections;
 
 import static scala.collection.JavaConverters.asScalaBuffer;
 
-
 /**
  * Unit tests {@link ReflectUtil}.
  */

@@ -299,7 +299,6 @@ public class HoodieIndexUtils {
 
   }
 
-
   /**
    * Merge the incoming record with the matching existing record loaded via {@link HoodieMergedReadHandle}. The existing record is the latest version in the table.
    */

@@ -18,16 +18,17 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.keygen.BaseKeyGenerator;
 
 import javax.annotation.Nullable;
 
@@ -189,7 +190,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
-  public HoodieRecord() {}
+  public HoodieRecord() {
+  }
 
   public abstract HoodieRecord<T> newInstance();
 
@@ -442,10 +444,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
    */
   private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {}
+    private EmptyRecord() {
+    }
 
     @Override
-    public void put(int i, Object v) {}
+    public void put(int i, Object v) {
+    }
 
     @Override
     public Object get(int i) {
@@ -458,7 +462,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
 
     @Override
-    public void put(String key, Object v) {}
+    public void put(String key, Object v) {
+    }
 
     @Override
     public Object get(String key) {

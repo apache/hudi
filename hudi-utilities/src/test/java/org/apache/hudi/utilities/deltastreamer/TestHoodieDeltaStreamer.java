@@ -19,7 +19,6 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import joptsimple.internal.Strings;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkRecordMerger;
@@ -103,6 +102,7 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import joptsimple.internal.Strings;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -1211,8 +1211,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testAsyncClusteringServiceWithConflictsAvro() throws Exception {
     testAsyncClusteringServiceWithConflicts(HoodieRecordType.AVRO);
   }
-
-
+  
   /**
    * When deltastreamer writes clashes with pending clustering, deltastreamer should keep retrying and eventually succeed(once clustering completes)
    * w/o failing mid way.

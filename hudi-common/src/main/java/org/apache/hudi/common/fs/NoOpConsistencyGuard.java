@@ -29,10 +29,12 @@ import java.util.List;
 public class NoOpConsistencyGuard implements ConsistencyGuard {
 
   @Override
-  public void waitTillFileAppears(Path filePath) {}
+  public void waitTillFileAppears(Path filePath) {
+  }
 
   @Override
-  public void waitTillFileDisappears(Path filePath) {}
+  public void waitTillFileDisappears(Path filePath) {
+  }
 
   @Override
   public void waitTillAllFilesAppear(String dirPath, List<String> files) {

@@ -60,5 +60,6 @@ public class DisruptorExecutor<I, O, E> extends BaseHoodieQueueBasedExecutor<I, 
   }
 
   @Override
-  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {}
+  protected void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer) {
+  }
 }
