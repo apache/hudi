@@ -45,6 +45,7 @@ import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyForma
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
   // New changes
+  // 
   private static final Logger LOG = LoggerFactory.getLogger(DefaultSource.class);
 
   @Override
