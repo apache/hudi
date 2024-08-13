@@ -9,7 +9,7 @@ This guide provides a quick peek at Hudi's capabilities using spark-shell. Using
 code snippets that allows you to insert and update a Hudi table of default table type: 
 [Copy on Write](/docs/concepts#copy-on-write-table). 
 After each write operation we will also show how to read the data both snapshot and incrementally.
-# Scala example
+## Scala example
 
 ## Setup
 

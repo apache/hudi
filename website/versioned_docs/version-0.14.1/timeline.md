@@ -68,7 +68,7 @@ manner.
 
 ```bash
 /.hoodie/archived/ 					
-├── _version_      					        <-- stores the manifest version that is current
+├── _version_                               <-- stores the manifest version that is current
 ├── manifest_1                              <-- manifests store list of files in timeline
 ├── manifest_2                              <-- compactions, cleaning, writes produce new manifest files
 ├── ...                                      
