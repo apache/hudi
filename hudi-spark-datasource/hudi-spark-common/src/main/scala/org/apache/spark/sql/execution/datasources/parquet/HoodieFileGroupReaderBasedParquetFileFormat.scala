@@ -28,9 +28,11 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.storage.StorageConfiguration
+import org.apache.hudi.storage.{HoodieStorageUtils, StorageConfiguration}
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
+
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -268,7 +270,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
     } else {
       val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
-      val modifiedFile = PartitionedFile(partitionValues, file.filePath, file.start, file.length, file.locations, file.modificationTime, file.fileSize, file.otherConstantMetadataColumnValues)
+      val modifiedFile = sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(partitionValues, HadoopFSUtils.convertToStoragePath(file.filePath.toPath) , file.start, file.length)
       val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
       val unsafeProjection = generateUnsafeProjection(StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
       iter.map(row => unsafeProjection(row))
