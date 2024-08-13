@@ -11,13 +11,13 @@ const Events = () => {
                  <div className="container">
                      <div className={styles.flexContainer}>
                         <div className={styles.bannercontent}>
-                            <h3> Accelerating Data Operations: Our Journey with Apache Hudi, from Metica</h3>
+                            <h3> Scaling Complex Data Workflows Using Apache Hudi, from Uber</h3>
                             <p className={styles.flexParagraph}><span className={styles.sideMicrophone}><Microphone/></span>
                              Linkedin Live Event | <span className={styles.sideCalendar}><Calendar/></span>
-                           July 24</p>
+                           Aug 20th, 9am Pacific Time</p>
                         </div>
                          <div className={styles.joinButton}>
-                             <LinkButton class={styles.registerbutton} type="secondary" to="https://www.linkedin.com/events/acceleratingdataoperations-ourj7218714050308845568/theater/">
+                             <LinkButton class={styles.registerbutton} type="secondary" to="https://www.linkedin.com/events/scalingcomplexdataworkflowsusin7227002765909057537/theater/">
                                              Join Now
                              </LinkButton>
                          </div>

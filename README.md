@@ -167,7 +167,7 @@ be removed to turn off the banner.
 The code for displaying an event banner is already in place. Steps to add: 
 1. Edit file `website/src/components/EventFeature/index.js` . Edit Event description, date and note if it is an 
 `In Person Event` or a `Linkedin Live Event`.
-2. Add `<Event />` entry after `<HomepageHeader />` (if not already present) in the file `website/src/pages/index.js`
+2. Add `<Events />` entry after `<HomepageHeader />` (if not already present) in the file `website/src/pages/index.js`
 
 ## Talks
 
