@@ -36,7 +36,7 @@ import java.io.IOException;
  * Hoodie's Implementation of {@link DataWriter<InternalRow>}. This is used in data source "hudi.spark3.internal" implementation for bulk insert.
  */
 public class HoodieBulkInsertDataInternalWriter implements DataWriter<InternalRow> {
-
+  // XYZ
   private final BulkInsertDataInternalWriterHelper bulkInsertWriterHelper;
 
   public HoodieBulkInsertDataInternalWriter(HoodieTable hoodieTable, HoodieWriteConfig writeConfig,
