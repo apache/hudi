@@ -50,7 +50,11 @@ public class ColumnarBatchUtils {
       for (int i = 0; i < projection.length; i++) {
         vectors[i] = columnarBatch.column(projection[i]);
       }
-      return new ColumnarBatch(vectors, columnarBatch.numRows());
+
+      //do this until we get rid of spark 2
+      ColumnarBatch b = new ColumnarBatch(vectors);
+      b.setNumRows(columnarBatch.numRows());
+      return b;
     };
   }
 
