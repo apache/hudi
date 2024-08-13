@@ -1,6 +1,5 @@
 .authorCol {
   max-width: inherit !important;
-  flex-grow: 1 !important;
 }
 
 .imageOnlyAuthorRow {
@@ -13,11 +12,11 @@
   margin-right: 0.3rem;
 }
 
-.autherName {
-  height: 100%;
-}
-:global(.avatar__name) {
-  font-size: 1.1rem;
-  font-weight: 400;
-  margin-left: 5px;
+.authorWrapper {
+  margin-left: 10px;
+  .avatar__name {
+    span {
+      font-weight: 600 !important;
+    }
+  }
 }

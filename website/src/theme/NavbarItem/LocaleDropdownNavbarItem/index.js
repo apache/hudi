@@ -7,9 +7,6 @@ import DropdownNavbarItem from '@theme/NavbarItem/DropdownNavbarItem';
 import IconLanguage from '@theme/Icon/Language';
 import styles from './styles.module.css';
 import Globe from '../Icons/globe.svg';
-
-
-
 export default function LocaleDropdownNavbarItem({
   mobile,
   dropdownItemsBefore,
@@ -29,7 +26,6 @@ export default function LocaleDropdownNavbarItem({
     })}`;
     // preserve ?search#hash suffix on locale switches
     const to = `${baseTo}${search}${hash}${queryString}`;
-
     return {
       label: localeConfigs[locale].label,
       lang: localeConfigs[locale].htmlLang,
@@ -57,7 +53,6 @@ export default function LocaleDropdownNavbarItem({
         description: 'The label for the mobile language switcher dropdown',
       })
     : localeConfigs[currentLocale].label;
-
   return (
     <DropdownNavbarItem
       {...props}
@@ -65,7 +60,7 @@ export default function LocaleDropdownNavbarItem({
       className={styles.wrapper}
       label={
         <>
-          <IconLanguage className={styles.iconLanguage} />
+          <IconLanguage className={styles.iconLaynguage} />
           {dropdownLabel}
           <Globe className={styles.globeIcon}/>
         </>

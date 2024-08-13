@@ -100,7 +100,6 @@ export default function BlogPostBox({metadata = {}, assets, frontMatter}) {
                     </TitleHeading>
                     <div className={clsx(styles.blogInfo, "margin-top--sm margin-bottom--sm")}>
                         {AuthorsList()}
-
                     </div>
                 </div>
                 {!!tags.length && (

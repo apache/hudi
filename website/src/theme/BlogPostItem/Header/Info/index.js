@@ -2,13 +2,10 @@ import React from 'react';
 import clsx from 'clsx';
 import {translate} from '@docusaurus/Translate';
 import {usePluralForm} from '@docusaurus/theme-common';
-import {
-  useBlogPost,
-  useDateTimeFormat,
-} from '@docusaurus/theme-common/internal';
+import {useDateTimeFormat} from '@docusaurus/theme-common/internal';
+import {useBlogPost} from '@docusaurus/plugin-content-blog/client';
 import BlogPostItemHeaderAuthors from '@theme/BlogPostItem/Header/Authors';
 import styles from './styles.module.css';
-
 // Very simple pluralization: probably good enough for now
 function useReadingTimePlural() {
   const {selectMessage} = usePluralForm();
@@ -30,13 +27,13 @@ function useReadingTimePlural() {
 }
 function ReadingTime({readingTime}) {
   const readingTimePlural = useReadingTimePlural();
-  return <>{readingTimePlural(readingTime)}</>;
+  return <span className={styles.marker}>{readingTimePlural(readingTime)}</span>;
 }
 function DateTime({date, formattedDate}) {
   return <time dateTime={date}>{formattedDate}</time>;
 }
 function Spacer() {
-  return <span className={styles.spacer}>&nbsp;{'·'}&nbsp;</span>;
+  return <span className={styles.spacer}>{' · '}</span>;
 }
 export default function BlogPostItemHeaderInfo({className}) {
   const {metadata} = useBlogPost();
@@ -49,12 +46,11 @@ export default function BlogPostItemHeaderInfo({className}) {
   });
   const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
   return (
-    <div className={clsx(styles.container, 'margin-vert--md' , className)}>
+    <div className={clsx(styles.container, 'margin-vert--md', className)}>
       <DateTime date={date} formattedDate={formatDate(date)} />
       <BlogPostItemHeaderAuthors />
       {typeof readingTime !== 'undefined' && (
         <>
-          <Spacer />
           <ReadingTime readingTime={readingTime} />
         </>
       )}

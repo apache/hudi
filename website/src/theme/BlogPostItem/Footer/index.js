@@ -1,11 +1,11 @@
 import React from 'react';
 import clsx from 'clsx';
-import {useBlogPost} from '@docusaurus/theme-common/internal';
+import {useBlogPost} from '@docusaurus/plugin-content-blog/client';
 import {ThemeClassNames} from '@docusaurus/theme-common';
 import EditMetaRow from '@theme/EditMetaRow';
 import TagsListInline from '@theme/TagsListInline';
 import ReadMoreLink from '@theme/BlogPostItem/Footer/ReadMoreLink';
-export default function BlogPostItemFooter({ isListPage }) {
+export default function BlogPostItemFooter() {
   const {metadata, isBlogPostPage} = useBlogPost();
   const {
     tags,
@@ -27,18 +27,6 @@ export default function BlogPostItemFooter({ isListPage }) {
     const canDisplayEditMetaRow = !!(editUrl || lastUpdatedAt || lastUpdatedBy);
     return (
       <footer className="docusaurus-mt-lg">
-        {tagsExists && (
-          <div
-            className={clsx(
-              'row',
-              'margin-top--sm',
-              ThemeClassNames.blog.blogFooterEditMetaRow,
-            )}>
-            <div className="col">
-              <TagsListInline tags={tags} />
-            </div>
-          </div>
-        )}
         {canDisplayEditMetaRow && (
           <EditMetaRow
             className={clsx(

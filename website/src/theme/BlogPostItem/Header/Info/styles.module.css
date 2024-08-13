@@ -10,3 +10,8 @@
   font-size: 35px;
   line-height: 28px;
 }
+
+.marker {
+  margin-left: 30px;
+  display: list-item;
+}

@@ -16,21 +16,18 @@ function DefaultNavbarItemDesktop({
       {...props}
     />
   );
-
   if (isDropdownItem) {
     return <li>{element}</li>;
   }
-
   return element;
 }
 function DefaultNavbarItemMobile({className, isDropdownItem, ...props}) {
   return (
     <li className="menu__list-item">
-        <NavbarNavLink className={clsx('menu__link 321231', className)} {...props} />
+      <NavbarNavLink className={clsx('menu__link', className)} {...props} />
     </li>
   );
 }
-
 export default function DefaultNavbarItem({
   mobile = false,
   position, // Need to destructure position from props so that it doesn't get passed on.
