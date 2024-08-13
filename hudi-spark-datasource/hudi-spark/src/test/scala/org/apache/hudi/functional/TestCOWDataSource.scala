@@ -1494,15 +1494,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assert(firstDF.count() == 2)
 
-    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    val expectedValues = if (useGlobbing || !enableFileIndex) {
-      Seq("2018-09-23", "2018-09-24")
-    } else {
-      Seq("2018/09/23", "2018/09/24")
-    }
+    assertEquals(
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+    )
 
-    assertEquals(expectedValues, firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq)
     assertEquals(
       Seq("2018/09/23", "2018/09/24"),
       firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
