@@ -44,6 +44,7 @@ import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyForma
  * This class is only compatible with datasource V2 API in Spark 3.
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
+  // New changes
   private static final Logger LOG = LoggerFactory.getLogger(DefaultSource.class);
 
   @Override
