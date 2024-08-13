@@ -108,8 +108,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     //dataSchema is not always right due to spark bugs
     val partitionColumns = partitionSchema.fieldNames
     val preCombineField = options.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
-    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filter(f => !partitionColumns.contains(f.name)
-      || preCombineField.equals(f.name)))
+    val dataSchema = StructType(tableSchema.structTypeSchema.fields.filter(f => mandatoryFields.contains(f.name)
+      || !partitionColumns.contains(f.name) || preCombineField.equals(f.name)))
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
@@ -127,7 +127,11 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
         new Configuration(hadoopConf))
     }
 
-    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requiredSchema, sanitizedTableName)
+    val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
+    val remainingPartitionSchema = StructType(remainingPartitionSchemaArr)
+    val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
+    val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
@@ -172,13 +176,15 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 // Append partition values to rows and project to output schema
                 appendPartitionAndProject(
                   reader.getClosableIterator,
-                  requiredSchema,
-                  partitionSchema,
+                  requestedSchema,
+                  remainingPartitionSchema,
                   outputSchema,
                   fileSliceMapping.getPartitionValues)
               }
 
-            case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+            case _ =>
+              readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+                requiredSchema, partitionSchema, outputSchema, filters, storageConf)
           }
         // CDC queries.
         case hoodiePartitionCDCFileGroupSliceMapping: HoodiePartitionCDCFileGroupMapping =>
@@ -188,7 +194,9 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
             fileGroupSplit, cdcFileReader.asInstanceOf[PartitionedFile => Iterator[InternalRow]],
             storageConf, fileIndexProps, requiredSchema)
 
-        case _ => parquetFileReader.value.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+        case _ =>
+          readBaseFile(file, parquetFileReader.value, requestedSchema, remainingPartitionSchema, fixedPartitionIndexes,
+            requiredSchema, partitionSchema, outputSchema, filters, storageConf)
       }
     }
   }
@@ -250,5 +258,21 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
       override def close(): Unit = closeableFileGroupRecordIterator.close()
     }
+  }
+
+  private def readBaseFile(file: PartitionedFile, parquetFileReader: SparkParquetReader, requestedSchema: StructType,
+                           remainingPartitionSchema: StructType, fixedPartitionIndexes: Set[Int], requiredSchema: StructType,
+                           partitionSchema: StructType, outputSchema: StructType, filters: Seq[Filter],
+                           storageConf: StorageConfiguration[Configuration]): Iterator[InternalRow] = {
+    if (requestedSchema.equals(requiredSchema)) {
+      parquetFileReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf)
+    } else {
+      val partitionValues = InternalRow.fromSeq(file.partitionValues.toSeq(partitionSchema).zipWithIndex.filter(p => fixedPartitionIndexes.contains(p._2)).map(p => p._1))
+      val modifiedFile = PartitionedFile(partitionValues, file.filePath, file.start, file.length, file.locations, file.modificationTime, file.fileSize, file.otherConstantMetadataColumnValues)
+      val iter = parquetFileReader.read(modifiedFile, requestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf)
+      val unsafeProjection = generateUnsafeProjection(StructType(requestedSchema.fields ++ remainingPartitionSchema.fields), outputSchema)
+      iter.map(row => unsafeProjection(row))
+    }
+
   }
 }
