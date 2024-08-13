@@ -31,6 +31,8 @@ import org.apache.spark.sql.connector.catalog.TableProvider;
 import org.apache.spark.sql.connector.expressions.Transform;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -42,6 +44,7 @@ import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyForma
  * This class is only compatible with datasource V2 API in Spark 3.
  */
 public class DefaultSource extends BaseDefaultSource implements TableProvider {
+  private static final Logger LOG = LoggerFactory.getLogger(DefaultSource.class);
 
   @Override
   public StructType inferSchema(CaseInsensitiveStringMap options) {
