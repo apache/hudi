@@ -333,7 +333,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       assertEquals(2, fieldNames.length);
       assertEquals("rider", fieldNames[0]);
       assertEquals("tripType", fieldNames[1]);
-      assertEquals("StructType(StructField(rider,StringType,true), StructField(tripType,StringType,true))",
+      assertEquals("StructType(StructField(rider,StringType,true),StructField(tripType,StringType,true))",
               transformedData.schema().toString());
       assertEquals(10, transformedData.count());
       assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
