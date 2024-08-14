@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.functional;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -39,9 +40,12 @@ import org.apache.hudi.utilities.HoodieSnapshotExporter;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Config;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.OutputFormatValidator;
 import org.apache.hudi.utilities.HoodieSnapshotExporter.Partitioner;
+import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
+import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.ForeachFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
@@ -58,10 +62,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -219,27 +226,141 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       });
       assertEquals("The source dataset has 0 partition to snapshot.", thrown.getMessage());
     }
+
+    @Test
+    public void testExportTransformedDatasetWithNoTransformerSql() {
+      cfg.outputFormat = "json";
+      cfg.transformerClassName = "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer";
+      Throwable thrown = assertThrows(IllegalArgumentException.class, () -> {
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+      });
+      assertEquals("Property " + SqlTransformerConfig.TRANSFORMER_SQL.key() + " not found", thrown.getMessage());
+
+      cfg.transformerClassName = "org.apache.hudi.utilities.transform.SqlFileBasedTransformer";
+      thrown = assertThrows(IllegalArgumentException.class, () -> {
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+      });
+      assertEquals("Property " + SqlTransformerConfig.TRANSFORMER_SQL_FILE.key() + " not found", thrown.getMessage());
+    }
+
+    @Test
+    public void testTransformerOptionsValidity() {
+      Config config = new Config();
+      assertTrue(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+      config.transformerClassName = "org.apache.hudi.utilities.transform.FlatteningTransformer";
+      assertTrue(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+      config.transformerClassName = "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer";
+      assertFalse(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+      config.transformerClassName = "org.apache.hudi.utilities.transform.SqlFileBasedTransformer";
+      assertFalse(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+      config.transformerSqlFile = "filepath";
+      assertTrue(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+      config.transformerClassName = "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer";
+      config.transformerSql = "query";
+      assertTrue(HoodieSnapshotExporter.areTransformerOptionsValid(config));
+    }
   }
 
   @Nested
   public class TestHoodieSnapshotExporterForNonHudi {
 
-    @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
-    public void testExportAsNonHudi(String format) throws IOException {
+    private HoodieSnapshotExporter.Config createConfig(String format) {
       // NOTE: Hudi doesn't support Orc in Spark < 3.0
       //       Please check HUDI-4496 for more details
       if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_0()) {
-        return;
+        return null;
       }
 
       HoodieSnapshotExporter.Config cfg = new Config();
       cfg.sourceBasePath = sourcePath;
       cfg.targetOutputPath = targetPath;
       cfg.outputFormat = format;
-      new HoodieSnapshotExporter().export(jsc(), cfg);
-      assertEquals(NUM_RECORDS, sqlContext().read().format(format).load(targetPath).count());
+      return cfg;
+    }
+
+    private void assertExport(Dataset<Row> data, int fieldsCount, List<String> fieldNamesToCheck) throws IOException {
+      List<String> fieldNames = Arrays.asList(data.schema().fieldNames());
+      assertEquals(fieldsCount, fieldNames.size());
+      assertTrue(fieldNames.containsAll(fieldNamesToCheck));
+      assertEquals(NUM_RECORDS, data.count());
       assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "orc"})
+    public void testExportAsNonHudi(String format) throws IOException {
+      HoodieSnapshotExporter.Config cfg = createConfig(format);
+      if (cfg != null) {
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+        Dataset<Row> data = sqlContext().read().format(format).load(targetPath);
+        assertExport(data, 21, Collections.singletonList("fare"));
+      }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "orc"})
+    public void testSqlTransformedExportAsNonHudi(String format) throws IOException {
+      HoodieSnapshotExporter.Config cfg = createConfig(format);
+      if (cfg != null) {
+        cfg.transformerClassName = "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer";
+        cfg.transformerSql = "SELECT substr(rider,1,10) as rider, trip_type as tripType "
+                + "FROM <SRC> WHERE trip_type = 'BLACK' LIMIT 10";
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+        assertSqlTransformedExport(format);
+      }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "orc"})
+    public void testSqlFileTransformedExportAsNonHudi(String format) throws IOException {
+      HoodieSnapshotExporter.Config cfg = createConfig(format);
+      if (cfg != null) {
+        cfg.transformerClassName = "org.apache.hudi.utilities.transform.SqlFileBasedTransformer";
+        cfg.transformerSqlFile = basePath() + "/sql-file-transformer.sql";
+        UtilitiesTestBase.Helpers.copyToDFS("exporter/sql-file-transformer.sql", storage, cfg.transformerSqlFile);
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+        assertSqlTransformedExport(format);
+      }
+    }
+
+    private void assertSqlTransformedExport(String format) throws IOException {
+      Dataset<Row> transformedData = sqlContext().read().format(format).load(targetPath);
+      transformedData.foreach((ForeachFunction<Row>) row -> {
+        assertEquals("rider-2020", row.getString(0));
+        assertEquals("BLACK", row.getString(1));
+      });
+      String[] fieldNames = transformedData.schema().fieldNames();
+      assertEquals(2, fieldNames.length);
+      assertEquals("rider", fieldNames[0]);
+      assertEquals("tripType", fieldNames[1]);
+      assertEquals("StructType(StructField(rider,StringType,true), StructField(tripType,StringType,true))",
+              transformedData.schema().toString());
+      assertEquals(10, transformedData.count());
+      assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "orc"})
+    public void testFlattenedExportAsNonHudi(String format) throws IOException {
+      HoodieSnapshotExporter.Config cfg = createConfig(format);
+      if (cfg != null) {
+        cfg.transformerClassName = "org.apache.hudi.utilities.transform.FlatteningTransformer";
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+        Dataset<Row> transformedData = sqlContext().read().format(format).load(targetPath);
+        assertExport(transformedData, 22, Arrays.asList("fare_amount", "fare_currency"));
+      }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "parquet", "orc"})
+    public void testAWSDmsTransformedExportAsNonHudi(String format) throws IOException {
+      HoodieSnapshotExporter.Config cfg = createConfig(format);
+      if (cfg != null) {
+        cfg.transformerClassName = "org.apache.hudi.utilities.transform.AWSDmsTransformer";
+        new HoodieSnapshotExporter().export(jsc(), cfg);
+        Dataset<Row> transformedData = sqlContext().read().format(format).load(targetPath);
+        assertExport(transformedData, 22, Collections.singletonList(AWSDmsAvroPayload.OP_FIELD));
+      }
     }
   }
 

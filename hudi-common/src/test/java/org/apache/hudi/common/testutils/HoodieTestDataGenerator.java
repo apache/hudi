@@ -380,7 +380,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
   }
 
-
   /**
    * Populate rec with values for TRIP_SCHEMA_PREFIX
    */
@@ -468,8 +467,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-
-
+  
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */
@@ -615,15 +613,15 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     createEmptyFile(basePath, commitFile, configuration);
   }
 
-  private static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
-    Arrays.asList(HoodieTimeline.makeInflightReplaceFileName(instantTime),
-            HoodieTimeline.makeRequestedReplaceFileName(instantTime))
+  private static void createPendingClusterFile(String basePath, String instantTime, StorageConfiguration<?> configuration, HoodieCommitMetadata commitMetadata) {
+    Arrays.asList(HoodieTimeline.makeInflightClusteringFileName(instantTime),
+            HoodieTimeline.makeRequestedClusteringFileName(instantTime))
         .forEach(f -> createMetadataFile(f, basePath, configuration, commitMetadata));
   }
 
-  public static void createPendingReplaceFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
+  public static void createPendingClusterFile(String basePath, String instantTime, StorageConfiguration<?> configuration) {
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    createPendingReplaceFile(basePath, instantTime, configuration, commitMetadata);
+    createPendingClusterFile(basePath, instantTime, configuration, commitMetadata);
   }
 
   public static void createEmptyCleanRequestedFile(String basePath, String instantTime, StorageConfiguration<?> configuration)

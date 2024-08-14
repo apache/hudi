@@ -17,18 +17,17 @@
 
 package org.apache.spark.sql.avro
 
-import java.util.Locale
-
-import scala.collection.JavaConverters._
-
 import org.apache.avro.Schema
-import org.apache.avro.file. FileReader
+import org.apache.avro.file.FileReader
 import org.apache.avro.generic.GenericRecord
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+
+import java.util.Locale
+
+import scala.collection.JavaConverters._
 
 /**
  * NOTE: This code is borrowed from Spark 3.3.0

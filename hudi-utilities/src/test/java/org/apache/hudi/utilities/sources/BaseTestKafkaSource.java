@@ -27,6 +27,7 @@ import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
@@ -214,7 +215,7 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), 599);
     // commit to kafka after first batch
     kafkaSource.getSource().onCommit(fetch1.getCheckpointForNextBatch());
-    try (KafkaConsumer consumer = new KafkaConsumer(props)) {
+    try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, KafkaOffsetGen.excludeHoodieConfigs(props))) {
       consumer.assign(topicPartitions);
 
       OffsetAndMetadata offsetAndMetadata = consumer.committed(topicPartition0);

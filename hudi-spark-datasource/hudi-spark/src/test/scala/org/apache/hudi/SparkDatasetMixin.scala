@@ -17,9 +17,10 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 

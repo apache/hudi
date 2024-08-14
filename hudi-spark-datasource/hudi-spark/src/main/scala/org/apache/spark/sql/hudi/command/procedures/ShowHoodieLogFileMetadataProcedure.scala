@@ -27,13 +27,12 @@ import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlo
 import org.apache.hudi.storage.StoragePath
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.apache.parquet.avro.AvroSchemaConverter
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.Objects
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter, mapAsScalaMapConverter}
 
 class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBuilder {

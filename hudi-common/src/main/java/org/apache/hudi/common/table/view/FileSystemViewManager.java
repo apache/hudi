@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunctionUnchecked;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Functions.Function2;
@@ -240,45 +241,62 @@ public class FileSystemViewManager {
     LOG.info("Creating View Manager with storage type {}.", config.getStorageType());
     switch (config.getStorageType()) {
       case EMBEDDED_KV_STORE:
-        LOG.info("Creating embedded rocks-db based Table View");
+        LOG.debug("Creating embedded rocks-db based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConf) -> createRocksDBBasedFileSystemView(viewConf, metaClient));
       case SPILLABLE_DISK:
-        LOG.info("Creating Spillable Disk based Table View");
+        LOG.debug("Creating Spillable Disk based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConf) -> createSpillableMapBasedFileSystemView(viewConf, metaClient, commonConfig));
       case MEMORY:
-        LOG.info("Creating in-memory based Table View");
+        LOG.debug("Creating in-memory based Table View");
         return new FileSystemViewManager(context, config,
             (metaClient, viewConfig) -> createInMemoryFileSystemView(viewConfig, metaClient, metadataCreator));
       case REMOTE_ONLY:
-        LOG.info("Creating remote only table view");
+        LOG.debug("Creating remote only table view");
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> createRemoteFileSystemView(viewConfig,
             metaClient));
       case REMOTE_FIRST:
-        LOG.info("Creating remote first table view");
+        LOG.debug("Creating remote first table view");
         return new FileSystemViewManager(context, config, (metaClient, viewConfig) -> {
           RemoteHoodieTableFileSystemView remoteFileSystemView =
               createRemoteFileSystemView(viewConfig, metaClient);
-          SyncableFileSystemView secondaryView;
-          switch (viewConfig.getSecondaryStorageType()) {
-            case MEMORY:
-              secondaryView = createInMemoryFileSystemView(viewConfig, metaClient, metadataCreator);
-              break;
-            case EMBEDDED_KV_STORE:
-              secondaryView = createRocksDBBasedFileSystemView(viewConfig, metaClient);
-              break;
-            case SPILLABLE_DISK:
-              secondaryView = createSpillableMapBasedFileSystemView(viewConfig, metaClient, commonConfig);
-              break;
-            default:
-              throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"
-                  + viewConfig.getSecondaryStorageType());
-          }
-          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryView);
+          SerializableSupplier<SyncableFileSystemView> secondaryViewSupplier = new SecondaryViewSupplier(viewConfig, metaClient, commonConfig, metadataCreator);
+          return new PriorityBasedFileSystemView(remoteFileSystemView, secondaryViewSupplier);
         });
       default:
         throw new IllegalArgumentException("Unknown file system view type :" + config.getStorageType());
+    }
+  }
+
+  private static class SecondaryViewSupplier implements SerializableSupplier<SyncableFileSystemView> {
+    private final FileSystemViewStorageConfig viewConfig;
+    private final HoodieTableMetaClient metaClient;
+    private final HoodieCommonConfig commonConfig;
+    private final SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata> metadataCreator;
+
+    private SecondaryViewSupplier(FileSystemViewStorageConfig viewConfig,
+                                  HoodieTableMetaClient metaClient, HoodieCommonConfig commonConfig,
+                                  SerializableFunctionUnchecked<HoodieTableMetaClient, HoodieTableMetadata> metadataCreator) {
+      this.viewConfig = viewConfig;
+      this.metaClient = metaClient;
+      this.commonConfig = commonConfig;
+      this.metadataCreator = metadataCreator;
+    }
+
+    @Override
+    public SyncableFileSystemView get() {
+      switch (viewConfig.getSecondaryStorageType()) {
+        case MEMORY:
+          return createInMemoryFileSystemView(viewConfig, metaClient, metadataCreator);
+        case EMBEDDED_KV_STORE:
+          return createRocksDBBasedFileSystemView(viewConfig, metaClient);
+        case SPILLABLE_DISK:
+          return createSpillableMapBasedFileSystemView(viewConfig, metaClient, commonConfig);
+        default:
+          throw new IllegalArgumentException("Secondary Storage type can only be in-memory or spillable. Was :"
+              + viewConfig.getSecondaryStorageType());
+      }
     }
   }
 }

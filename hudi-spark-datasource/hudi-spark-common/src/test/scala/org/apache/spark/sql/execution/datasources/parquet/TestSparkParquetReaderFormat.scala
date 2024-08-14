@@ -21,6 +21,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.util
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +51,7 @@ class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSu
 
     (file: PartitionedFile) => {
       //code inside the lambda will run on the executor
-      reader.read(file, requiredSchema, partitionSchema, filters, broadcastedStorageConf.value)
+      reader.read(file, requiredSchema, partitionSchema, util.Option.empty(), filters, broadcastedStorageConf.value)
     }
   }
 }

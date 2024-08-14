@@ -22,6 +22,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 
 trait HoodieCatalystPlansUtils {
@@ -111,8 +112,10 @@ trait HoodieCatalystPlansUtils {
   /**
    * Decomposes [[InsertIntoStatement]] into its arguments allowing to accommodate for API
    * changes in Spark 3.3
+   * @return a option tuple with (table logical plan, userSpecifiedCols, partitionSpec, query, overwrite, ifPartitionNotExists)
+   *         userSpecifiedCols: only than the version of Spark32 will return, other is empty
    */
-  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
+  def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)]
 
   /**
    * Decomposes [[CreateTableLikeCommand]] into its arguments allowing to accommodate for API
@@ -147,4 +150,9 @@ trait HoodieCatalystPlansUtils {
    * true if both plans produce the same attributes in the same order
    */
   def produceSameOutput(a: LogicalPlan, b: LogicalPlan): Boolean
+
+  /**
+   * Add a project to use the table column names for INSERT INTO BY NAME with specified cols
+   */
+  def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan]
 }

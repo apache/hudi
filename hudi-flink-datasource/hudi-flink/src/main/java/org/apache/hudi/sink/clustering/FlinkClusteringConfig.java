@@ -162,10 +162,10 @@ public class FlinkClusteringConfig extends Configuration {
   public String propsFilePath = "";
 
   public static TypedProperties getProps(FlinkClusteringConfig cfg) {
-    return cfg.propsFilePath.isEmpty()
-        ? buildProperties(cfg.configs)
-        : readConfig(HadoopConfigurations.getHadoopConf(cfg),
-        new StoragePath(cfg.propsFilePath), cfg.configs).getProps();
+    return cfg.propsFilePath.isEmpty() ? buildProperties(cfg.configs) : readConfig(
+        HadoopConfigurations.getHadoopConf(cfg),
+        new StoragePath(cfg.propsFilePath),
+        cfg.configs).getProps();
   }
 
   /**

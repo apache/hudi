@@ -20,6 +20,7 @@ package org.apache.hudi.sink.cluster;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -33,7 +34,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.clustering.FlinkClusteringConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.client.clustering.plan.strategy.FlinkConsistentBucketClusteringPlanStrategy;
 import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -114,7 +114,7 @@ public class ITTestFlinkConsistentHashingClustering {
     HoodieFlinkTable<?> table = writeClient.getHoodieTable();
     table.getMetaClient().reloadActiveTimeline();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
-        table.getMetaClient(), table.getMetaClient().getActiveTimeline().filterPendingReplaceTimeline().lastInstant().get());
+        table.getMetaClient(), table.getMetaClient().getActiveTimeline().filterPendingClusteringTimeline().lastInstant().get());
     return clusteringPlanOption.get().getRight();
   }
 

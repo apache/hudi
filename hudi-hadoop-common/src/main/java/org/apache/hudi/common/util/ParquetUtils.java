@@ -73,7 +73,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -272,20 +271,14 @@ public class ParquetUtils extends FileFormatUtils {
                                                                                  List<String> columnList) {
     ParquetMetadata metadata = readMetadata(storage, filePath);
 
-    // NOTE: This collector has to have fully specialized generic type params since
-    //       Java 1.8 struggles to infer them
-    Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, List<HoodieColumnRangeMetadata<Comparable>>>> groupingByCollector =
-        Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
-
     // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
-            .flatMap(blockMetaData ->
-                blockMetaData.getColumns().stream()
+    Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
+        metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
+            blockMetaData.getColumns().stream()
                     .filter(f -> columnList.contains(f.getPath().toDotString()))
                     .map(columnChunkMetaData -> {
                       Statistics stats = columnChunkMetaData.getStatistics();
-                      return HoodieColumnRangeMetadata.<Comparable>create(
+                      return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                           filePath.getName(),
                           columnChunkMetaData.getPath().toDotString(),
                           convertToNativeJavaType(
@@ -302,8 +295,10 @@ public class ParquetUtils extends FileFormatUtils {
                           columnChunkMetaData.getTotalSize(),
                           columnChunkMetaData.getTotalUncompressedSize());
                     })
-            )
-            .collect(groupingByCollector);
+        );
+
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
+        hoodieColumnRangeMetadataStream.collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName));
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer
@@ -435,23 +430,7 @@ public class ParquetUtils extends FileFormatUtils {
     // there are multiple blocks. Compute min(block_mins) and max(block_maxs)
     return blockRanges.stream()
         .sequential()
-        .reduce(this::combineRanges).get();
-  }
-
-  private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> combineRanges(
-      HoodieColumnRangeMetadata<T> one,
-      HoodieColumnRangeMetadata<T> another
-  ) {
-    final T minValue = getMinValueForColumnRanges(one, another);
-    final T maxValue = getMaxValueForColumnRanges(one, another);
-
-    return HoodieColumnRangeMetadata.create(
-        one.getFilePath(),
-        one.getColumnName(), minValue, maxValue,
-        one.getNullCount() + another.getNullCount(),
-        one.getValueCount() + another.getValueCount(),
-        one.getTotalSize() + another.getTotalSize(),
-        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+        .reduce(HoodieColumnRangeMetadata::merge).get();
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {

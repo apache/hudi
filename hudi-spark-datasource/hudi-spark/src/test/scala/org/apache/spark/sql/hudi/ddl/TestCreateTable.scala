@@ -533,7 +533,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
             )(table.schema.fields)
 
             // Should not include non.hoodie.property
-            assertResult(3)(table.properties.size)
+            assertResult(4)(table.properties.size)
             assertResult("cow")(table.properties("type"))
             assertResult("id,name")(table.properties("primaryKey"))
             assertResult("hudi")(table.properties("provider"))
@@ -1461,6 +1461,56 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult(tableType)(hoodieCatalogTable.tableTypeName)
         assertResult("ts")(hoodieCatalogTable.preCombineKey.get)
       }
+    }
+  }
+
+  test("Test Create Hoodie Table With Multiple Partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}"
+      // throws error if order in partition by different from that in create table
+      assertThrows[IllegalArgumentException] {
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |    ts BIGINT,
+             |    id STRING,
+             |    rider STRING,
+             |    driver STRING,
+             |    fare DOUBLE,
+             |    city STRING,
+             |    state STRING
+             |) using hudi
+             | options(
+             |    primaryKey ='id'
+             |)
+             |PARTITIONED BY (state, city)
+             |location '$tablePath';
+       """.stripMargin)
+      }
+      // otherwise successful
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |    ts BIGINT,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    city STRING,
+           |    state STRING
+           |) using hudi
+           | options(
+           |    primaryKey ='id'
+           |)
+           |PARTITIONED BY (city, state)
+           |location '$tablePath';
+       """.stripMargin)
+      // insert and validate
+      spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
+      )
     }
   }
 }

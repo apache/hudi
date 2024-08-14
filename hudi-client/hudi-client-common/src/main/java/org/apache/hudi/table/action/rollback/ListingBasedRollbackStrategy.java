@@ -103,6 +103,10 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
       if (commitMetadataOptional.isPresent()) {
         isCompaction.set(commitMetadataOptional.get().getOperationType() == WriteOperationType.COMPACT);
       }
+      AtomicBoolean isLogCompaction = new AtomicBoolean(false);
+      if (commitMetadataOptional.isPresent()) {
+        isLogCompaction.set(commitMetadataOptional.get().getOperationType() == WriteOperationType.LOG_COMPACT);
+      }
 
       return context.flatMap(partitionPaths, partitionPath -> {
         List<HoodieRollbackRequest> hoodieRollbackRequests = new ArrayList<>(partitionPaths.size());
@@ -125,9 +129,13 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           if (isCompaction.get()) { // compaction's action in hoodie instant will be "commit". So, we might need to override.
             action = HoodieTimeline.COMPACTION_ACTION;
           }
+          if (isLogCompaction.get()) {
+            action = HoodieTimeline.LOG_COMPACTION_ACTION;
+          }
           switch (action) {
             case HoodieTimeline.COMMIT_ACTION:
             case HoodieTimeline.REPLACE_COMMIT_ACTION:
+            case HoodieTimeline.CLUSTERING_ACTION:
               hoodieRollbackRequests.addAll(getHoodieRollbackRequests(partitionPath, filesToDelete.get()));
               break;
             case HoodieTimeline.COMPACTION_ACTION:
@@ -151,6 +159,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
               }
               break;
             case HoodieTimeline.DELTA_COMMIT_ACTION:
+            case HoodieTimeline.LOG_COMPACTION_ACTION:
 
               // In case all data was inserts and the commit failed, delete the file belonging to that commit
               // We do not know fileIds for inserts (first inserts are either log files or base files),

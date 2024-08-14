@@ -141,6 +141,7 @@ public class IncrementalInputSplits implements Serializable {
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
+        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .build();
 
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
@@ -251,6 +252,7 @@ public class IncrementalInputSplits implements Serializable {
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
+        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .limit(OptionsResolver.getReadCommitsLimit(conf))
         .build();
 
@@ -383,7 +385,7 @@ public class IncrementalInputSplits implements Serializable {
   private List<MergeOnReadInputSplit> getCdcInputSplits(
       HoodieTableMetaClient metaClient,
       InstantRange instantRange) {
-    HoodieCDCExtractor extractor = new HoodieCDCExtractor(metaClient, instantRange);
+    HoodieCDCExtractor extractor = new HoodieCDCExtractor(metaClient, instantRange, OptionsResolver.readCDCFromChangelog(this.conf));
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fileSplits = extractor.extractCDCFileSplits();
 
     if (fileSplits.isEmpty()) {

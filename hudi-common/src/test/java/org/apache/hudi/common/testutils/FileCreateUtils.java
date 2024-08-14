@@ -277,6 +277,24 @@ public class FileCreateUtils {
         serializeCommitMetadata(metadata).get());
   }
 
+  public static void createRequestedClusterCommit(String basePath, String instantTime,
+                                                  HoodieRequestedReplaceMetadata requestedReplaceMetadata)
+      throws IOException {
+    createMetaFile(basePath, instantTime, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION,
+        serializeRequestedReplaceMetadata(requestedReplaceMetadata).get());
+  }
+
+  public static void createInflightClusterCommit(String basePath, String instantTime,
+                                                 Option<HoodieCommitMetadata> inflightReplaceMetadata)
+      throws IOException {
+    if (inflightReplaceMetadata.isPresent()) {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION,
+          serializeCommitMetadata(inflightReplaceMetadata.get()).get());
+    } else {
+      createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION);
+    }
+  }
+
   public static void createRequestedReplaceCommit(String basePath, String instantTime,
                                                   Option<HoodieRequestedReplaceMetadata> requestedReplaceMetadata)
       throws IOException {
@@ -381,7 +399,7 @@ public class FileCreateUtils {
     createMetaFile(basePath, instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
   }
 
-  public static void createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
+  public static URI createPartitionMetaFile(String basePath, String partitionPath) throws IOException {
     Path metaFilePath;
     try {
       Path parentPath = Paths.get(new URI(basePath).getPath(), partitionPath);
@@ -390,6 +408,7 @@ public class FileCreateUtils {
       if (Files.notExists(metaFilePath)) {
         Files.createFile(metaFilePath);
       }
+      return metaFilePath.toUri();
     } catch (URISyntaxException e) {
       throw new HoodieException("Error creating partition meta file", e);
     }

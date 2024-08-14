@@ -241,12 +241,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
-  public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
-      .key("hoodie.schema.cache.enable")
-      .defaultValue(false)
-      .markAdvanced()
-      .withDocumentation("cache query internalSchemas in driver/executor side");
-
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("false")
@@ -1260,16 +1254,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(INTERNAL_SCHEMA_STRING);
   }
 
-  public boolean getInternalSchemaCacheEnable() {
-    return getBoolean(ENABLE_INTERNAL_SCHEMA_CACHE);
-  }
-
   public void setInternalSchemaString(String internalSchemaString) {
     setValue(INTERNAL_SCHEMA_STRING, internalSchemaString);
-  }
-
-  public void setInternalSchemaCacheEnable(boolean enable) {
-    setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
   }
 
   public boolean getSchemaEvolutionEnable() {
@@ -1309,11 +1295,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
-  public boolean isCDCEnabled() {
-    return getBooleanOrDefault(
-        HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
-  }
-
   public boolean isConsistentHashingEnabled() {
     return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
   }
@@ -1321,6 +1302,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isSimpleBucketIndex() {
     return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
+  }
+
+  /**
+   * Returns whether the table writer would generate pure log files at the very first place.
+   */
+  public boolean isYieldingPureLogForMor() {
+    switch (getIndexType()) {
+      case BUCKET:
+      case FLINK_STATE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
@@ -2824,11 +2818,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withSchemaEvolutionEnable(boolean enable) {
       writeConfig.setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
-    public Builder withInternalSchemaCacheEnable(boolean enable) {
-      writeConfig.setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
       return this;
     }
 

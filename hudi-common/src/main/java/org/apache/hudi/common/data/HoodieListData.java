@@ -202,6 +202,11 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public int deduceNumPartitions() {
+    return 1;
+  }
+
+  @Override
   public List<T> collectAsList() {
     return super.collectAsList();
   }

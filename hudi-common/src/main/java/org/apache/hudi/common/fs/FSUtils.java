@@ -44,6 +44,7 @@ import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,6 +81,7 @@ public class FSUtils {
   public static final Pattern LOG_FILE_PATTERN =
       Pattern.compile("^\\.(.+)_(.*)\\.(log|archive)\\.(\\d+)(_((\\d+)-(\\d+)-(\\d+))(.cdc)?)?");
   public static final Pattern PREFIX_BY_FILE_ID_PATTERN = Pattern.compile("^(.+)-(\\d+)");
+  private static final Pattern BASE_FILE_PATTERN = Pattern.compile("[a-zA-Z0-9-]+_[a-zA-Z0-9-]+_[0-9]+\\.[a-zA-Z0-9]+");
 
   private static final String LOG_FILE_EXTENSION = ".log";
 
@@ -428,7 +430,10 @@ public class FSUtils {
 
   public static boolean isBaseFile(StoragePath path) {
     String extension = getFileExtension(path.getName());
-    return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension);
+    if (HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(extension)) {
+      return BASE_FILE_PATTERN.matcher(path.getName()).matches();
+    }
+    return false;
   }
 
   public static boolean isLogFile(StoragePath logPath) {
@@ -684,6 +689,17 @@ public class FSUtils {
       }
     }
     return pathInfoList;
+  }
+
+  public static boolean comparePathsWithoutScheme(String pathStr1, String pathStr2) {
+    Path pathWithoutScheme1 = getPathWithoutScheme(new Path(pathStr1));
+    Path pathWithoutScheme2 = getPathWithoutScheme(new Path(pathStr2));
+    return pathWithoutScheme1.equals(pathWithoutScheme2);
+  }
+
+  public static Path getPathWithoutScheme(Path path) {
+    return path.isUriPathAbsolute()
+        ? new Path(null, path.toUri().getAuthority(), path.toUri().getPath()) : path;
   }
 
   /**

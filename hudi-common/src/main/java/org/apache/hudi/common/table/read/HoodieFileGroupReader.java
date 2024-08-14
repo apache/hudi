@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -92,11 +91,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
                                TypedProperties props,
                                long start,
                                long length,
-                               boolean shouldUseRecordPosition,
-                               long maxMemorySizeInBytes,
-                               String spillableMapBasePath,
-                               ExternalSpillableMap.DiskMapType diskMapType,
-                               boolean isBitCaskDiskMapCompressionEnabled) {
+                               boolean shouldUseRecordPosition) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -121,9 +116,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? null
         : shouldUseRecordPosition
         ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, Option.empty(), Option.empty(), recordMerger,
-        props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled)
+        props)
         : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, Option.empty(), Option.empty(), recordMerger,
-        props, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+        props);
   }
 
   /**

@@ -78,14 +78,10 @@ public class InternalSchemaCache {
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
-  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient, boolean cacheEnable) {
+  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
     Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
     if (candidateSchema.isPresent()) {
       return candidateSchema.get();
-    }
-    if (!cacheEnable) {
-      // parse history schema and return directly
-      return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
     }
     String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
@@ -206,9 +202,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn(String.format(
-            "Cannot find internal schema from commit file %s. Falling back to parsing historical internal schema",
-            candidateCommitFile.toString()));
+        LOG.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
       }
     }
     // step2:

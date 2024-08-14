@@ -28,6 +28,7 @@ import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
+
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -57,6 +58,7 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
   @BeforeEach
   override def setUp(): Unit = {
     initPath()
+    initQueryIndexConf()
     initSparkContexts()
     initHoodieStorage()
     initTestDataGenerator()
@@ -88,22 +90,28 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+    val latestDataFilesCount = getLatestDataFilesCount(opts)
+    assertTrue(filteredFilesCount > 0 && filteredFilesCount < latestDataFilesCount)
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    assertTrue(filesCountWithNoSkipping == getLatestDataFilesCount(opts))
+    assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
-      .values()
-      .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
-        (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
-          slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
-            + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
+    try {
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+        .values()
+        .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
+          (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
+            slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
+              + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+    } finally {
+      fsView.close()
+    }
     totalLatestDataFiles
   }
 

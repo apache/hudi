@@ -17,22 +17,23 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericData
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
+
+import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, EmptyRow, Expression, Literal}
-import org.apache.hudi.common.util.collection.Pair
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.types.{DoubleType, FloatType, StructType}
+import org.apache.spark.sql.types.{DoubleType, FloatType}
 import org.apache.spark.util.collection.BitSet
 import org.slf4j.LoggerFactory
 

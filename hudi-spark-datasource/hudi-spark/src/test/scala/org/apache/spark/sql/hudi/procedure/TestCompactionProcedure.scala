@@ -22,8 +22,9 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient
-import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
+
+import org.apache.hadoop.conf.Configuration
 
 class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
 
@@ -360,7 +361,7 @@ class TestCompactionProcedure extends HoodieSparkProcedureTestBase {
         val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
 
         assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-        assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+        assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
         spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
         spark.sql(s"update $tableName set name = 'a2' where id = 1")

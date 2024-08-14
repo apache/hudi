@@ -87,6 +87,7 @@ case class HoodieTableState(tablePath: String,
                             recordMergerImpls: List[String],
                             recordMergerStrategy: String)
 
+
 /**
  * Hoodie BaseRelation which extends [[PrunedFilteredScan]]
  */

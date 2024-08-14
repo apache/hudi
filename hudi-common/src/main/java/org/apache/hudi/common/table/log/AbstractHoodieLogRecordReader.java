@@ -458,7 +458,7 @@ public abstract class AbstractHoodieLogRecordReader {
           case PARQUET_DATA_BLOCK:
           case DELETE_BLOCK:
             List<HoodieLogBlock> logBlocksList = instantToBlocksMap.getOrDefault(instantTime, new ArrayList<>());
-            if (logBlocksList.size() == 0) {
+            if (logBlocksList.isEmpty()) {
               // Keep a track of instant Times in the order of arrival.
               orderedInstantsList.add(instantTime);
             }
@@ -473,8 +473,7 @@ public abstract class AbstractHoodieLogRecordReader {
             // Rollback blocks contain information of instants that are failed, collect them in a set..
             if (commandBlock.getType().equals(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK)) {
               totalRollbacks.incrementAndGet();
-              String targetInstantForCommandBlock =
-                  logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
+              String targetInstantForCommandBlock = logBlock.getLogBlockHeader().get(TARGET_INSTANT_TIME);
               targetRollbackInstants.add(targetInstantForCommandBlock);
               orderedInstantsList.remove(targetInstantForCommandBlock);
               instantToBlocksMap.remove(targetInstantForCommandBlock);
@@ -507,7 +506,7 @@ public abstract class AbstractHoodieLogRecordReader {
       for (int i = orderedInstantsList.size() - 1; i >= 0; i--) {
         String instantTime = orderedInstantsList.get(i);
         List<HoodieLogBlock> instantsBlocks = instantToBlocksMap.get(instantTime);
-        if (instantsBlocks.size() == 0) {
+        if (instantsBlocks.isEmpty()) {
           throw new HoodieException("Data corrupted while writing. Found zero blocks for an instant " + instantTime);
         }
         HoodieLogBlock firstBlock = instantsBlocks.get(0);
@@ -809,8 +808,7 @@ public abstract class AbstractHoodieLogRecordReader {
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime,
-        hoodieTableMetaClient, false);
+    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false).mergeSchema();
     Schema mergedAvroSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());

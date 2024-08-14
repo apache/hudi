@@ -193,6 +193,7 @@ public abstract class HoodieIndex<I, O> implements Serializable {
         + "hashing, particularly beneficial in large scale. Use `hoodie.index.bucket.engine` to "
         + "choose bucket engine type, i.e., how buckets are generated.")
     BUCKET,
+
     @EnumFieldDescription("Internal Config for indexing based on Flink state.")
     FLINK_STATE,
 

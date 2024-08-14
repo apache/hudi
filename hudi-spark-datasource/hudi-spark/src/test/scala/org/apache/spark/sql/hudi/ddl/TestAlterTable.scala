@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.hudi.ddl
 
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -282,10 +282,12 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         spark.sql(s"alter table $locTableName rename to $newLocTableName")
         val newLocation2 = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(newLocTableName))
           .properties.get("path")
-        // only hoodieCatalog will set path to tblp
         if (oldLocation2.nonEmpty) {
+          // Remove the impact of the schema.
+          val oldLocation2Path = new Path(oldLocation2.get.stripPrefix("file:"))
+          val newLocation2Path = new Path(newLocation2.get.stripPrefix("file:"))
           assertResult(true)(
-            newLocation2.equals(oldLocation2)
+            newLocation2Path.equals(oldLocation2Path)
           )
         } else {
           assertResult(None) (newLocation2)

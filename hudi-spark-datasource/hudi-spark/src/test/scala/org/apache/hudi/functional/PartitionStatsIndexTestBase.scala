@@ -74,6 +74,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   @BeforeEach
   override def setUp(): Unit = {
     initPath()
+    initQueryIndexConf()
     initSparkContexts()
     initHoodieStorage()
     initTestDataGenerator()

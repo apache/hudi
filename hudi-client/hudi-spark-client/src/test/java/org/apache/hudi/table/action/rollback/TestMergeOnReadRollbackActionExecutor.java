@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table.action.rollback;
 
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.FileSlice;
@@ -36,12 +38,14 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.Assertions;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
@@ -152,6 +156,96 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
     assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "002").doesMarkerDirExist());
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testMergeOnReadRollbackLogCompactActionExecutorWithListingStrategy(boolean isComplete) throws IOException {
+    //1. prepare data and assert data result
+    List<FileSlice> firstPartitionCommit2FileSlices = new ArrayList<>();
+    List<FileSlice> secondPartitionCommit2FileSlices = new ArrayList<>();
+    HoodieWriteConfig cfg = getConfigBuilder()
+        .withRollbackUsingMarkers(false).withAutoCommit(false)
+        .withMetadataConfig(
+            HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+    twoUpsertCommitDataWithTwoPartitions(firstPartitionCommit2FileSlices, secondPartitionCommit2FileSlices, cfg, true);
+    List<HoodieLogFile> firstPartitionCommit2LogFiles = new ArrayList<>();
+    List<HoodieLogFile> secondPartitionCommit2LogFiles = new ArrayList<>();
+    firstPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> firstPartitionCommit2LogFiles.add(logFile));
+    assertEquals(1, firstPartitionCommit2LogFiles.size());
+    secondPartitionCommit2FileSlices.get(0).getLogFiles().collect(Collectors.toList()).forEach(logFile -> secondPartitionCommit2LogFiles.add(logFile));
+    assertEquals(1, secondPartitionCommit2LogFiles.size());
+
+    //2. log compact
+    cfg = getConfigBuilder()
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withLogCompactionBlocksThreshold(1)
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .withInlineCompactionTriggerStrategy(CompactionTriggerStrategy.NUM_COMMITS).build())
+        .withRollbackUsingMarkers(false).withAutoCommit(false)
+        .withMetadataConfig(
+            HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+
+    String action = HoodieTimeline.LOG_COMPACTION_ACTION;
+    if (isComplete) {
+      cfg.setValue(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
+      action = HoodieTimeline.DELTA_COMMIT_ACTION;
+    }
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    client.scheduleLogCompactionAtInstant("003", Option.empty());
+    client.logCompact("003");
+
+    //3. rollback log compact
+    metaClient.reloadActiveTimeline();
+    HoodieInstant rollBackInstant = new HoodieInstant(!isComplete, action, "003");
+    HoodieTable table = this.getHoodieTable(metaClient, cfg);
+    BaseRollbackPlanActionExecutor mergeOnReadRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, cfg, table, "004", rollBackInstant, false,
+            cfg.shouldRollbackUsingMarkers(), false);
+    mergeOnReadRollbackPlanActionExecutor.execute().get();
+    MergeOnReadRollbackActionExecutor mergeOnReadRollbackActionExecutor = new MergeOnReadRollbackActionExecutor(
+        context,
+        cfg,
+        table,
+        "004",
+        rollBackInstant,
+        true,
+        false);
+    //4. assert the rollback stat
+    final HoodieRollbackMetadata execute = mergeOnReadRollbackActionExecutor.execute();
+    Map<String, HoodieRollbackPartitionMetadata> rollbackMetadata = execute.getPartitionMetadata();
+    assertEquals(2, rollbackMetadata.size());
+
+    for (Map.Entry<String, HoodieRollbackPartitionMetadata> entry : rollbackMetadata.entrySet()) {
+      HoodieRollbackPartitionMetadata meta = entry.getValue();
+      assertEquals(0, meta.getFailedDeleteFiles().size());
+      assertEquals(1, meta.getSuccessDeleteFiles().size());
+    }
+
+    //4. assert file group after rollback, and compare to the rollbackstat
+    // assert the first partition data and log file size
+    metaClient.reloadActiveTimeline();
+    table = this.getHoodieTable(metaClient, cfg);
+    List<HoodieFileGroup> firstPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_FIRST_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, firstPartitionRollBack1FileGroups.size());
+    List<FileSlice> firstPartitionRollBack1FileSlices = firstPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
+    assertEquals(1, firstPartitionRollBack1FileSlices.size());
+    FileSlice firstPartitionRollBack1FileSlice = firstPartitionRollBack1FileSlices.get(0);
+    List<HoodieLogFile> firstPartitionRollBackLogFiles = firstPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
+    assertEquals(1, firstPartitionRollBackLogFiles.size());
+
+    // assert the second partition data and log file size
+    List<HoodieFileGroup> secondPartitionRollBack1FileGroups = table.getFileSystemView().getAllFileGroups(DEFAULT_SECOND_PARTITION_PATH).collect(Collectors.toList());
+    assertEquals(1, secondPartitionRollBack1FileGroups.size());
+    List<FileSlice> secondPartitionRollBack1FileSlices = secondPartitionRollBack1FileGroups.get(0).getAllFileSlices().collect(Collectors.toList());
+    assertEquals(1, secondPartitionRollBack1FileSlices.size());
+    FileSlice secondPartitionRollBack1FileSlice = secondPartitionRollBack1FileSlices.get(0);
+    List<HoodieLogFile> secondPartitionRollBackLogFiles = secondPartitionRollBack1FileSlice.getLogFiles().collect(Collectors.toList());
+    assertEquals(1, secondPartitionRollBackLogFiles.size());
+
+    assertFalse(WriteMarkersFactory.get(cfg.getMarkersType(), table, "003").doesMarkerDirExist());
+  }
+
   @Test
   public void testMergeOnReadRestoreCompactionCommit() throws IOException {
     boolean isUsingMarkers = false;
@@ -159,7 +253,7 @@ public class TestMergeOnReadRollbackActionExecutor extends HoodieClientRollbackT
 
     // 1. ingest data to partition 3.
     //just generate two partitions
-    HoodieTestDataGenerator dataGenPartition3 = new HoodieTestDataGenerator(new String[]{DEFAULT_THIRD_PARTITION_PATH});
+    HoodieTestDataGenerator dataGenPartition3 = new HoodieTestDataGenerator(new String[] {DEFAULT_THIRD_PARTITION_PATH});
     HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
         new String[] {DEFAULT_THIRD_PARTITION_PATH}, basePath);
     SparkRDDWriteClient client = getHoodieWriteClient(cfg);
