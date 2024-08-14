@@ -155,4 +155,11 @@ public class CloudSourceConfig extends HoodieConfig {
       .withDocumentation("Max time in secs to consume " + MAX_NUM_MESSAGES_PER_SYNC.key() + " messages from cloud queue. Cloud event queues like SQS, "
           + "PubSub can return empty responses even when messages are available the queue, this config ensures we don't wait forever "
           + "to consume MAX_MESSAGES_CONF messages, but time out and move on further.");
+
+  public static final ConfigProperty<Boolean> SPARK_DATASOURCE_READER_COALESCE_ALIAS_COLUMNS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.reader.coalesce.aliases")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
 }
