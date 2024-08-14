@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

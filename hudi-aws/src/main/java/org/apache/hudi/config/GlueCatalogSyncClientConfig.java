@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -83,10 +83,18 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields")
       .noDefaultValue()
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+      .withInferFunction(cfg -> HoodieTableConfigUtils.getPartitionFieldProp(cfg)
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .sinceVersion("0.15.0")
       .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by semicolon.",
           "By default, when the feature is enabled, all the partition will be indexed.",
           "You can create up to three indexes, separate them by comma. Eg: col1;col2;col3,col2,col3"));
+
+  public static final ConfigProperty<Boolean> RECREATE_GLUE_TABLE_ON_ERROR = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "recreate_table_on_error")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Glue sync may fail if the Glue table exists with partitions differing from the Hoodie table or if schema evolution is not supported by Glue."
+          + "Enabling this configuration will drop and create the table to match the Hoodie config");
 }

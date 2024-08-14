@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
 import static org.apache.hudi.common.util.MapUtils.nonEmpty;
-import static org.apache.hudi.table.action.clean.CleanPlanner.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
@@ -159,7 +159,9 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     if (savepointedTimestamps.isEmpty()) {
       return Collections.emptyMap();
     } else {
-      return Collections.singletonMap(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
+      Map<String, String> extraMetadata = new HashMap<>();
+      extraMetadata.put(SAVEPOINTED_TIMESTAMPS, savepointedTimestamps.stream().collect(Collectors.joining(",")));
+      return extraMetadata;
     }
   }
 

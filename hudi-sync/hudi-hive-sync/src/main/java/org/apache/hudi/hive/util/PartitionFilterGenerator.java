@@ -20,13 +20,13 @@ package org.apache.hudi.hive.util;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.hive.HiveSyncConfig;
-import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.BinaryExpression;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
+import org.apache.hudi.expression.NameReference;
+import org.apache.hudi.expression.Predicates;
+import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
@@ -76,8 +76,7 @@ public class PartitionFilterGenerator {
         throw new IllegalArgumentException(String.format(UNSUPPORTED_TYPE_ERROR, fieldType));
     }
   }
-
-
+  
   /**
    * Build expression from the Partition list. Here we're trying to match all partitions.
    *

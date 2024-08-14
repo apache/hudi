@@ -18,9 +18,6 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
-
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.BaseHoodieWriteClient;
@@ -86,6 +83,9 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.HoodieWriteHelper;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -428,7 +428,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     String partitionPath = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).filter(s -> s.getPath().endsWith(extension)).findAny()
         .map(HoodieWriteStat::getPartitionPath).orElse(null);
-    return Pair.of(partitionPath, metaClient.getBasePathV2().toString() + StoragePath.SEPARATOR + filePath);
+    return Pair.of(partitionPath, metaClient.getBasePath() + StoragePath.SEPARATOR + filePath);
   }
 
   public static FileFormatUtils getFileUtilsInstance(HoodieTableMetaClient metaClient) {
@@ -862,15 +862,15 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       HoodieTimeline commitTimeline = metaClient.getCommitTimeline().filterCompletedInstants();
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
               .fromBytes(commitTimeline.getInstantDetails(commitInstant).get(), HoodieCommitMetadata.class);
-      String basePath = metaClient.getBasePathV2().toString();
-      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(new StoragePath(basePath)).values();
+      StoragePath basePath = metaClient.getBasePath();
+      Collection<String> commitPathNames = commitMetadata.getFileIdAndFullPaths(basePath).values();
 
       // Read from commit file
       HoodieCommitMetadata metadata = HoodieCommitMetadata.fromBytes(
               metaClient.reloadActiveTimeline()
                       .getInstantDetails(new HoodieInstant(COMPLETED, COMMIT_ACTION, instantTime)).get(),
               HoodieCommitMetadata.class);
-      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(new StoragePath(basePath));
+      HashMap<String, String> paths = metadata.getFileIdAndFullPaths(basePath);
       // Compare values in both to make sure they are equal.
       for (String pathName : paths.values()) {
         assertTrue(commitPathNames.contains(pathName));
@@ -1090,7 +1090,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig hoodieWriteConfig = cfgBuilder.withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(VERSION_0).build();
     HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString());
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
 
@@ -1155,7 +1155,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     // Force using older timeline layout
     HoodieWriteConfig config = cfgBuilder.withTimelineLayoutVersion(VERSION_0).build();
     HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(populateMetaFields).initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePathV2().toString());
+        .setPopulateMetaFields(populateMetaFields).initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 

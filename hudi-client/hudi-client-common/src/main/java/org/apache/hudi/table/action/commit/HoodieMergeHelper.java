@@ -96,13 +96,13 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
-    boolean isPureProjection = isStrictProjectionOf(readerSchema, writerSchema)
-        && !schemaEvolutionTransformerOpt.isPresent();
+    boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
+        && isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
-    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
-        || !isPureProjection
-        || baseFile.getBootstrapBaseFile().isPresent();
+    boolean shouldRewriteInWriterSchema = !isPureProjection
+        || baseFile.getBootstrapBaseFile().isPresent()
+        || writeConfig.shouldUseExternalSchemaTransformation();
 
     HoodieExecutor<Void> executor = null;
 

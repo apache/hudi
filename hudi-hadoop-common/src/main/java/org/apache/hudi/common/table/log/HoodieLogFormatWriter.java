@@ -198,13 +198,13 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
    * content 6. Length of the footers 7. Number of bytes to write totalLogBlockLength
    */
   private int getLogBlockLength(int contentLength, int headerLength, int footerLength) {
-    return Integer.BYTES + // Number of bytes to write version
-        Integer.BYTES + // Number of bytes to write ordinal
-        headerLength + // Length of the headers
-        Long.BYTES + // Number of bytes used to write content length
-        contentLength + // Length of the content
-        footerLength + // Length of the footers
-        Long.BYTES; // bytes to write totalLogBlockLength at end of block (for reverse ptr)
+    return Integer.BYTES // Number of bytes to write version
+        + Integer.BYTES // Number of bytes to write ordinal
+        + headerLength // Length of the headers
+        + Long.BYTES // Number of bytes used to write content length
+        + contentLength // Length of the content
+        + footerLength // Length of the footers
+        + Long.BYTES; // bytes to write totalLogBlockLength at end of block (for reverse ptr)
   }
 
   private void rolloverIfNeeded() throws IOException {

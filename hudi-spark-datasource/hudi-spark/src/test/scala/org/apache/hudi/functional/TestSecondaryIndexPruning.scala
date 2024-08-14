@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
+
 import org.apache.spark.sql.Row
 import org.junit.jupiter.api.{Tag, Test}
 import org.scalatest.Assertions.assertResult
@@ -70,14 +71,20 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
-      // validate data skipping
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
         Seq("abc", "row1"),
         Seq("cde", "row2"),
         Seq("def", "row3")
       )
+      // validate data skipping with filters on secondary key column
+      spark.sql("set hoodie.metadata.enable=true")
+      spark.sql("set hoodie.enable.data.skipping=true")
+      spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
+        Seq(1, "row1", "abc", "p1")
+      )
+      verifyQueryPredicate(hudiOpts, "not_record_key_col")
 
       // create another secondary index on non-string column
       spark.sql(s"create index idx_ts on $tableName using secondary_index(ts)")

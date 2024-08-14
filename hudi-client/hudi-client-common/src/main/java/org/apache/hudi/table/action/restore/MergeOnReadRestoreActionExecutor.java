@@ -41,6 +41,7 @@ public class MergeOnReadRestoreActionExecutor<T, I, K, O>
       case HoodieTimeline.DELTA_COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case HoodieTimeline.CLUSTERING_ACTION:
         // TODO : Get file status and create a rollback stat and file
         // TODO : Delete the .aux files along with the instant file, okay for now since the archival process will
         // delete these files when it does not see a corresponding instant file under .hoodie

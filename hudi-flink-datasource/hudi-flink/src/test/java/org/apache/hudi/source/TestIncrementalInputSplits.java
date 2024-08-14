@@ -154,9 +154,9 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "2");
     // commit3: clustering
     timelineMOR.createCompleteInstant(commit2);
-    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
+    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "3");
     timelineMOR.createNewInstant(commit3);
-    commit3 = timelineMOR.transitionReplaceRequestedToInflight(commit3, Option.empty());
+    commit3 = timelineMOR.transitionClusterRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
             new ArrayList<>(),
             new HashMap<>(),
@@ -164,8 +164,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineMOR.transitionReplaceInflightToComplete(true,
-        HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
+    timelineMOR.transitionClusterInflightToComplete(true,
+        HoodieTimeline.getClusteringCommitInflightInstant(commit3.getTimestamp()),
         serializeCommitMetadata(commitMetadata));
     // commit4: insert overwrite
     HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
@@ -235,9 +235,9 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     HoodieInstant commit2 = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "2");
     // commit3: clustering
     timelineCOW.createCompleteInstant(commit2);
-    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "3");
+    HoodieInstant commit3 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "3");
     timelineCOW.createNewInstant(commit3);
-    commit3 = timelineCOW.transitionReplaceRequestedToInflight(commit3, Option.empty());
+    commit3 = timelineCOW.transitionClusterRequestedToInflight(commit3, Option.empty());
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(
             new ArrayList<>(),
             new HashMap<>(),
@@ -245,8 +245,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineCOW.transitionReplaceInflightToComplete(true,
-            HoodieTimeline.getReplaceCommitInflightInstant(commit3.getTimestamp()),
+    timelineCOW.transitionClusterInflightToComplete(true,
+            HoodieTimeline.getClusteringCommitInflightInstant(commit3.getTimestamp()),
             serializeCommitMetadata(commitMetadata));
     // commit4: insert overwrite
     HoodieInstant commit4 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");

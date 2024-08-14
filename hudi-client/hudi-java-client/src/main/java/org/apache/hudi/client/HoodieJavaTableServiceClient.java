@@ -25,7 +25,6 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -51,7 +50,7 @@ public class HoodieJavaTableServiceClient<T> extends BaseHoodieTableServiceClien
   protected void validateClusteringCommit(HoodieWriteMetadata<List<WriteStatus>> clusteringMetadata, String clusteringCommitTime, HoodieTable table) {
     if (clusteringMetadata.getWriteStatuses().isEmpty()) {
       HoodieClusteringPlan clusteringPlan = ClusteringUtils.getClusteringPlan(
-              table.getMetaClient(), HoodieTimeline.getReplaceCommitRequestedInstant(clusteringCommitTime))
+              table.getMetaClient(), ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline()).get())
           .map(Pair::getRight).orElseThrow(() -> new HoodieClusteringException(
               "Unable to read clustering plan for instant: " + clusteringCommitTime));
       throw new HoodieClusteringException("Clustering plan produced 0 WriteStatus for " + clusteringCommitTime

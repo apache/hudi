@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
@@ -27,6 +28,7 @@ import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -43,6 +45,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -68,10 +71,66 @@ public class ClusteringUtils {
    */
   public static Stream<Pair<HoodieInstant, HoodieClusteringPlan>> getAllPendingClusteringPlans(
       HoodieTableMetaClient metaClient) {
-    List<HoodieInstant> pendingReplaceInstants =
-        metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
-    return pendingReplaceInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
+    List<HoodieInstant> pendingClusterInstants =
+        metaClient.getActiveTimeline().filterPendingReplaceOrClusteringTimeline().getInstants();
+    return pendingClusterInstants.stream().map(instant -> getClusteringPlan(metaClient, instant))
         .filter(Option::isPresent).map(Option::get);
+  }
+
+  /**
+   * Returns the pending clustering instant. This can be older pending replace commit or a new
+   * clustering inflight commit. After HUDI-7905, all the requested and inflight clustering instants
+   * use clustering action instead of replacecommit.
+   */
+  public static Option<HoodieInstant> getInflightClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline) {
+    HoodieTimeline pendingReplaceOrClusterTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
+    HoodieInstant inflightInstant = HoodieTimeline.getClusteringCommitInflightInstant(timestamp);
+    if (pendingReplaceOrClusterTimeline.containsInstant(inflightInstant)) {
+      return Option.of(inflightInstant);
+    }
+    inflightInstant = HoodieTimeline.getReplaceCommitInflightInstant(timestamp);
+    return Option.ofNullable(pendingReplaceOrClusterTimeline.containsInstant(inflightInstant) ? inflightInstant : null);
+  }
+
+  /**
+   * Returns the pending clustering instant. This can be older requested replace commit or a new
+   * clustering requested commit. After HUDI-7905, all the requested and inflight clustering instants
+   * use clustering action instead of replacecommit.
+   */
+  public static Option<HoodieInstant> getRequestedClusteringInstant(String timestamp, HoodieActiveTimeline activeTimeline) {
+    HoodieTimeline pendingReplaceOrClusterTimeline = activeTimeline.filterPendingReplaceOrClusteringTimeline();
+    HoodieInstant requestedInstant = HoodieTimeline.getClusteringCommitRequestedInstant(timestamp);
+    if (pendingReplaceOrClusterTimeline.containsInstant(requestedInstant)) {
+      return Option.of(requestedInstant);
+    }
+    requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(timestamp);
+    return Option.ofNullable(pendingReplaceOrClusterTimeline.containsInstant(requestedInstant) ? requestedInstant : null);
+  }
+
+  /**
+   * Transitions the provided clustering instant fron inflight to complete based on the clustering
+   * action type. After HUDI-7905, the new clustering commits are written with clustering action.
+   */
+  public static void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                     Option<byte[]> commitMetadata, HoodieActiveTimeline activeTimeline) {
+    if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+      activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+    } else {
+      activeTimeline.transitionReplaceInflightToComplete(shouldLock, clusteringInstant, commitMetadata);
+    }
+  }
+
+  /**
+   * Transitions the provided clustering instant fron requested to inflight based on the clustering
+   * action type. After HUDI-7905, the new clustering commits are written with clustering action.
+   */
+  public static void transitionClusteringOrReplaceRequestedToInflight(HoodieInstant requestedClusteringInstant, Option<byte[]> data,
+                                                                      HoodieActiveTimeline activeTimeline) {
+    if (requestedClusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+      activeTimeline.transitionClusterRequestedToInflight(requestedClusteringInstant, data);
+    } else {
+      activeTimeline.transitionReplaceRequestedToInflight(requestedClusteringInstant, data);
+    }
   }
 
   /**
@@ -79,33 +138,56 @@ public class ClusteringUtils {
    * is a clustering operation, by checking whether the requested instant contains
    * a clustering plan.
    *
+   * @param actionType      Action type
+   * @return whether the action type is a clustering or replace commit action type
+   */
+  public static boolean isClusteringOrReplaceCommitAction(String actionType) {
+    return actionType.equals(HoodieTimeline.CLUSTERING_ACTION) || actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION);
+  }
+
+  /**
+   * Checks if the action type is a clustering or replace commit action type.
+   *
    * @param timeline       Hudi timeline.
    * @param replaceInstant the instant of replacecommit action to check.
    * @return whether the instant is a clustering operation.
    */
   public static boolean isClusteringInstant(HoodieTimeline timeline, HoodieInstant replaceInstant) {
-    return getClusteringPlan(timeline, replaceInstant).isPresent();
+    return replaceInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
+        || (replaceInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) && getClusteringPlan(timeline, replaceInstant).isPresent());
   }
 
   /**
    * Get requested replace metadata from timeline.
    *
    * @param timeline              used to get the bytes stored in the requested replace instant in the timeline
-   * @param pendingReplaceInstant can be in any state, because it will always be converted to requested state
+   * @param pendingReplaceOrClusterInstant can be in any state, because it will always be converted to requested state
    * @return option of the replace metadata if present, else empty
    * @throws IOException
    */
-  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTimeline timeline, HoodieInstant pendingReplaceInstant) throws IOException {
-    final HoodieInstant requestedInstant;
-    if (!pendingReplaceInstant.isRequested()) {
+  private static Option<HoodieRequestedReplaceMetadata> getRequestedReplaceMetadata(HoodieTimeline timeline, HoodieInstant pendingReplaceOrClusterInstant) throws IOException {
+    HoodieInstant requestedInstant;
+    if (pendingReplaceOrClusterInstant.isInflight()) {
       // inflight replacecommit files don't have clustering plan.
       // This is because replacecommit inflight can have workload profile for 'insert_overwrite'.
       // Get the plan from corresponding requested instant.
-      requestedInstant = HoodieTimeline.getReplaceCommitRequestedInstant(pendingReplaceInstant.getTimestamp());
+      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, pendingReplaceOrClusterInstant.getAction(), pendingReplaceOrClusterInstant.getTimestamp());
+    } else if (pendingReplaceOrClusterInstant.isRequested()) {
+      requestedInstant = pendingReplaceOrClusterInstant;
     } else {
-      requestedInstant = pendingReplaceInstant;
+      requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
     }
-    Option<byte[]> content = timeline.getInstantDetails(requestedInstant);
+    Option<byte[]> content = Option.empty();
+    try {
+      content = timeline.getInstantDetails(requestedInstant);
+    } catch (HoodieIOException e) {
+      if (e.getCause() instanceof FileNotFoundException && pendingReplaceOrClusterInstant.isCompleted()) {
+        // For clustering instants, completed instant is also a replace commit instant. For input replace commit instant,
+        // it is not known whether requested instant is CLUSTER or REPLACE_COMMIT_ACTION. So we need to query both.
+        requestedInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, pendingReplaceOrClusterInstant.getTimestamp());
+        content = timeline.getInstantDetails(requestedInstant);
+      }
+    }
     if (!content.isPresent() || content.get().length == 0) {
       // few operations create requested file without any content. Assume these are not clustering
       return Option.empty();
@@ -244,7 +326,7 @@ public class ClusteringUtils {
   }
 
   public static List<HoodieInstant> getPendingClusteringInstantTimes(HoodieTableMetaClient metaClient) {
-    return metaClient.getActiveTimeline().filterPendingReplaceTimeline().getInstantsAsStream()
+    return metaClient.getActiveTimeline().filterPendingReplaceOrClusteringTimeline().getInstantsAsStream()
         .filter(instant -> isClusteringInstant(metaClient.getActiveTimeline(), instant))
         .collect(Collectors.toList());
   }
@@ -253,28 +335,30 @@ public class ClusteringUtils {
    * Returns the earliest instant to retain.
    * Make sure the clustering instant won't be archived before cleaned, and the earliest inflight clustering instant has a previous commit.
    *
-   * @param activeTimeline The active timeline
-   * @param metaClient     The meta client
+   * @param activeTimeline               The active timeline
+   * @param metaClient                   The meta client
+   * @param cleanerPolicy                The hoodie cleaning policy
    * @return the earliest instant to retain for clustering
    */
   public static Option<HoodieInstant> getEarliestInstantToRetainForClustering(
-      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient) throws IOException {
+      HoodieActiveTimeline activeTimeline, HoodieTableMetaClient metaClient, HoodieCleaningPolicy cleanerPolicy) throws IOException {
     Option<HoodieInstant> oldestInstantToRetain = Option.empty();
-    HoodieTimeline replaceTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION));
-    if (!replaceTimeline.empty()) {
+    HoodieTimeline replaceOrClusterTimeline = activeTimeline.getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
+    if (!replaceOrClusterTimeline.empty()) {
       Option<HoodieInstant> cleanInstantOpt =
           activeTimeline.getCleanerTimeline().filterCompletedInstants().lastInstant();
       if (cleanInstantOpt.isPresent()) {
         // The first clustering instant of which timestamp is greater than or equal to the earliest commit to retain of
         // the clean metadata.
         HoodieInstant cleanInstant = cleanInstantOpt.get();
-        HoodieActionInstant earliestInstantToRetain = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested()
-                ? cleanInstant
-                : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()))
-            .getEarliestInstantToRetain();
+        HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, cleanInstant.isRequested() ? cleanInstant : HoodieTimeline.getCleanRequestedInstant(cleanInstant.getTimestamp()));
+        Option<String> earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp);
         String retainLowerBound;
-        if (earliestInstantToRetain != null && !StringUtils.isNullOrEmpty(earliestInstantToRetain.getTimestamp())) {
-          retainLowerBound = earliestInstantToRetain.getTimestamp();
+        Option<String> earliestReplacedSavepointInClean = getEarliestReplacedSavepointInClean(activeTimeline, cleanerPolicy, cleanerPlan);
+        if (earliestReplacedSavepointInClean.isPresent()) {
+          retainLowerBound = earliestReplacedSavepointInClean.get();
+        } else if (earliestInstantToRetain.isPresent() && !StringUtils.isNullOrEmpty(earliestInstantToRetain.get())) {
+          retainLowerBound = earliestInstantToRetain.get();
         } else {
           // no earliestInstantToRetain, indicate KEEP_LATEST_FILE_VERSIONS clean policy,
           // retain first instant after clean instant.
@@ -285,18 +369,49 @@ public class ClusteringUtils {
           // TODO: This case has to be handled. HUDI-6352
           retainLowerBound = cleanInstant.getTimestamp();
         }
-
-        oldestInstantToRetain = replaceTimeline.filter(instant ->
-                HoodieTimeline.compareTimestamps(
-                    instant.getTimestamp(),
-                    HoodieTimeline.GREATER_THAN_OR_EQUALS,
-                    retainLowerBound))
-            .firstInstant();
+        oldestInstantToRetain = replaceOrClusterTimeline.findInstantsAfterOrEquals(retainLowerBound).firstInstant();
       } else {
-        oldestInstantToRetain = replaceTimeline.firstInstant();
+        oldestInstantToRetain = replaceOrClusterTimeline.firstInstant();
       }
     }
     return oldestInstantToRetain;
+  }
+
+  public static Option<String> getEarliestReplacedSavepointInClean(HoodieActiveTimeline activeTimeline, HoodieCleaningPolicy cleanerPolicy,
+                                                                   HoodieCleanerPlan cleanerPlan) {
+    // EarliestSavepoint in clean is required to block archival when savepoint is deleted.
+    // This ensures that archival is blocked until clean has cleaned up files retained due to savepoint.
+    // If this guard is not present, the archiving of commits can lead to duplicates. Here is a scenario
+    // illustrating the same. This scenario considers a case where EarliestSavepoint guard is not present
+    // c1.dc - f1 (c1 deltacommit creates file with id f1)
+    // c2.dc - f2 (c2 deltacommit creates file with id f2)
+    // c2.sp - Savepoint at c2
+    // c3.rc (replacing f2 -> f3) (Replace commit replacing file id f2 with f3)
+    // c4.dc
+    //
+    // Lets say Incremental cleaner moved past the c3.rc without cleaning f2 since savepoint is created at c2.
+    // Archival is blocked at c2 since there is a savepoint at c2.
+    // Let's say the savepoint at c2 is now deleted, Archival would archive c3.rc since it is unblocked now.
+    // Since c3 is archived and f2 has not been cleaned, the table view would be considering f2 as a valid
+    // file id. This causes duplicates.
+
+    String earliestInstantToRetain = Option.ofNullable(cleanerPlan.getEarliestInstantToRetain()).map(HoodieActionInstant::getTimestamp).orElse(null);
+    Option<String[]> savepoints = Option.ofNullable(cleanerPlan.getExtraMetadata()).map(metadata -> metadata.getOrDefault(CleanerUtils.SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","));
+    String earliestSavepoint = savepoints.flatMap(arr -> Option.fromJavaOptional(Arrays.stream(arr).sorted().findFirst())).orElse(null);
+    if (cleanerPolicy != HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      if (!StringUtils.isNullOrEmpty(earliestInstantToRetain) && !StringUtils.isNullOrEmpty(earliestSavepoint)) {
+        // When earliestToRetainTs is greater than first savepoint timestamp and there are no
+        // replace commits between the first savepoint and the earliestToRetainTs, we can set the
+        // earliestSavepointOpt to empty as there was no cleaning blocked due to savepoint
+        if (HoodieTimeline.compareTimestamps(earliestInstantToRetain, HoodieTimeline.GREATER_THAN, earliestSavepoint)) {
+          HoodieTimeline replaceTimeline = activeTimeline.getCompletedReplaceTimeline().findInstantsInClosedRange(earliestSavepoint, earliestInstantToRetain);
+          if (!replaceTimeline.empty()) {
+            return Option.of(earliestSavepoint);
+          }
+        }
+      }
+    }
+    return Option.empty();
   }
 
   /**

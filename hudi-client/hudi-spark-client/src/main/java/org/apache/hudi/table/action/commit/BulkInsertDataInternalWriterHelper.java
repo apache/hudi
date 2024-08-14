@@ -166,7 +166,8 @@ public class BulkInsertDataInternalWriterHelper {
     return writeStatusList;
   }
 
-  public void abort() {}
+  public void abort() {
+  }
 
   public void close() throws IOException {
     for (HoodieRowCreateHandle rowCreateHandle : handles.values()) {

@@ -72,7 +72,8 @@ public class ITTestGluePartitionPushdown {
   private Column[] partitionsColumn = {Column.builder().name("part1").type("int").build(), Column.builder().name("part2").type("string").build()};
   List<FieldSchema> partitionsFieldSchema = Arrays.asList(new FieldSchema("part1", "int"), new FieldSchema("part2", "string"));
 
-  public ITTestGluePartitionPushdown() throws IOException {}
+  public ITTestGluePartitionPushdown() throws IOException {
+  }
 
   @BeforeEach
   public void setUp() throws Exception {

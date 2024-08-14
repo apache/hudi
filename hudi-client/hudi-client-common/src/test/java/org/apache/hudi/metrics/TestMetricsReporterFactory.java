@@ -81,18 +81,22 @@ public class TestMetricsReporterFactory {
     }
 
     @Override
-    public void start() {}
+    public void start() {
+    }
 
     @Override
-    public void report() {}
+    public void report() {
+    }
 
     @Override
-    public void stop() {}
+    public void stop() {
+    }
   }
 
   public static class IllegalTestMetricsReporter {
 
-    public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {}
+    public IllegalTestMetricsReporter(Properties props, MetricRegistry registry) {
+    }
   }
 }
 

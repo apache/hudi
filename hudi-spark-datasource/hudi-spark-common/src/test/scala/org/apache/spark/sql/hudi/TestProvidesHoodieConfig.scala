@@ -21,7 +21,6 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
-
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

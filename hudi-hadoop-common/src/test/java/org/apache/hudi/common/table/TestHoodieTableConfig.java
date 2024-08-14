@@ -30,6 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -43,6 +44,7 @@ import java.util.concurrent.Future;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -201,5 +203,20 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     updaterFuture.get();
     readerFuture.get();
     executor.shutdown();
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SEVEN", "EIGHT"})
+  public void testPartitionFields(HoodieTableVersion version) {
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), version.greaterThan(HoodieTableVersion.SEVEN) ? "p1:simple,p2:timestamp" : "p1,p2");
+    updatedProps.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    // Test makes sure that the partition fields returned by table config do not have partition type
+    // to ensure backward compatibility for the API
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
+    assertArrayEquals(new String[] {"p1", "p2"}, config.getPartitionFields().get());
+    assertEquals("p1,p2", config.getPartitionFieldProp());
   }
 }

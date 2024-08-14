@@ -229,7 +229,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected boolean initializeIfNeeded(HoodieTableMetaClient dataMetaClient,
                                        Option<String> inflightInstantTimestamp) throws IOException {
     HoodieTimer timer = HoodieTimer.start();
-    List<MetadataPartitionType> partitionsToInit = new ArrayList<>(MetadataPartitionType.values().length);
+    List<MetadataPartitionType> partitionsToInit = new ArrayList<>(MetadataPartitionType.getValidValues().length);
 
     try {
       boolean exists = metadataTableExists(dataMetaClient);
@@ -299,7 +299,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
 
     if (reInitialize) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.REBOOTSTRAP_STR, 1));
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.REBOOTSTRAP_STR, 1));
       LOG.info("Deleting Metadata Table directory so that it can be re-initialized");
       HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, engineContext, false);
       exists = false;
@@ -430,7 +430,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         String metricKey = partitionType.getPartitionPath() + "_" + HoodieMetadataMetrics.BOOTSTRAP_ERR_STR;
         metrics.ifPresent(m -> m.setMetric(metricKey, 1));
         String errMsg = String.format("Bootstrap on %s partition failed for %s",
-            partitionType.getPartitionPath(), metadataMetaClient.getBasePathV2());
+            partitionType.getPartitionPath(), metadataMetaClient.getBasePath());
         LOG.error(errMsg, e);
         throw new HoodieMetadataException(errMsg, e);
       }
@@ -622,7 +622,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           partitionBaseFilePairs,
           false,
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-          dataWriteConfig.getBasePath(),
+          dataMetaClient.getBasePath(),
           storageConf,
           this.getClass().getSimpleName());
     } else {
@@ -773,7 +773,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     final int fileListingParallelism = metadataWriteConfig.getFileListingParallelism();
     StorageConfiguration<?> storageConf = dataMetaClient.getStorageConf();
     final String dirFilterRegex = dataWriteConfig.getMetadataConfig().getDirectoryFilterRegex();
-    StoragePath storageBasePath = dataMetaClient.getBasePathV2();
+    StoragePath storageBasePath = dataMetaClient.getBasePath();
 
     while (!pathsToList.isEmpty()) {
       // In each round we will list a section of directories
@@ -1026,9 +1026,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
-      HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpserts(writeStatus);
-      HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, commitMetadata);
-      partitionToRecordMap.put(RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
+      if (dataWriteConfig.isRecordIndexEnabled()) {
+        HoodieData<HoodieRecord> updatesFromWriteStatuses = getRecordIndexUpserts(writeStatus);
+        HoodieData<HoodieRecord> additionalUpdates = getRecordIndexAdditionalUpserts(updatesFromWriteStatuses, commitMetadata);
+        partitionToRecordMap.put(RECORD_INDEX, updatesFromWriteStatuses.union(additionalUpdates));
+      }
       updateFunctionalIndexIfPresent(commitMetadata, instantTime, partitionToRecordMap);
       updateSecondaryIndexIfPresent(commitMetadata, partitionToRecordMap, writeStatus);
       return partitionToRecordMap;
@@ -1081,9 +1083,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private HoodieData<HoodieRecord> getFunctionalIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(dataMetaClient);
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, value) -> {
-      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.ofNullable(fsView), dataPartition);
+      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), dataPartition);
       fileSlices.forEach(fileSlice -> {
         // Filter log files for the instant time and add to this partition fileSlice pairs
         List<HoodieLogFile> logFilesForInstant = fileSlice.getLogFiles()
@@ -1411,35 +1412,35 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient)) {
+      for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
+        final String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(entry.getKey(), dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
+        HoodieData<HoodieRecord> records = entry.getValue();
 
-    HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient);
-    for (Map.Entry<MetadataPartitionType, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
-      final String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(entry.getKey(), dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
-      HoodieData<HoodieRecord> records = entry.getValue();
+        List<FileSlice> fileSlices =
+            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+        if (fileSlices.isEmpty()) {
+          // scheduling of INDEX only initializes the file group and not add commit
+          // so if there are no committed file slices, look for inflight slices
+          fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+        }
+        final int fileGroupCount = fileSlices.size();
+        ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be >0", partitionName));
 
-      List<FileSlice> fileSlices =
-          HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
-      if (fileSlices.isEmpty()) {
-        // scheduling of INDEX only initializes the file group and not add commit
-        // so if there are no committed file slices, look for inflight slices
-        fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+        List<FileSlice> finalFileSlices = fileSlices;
+        HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
+          FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
+              fileGroupCount));
+          r.unseal();
+          r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
+          r.seal();
+          return r;
+        });
+
+        allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
       }
-      final int fileGroupCount = fileSlices.size();
-      ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be >0", partitionName));
-
-      List<FileSlice> finalFileSlices = fileSlices;
-      HoodieData<HoodieRecord> rddSinglePartitionRecords = records.map(r -> {
-        FileSlice slice = finalFileSlices.get(HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(r.getRecordKey(),
-            fileGroupCount));
-        r.unseal();
-        r.setCurrentLocation(new HoodieRecordLocation(slice.getBaseInstantTime(), slice.getFileId()));
-        r.seal();
-        return r;
-      });
-
-      allPartitionRecords = allPartitionRecords.union(rddSinglePartitionRecords);
+      return allPartitionRecords;
     }
-    return allPartitionRecords;
   }
 
   /**
@@ -1484,11 +1485,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       throw e;
     } finally {
       long timeSpent = metadataTableServicesTimer.endTimer();
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION, timeSpent));
+      metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_DURATION, timeSpent));
       if (allTableServicesExecutedSuccessfullyOrSkipped) {
-        metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, 1));
+        metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, 1));
       } else {
-        metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, -1));
+        metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.TABLE_SERVICE_EXECUTION_STATUS, -1));
       }
     }
   }
@@ -1685,7 +1686,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         partitionBaseFilePairs,
         true,
         dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-        dataWriteConfig.getBasePath(),
+        dataMetaClient.getBasePath(),
         storageConf,
         this.getClass().getSimpleName());
   }

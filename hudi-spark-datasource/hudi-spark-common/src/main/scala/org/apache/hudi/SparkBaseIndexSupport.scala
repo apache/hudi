@@ -18,29 +18,49 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.util.JFunction
+
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
                                      metadataConfig: HoodieMetadataConfig,
                                      metaClient: HoodieTableMetaClient) {
   @transient protected lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient protected lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePathV2.toString)
+    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
 
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  def computeCandidateIsStrict(spark: SparkSession,
+                               fileIndex: HoodieFileIndex,
+                               queryFilters: Seq[Expression],
+                               queryReferencedColumns: Seq[String],
+                               prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                               shouldPushDownFilesFilter: Boolean): Option[Set[String]] = {
+    try {
+      computeCandidateFileNames(fileIndex, queryFilters, queryReferencedColumns, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
+    } catch {
+      case NonFatal(e) =>
+        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+          case DataSkippingFailureMode.Fallback.value => Option.empty
+          case DataSkippingFailureMode.Strict.value => throw e;
+        }
+    }
+  }
 
   def computeCandidateFileNames(fileIndex: HoodieFileIndex,
                                 queryFilters: Seq[Expression],
@@ -98,6 +118,12 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
    */
   protected def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String], inMemoryProjectionThreshold: Integer): Boolean = {
+    // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
+    //       it's most often preferential to fetch index w/in the same process (usually driver),
+    //       w/o resorting to on-cluster execution.
+    //       For that we use a simple-heuristic to determine whether we should read and process the index in-memory or
+    //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
+    //       threshold (of 100k records)
     Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
       case Some(mode) =>
         mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY

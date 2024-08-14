@@ -80,7 +80,8 @@ class CDCRelation(
         .startInstant(startInstant)
         .endInstant(endInstant)
         .nullableBoundary(true)
-        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build())
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED).build(),
+      false)
 
   override final def needConversion: Boolean = false
 
@@ -188,7 +189,7 @@ object CDCRelation {
       options: Map[String, String]): CDCRelation = {
 
     if (!isCDCEnabled(metaClient)) {
-      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePathV2.toString}")
+      throw new IllegalArgumentException(s"It isn't a CDC hudi table on ${metaClient.getBasePath}")
     }
 
     val startingInstant = options.getOrElse(DataSourceReadOptions.BEGIN_INSTANTTIME.key(),

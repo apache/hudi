@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -76,6 +77,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -113,7 +115,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty
       .key("hoodie.table.version")
-      .defaultValue(HoodieTableVersion.ZERO)
+      .defaultValue(HoodieTableVersion.current())
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
@@ -134,7 +136,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.partition.fields")
       .noDefaultValue()
       .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
-          + "the partition path, by invoking toString()");
+          + "the partition path, by invoking toString(). These fields also include the partition type which is used by custom key generators");
 
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
@@ -284,6 +286,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
+      TIMESTAMP_TYPE_FIELD,
       INPUT_TIME_UNIT,
       TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX,
       TIMESTAMP_INPUT_DATE_FORMAT,
@@ -532,9 +535,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return the hoodie.table.version from hoodie.properties file.
    */
   public HoodieTableVersion getTableVersion() {
-    return contains(VERSION)
-        ? HoodieTableVersion.versionFromCode(getInt(VERSION))
-        : VERSION.defaultValue();
+    return HoodieTableConfigUtils.getTableVersion(this);
   }
 
   /**
@@ -583,11 +584,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getPartitionFields() {
-    if (contains(PARTITION_FIELDS)) {
-      return Option.of(Arrays.stream(getString(PARTITION_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    return HoodieTableConfigUtils.getPartitionFields(this);
   }
 
   public boolean isTablePartitioned() {
@@ -610,7 +607,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getPartitionFieldProp() {
     // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
     //       behavior until this method is fully deprecated
-    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
+    return HoodieTableConfigUtils.getPartitionFieldProp(this).orElse("");
   }
 
   /**
@@ -814,7 +811,7 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(TABLE_METADATA_PARTITIONS, partitions.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePathV2(), partitionPath, enabled ? "enabled" : "disabled"));
+    LOG.info(String.format("MDT %s partition %s has been %s", metaClient.getBasePath(), partitionPath, enabled ? "enabled" : "disabled"));
   }
 
   /**
@@ -832,7 +829,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
     setValue(TABLE_METADATA_PARTITIONS_INFLIGHT, partitionsInflight.stream().sorted().collect(Collectors.joining(CONFIG_VALUES_DELIMITER)));
     update(metaClient.getStorage(), metaClient.getMetaPath(), getProps());
-    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePathV2(), partitionPaths));
+    LOG.info(String.format("MDT %s partitions %s have been set to inflight", metaClient.getBasePath(), partitionPaths));
   }
 
   public void setMetadataPartitionsInflight(HoodieTableMetaClient metaClient, MetadataPartitionType... partitionTypes) {

@@ -160,7 +160,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.beginInstantTime = beginInstantTime;
     this.endInstantTime = endInstantTime;
 
-    this.basePath = metaClient.getBasePathV2();
+    this.basePath = metaClient.getBasePath();
 
     this.metaClient = metaClient;
     this.engineContext = engineContext;
@@ -263,29 +263,28 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     HoodieTimeline activeTimeline = getActiveTimeline();
     Option<HoodieInstant> latestInstant = activeTimeline.lastInstant();
 
-    HoodieTableFileSystemView fileSystemView =
-        new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles);
+    try (HoodieTableFileSystemView fileSystemView = new HoodieTableFileSystemView(metaClient, activeTimeline, allFiles)) {
+      Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
+      validate(activeTimeline, queryInstant);
 
-    Option<String> queryInstant = specifiedQueryInstant.or(() -> latestInstant.map(HoodieInstant::getTimestamp));
-
-    validate(activeTimeline, queryInstant);
-
-    // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
-    // latest slices, but also include the base and log files of the second-last version of
-    // the file slice in the same file group as the latest file slice that is under compaction.
-    // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
-    // API.  Note that for COW table, the merging logic of two slices does not happen as there
-    // is no compaction, thus there is no performance impact.
-    return partitions.stream().collect(
-        Collectors.toMap(
-            Function.identity(),
-            partitionPath ->
-                queryInstant.map(instant ->
-                        fileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
-                    )
-                    .orElseGet(() -> fileSystemView.getLatestFileSlices(partitionPath.path))
-                    .collect(Collectors.toList())
-        ));
+      // NOTE: For MOR table, when the compaction is inflight, we need to not only fetch the
+      // latest slices, but also include the base and log files of the second-last version of
+      // the file slice in the same file group as the latest file slice that is under compaction.
+      // This logic is realized by `AbstractTableFileSystemView::getLatestMergedFileSlicesBeforeOrOn`
+      // API.  Note that for COW table, the merging logic of two slices does not happen as there
+      // is no compaction, thus there is no performance impact.
+      HoodieTableFileSystemView finalFileSystemView = fileSystemView;
+      return partitions.stream().collect(
+          Collectors.toMap(
+              Function.identity(),
+              partitionPath ->
+                  queryInstant.map(instant ->
+                          finalFileSystemView.getLatestMergedFileSlicesBeforeOrOn(partitionPath.path, queryInstant.get())
+                      )
+                      .orElseGet(() -> finalFileSystemView.getLatestFileSlices(partitionPath.path))
+                      .collect(Collectors.toList())
+          ));
+    }
   }
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths,
@@ -301,10 +300,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Convert partition's path into partition descriptor
     return matchedPartitionPaths.stream()
-        .map(partitionPath -> {
-          Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
-          return new PartitionPath(partitionPath, partitionColumnValues);
-        })
+        .map(this::convertToPartitionPath)
         .collect(Collectors.toList());
   }
 
@@ -328,10 +324,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // Convert partition's path into partition descriptor
     return matchedPartitionPaths.stream()
-        .map(partitionPath -> {
-          Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
-          return new PartitionPath(partitionPath, partitionColumnValues);
-        })
+        .map(this::convertToPartitionPath)
         .collect(Collectors.toList());
   }
 
@@ -341,7 +334,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isPartitionedTable() {
-    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return partitionColumns.length > 0 || HoodieTableMetadata.isMetadataTable(basePath);
   }
 
   protected HoodieTimeline getActiveTimeline() {
@@ -480,7 +473,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean shouldReadAsPartitionedTable() {
-    return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath.toString());
+    return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath);
+  }
+
+  protected PartitionPath convertToPartitionPath(String partitionPath) {
+    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
+    return new PartitionPath(partitionPath, partitionColumnValues);
   }
 
   private static long fileSliceSize(FileSlice fileSlice) {

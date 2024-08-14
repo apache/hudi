@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -264,7 +265,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         engineContext, FileSystemViewStorageConfig.newBuilder().build(),
         HoodieCommonConfig.newBuilder().build(),
         mc -> HoodieTableMetadata.create(
-            engineContext, mc.getStorage(), metadataConfig, mc.getBasePathV2().toString()));
+            engineContext, mc.getStorage(), metadataConfig, tablePath));
     SyncableFileSystemView fsView = viewManager.getFileSystemView(metaClient);
     FileSlice fileSlice = fsView.getAllFileSlices(partitionPaths[0]).findFirst().get();
     List<String> logFilePathList = getLogFileListFromFileSlice(fileSlice);
@@ -276,6 +277,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty("hoodie.payload.ordering.field", "timestamp");
     props.setProperty(RECORD_MERGER_STRATEGY.key(), RECORD_MERGER_STRATEGY.defaultValue());
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
+    props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
+    props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
+    props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+    props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
     if (metaClient.getTableConfig().contains(PARTITION_FIELDS)) {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
@@ -293,10 +298,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
         props,
         0,
         fileSlice.getTotalFileSize(),
-        false,
-        1024 * 1024 * 1000,
-        metaClient.getTempFolderPath(),
-        ExternalSpillableMap.DiskMapType.ROCKS_DB,
         false);
     fileGroupReader.initRecordIterators();
     while (fileGroupReader.hasNext()) {

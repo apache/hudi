@@ -32,6 +32,7 @@ import java.util.Collections;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestSqlQueryBasedTransformer {
 
@@ -82,6 +83,10 @@ public class TestSqlQueryBasedTransformer {
 
     // transform
     SqlQueryBasedTransformer transformer = new SqlQueryBasedTransformer();
+
+    // test if the class throws illegal argument exception when sql-config is missing
+    assertThrows(IllegalArgumentException.class, () -> transformer.apply(jsc, spark, ds, new TypedProperties()));
+
     Dataset<Row> result = transformer.apply(jsc, spark, ds, props);
 
     // check result

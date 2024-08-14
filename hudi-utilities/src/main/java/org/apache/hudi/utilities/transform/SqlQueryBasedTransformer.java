@@ -20,7 +20,6 @@ package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
-import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -50,17 +49,14 @@ public class SqlQueryBasedTransformer implements Transformer {
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
       TypedProperties properties) {
     String transformerSQL = getStringWithAltKeys(properties, SqlTransformerConfig.TRANSFORMER_SQL);
-    if (null == transformerSQL) {
-      throw new HoodieTransformException("Missing configuration : (" + SqlTransformerConfig.TRANSFORMER_SQL.key() + ")");
-    }
 
     try {
       // tmp table name doesn't like dashes
       String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-      LOG.info("Registering tmp table : " + tmpTable);
+      LOG.info("Registering tmp table: {}", tmpTable);
       rowDataset.createOrReplaceTempView(tmpTable);
       String sqlStr = transformerSQL.replaceAll(SRC_PATTERN, tmpTable);
-      LOG.debug("SQL Query for transformation : (" + sqlStr + ")");
+      LOG.debug("SQL Query for transformation: {}", sqlStr);
       Dataset<Row> transformed = sparkSession.sql(sqlStr);
       sparkSession.catalog().dropTempView(tmpTable);
       return transformed;

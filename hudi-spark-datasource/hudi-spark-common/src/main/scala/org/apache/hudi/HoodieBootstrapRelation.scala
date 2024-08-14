@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.hadoop.fs.Path
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -114,7 +113,7 @@ abstract class BaseHoodieBootstrapRelation(override val sqlContext: SQLContext,
       val baseFile = fileSlice.getBaseFile.get()
       if (baseFile.getBootstrapBaseFile.isPresent) {
         val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getPathInfo,
-          metaClient.getBasePathV2, extractPartitionValuesFromPartitionPath = isPartitioned)
+          metaClient.getBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
         val dataFile = createPartitionedFile(
           partitionValues, baseFile.getBootstrapBaseFile.get.getPathInfo.getPath,
           0, baseFile.getBootstrapBaseFile.get().getFileLen)

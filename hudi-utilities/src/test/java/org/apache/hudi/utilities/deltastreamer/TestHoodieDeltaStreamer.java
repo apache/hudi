@@ -813,9 +813,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieClusteringJob clusteringJob = initialHoodieClusteringJob(tableBasePath, null, false, "schedule");
     clusteringJob.cluster(0);
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingClusteringTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
-    meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
+    meta.getActiveTimeline().transitionClusterRequestedToInflight(clusteringRequest, Option.empty());
 
     // do another ingestion with inline clustering enabled
     cfg.configs.addAll(getTableServicesConfigs(totalRecords, "false", "true", "2", "", ""));
@@ -1236,9 +1236,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // convert clustering request into inflight, Simulate the last clustering failed scenario
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
-    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingReplaceTimeline().getInstants();
+    List<HoodieInstant> hoodieClusteringInstants = meta.getActiveTimeline().filterPendingClusteringTimeline().getInstants();
     HoodieInstant clusteringRequest = hoodieClusteringInstants.get(0);
-    HoodieInstant hoodieInflightInstant = meta.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringRequest, Option.empty());
+    HoodieInstant hoodieInflightInstant = meta.getActiveTimeline().transitionClusterRequestedToInflight(clusteringRequest, Option.empty());
 
     // trigger a scheduleAndExecute clustering job
     // when retryFailedClustering true => will rollback and re-execute failed clustering plan with same instant timestamp.
@@ -1289,7 +1289,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           return true;
         }
         case UtilHelpers.SCHEDULE: {
-          TestHelpers.assertAtLeastNReplaceRequests(2, tableBasePath);
+          TestHelpers.assertAtLeastNClusterRequests(2, tableBasePath);
           TestHelpers.assertNoReplaceCommits(tableBasePath);
           return true;
         }
@@ -2415,11 +2415,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_sql_source_table" + testNum++;
     HoodieDeltaStreamer deltaStreamer =
         new HoodieDeltaStreamer(TestHelpers.makeConfig(
-            tableBasePath, WriteOperationType.INSERT, SqlSource.class.getName(),
+            tableBasePath, WriteOperationType.UPSERT, SqlSource.class.getName(),
             Collections.emptyList(), PROPS_FILENAME_TEST_SQL_SOURCE, false,
-            false, 1000, false, null, null, "timestamp", null, true), jsc);
+            false, 2000, false, null, null, "timestamp", null, true), jsc);
     deltaStreamer.sync();
     assertRecordCount(SQL_SOURCE_NUM_RECORDS, tableBasePath, sqlContext);
+    // Data generation
+    String sourceRoot = basePath + "sqlSourceFiles";
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    generateSqlSourceTestTable(sourceRoot, "2", "1000", SQL_SOURCE_NUM_RECORDS, dataGenerator);
+
+    deltaStreamer.sync();
+    assertRecordCount(SQL_SOURCE_NUM_RECORDS * 2, tableBasePath, sqlContext);
   }
 
   @Test
@@ -2641,8 +2648,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");
 
-    // add a replace commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
-    addReplaceCommitToTimeline(metaClient, Collections.emptyMap());
+    // add a cluster commit which does not have CHECKPOINT_KEY. Deltastreamer should be able to go back and pick the right checkpoint.
+    addClusterCommitToTimeline(metaClient, Collections.emptyMap());
     metaClient.reloadActiveTimeline();
     assertEquals(testDeltaSync.getLatestCommitMetadataWithValidCheckpointInfo(metaClient.getActiveTimeline()
         .getCommitsTimeline()).get().getMetadata(HoodieDeltaStreamer.CHECKPOINT_KEY), "def");
@@ -2715,7 +2722,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
     LOG.info("new props: {}", hoodieProps);
-    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), HoodieTableMetaClient.METAFOLDER_NAME);
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer
@@ -2786,7 +2793,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     LOG.info("old props: " + hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
     LOG.info("new props: " + hoodieProps);
-    StoragePath metaPathDir = new StoragePath(metaClient.getBasePathV2(), ".hoodie");
+    StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), ".hoodie");
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
     // continue deltastreamer

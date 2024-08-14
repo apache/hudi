@@ -216,6 +216,17 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     }
   }
 
+  @Override
+  public void inlineCompaction() {
+    if (asyncCompaction) {
+      try {
+        compactFunctionWrapper.compact(1); // always uses a constant checkpoint ID.
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    }
+  }
+
   public void jobFailover() throws Exception {
     coordinatorFails();
     subTaskFails(0, 0);
