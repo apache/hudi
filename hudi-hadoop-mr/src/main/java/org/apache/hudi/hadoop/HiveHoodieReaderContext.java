@@ -155,7 +155,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   protected ClosableIterator<ArrayWritable> getFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException {
-    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(),start, length, dataSchema, requiredSchema, storage);
+    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
   }
 
   private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
