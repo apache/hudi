@@ -146,7 +146,7 @@ inputDF.write()
  
 ## Upgrading 
 
-New Hudi releases are listed on the [releases page](/releases), with detailed notes which list all the changes, with highlights in each release. 
+New Hudi releases are listed on the [releases page](/releases/download), with detailed notes which list all the changes, with highlights in each release. 
 At the end of the day, Hudi is a storage system and with that comes a lot of responsibilities, which we take seriously. 
 
 As general guidelines, 

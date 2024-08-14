@@ -18,7 +18,7 @@ To contribute code, you need
    Agreement](https://www.apache.org/licenses/icla.pdf) (ICLA) to the Apache
    Software Foundation (ASF).
  - (Recommended) Create an account on [JIRA](https://issues.apache.org/jira/projects/HUDI/summary) to open issues/find similar issues.
- - (Recommended) Join our dev mailing list & slack channel, listed on [community](/contribute/get-involved) page.
+ - (Recommended) Join our dev mailing list & slack channel, listed on [community](/community/get-involved.md) page.
 
 
 ## IDE Setup
@@ -236,7 +236,7 @@ For technical suggestions, you can also leverage [our RFC Process](https://cwiki
 ## Communication
 
 All communication is expected to align with the [Code of Conduct](https://www.apache.org/foundation/policies/conduct).
-Discussion about contributing code to Hudi happens on the [dev@ mailing list](/contribute/get-involved). Introduce yourself!
+Discussion about contributing code to Hudi happens on the [dev@ mailing list](/community/get-involved.md). Introduce yourself!
 
 ## Code & Project Structure
 

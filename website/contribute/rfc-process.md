@@ -40,7 +40,7 @@ Use this discussion thread to get an agreement from people on the mailing list t
 1. Create a folder `rfc-<number>` under `rfc` folder, where `<number>` is replaced by the actual RFC number used.
 2. Copy the rfc template file `rfc/template.md` to `rfc/rfc-<number>/rfc-<number>.md` and proceed to draft your design document.
 3. [Optional] Place any images used by the same directory using the `![alt text](./image.png)` markdown syntax.
-4. Add at least 2 PMC members as approvers (you can find their github usernames [here](/contribute/team)). You are free to add any number of dev members to your reviewers list.
+4. Add at least 2 PMC members as approvers (you can find their github usernames [here](/community/team)). You are free to add any number of dev members to your reviewers list.
 5. Raise a PR against the master branch with `[RFC-<number>]` in the title and work through feedback, until the RFC approved (by approving the Github PR itself)
 6. Before landing the PR, please change the status to "IN PROGRESS" under `rfc/README.md` and keep it maintained as you go about implementing, completing or even abandoning.
 
