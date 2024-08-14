@@ -287,7 +287,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -298,7 +299,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testSqlTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -311,7 +313,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testSqlFileTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -340,7 +343,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testFlattenedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -352,7 +356,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testAWSDmsTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {

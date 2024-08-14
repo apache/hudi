@@ -2226,7 +2226,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testParquetDFSSource(true, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
   }
 
-  @Disabled
+  @Disabled("HUDI-8081")
   @Test
   public void testORCDFSSourceWithoutSchemaProviderAndNoTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
@@ -2236,7 +2236,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
-  @Disabled
+  @Disabled("HUDI-8081")
   @Test
   public void testORCDFSSourceWithSchemaProviderAndWithTransformer() throws Exception {
     // NOTE: Hudi doesn't support Orc in Spark < 3.0

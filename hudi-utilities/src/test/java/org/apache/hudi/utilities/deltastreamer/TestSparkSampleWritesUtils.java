@@ -86,7 +86,7 @@ public class TestSparkSampleWritesUtils extends SparkClientFunctionalTestHarness
     assertEquals(originalRecordSize, originalWriteConfig.getCopyOnWriteRecordSizeEstimate(), "Original record size estimate should not be changed.");
   }
 
-  @Disabled
+  @Disabled("HUDI-8082")
   @Test
   public void overwriteRecordSizeEstimateForEmptyTable() {
     int originalRecordSize = 100;
