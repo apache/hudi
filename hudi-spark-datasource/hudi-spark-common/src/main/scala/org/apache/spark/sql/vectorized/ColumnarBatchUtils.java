@@ -19,15 +19,9 @@
 
 package org.apache.spark.sql.vectorized;
 
-import org.apache.hudi.common.util.collection.Pair;
-
 import org.apache.spark.sql.types.StructType;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
 
 public class ColumnarBatchUtils {
 
