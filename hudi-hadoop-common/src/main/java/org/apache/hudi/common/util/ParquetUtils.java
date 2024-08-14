@@ -108,7 +108,7 @@ public class ParquetUtils extends FileFormatUtils {
     try {
       // TODO(vc): Should we use the parallel reading version here?
       footer = ParquetFileReader.readFooter(storage.newInstance(
-          parquetFilePath, storage.getConf()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
+          parquetFilePath, storage.getConf(), storage.getStorageStrategy()).getConf().unwrapAs(Configuration.class), parquetFileHadoopPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read footer for parquet " + parquetFileHadoopPath, e);
     }
@@ -133,7 +133,7 @@ public class ParquetUtils extends FileFormatUtils {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
-    conf.addResource(storage.newInstance(convertToStoragePath(filePath), storage.getConf()).getConf().unwrapAs(Configuration.class));
+    conf.addResource(storage.newInstance(convertToStoragePath(filePath), storage.getConf(), storage.getStorageStrategy()).getConf().unwrapAs(Configuration.class));
     AvroReadSupport.setAvroReadSchema(conf, readSchema);
     AvroReadSupport.setRequestedProjection(conf, readSchema);
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
@@ -195,7 +195,7 @@ public class ParquetUtils extends FileFormatUtils {
   public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
-      conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
+      conf.addResource(storage.newInstance(filePath, storage.getConf(), storage.getStorageStrategy()).getConf().unwrapAs(Configuration.class));
       Schema readSchema = keyGeneratorOpt
           .map(keyGenerator -> {
             List<String> fields = new ArrayList<>();

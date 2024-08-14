@@ -21,8 +21,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.spark.api.java.JavaRDD
@@ -53,7 +53,7 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     val limit = getArgValueOrDefault(args, PARAMETERS(1))
     val needDelete = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
     val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
-    val storage = new HoodieHadoopStorage(srcPath, storageConf)
+    val storage = new HoodieHadoopStorage(srcPath, storageConf, new DefaultStorageStrategy())
     val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(
       new HoodieSparkEngineContext(jsc), storage, srcPath, false)
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())

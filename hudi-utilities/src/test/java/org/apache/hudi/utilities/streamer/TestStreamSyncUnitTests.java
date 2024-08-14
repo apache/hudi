@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -70,14 +71,14 @@ public class TestStreamSyncUnitTests {
   void testFetchNextBatchFromSource(Boolean useRowWriter, Boolean hasTransformer, Boolean hasSchemaProvider,
                                     Boolean isNullTargetSchema, Boolean hasErrorTable, Boolean shouldTryWriteToErrorTable) {
     //basic deltastreamer inputs
-    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
-    SparkSession sparkSession = mock(SparkSession.class);
-    Configuration configuration = mock(Configuration.class);
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetTableName = "testTableName";
     cfg.targetBasePath = "/fake/table/name";
     cfg.tableType = "MERGE_ON_READ";
+    HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class), new DefaultStorageStrategy(cfg.targetBasePath));
+    SparkSession sparkSession = mock(SparkSession.class);
+    Configuration configuration = mock(Configuration.class);
 
     //Source format adapter
     SourceFormatAdapter sourceFormatAdapter = mock(SourceFormatAdapter.class);
@@ -141,7 +142,7 @@ public class TestStreamSyncUnitTests {
   @MethodSource("getCheckpointToResumeCases")
   void testGetCheckpointToResume(HoodieStreamer.Config cfg, HoodieCommitMetadata commitMetadata, Option<String> expectedResumeCheckpoint) throws IOException {
     HoodieSparkEngineContext hoodieSparkEngineContext = mock(HoodieSparkEngineContext.class);
-    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class));
+    HoodieStorage storage = new HoodieHadoopStorage(mock(FileSystem.class), new DefaultStorageStrategy(cfg.targetBasePath));
     TypedProperties props = new TypedProperties();
     SparkSession sparkSession = mock(SparkSession.class);
     Configuration configuration = mock(Configuration.class);

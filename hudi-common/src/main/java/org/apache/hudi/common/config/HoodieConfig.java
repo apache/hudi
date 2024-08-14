@@ -44,9 +44,9 @@ public class HoodieConfig implements Serializable {
 
   protected static final String CONFIG_VALUES_DELIMITER = ",";
   // Number of retries while reading the properties file to deal with parallel updates
-  protected static final int MAX_READ_RETRIES = 5;
+  public static final int MAX_READ_RETRIES = 5;
   // Delay between retries while reading the properties file
-  protected static final int READ_RETRY_DELAY_MSEC = 1000;
+  public static final int READ_RETRY_DELAY_MSEC = 1000;
 
   protected TypedProperties props;
 

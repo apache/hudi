@@ -34,6 +34,7 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -96,7 +97,7 @@ public class TestTableSchemaResolver {
     Schema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema);
     assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(new HoodieHadoopStorage(
-        logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults()), logFilePath));
+        logFilePath, HoodieTestUtils.getDefaultStorageConfWithDefaults(), new DefaultStorageStrategy()), logFilePath));
   }
 
   private String initTestDir(String folderName) throws IOException {

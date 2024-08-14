@@ -115,7 +115,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
     StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorage().getConf().getInline();
-    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(pathForReader, storageConf);
+    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(pathForReader, storageConf,
+        getBlockContentLocation().get().getStorage().getStorageStrategy());
     // Read the content
     try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(inlineStorage)
         .getReaderFactory(HoodieRecordType.AVRO)
@@ -129,8 +130,10 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
   protected <T> ClosableIterator<T> deserializeRecords(HoodieReaderContext<T> readerContext, byte[] content) throws IOException {
     checkState(readerSchema != null, "Reader's schema has to be non-null");
 
-    StorageConfiguration<?> storageConf = getBlockContentLocation().get().getStorage().getConf().getInline();
-    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(pathForReader, storageConf);
+    HoodieStorage blockLocStorage = getBlockContentLocation().get().getStorage();
+    StorageConfiguration<?> storageConf = blockLocStorage.getConf().getInline();
+    HoodieStorage inlineStorage = blockLocStorage.newInstance(pathForReader, storageConf,
+        blockLocStorage.getStorageStrategy());
     // Read the content
     try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
         HoodieIOFactory.getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
@@ -153,7 +156,8 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getLogFile().getPath().toUri().getScheme(),
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
-    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlinePath, inlineConf);
+    HoodieStorage inlineStorage = getBlockContentLocation().get().getStorage().newInstance(inlinePath, inlineConf,
+        blockContentLoc.getStorage().getStorageStrategy());
 
     try (final HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory
         .getIOFactory(inlineStorage)

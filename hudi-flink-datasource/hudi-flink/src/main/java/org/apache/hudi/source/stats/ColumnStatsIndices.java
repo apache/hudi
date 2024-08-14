@@ -32,6 +32,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkClientUtil;
@@ -287,7 +288,7 @@ public class ColumnStatsIndices {
     //    - Fetching the records from CSI by key-prefixes (encoded column names)
     //    - Deserializing fetched records into [[RowData]]s
     HoodieTableMetadata metadataTable = HoodieTableMetadata.create(
-        HoodieFlinkEngineContext.DEFAULT, new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf()),
+        HoodieFlinkEngineContext.DEFAULT, new HoodieHadoopStorage(basePath, FlinkClientUtil.getHadoopConf(), new DefaultStorageStrategy(basePath)),
         metadataConfig, basePath);
 
     // TODO encoding should be done internally w/in HoodieBackedTableMetadata

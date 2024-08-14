@@ -38,6 +38,7 @@ import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,7 +134,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     Path folder = null;
     try {
       if (storage == null) {
-        storage = new HoodieHadoopStorage(convertToStoragePath(path), conf);
+        storage = new HoodieHadoopStorage(convertToStoragePath(path), conf, new DefaultStorageStrategy(path.toString()));
       }
 
       // Assumes path is a file

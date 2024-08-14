@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -87,7 +88,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
-    storage = new HoodieHadoopStorage(fs);
+    storage = new HoodieHadoopStorage(fs, new DefaultStorageStrategy());
   }
 
   @AfterAll

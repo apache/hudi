@@ -43,6 +43,7 @@ import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.strategy.DefaultStorageStrategy;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
@@ -91,7 +92,8 @@ public class TestHoodieMergeOnReadSnapshotReader {
     baseJobConf.set(serdeConstants.LIST_COLUMNS, COLUMNS);
     baseJobConf.set(serdeConstants.LIST_COLUMN_TYPES, COLUMN_TYPES);
     baseJobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
-    storage = new HoodieHadoopStorage(HadoopFSUtils.getFs(new StoragePath(basePath.toUri()), baseJobConf));
+    storage = new HoodieHadoopStorage(HadoopFSUtils.getFs(new StoragePath(basePath.toUri()), baseJobConf),
+        new DefaultStorageStrategy(basePath.toString()));
   }
 
   @AfterEach
