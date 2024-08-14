@@ -58,7 +58,7 @@ public class HoodieJavaWriteClientExample {
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
-  private static final String morStr = "mor";
+  private static final String MOR_STR = "mor";
 
   public static void main(String[] args) throws Exception {
     if (args.length < 3) {
@@ -68,11 +68,11 @@ public class HoodieJavaWriteClientExample {
     String tablePath = args[0];
     String tableName = args[1];
     String tableTypeStr = args[2];
-    if (tableTypeStr != null && tableTypeStr.equals(morStr)) {
+    if (tableTypeStr != null && tableTypeStr.equals(MOR_STR)) {
       tableType = HoodieTableType.MERGE_ON_READ.name();
     }
 
-    LOG.info("Start JavaWriteClient example with tablePath: " + tablePath + ", tableName: " + tableName + ", tableType: " + tableType);
+    LOG.info("Start JavaWriteClient example with tablePath: {}, tableName: {}, tableType: {}", tablePath, tableName, tableType);
 
     // Generator of some records to be loaded in.
     HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
@@ -101,27 +101,27 @@ public class HoodieJavaWriteClientExample {
 
       // inserts
       String newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
 
       List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
       List<HoodieRecord<HoodieAvroPayload>> writeRecords =
-          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+          recordsSoFar.stream().map(HoodieAvroRecord::new).collect(Collectors.toList());
       client.insert(writeRecords, newCommitTime);
 
       // updates
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
       List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
       records.addAll(toBeUpdated);
       recordsSoFar.addAll(toBeUpdated);
       writeRecords =
-          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+          recordsSoFar.stream().map(HoodieAvroRecord::new).collect(Collectors.toList());
       client.upsert(writeRecords, newCommitTime);
 
       // Delete
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
       // just delete half of the records
       int numToDelete = recordsSoFar.size() / 2;
       List<HoodieKey> toBeDeleted =

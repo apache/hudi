@@ -125,6 +125,7 @@ public class RunCompactionActionExecutor<T> extends
       compactionMetadata.setWriteStatuses(statuses);
       compactionMetadata.setCommitted(false);
       compactionMetadata.setCommitMetadata(Option.of(metadata));
+      compactionMetadata.setWriteStats(updateStatusMap);
     } catch (Exception e) {
       throw new HoodieCompactionException("Could not compact " + config.getBasePath(), e);
     }

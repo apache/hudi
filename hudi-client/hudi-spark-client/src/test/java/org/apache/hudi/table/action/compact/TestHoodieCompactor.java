@@ -20,11 +20,8 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.data.HoodieData;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -48,6 +45,7 @@ import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import com.codahale.metrics.Counter;
@@ -235,7 +233,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
         updateRecords(config, newCommitTime, records);
         assertLogFilesNumEqualsTo(config, i);
       }
-      HoodieData<WriteStatus> result = compact(writeClient, String.format("10%s", i));
+      HoodieWriteMetadata result = compact(writeClient, String.format("10%s", i));
       verifyCompaction(result);
 
       // Verify compaction.requested, compaction.completed metrics counts.
@@ -270,7 +268,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
 
         assertLogFilesNumEqualsTo(config, 1);
 
-        HoodieData<WriteStatus> result = compact(writeClient, "10" + (i + 1));
+        HoodieWriteMetadata result = compact(writeClient, "10" + (i + 1));
         verifyCompaction(result);
 
         // Verify compaction.requested, compaction.completed metrics counts.
@@ -317,26 +315,28 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   /**
    * Do a compaction.
    */
-  private HoodieData<WriteStatus> compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
+  private HoodieWriteMetadata compact(SparkRDDWriteClient writeClient, String compactionInstantTime) {
     writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty());
-    JavaRDD<WriteStatus> writeStatusJavaRDD = (JavaRDD<WriteStatus>) writeClient.compact(compactionInstantTime).getWriteStatuses();
-    return HoodieListData.eager(writeStatusJavaRDD.collect());
+    HoodieWriteMetadata compactMetadata = writeClient.compact(compactionInstantTime);
+    return compactMetadata;
   }
 
   /**
-   * Verify that all partition paths are present in the WriteStatus result.
+   * Verify that all partition paths are present in the HoodieWriteMetadata result.
    */
-  private void verifyCompaction(HoodieData<WriteStatus> result) {
-    List<WriteStatus> writeStatuses = result.collectAsList();
+  private void verifyCompaction(HoodieWriteMetadata compactionMetadata) {
+    assertTrue(compactionMetadata.getWriteStats().isPresent());
+    List<HoodieWriteStat> stats = (List<HoodieWriteStat>) compactionMetadata.getWriteStats().get();
+    assertEquals(dataGen.getPartitionPaths().length, stats.size());
     for (String partitionPath : dataGen.getPartitionPaths()) {
-      assertTrue(writeStatuses.stream().anyMatch(writeStatus -> writeStatus.getStat().getPartitionPath().contentEquals(partitionPath)));
+      assertTrue(stats.stream().anyMatch(stat -> stat.getPartitionPath().contentEquals(partitionPath)));
     }
-    writeStatuses.forEach(writeStatus -> {
-      final HoodieWriteStat.RuntimeStats stats = writeStatus.getStat().getRuntimeStats();
-      assertNotNull(stats);
-      assertEquals(stats.getTotalCreateTime(), 0);
-      assertTrue(stats.getTotalUpsertTime() > 0);
-      assertTrue(stats.getTotalScanTime() > 0);
+    stats.forEach(stat -> {
+      HoodieWriteStat.RuntimeStats runtimeStats = stat.getRuntimeStats();
+      assertNotNull(runtimeStats);
+      assertEquals(0, runtimeStats.getTotalCreateTime());
+      assertTrue(runtimeStats.getTotalUpsertTime() > 0);
+      assertTrue(runtimeStats.getTotalScanTime() > 0);
     });
   }
 }
