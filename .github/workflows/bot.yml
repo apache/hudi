@@ -420,6 +420,7 @@ jobs:
           - flinkProfile: "flink1.16"
           - flinkProfile: "flink1.17"
           - flinkProfile: "flink1.18"
+          - flinkProfile: "flink1.19"
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -456,15 +457,15 @@ jobs:
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.18'
+            flinkProfile: 'flink1.19'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.18'
+            flinkProfile: 'flink1.19'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.18'
+            flinkProfile: 'flink1.19'
             sparkProfile: 'spark3.4'
             sparkRuntime: 'spark3.4.0'
 
@@ -493,6 +494,10 @@ jobs:
     strategy:
       matrix:
         include:
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.19'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.18'
             sparkProfile: 'spark3.5'
@@ -570,11 +575,11 @@ jobs:
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
-            flinkProfile: 'flink1.18'
+            flinkProfile: 'flink1.19'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
           - scalaProfile: 'scala-2.12'
-            flinkProfile: 'flink1.18'
+            flinkProfile: 'flink1.19'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.0'
     steps:
