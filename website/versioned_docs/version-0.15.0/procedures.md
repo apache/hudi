@@ -1291,7 +1291,7 @@ call run_clustering(path => '/tmp/hoodie/test_hudi_table');
 
 Clustering test_hudi_table with table name, predicate and order column
 ```
-call run_clustering(table => 'test_hudi_table', predicate => 'ts \<= 20220408L', order => 'ts');
+call run_clustering(table => 'test_hudi_table', predicate => 'ts <= 20220408L', order => 'ts');
 ```
 
 Clustering test_hudi_table with table name, show_involved_partition

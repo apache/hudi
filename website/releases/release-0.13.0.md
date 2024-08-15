@@ -428,7 +428,7 @@ Consistent Hashing Index is still an evolving feature and currently there are so
   stop your write pipeline and enable clustering. You should take extreme care to not run both concurrently because it
   might result in conflicts and a failed pipeline. Once clustering is complete, you can resume your regular write pipeline,
   which will have compaction enabled.
-  :::
+
 
 We are working towards automating these and making it easier for users to leverage the Consistent Hashing Index. You can
 follow the ongoing work on the Consistent Hashing Index [here](https://issues.apache.org/jira/browse/HUDI-3000).
@@ -445,7 +445,8 @@ To improve the concurrency control, the 0.13.0 release introduces a new feature,
 detect the conflict during the data writing phase and abort the writing early on once a conflict is detected, using
 Hudi's marker mechanism.  Hudi can now stop a conflicting writer much earlier because of the early conflict detection
 and release computing resources necessary to cluster, improving resource utilization.
-
+  :::
+  
 :::caution
 The early conflict detection in OCC is ***EXPERIMENTAL*** in 0.13.0 release.
 :::

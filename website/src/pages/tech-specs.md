@@ -34,21 +34,21 @@ Note that, unlike Hive style partitioning, partition columns are not removed fro
 A special file `hoodie.properties` persists table level configurations, shared by writers and readers of the table. These configurations are explained [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java), 
 and any config without a default value needs to be specified during table creation.
 ```plain
-/data/hudi_trips/               <== Base Path
-├── .hoodie/                    <== Meta Path
-|   └── hoodie.properties       <== Table Configs
-│   └── metadata/               <== Table Metadata
+/data/hudi_trips/                   <== Base Path
+├── .hoodie/                        <== Meta Path
+|   └── hoodie.properties           <== Table Configs
+│   └── metadata/                   <== Table Metadata
 ├── americas/
 │   ├── brazil/
-│   │   └── sao_paulo/          <== Partition Path 
-│   │       ├── \<data_files>
+│   │   └── sao_paulo/              <== Partition Path 
+│   │       ├── <data_files>
 │   └── united_states/
 │       └── san_francisco/
-│           ├── \<data_files>
+│           ├── <data_files>
 └── asia/
     └── india/
         └── chennai/
-            ├── \<data_files>
+            ├── <data_files>
 ```
 ### Table Types 
 

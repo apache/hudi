@@ -756,10 +756,7 @@ The semantics is best effort because the compaction job would finally merge all 
 ---
 
 > #### hoodie.datasource.merge.type
-> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
-1) skip_merge: read the base file records plus the log file records;
-2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
-   log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
+> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
 > **Default Value**: payload_combine (Optional)<br></br>
 > `Config Param: MERGE_TYPE`<br></br>
 
@@ -1156,11 +1153,7 @@ This also directly translates into how much you can incrementally pull on this t
 ---
 
 > #### hoodie.datasource.query.type
-> Decides how data files need to be read, in
-1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
-2) incremental mode (new data since an instantTime);
-3) Read Optimized mode (obtain latest view, based on columnar data)
-.Default: snapshot<br></br>
+> Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row &amp; columnar data); 2) incremental mode (new data since an instantTime); 3) Read Optimized mode (obtain latest view, based on columnar data) .Default: snapshot<br></br>
 > **Default Value**: snapshot (Optional)<br></br>
 > `Config Param: QUERY_TYPE`<br></br>
 

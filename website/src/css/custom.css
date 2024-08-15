@@ -249,11 +249,12 @@ table.features i.feather {
 
 footer .container {
   margin-block-start: 1.83em;
+  max-width: var(--ifm-container-width-xl) !important;
 }
 
 .blog-wrapper .container {
   max-width: 100%;
-  
+
 }
 
 .who-uses {

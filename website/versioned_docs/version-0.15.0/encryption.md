@@ -43,7 +43,7 @@ QuickstartUtils.DataGenerator dataGen = new QuickstartUtils.DataGenerator();
 List<String> inserts = convertToStringList(dataGen.generateInserts(3));
 Dataset<Row> inputDF1 = spark.read().json(jsc.parallelize(inserts, 1));
 inputDF1.write().format("org.apache.hudi")
-	.option("hoodie.table.name", "encryption_table")
+    .option("hoodie.table.name", "encryption_table")
     .option("hoodie.upsert.shuffle.parallelism","2")
     .option("hoodie.insert.shuffle.parallelism","2")
     .option("hoodie.delete.shuffle.parallelism","2")
