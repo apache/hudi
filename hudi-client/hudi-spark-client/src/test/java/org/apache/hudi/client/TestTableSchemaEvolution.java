@@ -53,6 +53,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.RECORD_MERGE_MODE
 import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_IS_DELETED_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.MAP_TYPE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TIP_NESTED_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -74,7 +75,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   public static final String EXTRA_FIELD_WITHOUT_DEFAULT_SCHEMA =
       "{\"name\": \"new_field_without_default\", \"type\": \"boolean\"},";
   public static final String EXTRA_FIELD_NULLABLE_SCHEMA =
-      ",{\"name\": \"new_field_without_default\", \"type\": [\"boolean\", \"null\"]}";
+      ",{\"name\": \"new_nullable_field\", \"type\": [\"null\", \"boolean\"], \"default\": null} ]}";
 
   // TRIP_EXAMPLE_SCHEMA with a new_field added
   public static final String TRIP_EXAMPLE_SCHEMA_EVOLVED_COL_ADDED = TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
@@ -154,7 +155,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         "Added field without default and not nullable is not compatible (Evolved Schema)");
 
     assertTrue(isSchemaCompatible(TRIP_EXAMPLE_SCHEMA, TRIP_SCHEMA_PREFIX + EXTRA_TYPE_SCHEMA + MAP_TYPE_SCHEMA
-            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + TRIP_SCHEMA_SUFFIX + EXTRA_FIELD_NULLABLE_SCHEMA, false),
+            + FARE_NESTED_SCHEMA + TIP_NESTED_SCHEMA + HOODIE_IS_DELETED_SCHEMA + EXTRA_FIELD_NULLABLE_SCHEMA, false),
         "Added nullable field is compatible (Evolved Schema)");
   }
 
