@@ -469,7 +469,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>set -x; export HUDI_WS=`dirname ${project.basedir}`; if ${docker.compose.skip}; then docker compose -f ${dockerCompose.file} up -d; fi; set +x</argument>
+                <argument>set -x; export HUDI_WS=`dirname ${project.basedir}`; if [ "${docker.compose.skip}" = "false" ]; then docker compose -f ${dockerCompose.file} up -d; fi; set +x</argument>
               </arguments>
             </configuration>
           </execution>
@@ -484,7 +484,7 @@
               <executable>/bin/bash</executable>
               <arguments>
                 <argument>-c</argument>
-                <argument>set -x; export HUDI_WS=`dirname ${project.basedir}`; if ${docker.compose.skip}; then docker compose -f ${dockerCompose.file} down -v; fi; set +x</argument>
+                <argument>set -x; export HUDI_WS=`dirname ${project.basedir}`; if [ "${docker.compose.skip}" = "false" ]; then docker compose -f ${dockerCompose.file} down -v; fi; set +x</argument>
               </arguments>
             </configuration>
           </execution>
