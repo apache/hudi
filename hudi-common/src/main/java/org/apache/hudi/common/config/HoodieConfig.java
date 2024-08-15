@@ -42,7 +42,7 @@ public class HoodieConfig implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieConfig.class);
 
-  protected static final String CONFIG_VALUES_DELIMITER = ",";
+  public static final String CONFIG_VALUES_DELIMITER = ",";
   // Number of retries while reading the properties file to deal with parallel updates
   public static final int MAX_READ_RETRIES = 5;
   // Delay between retries while reading the properties file

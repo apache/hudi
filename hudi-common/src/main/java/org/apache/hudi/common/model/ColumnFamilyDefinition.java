@@ -131,7 +131,11 @@ public class ColumnFamilyDefinition implements Serializable {
     final StringBuilder sb = new StringBuilder("HoodieColumnFamilyDefinition {");
     sb.append("name='").append(name);
     sb.append("', columns=").append(columns);
-    sb.append(", preCombine='").append(preCombine).append('\'');
+    if (preCombine != null) {
+      sb.append(", preCombine='").append(preCombine).append('\'');
+    } else {
+      sb.append(", preCombine=null");
+    }
     sb.append('}');
     return sb.toString();
   }

@@ -37,6 +37,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.COLUMN_FAMILY_PREFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -170,10 +171,11 @@ public class HoodieCommonTestHarness {
   protected Map<String, String> buildColumnFamilyConfigExample() {
     Map<String, String> config = new HashMap<>();
     config.put("hoodie.some.property", "val1");
-    config.put("hoodie.columnFamily.cf1", "id, col1, col2");
+    config.put(COLUMN_FAMILY_PREFIX + "cf1", "id1, id2, col1, col2");
     config.put("hoodie.some.property2", "val2");
-    config.put("hoodie.columnFamily.cf2", "id, col3, col4,ts;ts");
-    config.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    config.put(COLUMN_FAMILY_PREFIX + "cf2", "id1, id2, col3, col4,ts;ts");
+    config.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id1,id2");
+    config.put(HoodieTableConfig.PARTITION_FIELDS.key(), "par1,par2");
     return config;
   }
 
@@ -182,12 +184,12 @@ public class HoodieCommonTestHarness {
     ColumnFamilyDefinition cfd = cfDefinitions.get("cf1");
     assertNotNull(cfd);
     assertEquals("cf1", cfd.getName());
-    assertEquals("id,col1,col2", cfd.toConfigValue());
+    assertEquals("id1,id2,col1,col2", cfd.toConfigValue());
     assertNull(cfd.getPreCombine());
     cfd = cfDefinitions.get("cf2");
     assertNotNull(cfd);
     assertEquals("cf2", cfd.getName());
-    assertEquals("id,col3,col4,ts;ts", cfd.toConfigValue());
+    assertEquals("id1,id2,col3,col4,ts;ts", cfd.toConfigValue());
     assertEquals("ts", cfd.getPreCombine());
   }
 }
