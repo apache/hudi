@@ -22,7 +22,6 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageFile;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -39,7 +38,7 @@ import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
  *
  * <p>Also contains logic to roll over the log file.
  */
-public class HoodieLogFile implements Serializable, StorageFile {
+public class HoodieLogFile implements Serializable {
 
   private static final long serialVersionUID = 1L;
   public static final String DELTA_EXTENSION = ".log";
@@ -173,10 +172,6 @@ public class HoodieLogFile implements Serializable, StorageFile {
 
   public long getFileSize() {
     return fileLen;
-  }
-
-  public StoragePath getStoragePath() {
-    return getPath();
   }
 
   public StoragePathInfo getPathInfo() {

@@ -27,9 +27,7 @@ import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StorageFile;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import org.apache.avro.Schema;
@@ -151,17 +149,7 @@ public class HoodieParquetDataBlock extends HoodieDataBlock {
         new Schema.Parser().parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     return readerContext.getFileRecordIterator(
-        new StorageFile() {
-          @Override
-          public StoragePath getStoragePath() {
-            return inlineLogFilePath;
-          }
-
-          @Override
-          public StoragePathInfo getPathInfo() {
-            return null;
-          }
-        }, 0, blockContentLoc.getBlockSize(),
+        inlineLogFilePath, 0, blockContentLoc.getBlockSize(),
         writerSchema,
         readerSchema,
         inlineStorage);

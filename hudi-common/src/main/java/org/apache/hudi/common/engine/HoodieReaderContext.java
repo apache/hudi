@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageFile;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -157,31 +156,9 @@ public abstract class HoodieReaderContext<T> {
    * @param storage        {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  protected abstract ClosableIterator<T> getFileRecordIterator(
+  public abstract ClosableIterator<T> getFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException;
-
-  /**
-   * Gets the record iterator based on the type of engine-specific record representation from the
-   * file.
-   *
-   * @param file           {@link StorageFile} instance of a file.
-   * @param start          Starting byte to start reading.
-   * @param length         Bytes to read.
-   * @param dataSchema     Schema of records in the file in {@link Schema}.
-   * @param requiredSchema Schema containing required fields to read in {@link Schema} for projection.
-   * @param storage        {@link HoodieStorage} for reading records.
-   * @return {@link ClosableIterator<T>} that can return all records through iteration.
-   */
-  public final ClosableIterator<T> getFileRecordIterator(
-      StorageFile file, long start, long length, Schema dataSchema, Schema requiredSchema,
-      HoodieStorage storage) throws IOException {
-    if (file.getPathInfo() != null) {
-      return getFileRecordIterator(file.getPathInfo(), start, length, dataSchema, requiredSchema, storage);
-    } else {
-      return getFileRecordIterator(file.getStoragePath(), start, length, dataSchema, requiredSchema, storage);
-    }
-  }
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -195,7 +172,7 @@ public abstract class HoodieReaderContext<T> {
    * @param storage         {@link HoodieStorage} for reading records.
    * @return {@link ClosableIterator<T>} that can return all records through iteration.
    */
-  protected ClosableIterator<T> getFileRecordIterator(
+  public ClosableIterator<T> getFileRecordIterator(
       StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException {
     return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
