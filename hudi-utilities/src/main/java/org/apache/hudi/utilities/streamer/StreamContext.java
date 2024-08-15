@@ -42,11 +42,4 @@ public interface StreamContext {
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<SourceProfileSupplier> getSourceProfileSupplier();
-
-  /**
-   * An optional stream profile supplying details regarding how the next input batch in
-   * should be processed.
-   */
-  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  Option<StreamProfileSupplier> getStreamProfileSupplier();
 }

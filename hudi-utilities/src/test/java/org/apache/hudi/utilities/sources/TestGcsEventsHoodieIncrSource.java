@@ -302,8 +302,10 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
+      // Should be max of 12, 3 and 1 against sourcePartitions
       numPartitions = Arrays.asList(12, 3, sourcePartitions);
     } else {
+      // Should be max of 23 and sourcePartitions
       numPartitions = Arrays.asList(23, sourcePartitions);
     }
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());

@@ -93,8 +93,6 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
-import org.apache.hudi.utilities.streamer.StreamProfileSupplier;
-import org.apache.hudi.utilities.streamer.TestHoodieStreamerUtils;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -524,50 +522,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, bootstrapSourcePath);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, newDatasetBasePath);
-  }
-
-  @ParameterizedTest
-  @ValueSource(ints = {1, 5, 20})
-  public void testBulkInsertRowWriterWithDynamicWriteParallelism(int configuredWriteParallelism) throws Exception {
-    testBulkInsertRowWriterMultiBatches(true, null, false, configuredWriteParallelism);
-  }
-
-  @ParameterizedTest
-  @ValueSource(ints = {1, 5, 20})
-  public void testBulkInsertsWithDynamicWriteParallelism(int configuredWriteParallelism) throws Exception {
-    final int numberOfPartitions = 3;
-    String tableBasePath = basePath + "/test_table_write_parallelism";
-    HoodieRecordType recordType = HoodieRecordType.SPARK;
-    // Initial bulk insert
-    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
-    addRecordMerger(recordType, cfg.configs);
-
-    TestStreamProfileSupplier testStreamProfileSupplier = new TestStreamProfileSupplier(configuredWriteParallelism);
-    HoodieStreamer deltaStreamer = TestHoodieStreamerUtils.initializeHoodieStreamer(
-        cfg,
-        jsc,
-        Option.empty(),
-        Option.of(testStreamProfileSupplier));
-
-    // Validate the row counts matches in the output hudi table
-    syncAndAssertRecordCount(deltaStreamer, 1000, tableBasePath, "00000", 1);
-    // Validate that the number of files written is greater than or equal to
-    // the configured parallelism X number of partitions.
-    assertTrue(numberOfFilesWrittenInLatestCommit(tableBasePath, sqlContext)
-        >= Math.max(numberOfPartitions, configuredWriteParallelism));
-
-    deltaStreamer = TestHoodieStreamerUtils.initializeHoodieStreamer(
-        cfg,
-        jsc,
-        Option.empty(),
-        Option.of(testStreamProfileSupplier));
-
-    syncAndAssertRecordCount(deltaStreamer, 1950, tableBasePath, "00001", 2);
-
-    assertTrue(numberOfFilesWrittenInLatestCommit(tableBasePath, sqlContext)
-        >= Math.max(numberOfPartitions, configuredWriteParallelism));
-    //cleanup
-    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
   @Test
@@ -1391,14 +1345,14 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testBulkInsertRowWriterForEmptyBatch() throws Exception {
-    testBulkInsertRowWriterMultiBatches(false, null, true, -1);
+    testBulkInsertRowWriterMultiBatches(false, null, true);
   }
 
   private void testBulkInsertRowWriterMultiBatches(boolean useSchemaProvider, List<String> transformerClassNames) throws Exception {
-    testBulkInsertRowWriterMultiBatches(useSchemaProvider, transformerClassNames, false, -1);
+    testBulkInsertRowWriterMultiBatches(useSchemaProvider, transformerClassNames, false);
   }
 
-  private void testBulkInsertRowWriterMultiBatches(Boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch, int configuredWriteParallelism) throws Exception {
+  private void testBulkInsertRowWriterMultiBatches(Boolean useSchemaProvider, List<String> transformerClassNames, boolean testEmptyBatch) throws Exception {
     PARQUET_SOURCE_ROOT = basePath + "/parquetFilesDfs" + testNum;
     int parquetRecordsCount = 100;
     boolean hasTransformer = transformerClassNames != null && !transformerClassNames.isEmpty();
@@ -1412,26 +1366,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
         useSchemaProvider, 100000, false, null, null, "timestamp", null);
     cfg.configs.add(DataSourceWriteOptions.ENABLE_ROW_WRITER().key() + "=true");
-    cfg.configs.add("hoodie.streamer.write.row.writer.enable" + "=true");
-
-    Option<StreamProfileSupplier> testStreamProfileSupplier = Option.empty();
-    if (configuredWriteParallelism > 0) {
-      testStreamProfileSupplier = Option.of(new TestStreamProfileSupplier(configuredWriteParallelism));
-    }
-    HoodieStreamer deltaStreamer = TestHoodieStreamerUtils.initializeHoodieStreamer(
-        cfg,
-        jsc,
-        Option.empty(),
-        testStreamProfileSupplier);
-
+    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.sync();
     assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-    // Validate that the number of files written is greater than or equal to
-    // the configured parallelism X number of partitions.
-    if (configuredWriteParallelism > 0) {
-      assertTrue(numberOfFilesWrittenInLatestCommit(tableBasePath, sqlContext)
-          >= Math.max(1, configuredWriteParallelism));
-    }
     deltaStreamer.shutdownGracefully();
 
     try {
@@ -1439,18 +1376,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         prepareParquetDFSSource(useSchemaProvider, hasTransformer, "source.avsc", "target.avsc", PROPS_FILENAME_TEST_PARQUET,
             PARQUET_SOURCE_ROOT, false, "partition_path", "0");
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, "2.parquet", false, null, null);
-        deltaStreamer = TestHoodieStreamerUtils.initializeHoodieStreamer(
-            cfg,
-            jsc,
-            Option.empty(),
-            testStreamProfileSupplier);
+        deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
         deltaStreamer.sync();
         // since we mimic'ed empty batch, total records should be same as first sync().
         assertRecordCount(parquetRecordsCount, tableBasePath, sqlContext);
-        if (configuredWriteParallelism > 0) {
-          assertTrue(numberOfFilesWrittenInLatestCommit(tableBasePath, sqlContext)
-              >= Math.max(1, configuredWriteParallelism));
-        }
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(jsc.hadoopConfiguration()).build();
 
         // validate table schema fetches valid schema from last but one commit.
@@ -1464,11 +1393,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       }
 
       int recordsSoFar = 100;
-      deltaStreamer = TestHoodieStreamerUtils.initializeHoodieStreamer(
-          cfg,
-          jsc,
-          Option.empty(),
-          testStreamProfileSupplier);
+      deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
       // add 3 more batches and ensure all commits succeed.
       for (int i = 2; i < 5; i++) {
         prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(i) + ".parquet", false, null, null);
