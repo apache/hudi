@@ -1274,7 +1274,7 @@ object TestHoodieSparkSqlWriter {
 
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
     //       Please check HUDI-4496 for more details
-    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_0) {
+    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_3) {
       parquetScenarios ++ orcScenarios
     } else {
       parquetScenarios
