@@ -53,10 +53,6 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
  * Subclasses need to implement {@link #getFileRecordIterator} with the reader logic.
  */
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
-  @Override
-  public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
-    return HoodieStorageUtils.getStorage(path, conf);
-  }
 
   @Override
   public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
