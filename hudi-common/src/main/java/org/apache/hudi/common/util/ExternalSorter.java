@@ -21,7 +21,6 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.Lists;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +33,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
@@ -75,7 +75,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   public ExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<T> comparator, SizeEstimator<T> recordSizeEstimator) throws IOException {
     this.maxMemoryInBytes = maxMemoryInBytes;
     this.comparator = comparator;
-    this.memoryRecords = Lists.newArrayList();
+    this.memoryRecords = new LinkedList<>();
     this.recordSizeEstimator = recordSizeEstimator;
     this.basePath = String.format("%s/%s-%s", baseFilePath, SUBFOLDER_PREFIX, UUID.randomUUID());
     File baseDir = new File(basePath);
@@ -334,7 +334,6 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     }
   }
 
-
   public static final class Entry {
     public static final int MAGIC = 0x123321;
     private Integer magic;
@@ -376,6 +375,5 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       outputStream.write(record);
     }
   }
-
 
 }

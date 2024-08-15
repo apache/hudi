@@ -281,7 +281,6 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
       return this;
     }
 
-
     @Override
     public HoodieUnMergedSortedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {

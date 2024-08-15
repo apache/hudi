@@ -416,7 +416,6 @@ public class TestCompactionData extends HoodieClientTestBase {
     return new TestCompactionData.TestTableContents(basePath2, tableName2, metaClient2, config2, client2, RECORD_KEY_APPEND_VALUE3);
   }
 
-
   private String createBasePathForSecondTable(java.nio.file.Path secondTableBasePath, int num) throws IOException {
     java.nio.file.Path basePath = secondTableBasePath.resolve("dataset" + num);
     java.nio.file.Files.createDirectories(basePath);

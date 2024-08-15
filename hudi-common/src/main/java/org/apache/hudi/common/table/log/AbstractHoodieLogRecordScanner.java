@@ -55,6 +55,7 @@ public abstract class AbstractHoodieLogRecordScanner extends AbstractHoodieLogRe
   protected void scanStart() {
     this.timer.startTimer();
   }
+
   protected void scanEnd() {
     this.totalTimeTakenToScanRecords = timer.endTimer();
   }
