@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ExternalSorter;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -93,7 +94,6 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
     LOG.info("Base file: {} is not sorted. Sort the records before merging", mergeHandle.getOldFilePath());
     // sort the base file records
-
     return new SortedIterator(rawRecordItr, sorterBasePath, maxMemory, Comparator.comparing(HoodieRecord::getRecordKey),
         new HoodieRecordSizeEstimator<>(readSchema));
   }
@@ -117,12 +117,15 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
 
     private void init() {
+      HoodieTimer hoodieTimer = HoodieTimer.create();
+      hoodieTimer.startTimer();
       // scan all records and sort them
       while (rawIterator.hasNext()) {
         sorter.add(rawIterator.next());
       }
       this.sorter.sort();
       this.sortedIterator = sorter.iterator();
+      LOG.info("Finished sorting base-file records in " + hoodieTimer.endTimer() + "ms");
     }
 
     @Override

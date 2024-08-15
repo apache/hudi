@@ -21,7 +21,6 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.exception.HoodieIOException;
 
-import com.google.common.collect.Lists;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +33,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
@@ -75,7 +75,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   public ExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<T> comparator, SizeEstimator<T> recordSizeEstimator) throws IOException {
     this.maxMemoryInBytes = maxMemoryInBytes;
     this.comparator = comparator;
-    this.memoryRecords = Lists.newArrayList();
+    this.memoryRecords = new LinkedList<>();
     this.recordSizeEstimator = recordSizeEstimator;
     this.basePath = String.format("%s/%s-%s", baseFilePath, SUBFOLDER_PREFIX, UUID.randomUUID());
     File baseDir = new File(basePath);
@@ -124,6 +124,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       private Option<BufferedRandomAccessFile> reader = Option.empty();
       private Option<Entry> currentRecord = Option.empty();
       private boolean init = false;
+      private int iterateCount = 0;
 
       @Override
       public boolean hasNext() {
@@ -133,6 +134,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
         if (currentRecord.isPresent()) {
           return true;
         }
+        LOG.debug("Total iterate count: " + iterateCount);
         return false;
       }
 
@@ -159,6 +161,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
         if (!init) {
           init();
         }
+        iterateCount++;
         Entry current = currentRecord.get();
         T record = SerializationUtils.deserialize(current.getRecord());
         currentRecord = readEntry(reader.get());
@@ -263,7 +266,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     while (entry1.isPresent() && entry2.isPresent()) {
       // pick the smaller one
       int compareResult = comparator.compare(SerializationUtils.deserialize(entry1.get().getRecord()), SerializationUtils.deserialize(entry2.get().getRecord()));
-      if (compareResult < 0) {
+      // left <= right, pick left, because left's natural order is smaller
+      if (compareResult <= 0) {
         entry1.get().writeToFile(outputStream);
         entry1 = readEntry(reader1);
       } else {
@@ -328,12 +332,11 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       currentLevelFiles.forEach(File::delete);
       sortedFile.ifPresent(File::delete);
       memoryRecords.clear();
-      LOG.info("External sorter closed, stats: totalEntryCount=" + totalEntryCount + ", totalTimeTakenToSortRecords=" + totalTimeTakenToSortRecords);
+      LOG.info("External sorter closed, stats: totalEntryCount=" + totalEntryCount + ", totalTimeTakenToSortRecords=" + totalTimeTakenToSortRecords + "ms" + ", sorted files num=" + currentSortedFileIndex + 1);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close external sorter", e);
     }
   }
-
 
   public static final class Entry {
     public static final int MAGIC = 0x123321;
@@ -376,6 +379,5 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       outputStream.write(record);
     }
   }
-
 
 }

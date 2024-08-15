@@ -175,9 +175,10 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     this.numMergedRecordsInLog = records.size();
 
     if (LOG.isInfoEnabled()) {
-      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes",
+      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes, MemoryEntryHitRatio => {}, MemorySizeHitRatio => {}",
           logFilePaths.size(), maxMemorySizeInBytes, records.getInMemoryMapNumEntries(), records.getCurrentInMemoryMapSize(),
-          records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes());
+          records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes(),
+          records.getInMemoryMapNumEntries() / (double) records.getDiskBasedMapNumEntries(), records.getCurrentInMemoryMapSize() / (double) records.getSizeOfFileOnDiskInBytes());
     }
   }
 

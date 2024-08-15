@@ -26,7 +26,6 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 

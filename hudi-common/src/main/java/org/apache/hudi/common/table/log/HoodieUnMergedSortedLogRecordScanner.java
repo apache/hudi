@@ -64,7 +64,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     }
 
     // For same key, compare by ordering value
-    // TODO: consider different Comparable types
+    // TODO: consider delete record's ordering value
     Comparable order1 = o1.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
     Comparable order2 = o2.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
     return order1.compareTo(order2);
@@ -280,7 +280,6 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
       this.externalSorterBasePath = externalSorterBasePath;
       return this;
     }
-
 
     @Override
     public HoodieUnMergedSortedLogRecordScanner build() {

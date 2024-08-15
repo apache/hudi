@@ -18,12 +18,15 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.HoodieFileFooterSupport;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.table.HoodieTable;
 
@@ -31,7 +34,10 @@ import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 public class HoodieUnmergedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
 
@@ -86,10 +92,9 @@ public class HoodieUnmergedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T
     }
   }
 
-  private void merge(HoodieRecord newRecord) {
+  private void merge(HoodieRecord record) {
 
     // for update record, merge new record with current merged record
-    HoodieRecord<T> record = (HoodieRecord<T>) newRecord;
     if (currentMergedRecord.isEmpty()) {
       currentMergedRecord = Option.of(record);
       currentMergedRecordMerged = false;
@@ -127,5 +132,36 @@ public class HoodieUnmergedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T
     write(currentMergedRecord.get(), writeSchemaWithMetaFields, config.getProps());
     currentMergedRecord = Option.of(record);
     currentMergedRecordMerged = false;
+  }
+
+  @Override
+  public List<WriteStatus> close() {
+    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    try {
+      if (isClosed()) {
+        // Handle has already been closed
+        return Collections.emptyList();
+      }
+
+      markClosed();
+
+      // Write metadata about sorted
+      fileWriter.writeFooterMetadata(HoodieFileFooterSupport.HOODIE_BASE_FILE_SORTED, "true");
+
+      if (fileWriter != null) {
+        fileWriter.close();
+        fileWriter = null;
+      }
+
+      setupWriteStatus();
+
+      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
+          writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
+          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
+
+      return Collections.singletonList(writeStatus);
+    } catch (IOException e) {
+      throw new HoodieInsertException("Failed to close the Insert Handle for path " + path, e);
+    }
   }
 }
