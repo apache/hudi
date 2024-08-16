@@ -288,3 +288,8 @@ e0c211aedd8 [ENG-12523] fix master branch compilation error
 ---[2024-08-09 15:32:35] [release-v1.27.1] ---
 1287e315bc2 [ENG-12730][INTERNAL] Add flag to allow old code path when decimals are present in json (#863)
 7d65c8a7930 [ENG-12709][INTERNAL] Disable some tests failing in github actions due to updated runner image (#862)
+
+---[2024-08-13 16:00:17] [release-v1.28.0] ---
+ba9bddf1e [ENG-12062][HUDI-8012] Update checkstyle.xml and fix checkstyle errors (#836)
+9ff5e7223 [ENG-12169][HUDI-6948] Fix schema evolution for non row writer (#858)
+07c2b90b2 [AUDIT-899]: Changelog for release-v1.27.1 (#868)
