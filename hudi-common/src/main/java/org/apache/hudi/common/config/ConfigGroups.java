@@ -100,7 +100,7 @@ public class ConfigGroups {
         break;
       case ENVIRONMENT_CONFIG:
         description = "Hudi supports passing configurations via a configuration file "
-            + "`hudi-default.conf` in which each line consists of a key and a value "
+            + "`hudi-defaults.conf` in which each line consists of a key and a value "
             + "separated by whitespace or = sign. For example:\n"
             + "```\n"
             + "hoodie.datasource.hive_sync.mode               jdbc\n"
