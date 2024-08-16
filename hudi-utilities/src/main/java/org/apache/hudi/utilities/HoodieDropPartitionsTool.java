@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
+ * TODO: [HUDI-8086]
  * A tool with spark-submit to drop Hudi table partitions.
  *
  * <p>
