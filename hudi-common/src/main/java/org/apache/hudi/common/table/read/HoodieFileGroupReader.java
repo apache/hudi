@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 
@@ -145,10 +146,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return makeBootstrapBaseFileIterator(baseFile);
     }
 
-    return readerContext.getFileRecordIterator(
-        baseFile.getStoragePath(), start, length,
-        readerContext.getSchemaHandler().getDataSchema(),
-        readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    if (baseFileStoragePathInfo != null) {
+      return readerContext.getFileRecordIterator(
+          baseFileStoragePathInfo, start, length,
+          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    } else {
+      return readerContext.getFileRecordIterator(
+          baseFile.getStoragePath(), start, length,
+          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    }
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
@@ -186,8 +195,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.empty();
     }
     Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
-    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
-        readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    StoragePathInfo fileStoragePathInfo = file.getPathInfo();
+    if (fileStoragePathInfo != null) {
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    } else {
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    }
   }
 
   /**
