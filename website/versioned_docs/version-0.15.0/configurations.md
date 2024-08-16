@@ -12,7 +12,7 @@ last_modified_at: 2024-06-06T12:05:06.405
 This page covers the different ways of configuring your job to write/read Hudi tables. At a high level, you can control behaviour at few levels.
 
 - [**Hudi Table Config**](#TABLE_CONFIG): Basic Hudi Table configuration parameters.
-- [**Environment Config**](#ENVIRONMENT_CONFIG): Hudi supports passing configurations via a configuration file `hudi-default.conf` in which each line consists of a key and a value separated by whitespace or = sign. For example:
+- [**Environment Config**](#ENVIRONMENT_CONFIG): Hudi supports passing configurations via a configuration file `hudi-defaults.conf` in which each line consists of a key and a value separated by whitespace or = sign. For example:
 ```
 hoodie.datasource.hive_sync.mode               jdbc
 hoodie.datasource.hive_sync.jdbcurl            jdbc:hive2://localhost:10000
@@ -38,7 +38,7 @@ In the tables below **(N/A)** means there is no default value set
 
 ## Externalized Config File
 Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration
-file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can
+file `hudi-defaults.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can
 specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be
 useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.
 

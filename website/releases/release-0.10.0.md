@@ -107,7 +107,7 @@ With this capability, we can continuously capture row-level changes that insert,
 
 ### External config file support
 
-Instead of directly and sometimes passing configurations to every Hudi job, since 0.10.0 users can now pass in configuration via a configuration file `hudi-default.conf`.
+Instead of directly and sometimes passing configurations to every Hudi job, since 0.10.0 users can now pass in configuration via a configuration file `hudi-defaults.conf`.
 By default, Hudi would load the configuration file under /etc/hudi/conf directory. You can specify a different configuration directory location
 by setting the **HUDI_CONF_DIR** environment variable. This can be useful for uniformly enforcing often repeated configs
 like Hive sync settings, write/index tuning parameters, across your entire data lake.
