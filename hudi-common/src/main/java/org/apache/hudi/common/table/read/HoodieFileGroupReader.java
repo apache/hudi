@@ -158,7 +158,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           readerContext.getSchemaHandler().getDataSchema(),
           readerContext.getSchemaHandler().getRequiredSchema(), storage);
     }
-
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
