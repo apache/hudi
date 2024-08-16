@@ -415,9 +415,7 @@ public class Pipelines {
             new CompactionPlanOperator(conf))
         .setParallelism(1) // plan generate must be singleton
         .setMaxParallelism(1)
-        // make the distribution strategy deterministic to avoid concurrent modifications
-        // on the same bucket files
-        .keyBy(plan -> plan.getOperation().getFileGroupId().getFileId())
+        .partitionCustom(new IndexPartitioner(), CompactionPlanEvent::getIndex)
         .transform("compact_task",
             TypeInformation.of(CompactionCommitEvent.class),
             new CompactOperator(conf))
@@ -511,5 +509,12 @@ public class Pipelines {
   public static class DummySink implements SinkFunction<Object> {
     private static final long serialVersionUID = 1L;
     public static DummySink INSTANCE = new DummySink();
+  }
+
+  public static class IndexPartitioner implements Partitioner<Integer> {
+    @Override
+    public int partition(Integer key, int numPartitions) {
+      return key % numPartitions;
+    }
   }
 }

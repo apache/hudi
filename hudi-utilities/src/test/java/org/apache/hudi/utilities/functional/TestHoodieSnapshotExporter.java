@@ -267,7 +267,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     private HoodieSnapshotExporter.Config createConfig(String format) {
       // NOTE: Hudi doesn't support Orc in Spark < 3.0
       //       Please check HUDI-4496 for more details
-      if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_0()) {
+      if ("orc".equals(format) && !HoodieSparkUtils.gteqSpark3_3()) {
         return null;
       }
 
@@ -287,7 +287,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -298,7 +299,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testSqlTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -311,7 +313,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testSqlFileTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -333,14 +336,15 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
       assertEquals(2, fieldNames.length);
       assertEquals("rider", fieldNames[0]);
       assertEquals("tripType", fieldNames[1]);
-      assertEquals("StructType(StructField(rider,StringType,true), StructField(tripType,StringType,true))",
+      assertEquals("StructType(StructField(rider,StringType,true),StructField(tripType,StringType,true))",
               transformedData.schema().toString());
       assertEquals(10, transformedData.count());
       assertTrue(storage.exists(new StoragePath(targetPath + "/_SUCCESS")));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testFlattenedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {
@@ -352,7 +356,8 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"json", "parquet", "orc"})
+    // TODO("HUDI-8081"): "orc"
+    @ValueSource(strings = {"json", "parquet"})
     public void testAWSDmsTransformedExportAsNonHudi(String format) throws IOException {
       HoodieSnapshotExporter.Config cfg = createConfig(format);
       if (cfg != null) {

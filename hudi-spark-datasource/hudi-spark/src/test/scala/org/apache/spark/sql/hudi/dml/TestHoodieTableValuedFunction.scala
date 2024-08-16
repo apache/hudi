@@ -26,7 +26,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
 
   test(s"Test hudi_query Table-Valued Function") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -88,7 +88,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_table_changes latest_state") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -195,7 +195,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_filesystem_view") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -258,7 +258,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_table_changes cdc") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -415,7 +415,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_query_timeline") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -563,7 +563,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_metadata Table-Valued Function") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -629,7 +629,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName

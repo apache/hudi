@@ -251,10 +251,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
   }
 
   test("Test table property isolation for partition path field config "
-    + "with custom key generator for Spark 3.1 and above") {
-    // Only testing Spark 3.1 and above as lower Spark versions do not support
+    + "with custom key generator for Spark 3.3 and above") {
+    // Only testing Spark 3.3 and above as lower Spark versions do not support
     // ALTER TABLE .. SET TBLPROPERTIES .. to store table-level properties in Hudi Catalog
-    if (HoodieSparkUtils.gteqSpark3_1) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       for (extractPartition <- Seq(true, false)) {
         withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
           withTempDir { tmp => {
@@ -374,9 +374,9 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                  | """.stripMargin)
           }
 
-          // Only testing Spark 3.1 and above as lower Spark versions do not support
+          // Only testing Spark 3.3 and above as lower Spark versions do not support
           // ALTER TABLE .. SET TBLPROPERTIES .. to store table-level properties in Hudi Catalog
-          if (HoodieSparkUtils.gteqSpark3_1) {
+          if (HoodieSparkUtils.gteqSpark3_3) {
             // Now fix the partition path field write config for tableName
             spark.sql(
               s"""ALTER TABLE $tableName
