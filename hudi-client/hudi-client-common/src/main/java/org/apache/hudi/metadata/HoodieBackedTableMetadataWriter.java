@@ -953,8 +953,12 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @param convertMetadataFunction converter function to convert the respective metadata to List of HoodieRecords to be written to metadata table.
    */
   private void processAndCommit(String instantTime, ConvertMetadataFunction convertMetadataFunction) {
+    Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     if (initialized && metadata != null) {
-      commit(instantTime, convertMetadataFunction.convertMetadata());
+      // convert metadata and filter only the entries whose partition path are in partitionsToUpdate
+      Map<String, HoodieData<HoodieRecord>> partitionRecordsMap = convertMetadataFunction.convertMetadata().entrySet().stream()
+          .filter(entry -> partitionsToUpdate.contains(entry.getKey())).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      commit(instantTime, partitionRecordsMap);
     }
   }
 
@@ -1406,16 +1410,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected HoodieData<HoodieRecord> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
-    Set<String> partitionsToUpdate = getMetadataPartitionsToUpdate();
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient)) {
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionName = entry.getKey();
-        // filter only the entries whose partition path are in partitionsToUpdate
-        if (!partitionsToUpdate.contains(partitionName)) {
-          continue;
-        }
         HoodieData<HoodieRecord> records = entry.getValue();
-
         List<FileSlice> fileSlices =
             HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
         if (fileSlices.isEmpty()) {
