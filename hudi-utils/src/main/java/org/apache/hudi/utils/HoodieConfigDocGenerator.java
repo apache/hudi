@@ -74,7 +74,7 @@ public class HoodieConfigDocGenerator {
   private static final String BASIC_CONFIGS_PATH = "/tmp/basic_configurations.md";
   private static final String EXTERNALIZED_CONFIGS = "## Externalized Config File\n" +
           "Instead of directly passing configuration settings to every Hudi job, you can also centrally set them in a configuration\n" +
-          "file `hudi-default.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can\n" +
+          "file `hudi-defaults.conf`. By default, Hudi would load the configuration file under `/etc/hudi/conf` directory. You can\n" +
           "specify a different configuration directory location by setting the `HUDI_CONF_DIR` environment variable. This can be\n" +
           "useful for uniformly enforcing repeated configs (like Hive sync or write/index tuning), across your entire data lake.";
   private static final String DEFAULT_FOOTER_MARKUP = new StringBuilder().append(NEWLINE).append(new HorizontalRule(3)).append(DOUBLE_NEWLINE).toString();
