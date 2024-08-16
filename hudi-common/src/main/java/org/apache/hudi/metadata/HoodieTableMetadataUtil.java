@@ -1874,7 +1874,7 @@ public class HoodieTableMetadataUtil {
       List<String> logFilePaths = new ArrayList<>();
       baseAndLogFiles.getValue().forEach(logFile -> logFilePaths.add(basePath + StoragePath.SEPARATOR + partition + StoragePath.SEPARATOR + logFile));
       String filePath = baseAndLogFiles.getKey();
-      Option<StoragePath> dataFilePath = filePath.isEmpty() ? Option.empty() : Option.of(filePath(basePath, partition, filePath));
+      Option<StoragePath> dataFilePath = filePath.isEmpty() ? Option.empty() : Option.of(FSUtils.constructAbsolutePath(basePath, filePath));
       Schema readerSchema;
       if (dataFilePath.isPresent()) {
         readerSchema = HoodieIOFactory.getIOFactory(metaClient.getStorage())

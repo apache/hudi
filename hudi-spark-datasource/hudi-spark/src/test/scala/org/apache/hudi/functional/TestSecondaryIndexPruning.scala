@@ -106,7 +106,7 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
   }
 
   @Test
-  def testSecondaryIndexWithUpdates(): Unit = {
+  def testSecondaryIndexPruningWithUpdates(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
@@ -160,11 +160,17 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
-      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
-        Seq("cde", "row2"),
-        Seq("def", "row3"),
-        Seq("xyz", "row1")
+      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
+        Seq("abc", "row1", true),
+        Seq("cde", "row2", false),
+        Seq("def", "row3", false),
+        Seq("xyz", "row1", false)
       )
+      // validate data and data skipping
+      checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
+        Seq(1, "row1", "xyz", "p1")
+      )
+      verifyQueryPredicate(hudiOpts, "not_record_key_col")
     }
   }
 
