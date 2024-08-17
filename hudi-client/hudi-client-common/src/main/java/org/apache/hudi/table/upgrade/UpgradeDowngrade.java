@@ -30,7 +30,6 @@ import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,8 +48,8 @@ public class UpgradeDowngrade {
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
-  private Path updatedPropsFilePath;
-  private Path propsFilePath;
+  private StoragePath updatedPropsFilePath;
+  private StoragePath propsFilePath;
 
   public UpgradeDowngrade(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
@@ -58,8 +57,8 @@ public class UpgradeDowngrade {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
-    this.updatedPropsFilePath = new Path(metaClient.getMetaPath().toString(), HOODIE_UPDATED_PROPERTY_FILE);
-    this.propsFilePath = new Path(metaClient.getMetaPath().toString(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    this.updatedPropsFilePath = new StoragePath(metaClient.getMetaPath().toString(), HOODIE_UPDATED_PROPERTY_FILE);
+    this.propsFilePath = new StoragePath(metaClient.getMetaPath().toString(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
