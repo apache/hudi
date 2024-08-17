@@ -55,7 +55,7 @@ See all the ways to [engage with the community here](/community/get-involved). T
 - [Hudi mailing list](mailto:users-subscribe@hudi.apache.org) - (send any msg to subscribe)
 
 ### Come to Office Hours for help
-Weekly office hours are [posted here](/community/syncs#weekly-office-hours)
+Weekly office hours are [posted here](/community/office_hours)
 
 ### Community Calls
 Attend [monthly community calls](/community/syncs#monthly-community-call) to learn best practices and see what others are building.
