@@ -117,7 +117,8 @@ public class TimelineServerPerf implements Serializable {
 
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
-            .setConf(timelineServer.getConf().newInstance()).setBasePath(cfg.basePath)
+            .setConf(timelineServer.getStorageConf().newInstance())
+            .setBasePath(cfg.basePath)
             .setLoadActiveTimelineOnLoad(true).build();
     SyncableFileSystemView fsView =
         new RemoteHoodieTableFileSystemView(this.hostAddr, cfg.serverPort, metaClient);

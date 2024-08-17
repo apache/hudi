@@ -41,15 +41,14 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import com.codahale.metrics.Timer;
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +69,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
   protected final transient HoodieStorage storage;
   protected final transient HoodieEngineContext context;
-  protected final transient Configuration hadoopConf;
+  protected final transient StorageConfiguration<?> storageConf;
   protected final transient HoodieMetrics metrics;
   protected final HoodieWriteConfig config;
   protected final String basePath;
@@ -92,8 +91,8 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected BaseHoodieClient(HoodieEngineContext context, HoodieWriteConfig clientConfig,
       Option<EmbeddedTimelineService> timelineServer) {
-    this.hadoopConf = context.getStorageConf().unwrapAs((Configuration.class));
-    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), HadoopFSUtils.getStorageConf(hadoopConf));
+    this.storageConf = context.getStorageConf();
+    this.storage = HoodieStorageUtils.getStorage(clientConfig.getBasePath(), storageConf);
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
@@ -105,7 +104,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.metrics = new HoodieMetrics(config, storage);
     this.txnManager = new TransactionManager(config, storage);
     this.timeGenerator = TimeGenerators.getTimeGenerator(
-        config.getTimeGeneratorConfig(), HadoopFSUtils.getStorageConf(hadoopConf));
+        config.getTimeGeneratorConfig(), storageConf);
     startEmbeddedServerView();
     initWrapperFSMetrics();
     runClientInitCallbacks();
@@ -183,8 +182,10 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {
     return HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf)).setBasePath(config.getBasePath())
-        .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setConf(storageConf.newInstance())
+        .setBasePath(config.getBasePath())
+        .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad)
+        .setConsistencyGuardConfig(config.getConsistencyGuardConfig())
         .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
         .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
         .setFileSystemRetryConfig(config.getFileSystemRetryConfig())

@@ -19,6 +19,9 @@
 
 package org.apache.hudi.hadoop.fs;
 
+import org.apache.hadoop.conf.Configurable;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hudi.avro.model.HoodieFSPermission;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.avro.model.HoodiePath;
@@ -86,12 +89,20 @@ public class HadoopFSUtils {
     return getStorageConf(conf, false);
   }
 
+  public static StorageConfiguration<Configuration> getStorageConf() {
+    return getStorageConf(prepareHadoopConf(new Configuration()), false);
+  }
+
   public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
     return getStorageConf(conf, true);
   }
 
   public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
     return getFs(new Path(pathStr), storageConf);
+  }
+
+  public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf, boolean newCopy) {
+    return getFs(new Path(pathStr), storageConf, newCopy);
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf) {
@@ -141,12 +152,20 @@ public class HadoopFSUtils {
     return providedPath;
   }
 
+  public static Configuration convertToHadoopConf(StorageConfiguration<?> storageConf) {
+    return storageConf.unwrapAs(Configuration.class);
+  }
+
   /**
    * @param path {@link StoragePath} instance.
    * @return the Hadoop {@link Path} instance after conversion.
    */
   public static Path convertToHadoopPath(StoragePath path) {
     return new Path(path.toUri());
+  }
+
+  public static JobConf convertToJobConf(StorageConfiguration<?> storageConf) {
+    return new JobConf(storageConf.unwrapAs(Configuration.class));
   }
 
   /**
@@ -194,6 +213,10 @@ public class HadoopFSUtils {
         pathInfo.getBlockSize(),
         pathInfo.getModificationTime(),
         convertToHadoopPath(pathInfo.getPath()));
+  }
+
+  public static void setConfForConfigurableInputFormat(FileInputFormat inputFormat, Configuration conf) {
+    ((Configurable) inputFormat).setConf(conf);
   }
 
   /**

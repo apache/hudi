@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -37,11 +38,9 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.mapred.JobConf;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -93,29 +92,31 @@ public class GenericRecordValidationTestUtils {
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths) {
+                                          StorageConfiguration<?> storageConf, List<String> partitionPaths) {
     List<String> excludeFields = CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
         FILENAME_METADATA_FIELD, OPERATION_METADATA_FIELD);
     assertDataInMORTable(config, instant1, instant2, storageConf, partitionPaths, excludeFields);
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths, List<String> excludeFields) {
-    JobConf jobConf = new JobConf(storageConf.unwrap());
+                                          StorageConfiguration<?> storageConf, List<String> partitionPaths, List<String> excludeFields) {
+    StorageConfiguration<?> storageConfCopy = storageConf.newInstance();
     List<String> fullPartitionPaths = partitionPaths.stream()
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
 
-    jobConf.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant1);
-    jobConf.set(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), "true");
+    storageConfCopy.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant1);
+    storageConfCopy.set(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), "true");
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-        storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true);
+        storageConf, fullPartitionPaths, config.getBasePath(),
+        HadoopFSUtils.convertToJobConf(storageConfCopy), true);
     Map<String, GenericRecord> prevRecordsMap = records.stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
 
-    jobConf.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant2);
+    storageConfCopy.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant2);
     List<GenericRecord> records1 = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-        storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true);
+        storageConf, fullPartitionPaths, config.getBasePath(),
+        HadoopFSUtils.convertToJobConf(storageConfCopy), true);
     Map<String, GenericRecord> newRecordsMap = records1.stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
 
@@ -132,21 +133,26 @@ public class GenericRecordValidationTestUtils {
     });
   }
 
-  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<Configuration> storageConf,
+  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<?> storageConf,
                                                          HoodieTestDataGenerator dataGen) {
-    JobConf jobConf = new JobConf(storageConf.unwrap());
+    StorageConfiguration<?> storageConfCopy = storageConf.newInstance();
     List<String> fullPartitionPaths = Arrays.stream(dataGen.getPartitionPaths())
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-            storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true).stream()
+            storageConf,
+            fullPartitionPaths,
+            config.getBasePath(),
+            HadoopFSUtils.convertToJobConf(storageConfCopy),
+            true)
+        .stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
   }
 
-  public static Stream<GenericRecord> readHFile(Configuration conf, String[] paths) {
+  public static Stream<GenericRecord> readHFile(StorageConfiguration<?> storageConf, String[] paths) {
     List<GenericRecord> valuesAsList = new LinkedList<>();
     for (String path : paths) {
-      HoodieStorage storage = new HoodieHadoopStorage(path, conf);
+      HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
       try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
           HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
               .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(path), HoodieFileFormat.HFILE)) {
