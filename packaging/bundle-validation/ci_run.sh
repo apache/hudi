@@ -172,7 +172,7 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.17-bundle
   elif [[ ${FLINK_PROFILE} == 'flink1.18' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.18-bundle
-  elif [[ ${FLINK_PROFILE} == 'flink1.19']]; then
+  elif [[ ${FLINK_PROFILE} == 'flink1.19' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink1.19-bundle
   fi
 
