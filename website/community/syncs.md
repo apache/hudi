@@ -38,7 +38,7 @@ Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/
 
 Here's a quick view of the upcoming community calls: 
  - 24th Jul 2024, 9:00 - 10:00am pacific time
- - 28th Aug 2024, 9:00 - 10:00am pacific time
+ - 20th Aug 2024, 9:00 - 10:00am pacific time
  - 25th Sep 2024, 9:00 - 10:00am pacific time
  - 23rd Oct 2024, 9:00 - 10:00am pacific time
  - 27th Nov 2024, 9:00 - 10:00am pacific time
