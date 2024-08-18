@@ -80,12 +80,11 @@ public class TimelineServerPerf implements Serializable {
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
-        new HoodieLocalEngineContext(
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))),
-        new Configuration(), timelineServiceConf, HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(new Configuration())),
-        TimelineService.buildFileSystemViewManager(timelineServiceConf,
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))));
+        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf()),
+        HadoopFSUtils.getStorageConf(),
+        timelineServiceConf,
+        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf()),
+        TimelineService.buildFileSystemViewManager(timelineServiceConf, HadoopFSUtils.getStorageConf()));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
