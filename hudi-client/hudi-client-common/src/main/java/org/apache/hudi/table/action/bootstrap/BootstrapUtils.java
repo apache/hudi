@@ -79,7 +79,7 @@ public class BootstrapUtils {
       result.addAll(context.flatMap(subDirectories, directory -> {
         PathFilter pathFilter = getFilePathFilter(baseFileExtension);
         Path path = new Path(directory);
-        FileSystem fileSystem = HadoopFSUtils.getFs(path, context.getStorageConf());
+        FileSystem fileSystem = HadoopFSUtils.getFs(path, HadoopFSUtils.getStorageConf());
         RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
         List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
         while (itr.hasNext()) {
