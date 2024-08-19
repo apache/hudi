@@ -216,14 +216,32 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
                                                        isBootstrap: Boolean)
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  val fileIndex: HoodieFileIndex = new HoodieFileIndex(
-    sparkSession,
-    metaClient,
-    Some(tableStructSchema),
-    optParams,
-    FileStatusCache.getOrCreate(sparkSession),
-    includeLogFiles = true,
-    shouldEmbedFileSlices = true)
+  val fileIndex: HoodieFileIndex = {
+    val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+    val keyGeneratorClasses = Seq(KeyGeneratorType.TIMESTAMP.getClassName, KeyGeneratorType.TIMESTAMP_AVRO.getClassName,
+      KeyGeneratorType.CUSTOM.getClassName, KeyGeneratorType.CUSTOM_AVRO.getClassName)
+    if (keyGeneratorClasses.contains(keyGeneratorClassName)) {
+      new HoodieFileIndexTimestampKeyGen(
+        sparkSession,
+        metaClient,
+        Some(tableStructSchema),
+        optParams,
+        FileStatusCache.getOrCreate(sparkSession),
+        includeLogFiles = true,
+        shouldEmbedFileSlices = true)
+    } else {
+      new HoodieFileIndex(
+        sparkSession,
+        metaClient,
+        Some(tableStructSchema),
+        optParams,
+        FileStatusCache.getOrCreate(sparkSession),
+        includeLogFiles = true,
+        shouldEmbedFileSlices = true
+      )
+    }
+  }
+
 
   val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
   val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
@@ -268,32 +286,9 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
 
   override def buildOptions(): Map[String, String] = optParams
   override def build(): HadoopFsRelation = {
-    val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-    val keyGeneratorClasses = Seq(KeyGeneratorType.TIMESTAMP.getClassName, KeyGeneratorType.TIMESTAMP_AVRO.getClassName,
-      KeyGeneratorType.CUSTOM.getClassName, KeyGeneratorType.CUSTOM_AVRO.getClassName)
-    val fileIndex =  if (keyGeneratorClasses.contains(keyGeneratorClassName)) {
-      new HoodieFileIndexTimestampKeyGen(
-        sparkSession,
-        metaClient,
-        Some(tableStructSchema),
-        optParams,
-        FileStatusCache.getOrCreate(sparkSession),
-        includeLogFiles = true,
-        shouldEmbedFileSlices = true)
-    } else {
-      HoodieFileIndex(
-        sparkSession,
-        metaClient,
-        Some(tableStructSchema),
-        optParams,
-        FileStatusCache.getOrCreate(sparkSession),
-        includeLogFiles = true,
-        shouldEmbedFileSlices = true)
-    }
-
     HadoopFsRelation(
-      location = fileIndex,
-      partitionSchema = fileIndex.partitionSchema,
+      location = buildFileIndex(),
+      partitionSchema = buildPartitionSchema(),
       dataSchema = buildDataSchema(),
       bucketSpec = buildBucketSpec(),
       fileFormat = buildFileFormat(),
