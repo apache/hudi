@@ -1165,7 +1165,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   public void testAsyncClusteringServiceWithConflictsAvro() throws Exception {
     testAsyncClusteringServiceWithConflicts(HoodieRecordType.AVRO);
   }
-  
+
   /**
    * When deltastreamer writes clashes with pending clustering, deltastreamer should keep retrying and eventually succeed(once clustering completes)
    * w/o failing mid way.
@@ -1673,23 +1673,23 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
     return Stream.of(
-            Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", Strings.EMPTY),
-            Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", "timestamp"),
-            Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", Strings.EMPTY),
-            Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", "timestamp"),
-            Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", Strings.EMPTY),
-            Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", "timestamp"),
-            Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", Strings.EMPTY),
-            Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
   }
 
   @ParameterizedTest
   @MethodSource("getArgumentsForFilterDupesWithPrecombineTest")
   public void testFilterDupesWithPrecombine(
-          HoodieRecordType recordType, String tableType, String sourceOrderingField) throws Exception {
+      HoodieRecordType recordType, String tableType, String sourceOrderingField) throws Exception {
     String tableBasePath = basePath + "/test_dupes_tables_with_precombine";
     HoodieDeltaStreamer.Config cfg =
-            TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     cfg.tableType = tableType;
     cfg.filterDupes = true;
     cfg.sourceOrderingField = Strings.EMPTY;
@@ -1732,18 +1732,18 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     // Test with empty commits
     HoodieTableMetaClient mClient =
-            HoodieTableMetaClient
-                    .builder()
-                    .setConf(jsc.hadoopConfiguration())
-                    .setBasePath(tableBasePath)
-                    .setLoadActiveTimelineOnLoad(true)
-                    .build();
+        HoodieTableMetaClient
+            .builder()
+            .setConf(jsc.hadoopConfiguration())
+            .setBasePath(tableBasePath)
+            .setLoadActiveTimelineOnLoad(true)
+            .build();
     HoodieInstant lastFinished =
-            mClient
-                    .getCommitsTimeline()
-                    .filterCompletedInstants()
-                    .lastInstant()
-                    .get();
+        mClient
+            .getCommitsTimeline()
+            .filterCompletedInstants()
+            .lastInstant()
+            .get();
 
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
     cfg2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
@@ -1753,10 +1753,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     mClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(tableBasePath).setLoadActiveTimelineOnLoad(true).build();
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     assertTrue(
-            HoodieTimeline.compareTimestamps(
-                    newLastFinished.getTimestamp(),
-                    HoodieTimeline.GREATER_THAN,
-                    lastFinished.getTimestamp()));
+        HoodieTimeline.compareTimestamps(
+            newLastFinished.getTimestamp(),
+            HoodieTimeline.GREATER_THAN,
+            lastFinished.getTimestamp()));
 
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
@@ -1778,7 +1778,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   private void runDeltaSync(
-          HoodieDeltaStreamer.Config cfg, boolean filterDupes, int numberOfRecords, WriteOperationType operationType) throws Exception {
+      HoodieDeltaStreamer.Config cfg, boolean filterDupes, int numberOfRecords, WriteOperationType operationType) throws Exception {
     cfg.filterDupes = filterDupes;
     cfg.sourceLimit = numberOfRecords;
     cfg.operation = operationType;
@@ -2980,6 +2980,42 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Collections.sort(sortColumnValues);
         assertEquals(sortColumnValues, actualSortColumnValues);
       }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testBulkInsertSkewedSortColumns(boolean suffixRecordKey) throws Exception {
+    String tableBasePath = basePath + "/test_table_bulk_insert_skewed_sort_columns_" + suffixRecordKey;
+    int outputParallelism = 100;
+    int columnCardinality = 2;
+    // This column has 2 values [BLACK, UBERX]
+    String sortColumn = "trip_type";
+    TypedProperties bulkInsertProps =
+        new DFSPropertiesConfiguration(fs.getConf(), new Path(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+    bulkInsertProps.setProperty(HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS.key(), String.valueOf(suffixRecordKey));
+    bulkInsertProps.setProperty("hoodie.bulkinsert.shuffle.parallelism", String.valueOf(outputParallelism));
+    bulkInsertProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
+    bulkInsertProps.setProperty("hoodie.datasource.write.keygenerator.class", NonpartitionedKeyGenerator.class.getName());
+    bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.class", "org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner");
+    bulkInsertProps.setProperty("hoodie.bulkinsert.user.defined.partitioner.sort.columns", sortColumn);
+    String bulkInsertPropsFileName = "bulk_insert_override.properties";
+    UtilitiesTestBase.Helpers.savePropsToDFS(bulkInsertProps, fs, basePath + "/" + bulkInsertPropsFileName);
+    // Initial bulk insert
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()), bulkInsertPropsFileName, false);
+    syncAndAssertRecordCount(cfg, 1000, tableBasePath, "00000", 1);
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(sqlContext.sparkContext().hadoopConfiguration()).build();
+    Configuration hadoopConf = metaClient.getHadoopConf();
+    HoodieLocalEngineContext engContext = new HoodieLocalEngineContext(hadoopConf);
+    HoodieTableFileSystemView fsView =
+        FileSystemViewManager.createInMemoryFileSystemView(engContext, metaClient, HoodieMetadataConfig.newBuilder().enable(false).withAssumeDatePartitioning(true).build());
+    List<String> baseFiles = fsView.getLatestBaseFiles("").map(HoodieBaseFile::getPath).collect(Collectors.toList());
+    if (suffixRecordKey) {
+      assertEquals(baseFiles.size(), outputParallelism);
+    } else {
+      assertEquals(baseFiles.size(), columnCardinality);
     }
   }
 
