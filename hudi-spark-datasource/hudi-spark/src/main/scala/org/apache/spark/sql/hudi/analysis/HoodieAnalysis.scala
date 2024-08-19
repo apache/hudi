@@ -195,7 +195,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         if (catalogTableOpt.isDefined) {
           for (attr <- lr.output) {
             val origAttr: AttributeReference = attributesSet.collectFirst({ case a if a.name.equals(attr.name) => a }).get
-            val catalogAttr = catalogTableOpt.get.partitionSchema.toAttributes.collectFirst({ case a if a.name.equals(attr.name) => a })
+            val catalogAttr = catalogTableOpt.get.partitionSchema.fields.collectFirst({ case a if a.name.equals(attr.name) => a })
             val newAttr: AttributeReference = if (catalogAttr.isDefined) {
               origAttr.withDataType(catalogAttr.get.dataType).asInstanceOf[AttributeReference]
             } else {
