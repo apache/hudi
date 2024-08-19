@@ -560,14 +560,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
-    } else {
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    }
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")

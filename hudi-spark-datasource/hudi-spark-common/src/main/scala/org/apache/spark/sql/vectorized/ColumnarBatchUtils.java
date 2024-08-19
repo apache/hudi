@@ -45,47 +45,10 @@ public class ColumnarBatchUtils {
         vectors[i] = columnarBatch.column(projection[i]);
       }
 
-      //do this until we get rid of spark 2
+      //TODO: [HUDI-8099] replace this with inplace projection by extending columnar batch
       ColumnarBatch b = new ColumnarBatch(vectors);
       b.setNumRows(columnarBatch.numRows());
       return b;
     };
   }
-
-  //  public static UnaryOperator<ColumnarBatch> generateProjectionInplace(StructType from, StructType to) {
-  //    if (from.length() != to.length()) {
-  //      throw new IllegalStateException(from + " and " + to + "do not have the same length");
-  //    }
-  //
-  //    if (from.equals(to)) {
-  //      return UnaryOperator.identity();
-  //    }
-  //
-  //    List<Integer> currentPositions = Arrays.stream(from.fields()).map(f -> to.fieldIndex(f.name())).collect(Collectors.toList());
-  //    List<Pair<Integer,Integer>> swaps = new ArrayList<>();
-  //    for (int i = 0; i < currentPositions.size(); i++) {
-  //      Integer j;
-  //      while ((j = currentPositions.get(i)) != i) {
-  //        currentPositions.set(i, currentPositions.get(j));
-  //        currentPositions.set(j, j);
-  //        swaps.add(Pair.of(i, j));
-  //      }
-  //    }
-  //
-  //    return columnarBatch -> {
-  //      if (from.length() != columnarBatch.numCols()) {
-  //        throw new IllegalStateException("Schemas have length " + from.length() + " but columnar batch has " + columnarBatch.numCols() + " columns");
-  //      }
-  //      for (Pair<Integer,Integer> s : swaps) {
-  //        swap(columnarBatch, s.getLeft(), s.getRight());
-  //      }
-  //      return columnarBatch;
-  //    };
-  //  }
-  //
-  //  private static void swap(ColumnarBatch b, int i, int j) {
-  //    ColumnVector tmp = b.columns[i];
-  //    b.columns[i] = b.columns[j];
-  //    b.columns[j] = tmp;
-  //  }
 }

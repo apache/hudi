@@ -96,19 +96,24 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
   override def vectorTypes(requiredSchema: StructType,
                            partitionSchema: StructType,
                            sqlConf: SQLConf): Option[Seq[String]] = {
-    val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
-      classOf[OnHeapColumnVector].getName
+    val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
+    if (mandatoryFields.isEmpty) {
+      originalVectorTypes
     } else {
-      classOf[OffHeapColumnVector].getName
-    }
-    super.vectorTypes(requiredSchema, partitionSchema, sqlConf).map {
-      o: Seq[String] => o.zipWithIndex.map(a => {
-        if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
-          regularVectorType
-        } else {
-          a._1
-        }
-      })
+      val regularVectorType = if (!sqlConf.offHeapColumnVectorEnabled) {
+        classOf[OnHeapColumnVector].getName
+      } else {
+        classOf[OffHeapColumnVector].getName
+      }
+      originalVectorTypes.map {
+        o: Seq[String] => o.zipWithIndex.map(a => {
+          if (a._2 >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(a._2 - requiredSchema.length).name)) {
+            regularVectorType
+          } else {
+            a._1
+          }
+        })
+      }
     }
   }
 
@@ -129,18 +134,19 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    //dataSchema is not always right due to spark bugs
-    val dataSchema = tableSchema.structTypeSchema
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
     setSchemaEvolutionConfigs(augmentedStorageConf)
     val (remainingPartitionSchemaArr, fixedPartitionIndexesArr) = partitionSchema.fields.toSeq.zipWithIndex.filter(p => !mandatoryFields.contains(p._1.name)).unzip
-    //remainingPartitionSchema: the schema of the partition cols we want to append the value instead of reading from the file
+
+    // The schema of the partition cols we want to append the value instead of reading from the file
     val remainingPartitionSchema = StructType(remainingPartitionSchemaArr)
-    //fixedPartitionIndexes: index positions of the remainingPartitionSchema fields in partitionSchema
+
+    // index positions of the remainingPartitionSchema fields in partitionSchema
     val fixedPartitionIndexes = fixedPartitionIndexesArr.toSet
-    //requestedSchema: schema that we want fg reader to output to us
+
+    // schema that we want fg reader to output to us
     val requestedSchema = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
     val requestedAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(requestedSchema, sanitizedTableName)
     val dataAvroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(dataSchema, sanitizedTableName)

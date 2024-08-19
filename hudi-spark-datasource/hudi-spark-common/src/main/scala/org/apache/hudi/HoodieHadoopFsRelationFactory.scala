@@ -60,7 +60,8 @@ trait HoodieHadoopFsRelationFactory {
 abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val metaClient: HoodieTableMetaClient,
                                                  val options: Map[String, String],
-                                                 val schemaSpec: Option[StructType]
+                                                 val schemaSpec: Option[StructType],
+                                                 val isBootstrap: Boolean
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory {
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
@@ -75,8 +76,17 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  //placeholder until pr to persist field types lands
-  protected lazy val partitionColumnsToRead: Array[String] = if (shouldExtractPartitionValuesFromPartitionPath) Array.empty else tableConfig.getPartitionFields.orElse(Array.empty)
+  private lazy val keygenTypeHasVariablePartitionCols = tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedKeyGenerator") ||
+    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator") ||
+    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomKeyGenerator") ||
+    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomAvroKeyGenerator")
+
+  protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
+    Seq.empty
+  } else {
+    //TODO: [HUDI-8098] filter for timestamp keygen columns when using custom keygen
+    tableConfig.getPartitionFields.orElse(Array.empty).toSeq
+  }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
@@ -168,7 +178,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     val shouldExtractPartitionValueFromPath =
       optParams.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
-    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath
+    shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || isBootstrap
   }
 
   protected lazy val shouldUseRecordPosition: Boolean = checkIfAConfigurationEnabled(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS)
@@ -200,7 +210,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
                                                        override val options: Map[String, String],
                                                        override val schemaSpec: Option[StructType],
                                                        isBootstrap: Boolean)
-  extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec) {
+  extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   val fileIndex: HoodieFileIndex = new HoodieFileIndex(
     sparkSession,
@@ -229,7 +239,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = recordMergerStrategy
     )
-  val mandatoryFields: Seq[String] = if (isBootstrap) Seq.empty else partitionColumnsToRead.toSeq
+  val mandatoryFields: Seq[String] = partitionColumnsToRead
 
   override def buildFileIndex(): FileIndex = fileIndex
 
@@ -271,7 +281,7 @@ class HoodieMergeOnReadIncrementalHadoopFsRelationFactory(override val sqlContex
                                                           isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  override val mandatoryFields: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ (if (isBootstrap) Seq.empty else partitionColumnsToRead.toSeq)
+  override val mandatoryFields: Seq[String] = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++ partitionColumnsToRead
 
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), true, true)
@@ -299,7 +309,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
                                                         isBootstrap: Boolean)
   extends HoodieMergeOnReadSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  override val mandatoryFields: Seq[String] = if (isBootstrap) Seq.empty else partitionColumnsToRead.toSeq
+  override val mandatoryFields: Seq[String] = partitionColumnsToRead
 
   override val fileIndex: HoodieFileIndex = HoodieFileIndex(
     sparkSession,
@@ -332,7 +342,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
   extends HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
   override val mandatoryFields: Seq[String] = Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
-    preCombineFieldOpt.map(Seq(_)).getOrElse(Seq()) ++ (if (isBootstrap) Seq.empty else  partitionColumnsToRead.toSeq)
+    preCombineFieldOpt.map(Seq(_)).getOrElse(Seq()) ++ partitionColumnsToRead
 
   override val fileIndex = new HoodieIncrementalFileIndex(
     sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
