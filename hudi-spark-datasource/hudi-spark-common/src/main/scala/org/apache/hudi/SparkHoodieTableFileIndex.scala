@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex._
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
@@ -44,7 +44,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Collections
