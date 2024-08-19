@@ -29,6 +29,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig.{DEFAULT_METADATA_ENAB
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
@@ -36,7 +37,8 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
-import org.apache.spark.sql.{SparkSession, SQLContext}
+
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources.{FileFormat, FileIndex, FileStatusCache, HadoopFsRelation, HoodieMultipleBaseFileFormat}
@@ -76,10 +78,11 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  private lazy val keygenTypeHasVariablePartitionCols = tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedKeyGenerator") ||
+  private lazy val keygenTypeHasVariablePartitionCols = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
+    (tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedKeyGenerator") ||
     tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator") ||
     tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomKeyGenerator") ||
-    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomAvroKeyGenerator")
+    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomAvroKeyGenerator"))
 
   protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
     Seq.empty
