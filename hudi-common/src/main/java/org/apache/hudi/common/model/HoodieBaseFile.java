@@ -145,7 +145,7 @@ public class HoodieBaseFile extends BaseFile {
       StoragePath parent = pathInfo.getPath().getParent();
       return new StoragePathInfo(
           new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
-          pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime());
+          pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime(), pathInfo.getLocations());
     } else {
       return pathInfo;
     }
