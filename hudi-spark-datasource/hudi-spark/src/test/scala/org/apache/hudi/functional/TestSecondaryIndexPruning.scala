@@ -36,7 +36,7 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
 
   @Test
   def testSecondaryIndexWithFilters(): Unit = {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),

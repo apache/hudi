@@ -34,6 +34,7 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -108,7 +109,20 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   }
 
   @Override
-  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema, HoodieStorage storage) throws IOException {
+  public ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, long start, long length, Schema dataSchema,
+                                                               Schema requiredSchema, HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(filePath, null, start, length, dataSchema, requiredSchema, storage);
+  }
+
+  @Override
+  public ClosableIterator<ArrayWritable> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), storagePathInfo.getLocations(), start, length, dataSchema, requiredSchema, storage);
+  }
+
+  private ClosableIterator<ArrayWritable> getFileRecordIterator(StoragePath filePath, String[] hosts, long start, long length, Schema dataSchema,
+                                                                Schema requiredSchema, HoodieStorage storage) throws IOException {
     JobConf jobConfCopy = new JobConf(storage.getConf().unwrapAs(Configuration.class));
     if (getNeedsBootstrapMerge()) {
       // Hive PPD works at row-group level and only enabled when hive.optimize.index.filter=true;
@@ -124,7 +138,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
             .map(f -> f.name().toLowerCase(Locale.ROOT)).filter(n -> !partitionColSet.contains(n)),
         partitionCols.stream().filter(c -> dataSchema.getField(c) != null)).collect(Collectors.toList()));
     setSchemas(jobConfCopy, modifiedDataSchema, requiredSchema);
-    InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, (String[]) null);
+    InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
     RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;

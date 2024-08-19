@@ -253,7 +253,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       if (isLogFile) {
         return new FileSlice(fileGroupId, commitTime, null, realtimeSplit.getDeltaLogFiles());
       }
-      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath())), bootstrapBaseFile);
+      HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(realtimeSplit.getPath()), realtimeSplit.getLocations()), bootstrapBaseFile);
       return new FileSlice(fileGroupId, commitTime, hoodieBaseFile, realtimeSplit.getDeltaLogFiles());
     }
     // COW
@@ -261,7 +261,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return new FileSlice(
         fileGroupId,
         getCommitTime(split.getPath().toString()),
-        new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath())), bootstrapBaseFile),
+        new HoodieBaseFile(convertToStoragePathInfo(fs.getFileStatus(split.getPath()), split.getLocations()), bootstrapBaseFile),
         Collections.emptyList());
   }
 
@@ -269,7 +269,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     if (split instanceof BootstrapBaseFileSplit) {
       BootstrapBaseFileSplit bootstrapBaseFileSplit = (BootstrapBaseFileSplit) split;
       FileSplit bootstrapFileSplit = bootstrapBaseFileSplit.getBootstrapFileSplit();
-      return new BaseFile(convertToStoragePathInfo(fs.getFileStatus(bootstrapFileSplit.getPath())));
+      return new BaseFile(convertToStoragePathInfo(fs.getFileStatus(bootstrapFileSplit.getPath()), bootstrapFileSplit.getLocations()));
     }
     return null;
   }

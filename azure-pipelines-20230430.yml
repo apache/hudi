@@ -62,7 +62,6 @@ parameters:
       - 'hudi-spark-datasource'
       - 'hudi-spark-datasource/hudi-spark'
       - 'hudi-spark-datasource/hudi-spark3.5.x'
-      - 'hudi-spark-datasource/hudi-spark3.2plus-common'
       - 'hudi-spark-datasource/hudi-spark3-common'
       - 'hudi-spark-datasource/hudi-spark-common'
   - name: job6UTModules
@@ -89,7 +88,6 @@ parameters:
       - '!hudi-spark-datasource'
       - '!hudi-spark-datasource/hudi-spark'
       - '!hudi-spark-datasource/hudi-spark3.5.x'
-      - '!hudi-spark-datasource/hudi-spark3.2plus-common'
       - '!hudi-spark-datasource/hudi-spark3-common'
       - '!hudi-spark-datasource/hudi-spark-common'
   - name: job6FTModules
