@@ -20,10 +20,10 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HadoopFSTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -57,7 +57,7 @@ public class HoodieMergeOnReadTestUtils {
 
   public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
                                                                String basePath) {
-    return getRecordsUsingInputFormat(conf, inputPaths, basePath, HadoopFSUtils.convertToJobConf(conf), true);
+    return getRecordsUsingInputFormat(conf, inputPaths, basePath, HadoopFSTestUtils.convertToJobConf(conf), true);
   }
 
   public static List<GenericRecord> getRecordsUsingInputFormat(StorageConfiguration<?> conf, List<String> inputPaths,
@@ -172,7 +172,7 @@ public class HoodieMergeOnReadTestUtils {
     conf.set(IOConstants.COLUMNS_TYPES, hiveColumnTypesWithDatestr);
 
     // Hoodie Input formats are also configurable
-    HadoopFSUtils.setConfForConfigurableInputFormat(inputFormat, HadoopFSUtils.convertToHadoopConf(conf));
-    jobConf.addResource(HadoopFSUtils.convertToHadoopConf(conf));
+    HadoopFSTestUtils.setConfForConfigurableInputFormat(inputFormat, HadoopFSTestUtils.convertToHadoopConf(conf));
+    jobConf.addResource(HadoopFSTestUtils.convertToHadoopConf(conf));
   }
 }

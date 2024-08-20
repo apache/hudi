@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -38,9 +37,11 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.JobConf;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -100,23 +101,21 @@ public class GenericRecordValidationTestUtils {
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
                                           StorageConfiguration<?> storageConf, List<String> partitionPaths, List<String> excludeFields) {
-    StorageConfiguration<?> storageConfCopy = storageConf.newInstance();
+    JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     List<String> fullPartitionPaths = partitionPaths.stream()
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
 
-    storageConfCopy.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant1);
-    storageConfCopy.set(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), "true");
+    jobConf.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant1);
+    jobConf.set(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(), "true");
     List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-        storageConf, fullPartitionPaths, config.getBasePath(),
-        HadoopFSUtils.convertToJobConf(storageConfCopy), true);
+        storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true);
     Map<String, GenericRecord> prevRecordsMap = records.stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
 
-    storageConfCopy.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant2);
+    jobConf.set(String.format(HOODIE_CONSUME_COMMIT, config.getTableName()), instant2);
     List<GenericRecord> records1 = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-        storageConf, fullPartitionPaths, config.getBasePath(),
-        HadoopFSUtils.convertToJobConf(storageConfCopy), true);
+        storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true);
     Map<String, GenericRecord> newRecordsMap = records1.stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
 
@@ -135,7 +134,7 @@ public class GenericRecordValidationTestUtils {
 
   public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<?> storageConf,
                                                          HoodieTestDataGenerator dataGen) {
-    StorageConfiguration<?> storageConfCopy = storageConf.newInstance();
+    JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     List<String> fullPartitionPaths = Arrays.stream(dataGen.getPartitionPaths())
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
@@ -143,7 +142,7 @@ public class GenericRecordValidationTestUtils {
             storageConf,
             fullPartitionPaths,
             config.getBasePath(),
-            HadoopFSUtils.convertToJobConf(storageConfCopy),
+            jobConf,
             true)
         .stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));

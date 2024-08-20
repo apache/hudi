@@ -127,14 +127,14 @@ public class HoodieTestCommitGenerator {
     String commitFilename = HoodieTimeline.makeCommitFileName(instantTime + "_" + InProcessTimeGenerator.createNewInstantTime());
     HoodieCommitMetadata commitMetadata =
         generateCommitMetadata(partitionPathToFileIdAndNameMap, Collections.emptyMap());
-    createCommitFileWithMetadata(basePath, new HadoopStorageConfiguration(), commitFilename, serializeCommitMetadata(commitMetadata).get());
+    createCommitFileWithMetadata(basePath, new HadoopStorageConfiguration(true), commitFilename, serializeCommitMetadata(commitMetadata).get());
     for (String partitionPath : partitionPathToFileIdAndNameMap.keySet()) {
       createPartitionMetaFile(basePath, partitionPath);
       partitionPathToFileIdAndNameMap.get(partitionPath)
           .forEach(fileInfo -> {
             String filename = fileInfo.getValue();
             try {
-              createDataFile(basePath, new HadoopStorageConfiguration(), partitionPath, filename);
+              createDataFile(basePath, new HadoopStorageConfiguration(true), partitionPath, filename);
             } catch (IOException e) {
               LOG.error(String.format("Failed to create data file: %s/%s/%s",
                   basePath, partitionPath, filename));
