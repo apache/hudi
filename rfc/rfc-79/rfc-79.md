@@ -62,11 +62,26 @@ If mutable table services plans end up being supported, then the same reliabilit
 ### Supporting concurrent executions of immutable table service plans with heartbeating
 As mentioned above, once a clustering/compact "immutable" table service plan is scheduled, a corresponding cluster/compact API is called to (optionally rollback) and execute the plan. Implementing a "guard" to allow only one job to invoke the "execute" API on a table service plan (at a given time) would avoid any scenario of multiple jobs concurrently creating/deleting data files in a conflicting manner. This guard can be implemented by using HUDI heaertbeating in conjunction with the transaction manager. Whenever a job calls the compact/cluster API for an immutable table service, it can start a heartbeat to indicate to concurrent jobs that this table service already has an active execution attempt. These other jobs can then self-abort instead of starting their own (concurent) execution attempt. If the current job executing the table service plan fails, after its heartbeat expires another job can re-start the active heartbeat and start executing this plan again. 
 
-![heartbeat table service lifecycle](https://github.com/user-attachments/assets/49584822-fa85-486e-a234-84305c7d3eb0)
+Specifically, when invoking the clustering/compact API to execute an existing immutable table service plan, the aforementioned heartbeat guard will be implemented by running the following steps before running any other step.
+1. Start a transaction
+2. Get the instant time P of the desired table service plan to execute.
+3. If P has an active heartbeat, fail and abort the transaction
+4. Start a heartbeat for P
+5. End the transaction
+And once the rest of the clustering/compaction API logic completes or fails, the heartbeat will be cleaned up.
+
+
+The below visualization captures this modification to existing execution of immutable table service plans
+![heartbeat table service lifecycle (1)](https://github.com/user-attachments/assets/a8d63614-9691-4c87-b871-fc6855095227)
+
+A transaction is needed to ensure that if multiple concurrent callers attempt to start a heartbeat at the same time, at most one will start a heartbeat. 
 
 
 
-If there are multiple concurrent jobs that attempt to start a heartbeat for the table service at the same time, only one job should hold and start the heartbeat. This restriction will be enforced by using HUDI transaction manager, and will be detailed in `Implementation`.
+
+Although this increases the contention of multiple jobs trying to acquire a table lock, because only a few DFS calls will be made during this transaction (to find the heartbeat file and view its last update) other jobs waiting to start a transaction should ideally not have to wait for too long.
+
+
 
 
 
