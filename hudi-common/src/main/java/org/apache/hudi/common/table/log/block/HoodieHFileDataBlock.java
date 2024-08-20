@@ -136,7 +136,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         HoodieIOFactory.getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getContentReader(
             hFileReaderConfig, pathForReader, HoodieFileFormat.HFILE, inlineStorage, content,
             Option.of(getSchemaFromHeader()))) {
-      return unsafeCast(reader.getIndexedRecordIterator(readerSchema, readerSchema));
+      return new CloseableMappingIterator<>(reader.getIndexedRecordIterator(readerSchema, readerSchema), data -> readerContext.convertAvroRecord(data));
     }
   }
 

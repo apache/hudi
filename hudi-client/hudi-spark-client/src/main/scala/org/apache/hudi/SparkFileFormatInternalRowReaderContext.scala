@@ -119,6 +119,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
   }
 
+  override def getRecordKey(row: InternalRow, schema: Schema): String = super.getValue(row, schema, recordKeyColumn).toString
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an [[InternalRow]].
    *
