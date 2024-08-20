@@ -4,6 +4,9 @@ keywords: [hudi, spark, flink, streaming, processing]
 last_modified_at: 2024-03-13T15:59:57-04:00
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## Spark Streaming
 
 You can write Hudi tables using spark's structured streaming.
@@ -70,17 +73,17 @@ hudi_streaming_options = {
 }
 
 # create streaming df
-df = spark.readStream \
-    .format("hudi") \
+df = spark.readStream 
+    .format("hudi") 
     .load(basePath)
 
 # write stream to new hudi table
-df.writeStream.format("hudi") \
-    .options(**hudi_streaming_options) \
-    .outputMode("append") \
-    .option("path", baseStreamingPath) \
-    .option("checkpointLocation", checkpointLocation) \
-    .trigger(once=True) \
+df.writeStream.format("hudi") 
+    .options(**hudi_streaming_options) 
+    .outputMode("append") 
+    .option("path", baseStreamingPath) 
+    .option("checkpointLocation", checkpointLocation) 
+    .trigger(once=True) 
     .start()
 
 ```

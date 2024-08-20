@@ -34,10 +34,7 @@ in one of the following states
 * `INFLIGHT` - Denotes that the action is currently being performed
 * `COMPLETED` - Denotes completion of an action on the timeline
 
-All the actions in requested/inflight states are stored in the active timeline as files named *
-*_<begin\_instant\_time>.<action\_type>.<requested|inflight>_**. Completed actions are stored along with a time that
-denotes when the action was completed, in a file named *
-*_<begin\_instant\_time>\_<completion\_instant\_time>.<action\_type>._**
+All the actions in requested/inflight states are stored in the active timeline as files named *_\<begin\_instant\_time>.\<action\_type>.\<requested|inflight>_*. Completed actions are stored along with a time that denotes when the action was completed, in a file named *_\<begin\_instant\_time>\<completion\_instant\_time>.\<action\_type>._***
 
 <figure>
     <img className="docimage" src={require("/assets/images/hudi_timeline.png").default} alt="hudi_timeline.png" />

@@ -9,8 +9,13 @@ import styles from "./styles.module.css";
 const BlogCard = ({ blog }) => {
   const { withBaseUrl } = useBaseUrlUtils();
   const { frontMatter, assets, metadata } = blog;
-  const { formattedDate, title, authors, permalink } = metadata;
+  const { date, title, authors, permalink } = metadata;
   const image = assets.image ?? frontMatter.image ?? "/assets/images/hudi.png";
+
+  const dateObj = new Date(date);
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  const formattedDate = dateObj.toLocaleDateString('en-US', options);
+
 
   return (
     <div className={styles.blogsWrapper}>

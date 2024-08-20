@@ -3,12 +3,8 @@ id: quickstart
 title: quickstart
 ---
 
-import {Route} from '@docusaurus/router';
+import {Redirect} from '@docusaurus/router';
 
-<Route
-path={'/*'}
-component={() => {
-global.window && (global.window.location.href = '/docs/quick-start-guide');
-return null;
-}}
+<Redirect
+to={'/docs/quick-start-guide'}
 />

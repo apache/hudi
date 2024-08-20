@@ -387,6 +387,7 @@ Let's say the original schema is:
   }
 ]}
 ```
+
 Make sure you add `_hoodie_is_deleted` column:
 ```json
 {

@@ -227,7 +227,7 @@ dataGen = sc._jvm.org.apache.hudi.QuickstartUtils.DataGenerator()
 [数据生成器](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L50)
 可以基于[行程样本模式](https://github.com/apache/hudi/blob/master/hudi-spark/src/main/java/org/apache/hudi/QuickstartUtils.java#L57)
 生成插入和更新的样本。
-{: .notice--info}
+\{: .notice--info}
 
 
 ## 插入数据 {#inserts}
@@ -264,7 +264,7 @@ df.write.format("hudi"). \
 有关将数据提取到Hudi中的方法的信息，请参阅[写入Hudi数据集](/cn/docs/writing_data)。
 这里我们使用默认的写操作：`插入更新`。 如果您的工作负载没有`更新`，也可以使用更快的`插入`或`批量插入`操作。
 想了解更多信息，请参阅[写操作](/cn/docs/writing_data#write-operations)
-{: .notice--info}
+\{: .notice--info}
 
 ## 查询数据 {#query}
 
@@ -287,7 +287,7 @@ spark.sql("select _hoodie_commit_time, _hoodie_record_key, _hoodie_partition_pat
 该查询提供已提取数据的读取优化视图。由于我们的分区路径(`region/country/city`)是嵌套的3个级别
 从基本路径开始，我们使用了`load(basePath + "/*/*/*/*")`。
 有关支持的所有存储类型和视图的更多信息，请参考[存储类型和视图](/cn/docs/concepts#storage-types--views)。
-{: .notice--info}
+\{: .notice--info}
 
 ## 更新数据 {#updates}
 
@@ -310,7 +310,7 @@ denoted by the timestamp. Look for changes in `_hoodie_commit_time`, `rider`, `d
 注意，保存模式现在为`追加`。通常，除非您是第一次尝试创建数据集，否则请始终使用追加模式。
 [查询](#query)现在再次查询数据将显示更新的行程。每个写操作都会生成一个新的由时间戳表示的[commit](/cn/docs/concepts)
 。在之前提交的相同的`_hoodie_record_key`中寻找`_hoodie_commit_time`, `rider`, `driver`字段变更。
-{: .notice--info}
+\{: .notice--info}
 
 ## 增量查询
 
@@ -345,7 +345,7 @@ spark.sql("select `_hoodie_commit_time`, fare, begin_lon, begin_lat, ts from  hu
 ```
 
 这将提供在开始时间提交之后发生的所有更改，其中包含票价大于20.0的过滤器。关于此功能的独特之处在于，它现在使您可以在批量数据上创作流式管道。
-{: .notice--info}
+\{: .notice--info}
 
 ## 特定时间点查询
 

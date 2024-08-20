@@ -3,7 +3,7 @@ title: File Layouts
 toc: false
 ---
 
-The following describes the general file layout structure for Apache Hudi. Please refer the ** [tech spec](https://hudi.apache.org/tech-specs#file-layout-hierarchy) ** for a more detailed description of the file layouts.
+The following describes the general file layout structure for Apache Hudi. Please refer the **[tech spec](https://hudi.apache.org/tech-specs#file-layout-hierarchy)** for a more detailed description of the file layouts.
 * Hudi organizes data tables into a directory structure under a base path on a distributed file system
 * Tables are broken up into partitions
 * Within each partition, files are organized into file groups, uniquely identified by a file ID

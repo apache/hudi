@@ -31,7 +31,7 @@ This can possibly occur if your schema has some non-nullable field whose value i
 
 #### INT96, INT64 and timestamp compatibility
 
-[https://hudi.apache.org/docs/configurations#hoodiedatasourcehive\_syncsupport\_timestamp](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncsupport_timestamp)
+[https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncsupport_timestamp](https://hudi.apache.org/docs/configurations#hoodiedatasourcehive_syncsupport_timestamp)
 
 #### I am seeing lot of archive files. How do I control the number of archive commit files generated?
 
@@ -115,11 +115,11 @@ if Hive Sync is enabled in the [deltastreamer](https://github.com/apache/hudi/bl
 
 Section below generally aids in debugging Hudi failures. Off the bat, the following metadata is added to every record to help triage issues easily using standard Hadoop SQL engines (Hive/PrestoDB/Spark)
 
-* **\_hoodie\_record\_key** - Treated as a primary key within each DFS partition, basis of all updates/inserts
-* **\_hoodie\_commit\_time** - Last commit that touched this record
-* **\_hoodie_commit_seqno** - This field contains a unique sequence number for each record within each transaction.
-* **\_hoodie\_file\_name** - Actual file name containing the record (super useful to triage duplicates)
-* **\_hoodie\_partition\_path** - Path from basePath that identifies the partition containing this record
+* **_hoodie_record_key** - Treated as a primary key within each DFS partition, basis of all updates/inserts
+* **_hoodie_commit_time** - Last commit that touched this record
+* **_hoodie_commit_seqno** - This field contains a unique sequence number for each record within each transaction.
+* **_hoodie_file_name** - Actual file name containing the record (super useful to triage duplicates)
+* **_hoodie_partition_path** - Path from basePath that identifies the partition containing this record
 
 #### Missing records
 
@@ -192,11 +192,11 @@ set hive.metastore.disallow.incompatible.col.type.changes=false;
 
 This occurs because HiveSyncTool currently supports only few compatible data type conversions. Doing any other incompatible change will throw this exception. Please check the data type evolution for the concerned field and verify if it indeed can be considered as a valid data type conversion as per Hudi code base.
 
-#### org.apache.hadoop.hive.ql.parse.SemanticException: Database does not exist: test\_db
+#### org.apache.hadoop.hive.ql.parse.SemanticException: Database does not exist: test_db
 
-This generally occurs if you are trying to do Hive sync for your Hudi dataset and the configured hive\_sync database does not exist. Please create the corresponding database on your Hive cluster and try again.
+This generally occurs if you are trying to do Hive sync for your Hudi dataset and the configured hive_sync database does not exist. Please create the corresponding database on your Hive cluster and try again.
 
-#### org.apache.thrift.TApplicationException: Invalid method name: 'get\_table\_req'
+#### org.apache.thrift.TApplicationException: Invalid method name: 'get_table_req'
 
 This issue is caused by hive version conflicts, hudi built with hive-2.3.x version, so if still want hudi work with older hive version
 
