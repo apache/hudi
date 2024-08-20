@@ -19,9 +19,11 @@
 
 package org.apache.hudi.functional
 
+import org.apache.avro.Schema
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
@@ -243,6 +245,9 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                   Seq(100, "a100", "299.0", 1706800227, "cat10")
                 )
               }
+
+              // Validate ts field is still of type int in the table
+              validateTsFieldSchema(tablePath)
             }
           }
         }
@@ -325,6 +330,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
             testSecondRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testSecondRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
+
+            // Validate ts field is still of type int in the table
+            validateTsFieldSchema(tablePathCustom1)
+            validateTsFieldSchema(tablePathCustom2)
           }
           }
         }
@@ -386,6 +395,9 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
             // INSERT INTO should succeed now
             testFirstRoundInserts(tableName, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
           }
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath)
         }
         }
       }
@@ -393,34 +405,57 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
   }
 
   test("Test query with custom key generator") {
-    withTempDir { tmp => {
-      val tableName = generateTableName
-      val tablePath = tmp.getCanonicalPath + "/" + tableName
-      val writePartitionFields = "ts:timestamp"
-      val dateFormat = "yyyy/MM/dd"
-      val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
-      val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
-      val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+    for (extractPartition <- Seq(true, false)) {
+      withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
+        withTempDir { tmp => {
+          val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
+          val writePartitionFields = "ts:timestamp"
+          val dateFormat = "yyyy/MM/dd"
+          val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+          val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
+          val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
 
-      prepareTableWithKeyGenerator(
-        tableName, tablePath, "MERGE_ON_READ",
-        CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
+          prepareTableWithKeyGenerator(
+            tableName, tablePath, "MERGE_ON_READ",
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
 
-      createTableWithSql(tableName, tablePath,
-        s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields', "
-          + keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+          createTableWithSql(tableName, tablePath,
+            s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields', "
+              + keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
 
-      // INSERT INTO should fail due to conflict between write and table config of partition path fields
-      val sourceTableName = tableName + "_source"
-      prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-      // INSERT INTO should succeed now
-      testFirstRoundInserts(tableName, tsGenFunc, customPartitionFunc)
-      assertEquals(7, spark.sql(
-        s"""
-           | SELECT * from $tableName
-           | """.stripMargin).count())
+          // INSERT INTO should fail due to conflict between write and table config of partition path fields
+          val sourceTableName = tableName + "_source"
+          prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+          // INSERT INTO should succeed now
+          testFirstRoundInserts(tableName, extractPartition, tsGenFunc, customPartitionFunc)
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from $tableName
+               | """.stripMargin).count())
+          val incrementalDF = spark.read.format("hudi").
+            option("hoodie.datasource.query.type", "incremental").
+            option("hoodie.datasource.read.begin.instanttime", 0).
+            load(tablePath)
+          incrementalDF.createOrReplaceTempView("tbl_incremental")
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from tbl_incremental
+               | """.stripMargin).count())
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath)
+        }
+        }
+      }
     }
-    }
+  }
+
+  private def validateTsFieldSchema(tablePath: String): Unit = {
+    val metaClient = createMetaClient(spark, tablePath)
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val nullableIntSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT))
+    assertEquals(nullableIntSchema, schemaResolver.getTableAvroSchema(true).getField("ts").schema())
   }
 
   private def testFirstRoundInserts(tableName: String,

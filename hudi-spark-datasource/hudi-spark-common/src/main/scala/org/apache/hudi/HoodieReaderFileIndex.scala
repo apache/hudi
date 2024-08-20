@@ -29,13 +29,13 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.types.StructType
 
-class HoodieFileIndexTimestampKeyGen(override val spark: SparkSession,
-                                          override val metaClient: HoodieTableMetaClient,
-                                          override val schemaSpec: Option[StructType],
-                                          override val options: Map[String, String],
-                                          @transient override val fileStatusCache: FileStatusCache = NoopCache,
-                                          override val includeLogFiles: Boolean = false,
-                                          override val shouldEmbedFileSlices: Boolean = false)
+class HoodieReaderFileIndex(override val spark: SparkSession,
+                            override val metaClient: HoodieTableMetaClient,
+                            override val schemaSpec: Option[StructType],
+                            override val options: Map[String, String],
+                            @transient override val fileStatusCache: FileStatusCache = NoopCache,
+                            override val includeLogFiles: Boolean = false,
+                            override val shouldEmbedFileSlices: Boolean = false)
   extends HoodieFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -45,7 +45,13 @@ class HoodieFileIndexTimestampKeyGen(override val spark: SparkSession,
     includeLogFiles = includeLogFiles,
     shouldEmbedFileSlices = shouldEmbedFileSlices) {
 
-  def getTimestampPartitionIndex(): Set[Int] = {
+  /**
+   *
+   * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
+   * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
+   * timestamp.
+   */
+  private def getTimestampPartitionIndex(): Set[Int] = {
     val tableConfig = metaClient.getTableConfig
     val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
     if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
@@ -63,7 +69,7 @@ class HoodieFileIndexTimestampKeyGen(override val spark: SparkSession,
       }
       partitionIndexes
     } else {
-      throw new HoodieValidationException("Expected timestamp or custom keygen with HoodieFileIndexTimestampKeyGen")
+      Set.empty
     }
   }
 
@@ -78,23 +84,31 @@ class HoodieFileIndexTimestampKeyGen(override val spark: SparkSession,
     val partitionDirectories = super.listFiles(partitionFilters, dataFilters)
 
     val timestampPartitionIndexes = getTimestampPartitionIndex()
-    partitionDirectories.map(dir =>
-      dir.values match {
-        case mapping: HoodiePartitionFileSliceMapping =>
-          val oldValues = mapping.values
-          val finalValues = InternalRow.fromSeq(oldValues.toSeq(_partitionSchemaFromProperties)
-            .zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) })
-          dir.copy(values = new HoodiePartitionFileSliceMapping(finalValues, mapping.getFileSlices()))
-        case _ =>
-          val newValues = dir.values.toSeq(_partitionSchemaFromProperties)
-            .zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }
-          dir.copy(values = InternalRow.fromSeq(newValues))
-      }
-    )
+    if (timestampPartitionIndexes.isEmpty) {
+      partitionDirectories
+    } else {
+      partitionDirectories.map(dir =>
+        dir.values match {
+          case mapping: HoodiePartitionFileSliceMapping =>
+            val oldValues = mapping.values
+            val finalValues = InternalRow.fromSeq(oldValues.toSeq(_partitionSchemaFromProperties)
+              .zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) })
+            dir.copy(values = new HoodiePartitionFileSliceMapping(finalValues, mapping.getFileSlices()))
+          case _ =>
+            val newValues = dir.values.toSeq(_partitionSchemaFromProperties)
+              .zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }
+            dir.copy(values = InternalRow.fromSeq(newValues))
+        }
+      )
+    }
   }
 
   private def convertTimestampPartitionType(timestampPartitionIndexes: Set[Int], index: Int, elem: Any) = {
-    if (timestampPartitionIndexes.contains(index)) org.apache.spark.unsafe.types.UTF8String.fromString(String.valueOf(elem)) else elem
+    if (timestampPartitionIndexes.contains(index)) {
+      org.apache.spark.unsafe.types.UTF8String.fromString(String.valueOf(elem))
+    } else {
+      elem
+    }
   }
 
   override def getPartitionSchema(): StructType = {

@@ -216,32 +216,14 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
                                                        isBootstrap: Boolean)
   extends HoodieBaseHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
 
-  val fileIndex: HoodieFileIndex = {
-    val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
-    val keyGeneratorClasses = Seq(KeyGeneratorType.TIMESTAMP.getClassName, KeyGeneratorType.TIMESTAMP_AVRO.getClassName,
-      KeyGeneratorType.CUSTOM.getClassName, KeyGeneratorType.CUSTOM_AVRO.getClassName)
-    if (keyGeneratorClasses.contains(keyGeneratorClassName)) {
-      new HoodieFileIndexTimestampKeyGen(
-        sparkSession,
-        metaClient,
-        Some(tableStructSchema),
-        optParams,
-        FileStatusCache.getOrCreate(sparkSession),
-        includeLogFiles = true,
-        shouldEmbedFileSlices = true)
-    } else {
-      new HoodieFileIndex(
-        sparkSession,
-        metaClient,
-        Some(tableStructSchema),
-        optParams,
-        FileStatusCache.getOrCreate(sparkSession),
-        includeLogFiles = true,
-        shouldEmbedFileSlices = true
-      )
-    }
-  }
-
+  val fileIndex = new HoodieReaderFileIndex(
+    sparkSession,
+    metaClient,
+    Some(tableStructSchema),
+    optParams,
+    FileStatusCache.getOrCreate(sparkSession),
+    includeLogFiles = true,
+    shouldEmbedFileSlices = true)
 
   val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
   val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
@@ -333,7 +315,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
 
   override val mandatoryFields: Seq[String] = partitionColumnsToRead
 
-  override val fileIndex: HoodieFileIndex = HoodieFileIndex(
+  override val fileIndex = new HoodieReaderFileIndex(
     sparkSession,
     metaClient,
     Some(tableStructSchema),

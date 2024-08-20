@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
-import org.apache.hudi.{HoodieFileIndex, HoodieFileIndexTimestampKeyGen, HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{HoodieFileIndex, HoodieReaderFileIndex, HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
@@ -189,7 +189,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
      * accordingly. HoodieFileIndexTimestampKeyGen is used by HoodieBaseRelation for reading tables with
      * Timestamp or custom key generator.
      */
-    private def updateFSRelationForTimestampKeyGen(updatedRelation: Option[LogicalPlan]): Option[LogicalPlan] = {
+    private def transformReaderFSRelation(logicalPlan: Option[LogicalPlan]): Option[LogicalPlan] = {
       def getAttributesFromTableSchema(catalogTableOpt: Option[CatalogTable], lr: LogicalRelation, attributesSet: Set[AttributeReference]) = {
         var finalAttrs: List[AttributeReference] = List.empty
         if (catalogTableOpt.isDefined) {
@@ -197,7 +197,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
             val origAttr: AttributeReference = attributesSet.collectFirst({ case a if a.name.equals(attr.name) => a }).get
             val catalogAttr = catalogTableOpt.get.partitionSchema.fields.collectFirst({ case a if a.name.equals(attr.name) => a })
             val newAttr: AttributeReference = if (catalogAttr.isDefined) {
-              origAttr.withDataType(catalogAttr.get.dataType).asInstanceOf[AttributeReference]
+              origAttr.copy(dataType = catalogAttr.get.dataType)(origAttr.exprId, origAttr.qualifier)
             } else {
               origAttr
             }
@@ -218,10 +218,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
         }
       }
 
-      updatedRelation.map(relation => {
+      logicalPlan.map(relation => {
         val catalogTableOpt = sparkAdapter.resolveHoodieTable(relation)
         val fsRelation = getHadoopFsRelation(relation)
-        if (fsRelation.isDefined && fsRelation.get.location.isInstanceOf[HoodieFileIndexTimestampKeyGen]) {
+        if (fsRelation.isDefined && fsRelation.get.location.isInstanceOf[HoodieReaderFileIndex]) {
           relation transformUp {
             case lr: LogicalRelation =>
               val finalAttrs: List[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output.toSet)
@@ -268,12 +268,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
               case _ => None
             }
 
-            val targetRelation = updateFSRelationForTimestampKeyGen(updatedTargetTable)
+            val targetRelation = transformReaderFSRelation(updatedTargetTable)
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
               mit.asInstanceOf[MergeIntoTable].copy(
                 targetTable = targetRelation.getOrElse(targetTable),
-                sourceTable = updateFSRelationForTimestampKeyGen(updatedQuery).getOrElse(query)
+                sourceTable = transformReaderFSRelation(updatedQuery).getOrElse(query)
               )
             } else {
               mit
@@ -303,14 +303,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
               sparkAdapter.getCatalystPlanUtils.rebaseInsertIntoStatement(iis,
-                updateFSRelationForTimestampKeyGen(updatedTargetTable).getOrElse(targetTable),
-                updateFSRelationForTimestampKeyGen(updatedQuery).getOrElse(query))
+                transformReaderFSRelation(updatedTargetTable).getOrElse(targetTable),
+                transformReaderFSRelation(updatedQuery).getOrElse(query))
             } else {
               iis
             }
 
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
-            val updatedRelation: LogicalPlan = updateFSRelationForTimestampKeyGen(Option.apply(relation)).get
+            val updatedRelation: LogicalPlan = transformReaderFSRelation(Option.apply(relation)).get
             ut.copy(table = updatedRelation)
 
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
