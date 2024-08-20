@@ -61,14 +61,14 @@ class SecondaryIndexTestBase extends HoodieSparkClientTestBase {
     initQueryIndexConf()
     initSparkContexts()
     initHoodieStorage()
-    initTestDataGenerator()
     setTableName("hoodie_test")
     spark = sqlContext.sparkSession
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    cleanupResources()
+    cleanupFileSystem()
+    cleanupSparkContexts()
   }
 
   def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
