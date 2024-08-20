@@ -83,6 +83,12 @@ test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
 
+    echo "::warning::validate.sh Writing mor test..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writemor.scala
+
+    echo "::warning::validate.sh Writing bootstrap test..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writebootstrap.scala
+
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/validate.scala
@@ -105,9 +111,6 @@ test_spark_hadoop_mr_bundles () {
         echo "::error::validate.sh HiveQL validation failed."
         exit 1
     fi
-
-    echo "::warning::validate.sh Writing mor test..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writemor.scala
 
     echo "::warning::validate.sh Query and validate the results using HiveQL mor 1 test..."
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
@@ -144,9 +147,6 @@ test_spark_hadoop_mr_bundles () {
         echo "::error::validate.sh HiveQL mor 2 validation failed. numRecordsWithNull:$numRecordsWithNull"
         exit 1
     fi
-
-    echo "::warning::validate.sh Writing bootstrap test..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writebootstrap.scala
 
     echo "::warning::validate.sh Query and validate the results using HiveQL bootstrap 1 test..."
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
