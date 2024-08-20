@@ -100,11 +100,91 @@ test_spark_hadoop_mr_bundles () {
     $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
       -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
       -e 'select * from trips' >> $hiveqlresultsdir/results.csv
-    numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/results.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
         exit 1
     fi
+
+    echo "::warning::validate.sh Writing mor test..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writemor.scala
+
+    echo "::warning::validate.sh Query and validate the results using HiveQL mor 1 test..."
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+      -e 'select * from trips_mor' >> $hiveqlresultsdir/results_mor1.csv
+
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/results_mor1.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne 10 ]; then
+        echo "::error::validate.sh HiveQL mor 1 validation failed. numRecordsHiveQL:$numRecordsHiveQL"
+        exit 1
+    fi
+
+    numRecordsWithNull=$(cat $hiveqlresultsdir/results_mor1.csv | grep null | wc -l)
+    if [ "$numRecordsWithNull" -ne 0 ]; then
+        echo "::error::validate.sh HiveQL mor 1 validation failed. numRecordsWithNull:$numRecordsWithNull"
+        exit 1
+    fi
+
+    numRecordsWithPred=$(cat $hiveqlresultsdir/results_mor1.csv | cut -d',' -f6 | cut -c3 | awk '$1<5{c++} END{print c+0}')
+
+    echo "::warning::validate.sh Query and validate the results using HiveQL query2 mor 2 test..."
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+          -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+          -e 'select `_hoodie_partition_path`,`_hoodie_record_key`,`_hoodie_file_name` from trips_mor where begin_lat < 0.5' >> $hiveqlresultsdir/results_mor2.csv
+
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/results_mor2.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne "$numRecordsWithPred" ]; then
+        echo "::error::validate.sh HiveQL mor 2 validation failed. numRecordsHiveQL:$numRecordsHiveQL numRecordsWithPred:$numRecordsWithPred"
+        exit 1
+    fi
+
+    numRecordsWithNull=$(cat $hiveqlresultsdir/results_mor2.csv | grep null | wc -l)
+    if [ "$numRecordsWithNull" -ne 0 ]; then
+        echo "::error::validate.sh HiveQL mor 2 validation failed. numRecordsWithNull:$numRecordsWithNull"
+        exit 1
+    fi
+
+    echo "::warning::validate.sh Writing bootstrap test..."
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writebootstrap.scala
+
+    echo "::warning::validate.sh Query and validate the results using HiveQL bootstrap 1 test..."
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+      -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+      -e 'select * from trips_bootstrap' >> $hiveqlresultsdir/results_bootstrap1.csv
+
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/results_bootstrap1.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne 10 ]; then
+        echo "::error::validate.sh HiveQL bootstrap 1 validation failed. numRecordsHiveQL:$numRecordsHiveQL"
+        exit 1
+    fi
+
+    numRecordsWithNull=$(cat $hiveqlresultsdir/results_bootstrap1.csv | grep null | wc -l)
+    if [ "$numRecordsWithNull" -ne 0 ]; then
+      echo "::error::validate.sh HiveQL bootstrap 1 validation failed. numRecordsWithNull:$numRecordsWithNull"
+      exit 1
+    fi
+
+    numRecordsWithPred=$(cat $hiveqlresultsdir/results_bootstrap1.csv | cut -d',' -f6 | cut -c3 | awk '$1<5{c++} END{print c+0}')
+
+    echo "::warning::validate.sh Query and validate the results using HiveQL bootstrap 2 test..."
+    $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
+        -u jdbc:hive2://localhost:10000/default --showHeader=false --outputformat=csv2 \
+        -e 'select `_hoodie_partition_path`,`_hoodie_record_key`,`_hoodie_file_name` from trips_bootstrap where begin_lat < 0.5' >> $hiveqlresultsdir/results_bootstrap2.csv
+
+
+    numRecordsHiveQL=$(cat $hiveqlresultsdir/results_bootstrap2.csv | wc -l)
+    if [ "$numRecordsHiveQL" -ne "$numRecordsWithPred" ]; then
+        echo "::error::validate.sh HiveQL bootstrap 2 validation failed. numRecordsHiveQL:$numRecordsHiveQL numRecordsWithPred:$numRecordsWithPred"
+        exit 1
+    fi
+
+    numRecordsWithNull=$(cat $hiveqlresultsdir/results_bootstrap2.csv | grep null | wc -l)
+    if [ "$numRecordsWithNull" -ne 0 ]; then
+        echo "::error::validate.sh HiveQL bootstrap 2 validation failed. numRecordsWithNull:$numRecordsWithNull"
+        exit 1
+    fi
+    
     echo "::warning::validate.sh spark & hadoop-mr bundles validation was successful."
     kill $DERBY_PID $HIVE_PID
 }
