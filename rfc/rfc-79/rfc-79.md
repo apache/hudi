@@ -75,34 +75,19 @@ The below visualization captures this modification to existing execution of immu
 ![heartbeat table service lifecycle (1)](https://github.com/user-attachments/assets/a8d63614-9691-4c87-b871-fc6855095227)
 
 A transaction is needed to ensure that if multiple concurrent callers attempt to start a heartbeat at the same time, at most one will start a heartbeat. 
+Consider the interleaving of three writers attempting to execute the sample compaction plan "t" visualized below.
 
+![flow table serivce](https://github.com/user-attachments/assets/da8ce9ec-6b03-424a-909a-1481546e520d)
 
+Writers A and B both start to execute "t" at the same time, but due to a writer needing to check and start the heartbeat within a transaction, only one writer is able to start a heartbeat and proceed. Here, since writer B started the heartbeat first, writer A is able to see that another writer is already executing "t" and knows that it should self-abort. When writer B fails, the newer Writer C will still be able to rollback and retry the compaction plan, due to the heartbeat started by writer B now being expired.
 
-
-Although this increases the contention of multiple jobs trying to acquire a table lock, because only a few DFS calls will be made during this transaction (to find the heartbeat file and view its last update) other jobs waiting to start a transaction should ideally not have to wait for too long.
-
-
-
+Note that although this increases the contention of multiple jobs trying to acquire a table lock, because only a few DFS calls will be made during this transaction (to find the heartbeat file and view its last update) other jobs waiting to start a transaction should ideally not have to wait for too long.
 
 
 ### Improving reliability of mutable table service plans execution
 Although mutable table service plans aren't re-executed after a rollback attempt, the design change above for adding a table service execution guard is still needed as it will allow a job to start a heartbeat before attempting to execute a plan. This heartbeat will not only prevent concurrent execution attempts (that may lead to duplicate/conflicting data files), but will also allow (lazy) clean to detect that a mutable table service plan has an active heartbeat, and therefore should not undergo a rollback. In addition to preventing clean from rolling back an active muable table service instant, a similar restriction needs to be added during table service execution to ensure that cluster/compaction execution API will not target a mutable table service that had a past or concurrent rollback attempt. This can be achived by modifing the aforementioned heartbeat design changes to table service execution to add a new valiation check. This check wil ensure that, before a mutable plan attempts to be executed, it has not been transitioned to inflight and has not been targeted by a rollback plan. This will ensure that if concurrent table service execution / clean jobs are targeting the same instant, if the instant has been transitioned to inflight, it will either be completed by the job that transitioned it, or will eventually be rolled back. 
 This change to table service execution to start a heartbeat and validate that the plan isn't inflight (or subject to a rollback) is not sufficient to handle the aforementoned issues with async mutable table service executon/clean, where an instant may be stuck on the timeline or be prematurely rolled back. In order to address this scenario, (lazy) clean will be updated to support a new configuration, `table_service_rollback_delay`. This detects the number of minutes that must elapse after mutable table service plan is scheduled before it can be rolled back. When (lazy) clean finds canidate mutable table service plans (with an expired heartbeat) to rollback, it will now only proceed with scheduling a rollback if either the instant has already been transitioned to inflight or if it's instant time is `table_service_rollback_delay` minutes old. This will allow the user to use `table_service_rollback_delay` as a threshold to dictate how long a pending requested mutable table service instant can stay on the timeline before it must be removed, which can be configured depending on the user's environment for executing table services. For example, if a user expects their table service execution envrionemnt to execute table service plans within a few minutes of them being scheduled, the `table_service_rollback_delay` can be set to just a few minutes. 
 
-
-## Implementation
-### Guarding concurrent executions of immutable table service plans with heartbeating
-When invoking the clustering/compact API to execute an existing immutable table service plan, the aforementioned heartbeat guard will be implemented by running the following steps before running any other step.
-1. Start a transaction
-2. Get the instant time P of the desired table service plan to execute.
-3. If P has an active heartbeat, fail and abort the transaction
-4. Start a heartbeat for P
-5. End the transaction
-And once the rest of the clustering/compaction API logic completes or fails, the heartbeat will be cleaned up.
-
-A transaction is needed to ensure that if multiple concurrent callers attempt to start a heartbeat at the same time, at most one will start a heartbeat. Although this increases the contention of multiple jobs trying to acquire a table lock, because only a few DFS calls will be made during this transaction (to find the heartbeat file and view its last update) other jobs waiting to start a transaction should ideally not have to wait for too long.
-
-### Updating table service execution and clean failed writes rollback for mutable table service plan
 Like the immutable plan implementation, a heartbeating-based guard will be performed before starting execution of the plan. The steps are the same except for a new step (4)
 1. Start a transaction
 2. Get the instant time P of the desired table service plan to execute. 
