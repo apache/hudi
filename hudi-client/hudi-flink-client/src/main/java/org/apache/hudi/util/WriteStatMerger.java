@@ -45,7 +45,7 @@ public class WriteStatMerger {
     HoodieDeltaWriteStat merged = new HoodieDeltaWriteStat();
     mergeWriteStat(merged, stat1, stat2);
     merged.setLogVersion(stat2.getLogVersion());
-    merged.setLogOffset(stat2.getLogOffset());
+    merged.setLogOffset(maxLong(stat1.getLogOffset(), stat2.getLogOffset()));
     merged.setBaseFile(stat2.getBaseFile());
     // log files
     List<String> mergedLogFiles = new ArrayList<>(stat1.getLogFiles());
