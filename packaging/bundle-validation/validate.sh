@@ -43,9 +43,6 @@ ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
-export JAVA_LIBRARY_PATH=$JAVA_LIBRARY_PATH:/usr/lib/hadoop/lib/native
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/hadoop/lib/native
-export SPARK_YARN_USER_ENV="JAVA_LIBRARY_PATH=$JAVA_LIBRARY_PATH,LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 ##
 # Function to change Java runtime version by changing JAVA_HOME
 ##
@@ -90,7 +87,7 @@ test_spark_hadoop_mr_bundles () {
     $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writemor.scala
 
     echo "::warning::validate.sh Writing bootstrap test..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writebootstrap.scala
+    $SPARK_HOME/bin/spark-shell --conf spark.hadoop.mapred.output.compress=false --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/writebootstrap.scala
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
