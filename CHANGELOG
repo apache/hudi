@@ -293,3 +293,12 @@ e0c211aedd8 [ENG-12523] fix master branch compilation error
 ba9bddf1e [ENG-12062][HUDI-8012] Update checkstyle.xml and fix checkstyle errors (#836)
 9ff5e7223 [ENG-12169][HUDI-6948] Fix schema evolution for non row writer (#858)
 07c2b90b2 [AUDIT-899]: Changelog for release-v1.27.1 (#868)
+
+---[2024-08-20 19:57:17] [release-v1.29.0] ---
+72058305390 [ENG-12106][INTERNAL] Add support for rounding decimals to support scale 0 inputs (#883)
+fc7d5182a9f [ENG-11464][HUDI-8071] Handle skew for user defined sort columns in BULK_INSERT (#847)
+e42995fd308 [ENG-12709][INTERNAL] Renable tests (#876)
+bd4188ad3ed [AUDIT-913] Changelog for release-v1.28.0 (#871)
+8f3a92b2d5f [ENG-12698][INTERNAL] Remove StreamProfile as its not required and used anymore (#873)
+4db312464b6 [ENG-12698][HUDI-8068] Hook up source partitions to s3 incr source (#865)
+b131896ba9c [ENG-12062][INTERNAL] Downgrade maven-checkstyle-plugin to lower required maven version (#872)
