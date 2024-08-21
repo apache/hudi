@@ -54,7 +54,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -83,7 +82,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestCleanPlanner {
-  private static final StorageConfiguration<Configuration> CONF = getDefaultStorageConf();
+  private static final StorageConfiguration<?> CONF = getDefaultStorageConf();
   private final HoodieEngineContext context = new HoodieLocalEngineContext(CONF);
 
   private final HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);

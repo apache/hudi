@@ -93,15 +93,15 @@ public class GenericRecordValidationTestUtils {
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths) {
+                                          StorageConfiguration<?> storageConf, List<String> partitionPaths) {
     List<String> excludeFields = CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
         FILENAME_METADATA_FIELD, OPERATION_METADATA_FIELD);
     assertDataInMORTable(config, instant1, instant2, storageConf, partitionPaths, excludeFields);
   }
 
   public static void assertDataInMORTable(HoodieWriteConfig config, String instant1, String instant2,
-                                          StorageConfiguration<Configuration> storageConf, List<String> partitionPaths, List<String> excludeFields) {
-    JobConf jobConf = new JobConf(storageConf.unwrap());
+                                          StorageConfiguration<?> storageConf, List<String> partitionPaths, List<String> excludeFields) {
+    JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     List<String> fullPartitionPaths = partitionPaths.stream()
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
@@ -132,21 +132,26 @@ public class GenericRecordValidationTestUtils {
     });
   }
 
-  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<Configuration> storageConf,
+  public static Map<String, GenericRecord> getRecordsMap(HoodieWriteConfig config, StorageConfiguration<?> storageConf,
                                                          HoodieTestDataGenerator dataGen) {
-    JobConf jobConf = new JobConf(storageConf.unwrap());
+    JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     List<String> fullPartitionPaths = Arrays.stream(dataGen.getPartitionPaths())
         .map(partitionPath -> Paths.get(config.getBasePath(), partitionPath).toString())
         .collect(Collectors.toList());
     return HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
-            storageConf, fullPartitionPaths, config.getBasePath(), jobConf, true).stream()
+            storageConf,
+            fullPartitionPaths,
+            config.getBasePath(),
+            jobConf,
+            true)
+        .stream()
         .collect(Collectors.toMap(rec -> rec.get(RECORD_KEY_METADATA_FIELD).toString(), Function.identity()));
   }
 
-  public static Stream<GenericRecord> readHFile(Configuration conf, String[] paths) {
+  public static Stream<GenericRecord> readHFile(StorageConfiguration<?> storageConf, String[] paths) {
     List<GenericRecord> valuesAsList = new LinkedList<>();
     for (String path : paths) {
-      HoodieStorage storage = new HoodieHadoopStorage(path, conf);
+      HoodieStorage storage = new HoodieHadoopStorage(path, storageConf);
       try (HoodieAvroHFileReaderImplBase reader = (HoodieAvroHFileReaderImplBase)
           HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
               .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(path), HoodieFileFormat.HFILE)) {

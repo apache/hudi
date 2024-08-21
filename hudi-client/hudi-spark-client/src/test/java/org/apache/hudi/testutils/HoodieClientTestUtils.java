@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -200,7 +201,7 @@ public class HoodieClientTestUtils {
           return rows.count();
         }
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(jsc.hadoopConfiguration(), paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
               gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
@@ -286,7 +287,7 @@ public class HoodieClientTestUtils {
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(timelineServicePort).build())
           .build();
-      TimelineService timelineService = new TimelineService(context, new Configuration(),
+      TimelineService timelineService = new TimelineService(context, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           HoodieStorageUtils.getStorage(HoodieTestUtils.getDefaultStorageConf()),
