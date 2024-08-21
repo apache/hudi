@@ -78,6 +78,7 @@ public class TestMercifulJsonConverter {
 
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
+  private static final String DECIMAL_ZERO_SCALE_AVRO_FILE_PATH = "/decimal-logical-type-zero-scale.avsc";
 
   /**
    * Covered case:
@@ -192,7 +193,7 @@ public class TestMercifulJsonConverter {
     }
 
     // Decide the decimal field expected output according to the test dimension.
-    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH)) {
+    if (avroFilePath.equals(DECIMAL_AVRO_FILE_PATH) || avroFilePath.equals(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH)) {
       record.put("decimalField", conv.toBytes(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
     } else {
       record.put("decimalField", conv.toFixed(bigDecimal, decimalFieldSchema, decimalFieldSchema.getLogicalType()));
@@ -213,7 +214,7 @@ public class TestMercifulJsonConverter {
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "123.45", null, 123.45, false),
         // Test MIN/MAX allowed by the schema.
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "999.99",null, 999.99, false),
+        Arguments.of(DECIMAL_AVRO_FILE_PATH, "999.99", null, 999.99, false),
         // Test 0.
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", null, 0D, false),
         Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", "0", null, false),
@@ -235,26 +236,64 @@ public class TestMercifulJsonConverter {
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", null, null, true),
         Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true)
-
+        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", "12345.0", null, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", null, 12345.0, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "12345", null, 12345, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "1230", null, 1.23e+3, false),
+        Arguments.of(DECIMAL_ZERO_SCALE_AVRO_FILE_PATH, "1230", "1.23e+3", null, false)
     );
   }
 
-  @Test // tests an edge case where 0.0 is can be interpreted as having scale = 1
-  void zeroScaleDecimalConversion() throws IOException {
+  // tests cases where decimals with fraction `.0` can be interpreted as having scale > 0
+  @ParameterizedTest
+  @MethodSource("zeroScaleDecimalCases")
+  void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
     Schema schema = new Schema.Parser().parse("{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\",\"fields\": [{\"name\": \"decimalField\", "
-        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 5, \"scale\": 0}}]}");
-    Map<String, Object> data = new HashMap<>();
-    data.put("decimalField", 0.0);
-    String json = MAPPER.writeValueAsString(data);
+        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
+    String json = String.format("{\"decimalField\":%s}", inputValue);
 
-    GenericRecord record = new GenericData.Record(schema);
-    Conversions.DecimalConversion conv = new Conversions.DecimalConversion();
-    Schema decimalFieldSchema = schema.getField("decimalField").schema();
-    record.put("decimalField", conv.toBytes(new BigDecimal(0), decimalFieldSchema, decimalFieldSchema.getLogicalType()));
+    if (shouldConvert) {
+      GenericRecord record = new GenericData.Record(schema);
+      Conversions.DecimalConversion conv = new Conversions.DecimalConversion();
+      Schema decimalFieldSchema = schema.getField("decimalField").schema();
+      record.put("decimalField", conv.toBytes(new BigDecimal(expected), decimalFieldSchema, decimalFieldSchema.getLogicalType()));
 
-    GenericRecord real = CONVERTER.convert(json, schema);
-    assertEquals(record, real);
+      GenericRecord real = CONVERTER.convert(json, schema);
+      assertEquals(record, real);
+    } else {
+      assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> CONVERTER.convert(json, schema));
+    }
+  }
+
+  static Stream<Object> zeroScaleDecimalCases() {
+    return Stream.of(
+        // Input value in JSON, expected decimal, whether conversion should be successful
+        // Values that can be converted
+        Arguments.of("0.0", "0", true),
+        Arguments.of("20.0", "20", true),
+        Arguments.of("320", "320", true),
+        Arguments.of("320.00", "320", true),
+        Arguments.of("-1320.00", "-1320", true),
+        Arguments.of("1520423524459", "1520423524459", true),
+        Arguments.of("1520423524459.0", "1520423524459", true),
+        Arguments.of("1000000000000000.0", "1000000000000000", true),
+        // Values that are big enough and out of range of int or long types
+        // Note that we can have at most 17 significant decimal digits in double values
+        Arguments.of("1.2684037455962608e+16", "12684037455962608", true),
+        Arguments.of("4.0100001e+16", "40100001000000000", true),
+        Arguments.of("3.52838e+17", "352838000000000000", true),
+        Arguments.of("9223372036853999600.0000", "9223372036853999600", true),
+        Arguments.of("999998887654321000000000000000.0000", "999998887654321000000000000000", true),
+        Arguments.of("-999998887654321000000000000000.0000", "-999998887654321000000000000000", true),
+        // Values covering high precision decimals that lose precision when converting to a double
+        Arguments.of("3.781239258857277e+16", "37812392588572770", true),
+        Arguments.of("1.6585135379127473e+18", "1658513537912747300", true),
+        // Values that should not be converted
+        Arguments.of("0.0001", null, false),
+        Arguments.of("300.9999", null, false),
+        Arguments.of("1928943043.0001", null, false)
+    );
   }
 
   private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
