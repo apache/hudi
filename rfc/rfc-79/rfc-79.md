@@ -36,7 +36,7 @@ Once we have this support, it should be feasible to build orchestration for all 
 
 ## Background
 ### Multiwriter and rollbacks
-HUDI supports a transaction manager, which allows a job to take a table-level exclusive lock. Additionally, HUDI supports a heartbeating mechanism https://hudi.apache.org/docs/next/rollbacks/#heartbeats , where an ingestion writer will generate a heartbeat while writing an instant, and the heartbeat will be cleaned up or expired if the instant commits or fails. If the HUDI Clean operation detects an incomplete instant with a non-active heartbeat, it will perform a rollback of said instant. A rollback of https://hudi.apache.org/docs/next/rollbacks/#rolling-back-of-partially-failed-commits-w-multi-writers of a failed ingestion involves schedule a rollback plan (targeting the instant) if one doesn't exist already, deleting any data files written, and then finally deleting all instant files for the instant in the active timeline. Creating a plan and following this ordering ensures that if a writer failed while performing a rollback, the next attempt will correctly resume it. This RFC will explore applying some of these semantics to table service operations.
+HUDI supports a transaction manager, which allows a job to take a table-level exclusive lock. Additionally, HUDI supports a heartbeating mechanism https://hudi.apache.org/docs/next/rollbacks/#heartbeats , where an ingestion writer will generate a heartbeat while writing an instant, and the heartbeat will be cleaned up or expired if the instant commits or fails. If the HUDI Clean operation detects an incomplete instant with a non-active heartbeat, it will perform a rollback of said instant. A rollback of https://hudi.apache.org/docs/next/rollbacks/#rolling-back-of-partially-failed-commits-w-multi-writers of a failed ingestion instant involves scheduling a rollback plan (if one doesn't exist already) for the instant and executing it, deleting any data files written, and then finally removing the instant's files in the active timeline. Creating a plan and following this ordering ensures that even if a writer failed while performing a rollback, the next attempt will correctly resume the rollback. This RFC will explore applying some of these semantics to table service operations.
 
 ### Execution of table services 
 The table service operations compact and cluster are by default "immutable" plans, meaning that once a plan is scheduled it will stay as as a pending instant until a caller invokes the table service execute API on the table service instant and sucessfully completes it. Specifically, if an inflight execution fails after transitioning the instant to inflight, the next execution attempt will implictly create and execute a rollback plan (which will delete all new instant/data files), but will keep the table service plan. This process will repeat until the instant is completed. The below visualization captures these transitions at a high level 
@@ -68,9 +68,8 @@ Specifically, when invoking the clustering/compact API to execute an existing im
 3. If P has an active heartbeat, fail and abort the transaction
 4. Start a heartbeat for P
 5. End the transaction
-And once the rest of the clustering/compaction API logic completes or fails, the heartbeat will be cleaned up.
 
-
+Once the rest of the clustering/compaction API logic completes or fails, the heartbeat will be cleaned up.
 The below visualization captures this modification to existing execution of immutable table service plans (the faded-out steps are ones that already exist in the current flow of immutable table service execution, as shown earlier)
 ![heartbeat table service lifecycle (1)](https://github.com/user-attachments/assets/a8d63614-9691-4c87-b871-fc6855095227)
 
