@@ -21,13 +21,17 @@ package org.apache.hudi
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
+import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
-import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
+import org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory
+import org.apache.hudi.io.storage.{HoodieAvroHFileReaderImplBase, HoodieIOFactory, HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
 
@@ -96,6 +100,12 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
             projection.apply(data)
           }
         }).asInstanceOf[ClosableIterator[InternalRow]]
+    } else if (filePath.getFileExtension.equals(".hfile")) {
+      //THIS DOES NOT CURRENTLY WORK:
+      val storageConf = storage.getConf().getInline()
+      val inlineStorage = storage.newInstance(filePath, storageConf)
+      val reader = getIOFactory(inlineStorage).getReaderFactory(HoodieRecordType.AVRO).getFileReader(new HoodieConfig(), filePath, HoodieFileFormat.HFILE, Option.of(requiredSchema))
+      new CloseableMappingIterator[HoodieRecord[IndexedRecord], InternalRow](reader.getRecordIterator().asInstanceOf[ClosableIterator[HoodieRecord[IndexedRecord]]], r => convertAvroRecord(r.getData))
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
