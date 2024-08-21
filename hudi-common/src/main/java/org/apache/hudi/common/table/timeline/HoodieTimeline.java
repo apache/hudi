@@ -143,11 +143,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingExcludingLogCompaction();
 
   /**
-   * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
+   * Filter this timeline to just include the in-flights excluding compaction and log compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction and log compaction instants
    */
-  HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
+  HoodieTimeline filterPendingExcludingCompactionAndLogCompaction();
 
   /**
    * Filter this timeline to just include the completed instants.
