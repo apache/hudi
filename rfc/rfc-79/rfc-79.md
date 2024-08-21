@@ -79,7 +79,7 @@ Consider the interleaving of three writers attempting to execute the sample comp
 
 ![flow table serivce](https://github.com/user-attachments/assets/da8ce9ec-6b03-424a-909a-1481546e520d)
 
-Writers A and B both start to execute "t" at the same time, but due to a writer needing to check and start the heartbeat within a transaction, only one writer is able to start a heartbeat and proceed. Here, since writer B started the heartbeat first, writer A is able to see that another writer is already executing "t" and knows that it should self-abort. When writer B fails, the newer Writer C will still be able to rollback and retry the compaction plan, due to the heartbeat started by writer B now being expired.
+Writers A and B both start to execute "t" at the same time, but due to a writer needing to check and start the heartbeat within a transaction, only one writer is able to start a heartbeat and proceed. Here, since writer B started the heartbeat first, writer A is able to see that another writer is already executing "t" and knows that it should self-abort. When writer B fails, the newer Writer C will still be able to rollback and retry the compaction plan, due to the heartbeat started by writer B now being expired. See "Test Plan" for a list of more scenarios.
 
 Note that although this increases the contention of multiple jobs trying to acquire a table lock, because only a few DFS calls will be made during this transaction (to find the heartbeat file and view its last update) other jobs waiting to start a transaction should ideally not have to wait for too long.
 
