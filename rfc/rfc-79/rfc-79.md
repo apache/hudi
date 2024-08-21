@@ -71,7 +71,7 @@ Specifically, when invoking the clustering/compact API to execute an existing im
 And once the rest of the clustering/compaction API logic completes or fails, the heartbeat will be cleaned up.
 
 
-The below visualization captures this modification to existing execution of immutable table service plans
+The below visualization captures this modification to existing execution of immutable table service plans (the faded-out steps are ones that already exist in the current flow of immutable table service execution, as shown earlier)
 ![heartbeat table service lifecycle (1)](https://github.com/user-attachments/assets/a8d63614-9691-4c87-b871-fc6855095227)
 
 A transaction is needed to ensure that if multiple concurrent callers attempt to start a heartbeat at the same time, at most one will start a heartbeat. 
