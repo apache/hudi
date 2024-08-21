@@ -116,7 +116,8 @@ public class DirectWriteMarkers extends WriteMarkers {
         return storage.listFiles(path).stream()
             .map(pathInfo -> pathInfo.getPath().toString())
             .filter(pathStr -> pathStr.contains(HoodieTableMetaClient.MARKER_EXTN)
-                && !pathStr.endsWith(IOType.APPEND.name()));
+                && !pathStr.endsWith(IOType.APPEND.name()))
+            .map(this::translateMarkerToDataPath);
       }, parallelism));
     }
 
