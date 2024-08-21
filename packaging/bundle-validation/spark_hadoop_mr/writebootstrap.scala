@@ -41,7 +41,7 @@ val dataGen = new DataGenerator
 val inserts = convertToStringList(dataGen.generateInserts(10)).asScala.toSeq
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.show(100,false)
-df.write.partitionBy("partitionpath").parquet(bootstrapBasePath)
+df.write.partitionBy("partitionpath").option("spark.sql.parquet.compression.codec","none").parquet(bootstrapBasePath)
 
 val bootstrapDF = spark.emptyDataFrame
 bootstrapDF.write.format("hudi").
