@@ -112,7 +112,7 @@ Note that the reason (1b-d) needs to be within a transaction is in order to hand
 A proposed fix should handle any combination of table service execution/rollback operations. A few scenarios for compaction, logcomopaction, and clustering that can be tested are listed below
 
 ### Immutable table service plan
-Assume that table service plan P is either a compaction or a logcompaction/clustering plan that is configured to not be a removable-plan.
+Assume that table service plan P is immutable
 
 | #|  Scenario | Expectations |
 | - | - | -| 
@@ -122,7 +122,7 @@ Assume that table service plan P is either a compaction or a logcompaction/clust
 
 
 ### Mutable table service plan
-Assume that table service plan P is a logcompaction/clustering plan that is configured to be a removable-plan.
+Assume that table service plan P is mutable
 
 | #|  Scenario | Expectations |
 | - | - | -| 
