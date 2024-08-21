@@ -111,7 +111,7 @@ Note that the reason (1b-d) needs to be within a transaction is in order to hand
 
 A proposed fix should handle any combination of table service execution/rollback operations. A few scenarios for compaction, logcomopaction, and clustering that can be tested are listed below
 
-### Compaction and table service plans that are not removable-plan
+### Immutable table service plan
 Assume that table service plan P is either a compaction or a logcompaction/clustering plan that is configured to not be a removable-plan.
 
 | #|  Scenario | Expectations |
@@ -121,7 +121,7 @@ Assume that table service plan P is either a compaction or a logcompaction/clust
 |C.|<pre> <p> 1. Plan P exists on the timeline, which has already been transitioned to inflight </p> <p> 2. Writer X starts executing P </p> <p> 3. Writer Y starts executing P </p> </pre> | X or Y may complete execution (or neither),  though both may still succeed. If X completed execution, it would have had to rollback P.inflight first before re-execution. If Y completed execution, it may or may not have had to do a rollback, depending on if X failed after rolling back P.inflight but before re-attempting the actual execution. |
 
 
-### Removable-plan clustering / logcompaction
+### Mutable table service plan
 Assume that table service plan P is a logcompaction/clustering plan that is configured to be a removable-plan.
 
 | #|  Scenario | Expectations |
