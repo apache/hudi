@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -43,6 +44,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.utilities.JsonQuarantineTableWriter;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -186,7 +188,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_VALIDATE_RECORD_CREATION.key(), "true");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TARGET_TABLE.key(), tableName + "ERROR");
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH.key(), basePath + tableName + "ERROR");
-      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
+      extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), JsonQuarantineTableWriter.class.getName());
       extraProps.setProperty("hoodie.base.path", tableBasePath);
     }
 
@@ -346,6 +348,16 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     @Override
     public void addErrorEvents(JavaRDD errorEvent) {
       errorEvents.add(errorEvent);
+    }
+
+    @Override
+    public boolean commit(String baseTableInstantTime, JavaRDD writeStatuses) {
+      return false;
+    }
+
+    @Override
+    public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option commitedInstantTime) {
+      return null;
     }
 
     @Override

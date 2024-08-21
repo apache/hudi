@@ -843,9 +843,13 @@ public class StreamSync implements Serializable, Closeable {
     JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
 
+    Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+    String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    Option<JavaRDD<WriteStatus>> errorTableWriteStatusOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
+    List<WriteStatus> statuses = errorTableWriteStatusOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(writeStatusRDD).collect()).orElse(writeStatusRDD.collect());
     // process write status
-    long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
-    long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
+    long totalErrorRecords = statuses.stream().mapToLong(WriteStatus::getTotalErrorRecords).sum();
+    long totalRecords = statuses.stream().mapToLong(WriteStatus::getTotalRecords).sum();
     long totalSuccessfulRecords = totalRecords - totalErrorRecords;
     LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
         instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
@@ -872,10 +876,9 @@ public class StreamSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (errorTableWriter.isPresent()) {
+      if (errorTableWriter.isPresent() && errorTableWriteStatusOpt.isPresent()) {
         // Commit the error events triggered so far to the error table
-        Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
-        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        boolean errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusOpt.get());
         if (!errorTableSuccess) {
           switch (errorWriteFailureStrategy) {
             case ROLLBACK_COMMIT:

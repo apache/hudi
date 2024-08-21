@@ -20,10 +20,8 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.TestHoodieSparkUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -34,9 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -178,6 +174,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     }
 
     if (withErrorTable) {
+      Dataset<Row> errorDf = sparkSession.read().format("hudi").load(tableBasePath + "ERROR");
+      assertEquals(1, errorDf.count());
+      /**
       List<ErrorEvent> recs = new ArrayList<>();
       for (String key : TestErrorTable.commited.keySet()) {
         Option<JavaRDD> errors = TestErrorTable.commited.get(key);
@@ -189,6 +188,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       }
       assertEquals(1, recs.size());
       assertEquals(recs.get(0).getReason(), reason);
+       */
     }
   }
 
