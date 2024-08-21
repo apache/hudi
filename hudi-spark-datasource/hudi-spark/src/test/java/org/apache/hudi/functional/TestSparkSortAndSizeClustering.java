@@ -109,7 +109,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     config.setValue("hoodie.clustering.plan.strategy.max.bytes.per.group", String.valueOf(2 * 1024 * 1024));
 
     int numRecords = 1000;
-    writeData(HoodieActiveTimeline.createNewInstantTime(), numRecords, true);
+    writeData(metaClient.createNewInstantTime(), numRecords, true);
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(

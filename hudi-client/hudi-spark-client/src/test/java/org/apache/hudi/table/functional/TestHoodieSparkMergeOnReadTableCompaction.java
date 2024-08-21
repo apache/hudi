@@ -124,14 +124,14 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(metaClient.createNewInstantTime(), 100, true);
     // write data again, and in the case of bucket index, all records will go into log files (we use a small max_file_size)
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(metaClient.createNewInstantTime(), 100, true);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // schedule compaction
     String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
     // write data, and do not commit. those records should not visible to reader
-    String insertTime = HoodieActiveTimeline.createNewInstantTime();
+    String insertTime = client.createNewInstantTime();
     List<WriteStatus> writeStatuses = writeData(insertTime, 100, false);
     Assertions.assertEquals(200, readTableTotalRecordsNum());
     // commit the write. The records should be visible now even though the compaction does not complete.

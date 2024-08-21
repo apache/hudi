@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
@@ -259,7 +260,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
     assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
     assertEquals(2,((JavaRDD)errorTableWriter.get().getErrorEvents(
-        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+        InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
   }
 
   @Test
@@ -291,7 +292,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(),Long.MAX_VALUE);
     assertEquals(1000,fetch1.getBatch().get().count());
     assertEquals(2, ((JavaRDD)errorTableWriter.get().getErrorEvents(
-        HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+        InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
   }
 
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {

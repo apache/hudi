@@ -140,7 +140,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
 
     // generate updates from inserts
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys,
-        testUtil.generateHoodieTestRecords(0, 100), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 100), metaClient.createNewInstantTime());
     String newCommitTime =
         ((GenericRecord) updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 

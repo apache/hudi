@@ -82,8 +82,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
         HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(true, metaClient.createNewInstantTime(), 100, true);
+    writeData(true, metaClient.createNewInstantTime(), 100, true);
 
     // offline compaction schedule
     HoodieCompactor hoodieCompactorSchedule =
@@ -92,8 +92,8 @@ public class TestHoodieCompactorJob extends HoodieOfflineJobTestBase {
     TestHelpers.assertNCompletedCommits(2, tableBasePath);
     TestHelpers.assertNCleanCommits(0, tableBasePath);
 
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
-    writeData(true, HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(true, metaClient.createNewInstantTime(), 100, true);
+    writeData(true, metaClient.createNewInstantTime(), 100, true);
 
     // offline compaction execute with sync clean
     HoodieCompactor hoodieCompactorExecute =

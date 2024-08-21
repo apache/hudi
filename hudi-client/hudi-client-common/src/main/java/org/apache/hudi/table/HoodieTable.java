@@ -663,7 +663,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
                                        Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
-        .orElseGet(HoodieActiveTimeline::createNewInstantTime);
+        .orElseGet(() -> getMetaClient().createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
         false);
     rollback(context, commitTime, inflightInstant, false, false);
@@ -679,7 +679,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public void rollbackInflightLogCompaction(HoodieInstant inflightInstant, Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc) {
     final String commitTime = getPendingRollbackInstantFunc.apply(inflightInstant.getTimestamp()).map(entry
         -> entry.getRollbackInstant().getTimestamp())
-        .orElseGet(HoodieActiveTimeline::createNewInstantTime);
+        .orElseGet(() -> getMetaClient().createNewInstantTime());
     scheduleRollback(context, commitTime, inflightInstant, false, config.shouldRollbackUsingMarkers(),
         false);
     rollback(context, commitTime, inflightInstant, true, false);

@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTableServiceManagerConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
@@ -766,6 +767,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieTableServiceManagerConfig tableServiceManagerConfig;
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
+  private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private EngineType engineType;
 
   /**
@@ -1161,6 +1163,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.tableServiceManagerConfig = HoodieTableServiceManagerConfig.newBuilder().fromProperties(props).build();
     this.commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
+    this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
+        .withDefaultLockProvider(!isLockRequired()).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -2360,6 +2364,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public HoodieStorageConfig getStorageConfig() {
     return storageConfig;
+  }
+
+  public HoodieTimeGeneratorConfig getTimeGeneratorConfig() {
+    return timeGeneratorConfig;
   }
 
   /**

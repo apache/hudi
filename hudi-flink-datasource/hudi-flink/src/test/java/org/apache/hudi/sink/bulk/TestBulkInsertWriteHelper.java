@@ -66,7 +66,7 @@ public class TestBulkInsertWriteHelper {
   @Test
   void testWrite() throws Exception {
     HoodieFlinkTable<?> table = FlinkTables.createTable(conf);
-    String instant = HoodieActiveTimeline.createNewInstantTime();
+    String instant = table.getMetaClient().createNewInstantTime();
     RowType rowType = TestConfigurations.ROW_TYPE;
     BulkInsertWriterHelper writerHelper = new BulkInsertWriterHelper(conf, table, table.getConfig(), instant,
         1, 1, 0, rowType, false);

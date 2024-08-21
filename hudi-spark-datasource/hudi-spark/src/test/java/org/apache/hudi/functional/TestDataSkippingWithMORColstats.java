@@ -338,7 +338,7 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
         .withKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      client.scheduleCompactionAtInstant(HoodieActiveTimeline.createNewInstantTime(), Option.empty());
+      client.scheduleCompactionAtInstant(metaClient.createNewInstantTime(), Option.empty());
     }
   }
 

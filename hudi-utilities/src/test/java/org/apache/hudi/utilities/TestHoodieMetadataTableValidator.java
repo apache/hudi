@@ -21,12 +21,15 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimeGenerator;
+import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -145,14 +148,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     when(metaClient.getCommitsTimeline()).thenReturn(commitsTimeline);
     when(commitsTimeline.filterCompletedInstants()).thenReturn(completedTimeline);
 
+    TimeGenerator timeGenerator = TimeGenerators
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath),
+            HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
+
     StoragePath baseStoragePath = new StoragePath(basePath);
 
     if (testFailureCase) {
       // 3rd partition which is additional in MDT should have creation time before last instant in timeline.
 
-      String partition3CreationTime = HoodieActiveTimeline.createNewInstantTime();
+      String partition3CreationTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
       Thread.sleep(100);
-      String lastIntantCreationTime = HoodieActiveTimeline.createNewInstantTime();
+      String lastIntantCreationTime = HoodieActiveTimeline.createNewInstantTime(true, timeGenerator);
 
       HoodieInstant lastInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, lastIntantCreationTime);
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
@@ -163,10 +170,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       });
     } else {
       // 3rd partition creation time is > last completed instant
-      HoodieInstant lastInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, HoodieActiveTimeline.createNewInstantTime());
+      HoodieInstant lastInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, metaClient.createNewInstantTime());
       when(completedTimeline.lastInstant()).thenReturn(Option.of(lastInstant));
       Thread.sleep(100);
-      validator.setPartitionCreationTime(Option.of(HoodieActiveTimeline.createNewInstantTime()));
+      validator.setPartitionCreationTime(Option.of(metaClient.createNewInstantTime()));
 
       // validate that all 3 partitions are returned
       assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));

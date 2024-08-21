@@ -437,7 +437,7 @@ public class StreamSync implements Serializable, Closeable {
 
     // Refresh Timeline
     refreshTimeline();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
         .setBasePath(cfg.targetBasePath)
@@ -958,7 +958,7 @@ public class StreamSync implements Serializable, Closeable {
           // No-Op
         }
       }
-      instantTime = HoodieActiveTimeline.createNewInstantTime();
+      instantTime = writeClient.createNewInstantTime();
     }
     throw lastException;
   }

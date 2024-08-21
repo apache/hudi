@@ -189,7 +189,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
       writeClient.commit(newCommitTime, writeStatues);
 
       // Create new commit time.
-      String secondCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String secondCommitTime = writeClient.createNewInstantTime();
       // Now tagLocation for these records, index should tag them correctly
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(config, context, metaClient);

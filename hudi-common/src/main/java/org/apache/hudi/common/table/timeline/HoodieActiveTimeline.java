@@ -136,19 +136,43 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   /**
    * Returns next instant time in the correct format.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
+   * todo
    */
   public static String createNewInstantTime() {
-    return HoodieInstantTimeGenerator.createNewInstantTime(0);
+    return HoodieInstantTimeGenerator.createNewInstantTime(false, null, 0);
   }
 
   /**
    * Returns next instant time that adds N milliseconds to current time.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
-   *
+   * todo
    * @param milliseconds Milliseconds to add to current time while generating the new instant time
    */
   public static String createNewInstantTime(long milliseconds) {
-    return HoodieInstantTimeGenerator.createNewInstantTime(milliseconds);
+    return HoodieInstantTimeGenerator.createNewInstantTime(false, null, milliseconds);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
+   *
+   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   */
+  public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator) {
+    return createNewInstantTime(shouldLock, timeGenerator, 0L);
+  }
+
+  /**
+   * Returns next instant time in the correct format.
+   * Ensures each instant time is at least 1 millisecond apart since we create instant times at millisecond granularity.
+   *
+   * @param shouldLock whether the lock should be enabled to get the instant time.
+   * @param timeGenerator TimeGenerator used to generate the instant time.
+   * @param milliseconds Milliseconds to add to current time while generating the new instant time
+   */
+  public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
+    return HoodieInstantTimeGenerator.createNewInstantTime(shouldLock, timeGenerator, milliseconds);
   }
 
   protected HoodieActiveTimeline(HoodieTableMetaClient metaClient, Set<String> includedExtensions) {

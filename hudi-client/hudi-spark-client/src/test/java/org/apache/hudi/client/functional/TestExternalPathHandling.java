@@ -144,7 +144,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     assertFileGroupCorrectness(instantTime3, partitionPath2, filePath3, fileId3, partitionPath2.isEmpty() ? 2 : 1);
 
     // clean first commit
-    String cleanTime = HoodieActiveTimeline.createNewInstantTime();
+    String cleanTime = writeClient.createNewInstantTime();
     HoodieCleanerPlan cleanerPlan = cleanerPlan(new HoodieActionInstant(instantTime2, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieInstant.State.COMPLETED.name()), instantTime3,
         Collections.singletonMap(partitionPath1, Collections.singletonList(new HoodieCleanFileInfo(filePath1, false))));
     metaClient.getActiveTimeline().saveToCleanRequested(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime),

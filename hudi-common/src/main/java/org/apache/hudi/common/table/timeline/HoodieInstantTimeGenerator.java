@@ -63,9 +63,12 @@ public class HoodieInstantTimeGenerator {
    * Returns next instant time that adds N milliseconds to the current time.
    * Ensures each instant time is atleast 1 second apart since we create instant times at second granularity
    *
+   * @param shouldLock
+   * @param timeGenerator
    * @param milliseconds Milliseconds to add to current time while generating the new instant time
    */
-  public static String createNewInstantTime(long milliseconds) {
+  public static String createNewInstantTime(boolean shouldLock, TimeGenerator timeGenerator, long milliseconds) {
+    // boolean shouldLock, TimeGenerator timeGenerator, long milliseconds
     return lastInstantTime.updateAndGet((oldVal) -> {
       String newCommitTime;
       do {

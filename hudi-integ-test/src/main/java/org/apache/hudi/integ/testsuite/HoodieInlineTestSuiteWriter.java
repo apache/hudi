@@ -90,7 +90,7 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
 
   public Option<String> startCommit() {
     if (cfg.useDeltaStreamer) {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      return Option.of(writeClient.createNewInstantTime());
     } else {
       return Option.of(writeClient.startCommit());
     }

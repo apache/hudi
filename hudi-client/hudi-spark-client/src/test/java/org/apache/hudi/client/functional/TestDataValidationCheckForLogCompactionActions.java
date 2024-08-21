@@ -197,7 +197,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   }
 
   private boolean writeOnMainTable(TestTableContents mainTable, int curr) throws IOException {
-    String commitTime = HoodieActiveTimeline.createNewInstantTime();
+    String commitTime = mainTable.client.createNewInstantTime();
     mainTable.client.startCommitWithTime(commitTime);
 
     int actionType = pickAWriteAction();

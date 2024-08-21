@@ -59,7 +59,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 4; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty());
@@ -94,7 +94,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 3; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty());
@@ -107,7 +107,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       }
       assertRowNumberEqualsTo(30);
       // write another pending instant
-      insertBatchWithoutCommit(HoodieActiveTimeline.createNewInstantTime(), numRecords);
+      insertBatchWithoutCommit(metaClient.createNewInstantTime(), numRecords);
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(20);
@@ -137,7 +137,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
       final int numRecords = 10;
       for (int i = 1; i <= 2; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2nd commit been rolled back
         insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
             false, true, numRecords, numRecords * i, 1, Option.empty());
@@ -150,7 +150,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
       }
       assertRowNumberEqualsTo(20);
       // write another pending instant
-      insertBatchWithoutCommit(HoodieActiveTimeline.createNewInstantTime(), numRecords);
+      insertBatchWithoutCommit(metaClient.createNewInstantTime(), numRecords);
       // rollback the pending instant
       if (commitRollback) {
         client.rollbackFailedWrites();
@@ -158,12 +158,12 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
         HoodieInstant pendingInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction()
             .lastInstant().orElseThrow(() -> new HoodieException("Pending instant does not exist"));
         HoodieSparkTable.create(client.getConfig(), context)
-            .scheduleRollback(context, HoodieActiveTimeline.createNewInstantTime(), pendingInstant, false, true, false);
+            .scheduleRollback(context, metaClient.createNewInstantTime(), pendingInstant, false, true, false);
       }
       Option<String> rollbackInstant = metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().map(HoodieInstant::getTimestamp);
       assertTrue(rollbackInstant.isPresent(), "The latest instant should be a rollback");
       // write another batch
-      insertBatch(hoodieWriteConfig, client, HoodieActiveTimeline.createNewInstantTime(), rollbackInstant.get(), numRecords, SparkRDDWriteClient::insert,
+      insertBatch(hoodieWriteConfig, client, metaClient.createNewInstantTime(), rollbackInstant.get(), numRecords, SparkRDDWriteClient::insert,
           false, true, numRecords, numRecords * 3, 1, Option.empty());
       // restore
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));

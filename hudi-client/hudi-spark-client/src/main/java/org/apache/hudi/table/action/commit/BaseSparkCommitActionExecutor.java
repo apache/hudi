@@ -139,7 +139,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           .map(Map.Entry::getValue)
           .collect(Collectors.toSet());
       pendingClusteringInstantsToRollback.forEach(instant -> {
-        String commitTime = HoodieActiveTimeline.createNewInstantTime();
+        String commitTime = table.getMetaClient().createNewInstantTime();
         table.scheduleRollback(context, commitTime, instant, false, config.shouldRollbackUsingMarkers(), false);
         table.rollback(context, commitTime, instant, true, true);
       });

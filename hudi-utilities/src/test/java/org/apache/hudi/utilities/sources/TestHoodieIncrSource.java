@@ -155,7 +155,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
 
       for (int i = 0; i < 6; i++) {
-        inserts.add(writeRecords(writeClient, INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+        inserts.add(writeRecords(writeClient, INSERT, null, metaClient.createNewInstantTime()));
       }
 
       // Emulates a scenario where an inflight commit is before a completed commit
@@ -256,7 +256,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       for (int i = 0; i < 6; i++) {
         WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
         List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRight();
-        dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, HoodieActiveTimeline.createNewInstantTime()));
+        dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, metaClient.createNewInstantTime()));
         if (tableType == COPY_ON_WRITE) {
           if (i == 2) {
             writeClient.scheduleClustering(Option.empty());
@@ -270,7 +270,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           }
         }
       }
-      dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, HoodieActiveTimeline.createNewInstantTime()));
+      dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, metaClient.createNewInstantTime()));
 
       String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
       // Pending clustering exists

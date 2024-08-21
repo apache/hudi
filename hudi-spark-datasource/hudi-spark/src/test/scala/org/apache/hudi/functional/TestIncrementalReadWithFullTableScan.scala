@@ -22,12 +22,12 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
+import org.apache.hudi.common.testutils.InProcessTimeGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -114,8 +114,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
     val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
 
-    val startOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
-    val endOutOfRangeCommitTs = HoodieInstantTimeGenerator.createNewInstantTime(0)
+    val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
+    val endOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
 
     assertTrue(HoodieTimeline.compareTimestamps(startOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))
     assertTrue(HoodieTimeline.compareTimestamps(endOutOfRangeCommitTs, GREATER_THAN, completedCommits.lastInstant().get().getTimestamp))

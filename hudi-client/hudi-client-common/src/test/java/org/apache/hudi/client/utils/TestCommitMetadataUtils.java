@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -103,7 +104,7 @@ public class TestCommitMetadataUtils extends HoodieCommonTestHarness {
     when(writeConfig.getMarkersType()).thenReturn(MarkerType.DIRECT);
     when(writeConfig.getBasePath()).thenReturn(basePath);
     String commitActionType = HoodieActiveTimeline.DELTA_COMMIT_ACTION;
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
     // Setup dummy commit metadata
     String p0 = "2020/01/01";

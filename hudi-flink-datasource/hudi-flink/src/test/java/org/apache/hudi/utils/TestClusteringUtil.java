@@ -135,7 +135,7 @@ public class TestClusteringUtil {
         HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false);
     HoodieRequestedReplaceMetadata metadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(),
         plan, Collections.emptyMap(), 1);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant clusteringInstant =
         new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
     try {

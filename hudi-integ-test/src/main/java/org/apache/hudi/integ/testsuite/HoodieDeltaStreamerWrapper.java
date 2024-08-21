@@ -85,7 +85,7 @@ public class HoodieDeltaStreamerWrapper extends HoodieDeltaStreamer {
         .setConf(service.getStorage().getConf().newInstance())
         .setBasePath(service.getCfg().targetBasePath)
         .build();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = metaClient.createNewInstantTime();
     InputBatch inputBatch = service.readFromSource(instantTime, metaClient);
     return Pair.of(inputBatch.getSchemaProvider(), Pair.of(inputBatch.getCheckpointForNextBatch(), (JavaRDD<HoodieRecord>) inputBatch.getBatch().get()));
   }

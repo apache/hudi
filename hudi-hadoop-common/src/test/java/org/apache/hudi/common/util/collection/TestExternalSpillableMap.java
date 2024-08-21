@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.SpillableMapTestUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -129,7 +130,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
       assert recordKeys.contains(rec.getRecordKey());
     }
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys,
-        testUtil.generateHoodieTestRecords(0, 100), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 100), metaClient.createNewInstantTime());
 
     // update records already inserted
     SpillableMapTestUtils.upsertRecords(updatedRecords, records);
@@ -254,7 +255,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     List<IndexedRecord> recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
-    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     List<String> keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
     // Update the instantTime for this record
@@ -272,7 +273,7 @@ public class TestExternalSpillableMap extends HoodieCommonTestHarness {
     recordsToUpdate = new ArrayList<>();
     recordsToUpdate.add((IndexedRecord) record.getData().getInsertValue(schema).get());
 
-    newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    newCommitTime = InProcessTimeGenerator.createNewInstantTime();
     keysToBeUpdated = new ArrayList<>();
     keysToBeUpdated.add(key);
     // Update the commitTime for this record

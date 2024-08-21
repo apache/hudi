@@ -62,7 +62,7 @@ public class CleanFunction<T> extends AbstractRichFunction
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.executor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = writeClient.createNewInstantTime();
     LOG.info(String.format("exec clean with instant time %s...", instantTime));
     if (conf.getBoolean(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       executor.execute(() -> {

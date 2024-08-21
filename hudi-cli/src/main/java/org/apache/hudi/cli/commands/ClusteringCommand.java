@@ -59,7 +59,7 @@ public class ClusteringCommand {
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
     // First get a clustering instant time and pass it to spark launcher for scheduling clustering
-    String clusteringInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String clusteringInstantTime = client.createNewInstantTime();
 
     sparkLauncher.addAppArgs(SparkCommand.CLUSTERING_SCHEDULE.toString(), master, sparkMemory,
         HoodieCLI.basePath, client.getTableConfig().getTableName(), clusteringInstantTime, propsFilePath);

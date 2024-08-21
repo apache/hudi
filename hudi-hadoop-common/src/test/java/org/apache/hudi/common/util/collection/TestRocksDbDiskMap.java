@@ -137,7 +137,7 @@ public class TestRocksDbDiskMap extends HoodieCommonTestHarness {
 
     // generate updates from inserts for first 50 keys / subset of keys
     List<IndexedRecord> updatedRecords = SchemaTestUtil.updateHoodieTestRecords(recordKeys.subList(0, 50),
-        testUtil.generateHoodieTestRecords(0, 50), HoodieActiveTimeline.createNewInstantTime());
+        testUtil.generateHoodieTestRecords(0, 50), metaClient.createNewInstantTime());
     String newCommitTime =
         ((GenericRecord) updatedRecords.get(0)).get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
 

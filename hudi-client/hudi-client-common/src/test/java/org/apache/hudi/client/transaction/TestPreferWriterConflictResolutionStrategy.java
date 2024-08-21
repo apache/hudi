@@ -53,15 +53,15 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
 
   @Test
   public void testConcurrentWritesWithInterleavingScheduledCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -75,15 +75,15 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     // TODO: Remove sleep stmt once the modified times issue is fixed.
     // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
@@ -110,15 +110,15 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
 
   @Test
   public void testConcurrentWritesWithInterleavingCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // compaction 1 gets scheduled and finishes
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompactionRequested(newInstantTime, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, newInstantTime));
@@ -138,15 +138,15 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
    */
   @Test
   public void testConcurrentWriteAndCompactionScheduledEarlier() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     // consider commits before this are all successful
     // compaction 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createCompaction(newInstantTime, metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -162,15 +162,15 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
    */
   @Test
   public void testConcurrentWritesWithInterleavingScheduledCluster() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // clustering 1 gets scheduled
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplaceRequested(newInstantTime, metaClient);
     createReplaceInflight(newInstantTime, WriteOperationType.CLUSTER, metaClient);
 
@@ -190,18 +190,18 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
    */
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulCluster() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // TODO: Remove sleep stmt once the modified times issue is fixed.
     // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
     // clustering writer starts and complete before ingestion commit.
-    String replaceWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String replaceWriterInstant = metaClient.createNewInstantTime();
     createReplace(replaceWriterInstant, WriteOperationType.CLUSTER, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
@@ -226,18 +226,18 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
 
   @Test
   public void testConcurrentWritesWithInterleavingSuccessfulReplace() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // consider commits before this are all successful
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
     // writer 1 starts
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
     // TODO: Remove sleep stmt once the modified times issue is fixed.
     // Sleep thread for at least 1sec for consecutive commits that way they do not have two commits modified times falls on the same millisecond.
     Thread.sleep(1000);
     // replace 1 gets scheduled and finished
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createReplace(newInstantTime, WriteOperationType.INSERT_OVERWRITE, metaClient);
 
     Option<HoodieInstant> currentInstant = Option.of(new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));

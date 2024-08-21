@@ -89,7 +89,7 @@ public class CompactionUtil {
       LOG.info("No instants to schedule the compaction plan");
       return Option.empty();
     } else {
-      return Option.of(HoodieActiveTimeline.createNewInstantTime());
+      return Option.of(metaClient.createNewInstantTime());
     }
   }
 
@@ -203,7 +203,7 @@ public class CompactionUtil {
             instant.getState() == HoodieInstant.State.INFLIGHT).firstInstant();
     if (earliestInflight.isPresent()) {
       HoodieInstant instant = earliestInflight.get();
-      String currentTime = HoodieActiveTimeline.createNewInstantTime();
+      String currentTime = table.getMetaClient().createNewInstantTime();
       int timeout = conf.getInteger(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.getTimestamp()) >= timeout) {
         LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");

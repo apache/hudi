@@ -245,7 +245,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public static Long getNextCommitTime(long curCommitTime) {
     if ((curCommitTime + 1) % 1000000000000L >= 60) { // max seconds is 60 and hence
-      return Long.parseLong(HoodieActiveTimeline.createNewInstantTime());
+      return Long.parseLong(InProcessTimeGenerator.createNewInstantTime());
     } else {
       return curCommitTime + 1;
     }

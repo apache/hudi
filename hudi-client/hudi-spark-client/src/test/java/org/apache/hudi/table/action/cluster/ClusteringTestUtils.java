@@ -108,7 +108,7 @@ public class ClusteringTestUtils {
 
   public static String runClustering(SparkRDDWriteClient clusteringClient, boolean skipExecution, boolean shouldCommit) {
     // Schedule and execute clustering.
-    String clusteringCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String clusteringCommitTime = clusteringClient.createNewInstantTime();
     return runClusteringOnInstant(clusteringClient, skipExecution, shouldCommit, clusteringCommitTime);
   }
 

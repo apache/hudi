@@ -1019,7 +1019,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a timestamp with suffix which we use for MDT clean, compaction etc.
-      String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(HoodieActiveTimeline.createNewInstantTime());
+      String syncCommitTime = HoodieTableMetadataUtil.createRestoreTimestamp(writeClient.createNewInstantTime(false));
       processAndCommit(syncCommitTime, () -> HoodieTableMetadataUtil.convertMissingPartitionRecords(engineContext,
           partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete, syncCommitTime));
       closeInternal();

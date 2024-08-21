@@ -248,7 +248,7 @@ public class HoodieFlinkClusteringJob {
         ClusteringUtil.validateClusteringScheduling(conf);
 
         String clusteringInstantTime = cfg.clusteringInstantTime != null ? cfg.clusteringInstantTime
-            : HoodieActiveTimeline.createNewInstantTime();
+            : writeClient.createNewInstantTime();
 
         LOG.info("Creating a clustering plan for instant [" + clusteringInstantTime + "]");
         boolean scheduled = writeClient.scheduleClusteringAtInstant(clusteringInstantTime, Option.empty());

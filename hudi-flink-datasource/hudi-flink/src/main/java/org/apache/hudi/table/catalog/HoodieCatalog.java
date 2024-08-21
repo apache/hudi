@@ -478,7 +478,7 @@ public class HoodieCatalog extends AbstractCatalog {
     // enable auto-commit though ~
     options.put(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "true");
     try (HoodieFlinkWriteClient<?> writeClient = createWriteClient(options, tablePathStr, tablePath)) {
-      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), HoodieActiveTimeline.createNewInstantTime())
+      writeClient.deletePartitions(Collections.singletonList(partitionPathStr), writeClient.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));

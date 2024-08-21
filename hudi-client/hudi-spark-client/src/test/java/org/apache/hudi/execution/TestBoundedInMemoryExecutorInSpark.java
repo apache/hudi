@@ -21,6 +21,7 @@ package org.apache.hudi.execution;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
@@ -49,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHarness {
 
-  private final String instantTime = HoodieActiveTimeline.createNewInstantTime();
+  private final String instantTime = InProcessTimeGenerator.createNewInstantTime();
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.BOUNDED_IN_MEMORY.name())

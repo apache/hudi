@@ -582,9 +582,9 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
 
   @Test
   public void testCreateNewInstantTime() throws Exception {
-    String lastInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String lastInstantTime = metaClient.createNewInstantTime();
     for (int i = 0; i < 3; ++i) {
-      String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+      String newInstantTime = metaClient.createNewInstantTime();
       assertTrue(HoodieTimeline.compareTimestamps(lastInstantTime, HoodieTimeline.LESSER_THAN, newInstantTime));
       lastInstantTime = newInstantTime;
     }

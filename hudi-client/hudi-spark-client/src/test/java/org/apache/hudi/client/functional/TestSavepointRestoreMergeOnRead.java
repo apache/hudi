@@ -79,7 +79,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       final int numRecords = 10;
       List<HoodieRecord> baseRecordsToUpdate = null;
       for (int i = 1; i <= 3; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2td commit been rolled back
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
@@ -98,7 +98,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       // write another 3 delta commits
       String compactionCommit = null;
       for (int i = 1; i <= 3; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
         JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
@@ -139,7 +139,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
     String secondCommit;
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       // 1st commit insert
-      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String newCommitTime = client.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
       client.startCommitWithTime(newCommitTime);
@@ -147,7 +147,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       firstCommit = newCommitTime;
 
       // 2nd commit with inserts and updates which will create new file slice due to small file handling.
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       List<HoodieRecord> records2 = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
       List<HoodieRecord> records3 = dataGen.generateInserts(newCommitTime, 30);
@@ -180,13 +180,13 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
 
     // add 2 more updates which will create log files.
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
-      String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      String newCommitTime = client.createNewInstantTime();
       List<HoodieRecord> records = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
       JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
       client.startCommitWithTime(newCommitTime);
       client.upsert(writeRecords, newCommitTime);
 
-      newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+      newCommitTime = client.createNewInstantTime();
       records = dataGen.generateUniqueUpdates(newCommitTime, numRecords);
       writeRecords = jsc.parallelize(records, 1);
       client.startCommitWithTime(newCommitTime);
@@ -238,7 +238,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       final int numRecords = 10;
       List<HoodieRecord> baseRecordsToUpdate = null;
       for (int i = 1; i <= 3; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2td commit been rolled back
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
@@ -291,7 +291,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
       final int numRecords = 10;
       List<HoodieRecord> baseRecordsToUpdate = null;
       for (int i = 1; i <= 2; i++) {
-        String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+        String newCommitTime = client.createNewInstantTime();
         // Write 4 inserts with the 2td commit been rolled back
         client.startCommitWithTime(newCommitTime);
         List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
@@ -312,7 +312,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
 
       assertRowNumberEqualsTo(20);
       // write a delta_commit but does not commit
-      updateBatchWithoutCommit(HoodieActiveTimeline.createNewInstantTime(), Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
+      updateBatchWithoutCommit(metaClient.createNewInstantTime(), Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
       // rollback the delta_commit
       assertTrue(writeClient.rollbackFailedWrites(), "The last delta_commit should be rolled back");
 
@@ -326,7 +326,7 @@ public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
   }
 
   private void upsertBatch(SparkRDDWriteClient client, List<HoodieRecord> baseRecordsToUpdate) throws IOException {
-    String newCommitTime = HoodieActiveTimeline.createNewInstantTime();
+    String newCommitTime = client.createNewInstantTime();
     client.startCommitWithTime(newCommitTime);
     List<HoodieRecord> records = dataGen.generateUpdates(newCommitTime, Objects.requireNonNull(baseRecordsToUpdate, "The records to update should not be null"));
     JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);

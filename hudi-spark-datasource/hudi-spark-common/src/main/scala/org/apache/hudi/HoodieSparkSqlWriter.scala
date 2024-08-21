@@ -304,7 +304,7 @@ class HoodieSparkSqlWriterInternal {
           .setRecordMergerStrategy(hoodieConfig.getStringOrDefault(DataSourceWriteOptions.RECORD_MERGER_STRATEGY))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
-      val instantTime = HoodieActiveTimeline.createNewInstantTime()
+      val instantTime = tableMetaClient.createNewInstantTime()
       tableConfig = tableMetaClient.getTableConfig
 
       val commitActionType = CommitUtils.getCommitActionType(operation, tableConfig.getTableType)

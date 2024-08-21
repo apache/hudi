@@ -54,17 +54,17 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategyWithMORTabl
 
   @Test
   public void testConcurrentWritesWithInterleavingInflightCompaction() throws Exception {
-    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    createCommit(metaClient.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     // Consider commits before this are all successful.
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
 
     // Writer 1 starts.
-    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    String currentWriterInstant = metaClient.createNewInstantTime();
     createInflightCommit(currentWriterInstant, metaClient);
 
     // Compaction 1 gets scheduled and becomes inflight.
-    String newInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String newInstantTime = metaClient.createNewInstantTime();
     createPendingCompaction(newInstantTime, metaClient);
 
     // Writer 1 tries to commit.

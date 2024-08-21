@@ -214,7 +214,7 @@ public class TestAsyncCompaction extends CompactionTestBase {
         new ArrayList<>());
 
     // Schedule compaction but do not run them
-    String compactInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String compactInstantTime = client.createNewInstantTime();
     scheduleCompaction(compactInstantTime, client, cfg);
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf.newInstance(), cfg.getBasePath());
     HoodieInstant pendingCompactionInstant =

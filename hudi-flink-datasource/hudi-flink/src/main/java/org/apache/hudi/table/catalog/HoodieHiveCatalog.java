@@ -848,7 +848,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
           Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
-              HoodieActiveTimeline.createNewInstantTime())
+              writeClient.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {
               throw new HoodieMetadataException(String.format("Failed to commit metadata table records at file id %s.", writeStatus.getFileId()));
