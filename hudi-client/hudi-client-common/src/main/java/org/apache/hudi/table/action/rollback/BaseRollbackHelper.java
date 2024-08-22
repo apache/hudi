@@ -189,7 +189,7 @@ public class BaseRollbackHelper implements Serializable {
       try {
         StoragePath fullDeletePath = new StoragePath(fileToDelete);
         String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), fullDeletePath.getParent());
-        boolean isDeleted = false;
+        boolean isDeleted = true;
         if (doDelete) {
           try {
             isDeleted = metaClient.getStorage().deleteFile(fullDeletePath);
