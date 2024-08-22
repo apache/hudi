@@ -101,7 +101,6 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       if (metaClient.getTableConfig.isMetadataTableAvailable) {
         if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
           confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
-          logInfo("Auto config filesystem lock provider for metadata table")
         }
       }
 
