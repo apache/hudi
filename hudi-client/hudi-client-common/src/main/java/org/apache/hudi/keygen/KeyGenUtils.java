@@ -67,28 +67,33 @@ public class KeyGenUtils {
       Option<String> recordsKeyFields, String partitionFields) {
     boolean autoGenerateRecordKeys = !recordsKeyFields.isPresent();
     if (autoGenerateRecordKeys) {
-      return inferKeyGeneratorTypeForAutoKeyGen(partitionFields);
+      return inferKeyGeneratorTypeFromPartitionFields(partitionFields);
     } else {
       if (!StringUtils.isNullOrEmpty(partitionFields)) {
-        int numPartFields = partitionFields.split(",").length;
         int numRecordKeyFields = recordsKeyFields.get().split(",").length;
-        if (numPartFields == 1 && numRecordKeyFields == 1) {
-          return KeyGeneratorType.SIMPLE;
+        KeyGeneratorType recordKeyGeneratorType = numRecordKeyFields == 1 ? KeyGeneratorType.SIMPLE : KeyGeneratorType.COMPLEX;
+        KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
+        if (partitionKeyGeneratorType == KeyGeneratorType.SIMPLE && recordKeyGeneratorType == KeyGeneratorType.COMPLEX) {
+          return recordKeyGeneratorType;
+        } else {
+          return partitionKeyGeneratorType;
         }
-        return KeyGeneratorType.COMPLEX;
       }
       return KeyGeneratorType.NON_PARTITION;
     }
   }
 
   // When auto record key gen is enabled, our inference will be based on partition path only.
-  private static KeyGeneratorType inferKeyGeneratorTypeForAutoKeyGen(String partitionFields) {
+  private static KeyGeneratorType inferKeyGeneratorTypeFromPartitionFields(String partitionFields) {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
-      int numPartFields = partitionFields.split(",").length;
-      if (numPartFields == 1) {
+      String[] partitonFields = partitionFields.split(",");
+      if (partitonFields[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
+        return KeyGeneratorType.CUSTOM;
+      } else if (partitonFields.length == 1) {
         return KeyGeneratorType.SIMPLE;
+      } else {
+        return KeyGeneratorType.COMPLEX;
       }
-      return KeyGeneratorType.COMPLEX;
     }
     return KeyGeneratorType.NON_PARTITION;
   }

@@ -442,11 +442,91 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test create table with custom key generator") {
+    withTempDir { tmp => {
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      val writePartitionFields = "ts:timestamp"
+      val dateFormat = "yyyy/MM/dd"
+      val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+      val customPartitionFunc = (ts: Integer, _: String) => "ts=" + tsGenFunc.apply(ts)
+      val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+
+      spark.sql(
+        s"""
+           |create table ${tableName} (
+           |  `id` INT,
+           |  `name` STRING,
+           |  `price` DECIMAL(5, 1),
+           |  `ts` INT,
+           |  `segment` STRING
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'mor',
+           |  'preCombineField'='name',
+           |  'hoodie.datasource.write.keygenerator.class' = '$CUSTOM_KEY_GEN_CLASS_NAME',
+           |  'hoodie.datasource.write.partitionpath.field' = '$writePartitionFields',
+           |  'hoodie.insert.shuffle.parallelism' = '1',
+           |  'hoodie.upsert.shuffle.parallelism' = '1',
+           |  'hoodie.bulkinsert.shuffle.parallelism' = '1',
+           |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
+           |  'hoodie.keygen.timebased.output.dateformat' = '$dateFormat',
+           |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
+           |)
+           location '${tablePath}'
+           """.stripMargin)
+
+      testInserts(tableName, tsGenFunc, customPartitionFunc)
+      assertEquals(7, spark.sql(
+        s"""
+           | SELECT * from $tableName
+           | """.stripMargin).count())
+
+      // Validate ts field is still of type int in the table
+      validateTsFieldSchema(tablePath)
+    }
+    }
+  }
+
   private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: Schema.Type): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
     val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
     assertEquals(nullableSchema, schemaResolver.getTableAvroSchema(true).getField(fieldName).schema())
+  }
+
+  private def testInserts(tableName: String,
+                                    tsGenFunc: Integer => String,
+                                    partitionGenFunc: (Integer, String) => String): Unit = {
+    val sourceTableName = tableName + "_source1"
+    prepareParquetSource(sourceTableName, Seq(
+      "(1, 'a1', 1.6, 1704121827, 'cat1')",
+      "(2, 'a2', 10.8, 1704121827, 'cat1')",
+      "(3, 'a3', 30.0, 1706800227, 'cat1')",
+      "(4, 'a4', 103.4, 1701443427, 'cat2')",
+      "(5, 'a5', 1999.0, 1704121827, 'cat2')",
+      "(6, 'a6', 80.0, 1704121827, 'cat3')",
+      "(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+    spark.sql(
+      s"""
+         | INSERT INTO $tableName
+         | SELECT * from $sourceTableName
+         | """.stripMargin)
+    validateResults(
+      tableName,
+      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName",
+      tsGenFunc,
+      partitionGenFunc,
+      Seq(),
+      Seq(1, "a1", "1.6", 1704121827, "cat1"),
+      Seq(2, "a2", "10.8", 1704121827, "cat1"),
+      Seq(3, "a3", "30.0", 1706800227, "cat1"),
+      Seq(4, "a4", "103.4", 1701443427, "cat2"),
+      Seq(5, "a5", "1999.0", 1704121827, "cat2"),
+      Seq(6, "a6", "80.0", 1704121827, "cat3"),
+      Seq(7, "a7", "1399.0", 1706800227, "cat1")
+    )
   }
 
   private def testFirstRoundInserts(tableName: String,
