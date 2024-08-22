@@ -173,7 +173,7 @@ jobs:
         include:
           - scalaProfile: "scala-2.12"
             sparkProfile: "spark3.5"
-            flinkProfile: "flink1.18"
+            flinkProfile: "flink1.19"
 
     steps:
       - uses: actions/checkout@v3
@@ -718,7 +718,7 @@ jobs:
       matrix:
         include:
           - scalaProfile: "scala-2.12"
-            flinkProfile: "flink1.18"
+            flinkProfile: "flink1.19"
 
     steps:
       - uses: actions/checkout@v3
