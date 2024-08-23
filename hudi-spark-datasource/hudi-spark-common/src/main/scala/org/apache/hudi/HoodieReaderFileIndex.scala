@@ -19,10 +19,9 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.exception.HoodieValidationException
-import org.apache.hudi.keygen.CustomAvroKeyGenerator
 import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, KeyGenUtils}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -53,7 +52,9 @@ class HoodieReaderFileIndex(override val spark: SparkSession,
    */
   private def getTimestampPartitionIndex(): Set[Int] = {
     val tableConfig = metaClient.getTableConfig
-    val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
+    val keyGeneratorClassNameOpt = Option.apply(tableConfig.getKeyGeneratorClassName)
+    val recordKeyFieldOpt = common.util.Option.ofNullable(tableConfig.getRawRecordKeyFieldProp)
+    val keyGeneratorClassName = keyGeneratorClassNameOpt.getOrElse(KeyGenUtils.inferKeyGeneratorType(recordKeyFieldOpt, tableConfig.getPartitionFieldProp).getClassName)
     if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
       || keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP_AVRO.getClassName)) {
       Set(0)
