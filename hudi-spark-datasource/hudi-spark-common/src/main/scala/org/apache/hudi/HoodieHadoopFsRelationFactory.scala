@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources.{FileFormat, FileIndex, FileStatusCache, HadoopFsRelation, HoodieMultipleBaseFileFormat}
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedParquetFileFormat
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTimeTravelQueryTimestamp
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -147,9 +147,9 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       keyFields.head
     }
 
-  protected lazy val specifiedQueryTimestamp: Option[String] =
-    optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
-      .map(HoodieSqlCommonUtils.formatQueryInstant)
+  protected lazy val specifiedQueryTimestamp: Option[String] = {
+    getTimeTravelQueryTimestamp(optParams, metaClient)
+  }
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)

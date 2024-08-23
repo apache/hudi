@@ -64,7 +64,8 @@ import org.apache.spark.sql.execution.FileRelation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.{LegacyHoodieParquetFileFormat, ParquetFileFormat}
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTimeTravelQueryTimestamp
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{Row, SQLContext, SparkSession}
@@ -143,9 +144,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       case _ => None
     }
 
-  protected lazy val specifiedQueryTimestamp: Option[String] =
-    optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
-      .map(HoodieSqlCommonUtils.formatQueryInstant)
+  protected lazy val specifiedQueryTimestamp: Option[String] = {
+    getTimeTravelQueryTimestamp(optParams, metaClient)
+  }
 
   /**
    * NOTE: Initialization of teh following members is coupled on purpose to minimize amount of I/O

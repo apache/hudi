@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -43,7 +43,6 @@ import org.apache.spark.sql.types._
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -239,6 +238,15 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    */
   def isUsingHiveCatalog(sparkSession: SparkSession): Boolean =
     sparkSession.sessionState.conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION) == "hive"
+
+  def getTimeTravelQueryTimestamp(optParams: Map[String, String], metaClient: HoodieTableMetaClient) = {
+    val timestamp = optParams.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+      .map(HoodieSqlCommonUtils.formatQueryInstant)
+    if (timestamp.isDefined && metaClient.isMetadataTable) {
+      throw new HoodieNotSupportedException("Time travel query is not supported with metadata table")
+    }
+    timestamp
+  }
 
   /**
    * Convert different query instant time format to the commit time format.
