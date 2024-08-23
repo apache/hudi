@@ -716,6 +716,7 @@ public class HoodieTableMetadataUtil {
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
+      LOG.warn("No columns to index for column stats index.");
       return engineContext.emptyHoodieData();
     }
 
@@ -932,6 +933,7 @@ public class HoodieTableMetadataUtil {
             Lazy.lazily(() -> tryResolveSchemaForTable(dataMetaClient)));
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
+      LOG.warn("No columns to index for column stats index.");
       return engineContext.emptyHoodieData();
     }
 
@@ -1282,7 +1284,8 @@ public class HoodieTableMetadataUtil {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
       return Option.of(schemaResolver.getTableAvroSchema());
     } catch (Exception e) {
-      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
+      LOG.warn("Failed to get latest columns for {}", dataTableMetaClient.getBasePath());
+      return Option.empty();
     }
   }
 
@@ -2051,6 +2054,7 @@ public class HoodieTableMetadataUtil {
         metadataConfig.getColumnsEnabledForColumnStatsIndex(),
         Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
     if (columnsToIndex.isEmpty()) {
+      LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
     }
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndex);
