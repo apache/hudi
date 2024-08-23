@@ -19,19 +19,52 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
-
-import org.apache.spark.sql.Row
-import org.junit.jupiter.api.Test
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.metadata.{HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.hudi.util.JFunction
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSparkUtils}
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.{DataFrame, Row}
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.{Tag, Test}
 import org.scalatest.Assertions.assertResult
+
+import scala.collection.JavaConverters
 
 /**
  * Test cases for secondary index
  */
-class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
+@Tag("functional")
+class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
+
+  val metadataOpts: Map[String, String] = Map(
+    HoodieMetadataConfig.ENABLE.key -> "true",
+    HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true"
+  )
+  val commonOpts: Map[String, String] = Map(
+    "hoodie.insert.shuffle.parallelism" -> "4",
+    "hoodie.upsert.shuffle.parallelism" -> "4",
+    HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+    RECORDKEY_FIELD.key -> "record_key_col",
+    PARTITIONPATH_FIELD.key -> "partition_key_col",
+    HIVE_STYLE_PARTITIONING.key -> "true",
+    PRECOMBINE_FIELD.key -> "ts"
+  ) ++ metadataOpts
+  var mergedDfList: List[DataFrame] = List.empty
+  var tableName = "hoodie_"
+  var metaClient: HoodieTableMetaClient = _
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
 
   @Test
   def testSecondaryIndexWithFilters(): Unit = {
@@ -40,6 +73,7 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_with_filters"
 
       spark.sql(
         s"""
@@ -111,6 +145,7 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_pruning_with_updates"
 
       spark.sql(
         s"""
@@ -180,6 +215,7 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_with_partition_stats_index"
 
       spark.sql(
         s"""
@@ -247,7 +283,65 @@ class TestSecondaryIndexPruning extends SecondaryIndexTestBase {
     }
   }
 
-  private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
-    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(sql).collect().sortBy(_.toString()))
+  private def checkAnswer(query: String)(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
   }
+
+  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
+    mergedDfList = spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache() :: mergedDfList
+    val secondaryKey = mergedDfList.last.limit(1).collect().map(row => row.getAs(columnName).toString)
+    val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey(0)))
+    verifyFilePruning(hudiOpts, dataFilter)
+  }
+
+  private def attribute(partition: String): AttributeReference = {
+    AttributeReference(partition, StringType, nullable = true)()
+  }
+
+  private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression): Unit = {
+    // with data skipping
+    val commonOpts = opts + ("path" -> basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
+    val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
+    val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    val latestDataFilesCount = getLatestDataFilesCount(opts)
+    assertTrue(filteredFilesCount > 0 && filteredFilesCount < latestDataFilesCount)
+
+    // with no data skipping
+    fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
+    val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
+    assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
+  }
+
+  private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
+    var totalLatestDataFiles = 0L
+    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
+    try {
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+        .values()
+        .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
+          (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](
+            slice => totalLatestDataFiles += (if (includeLogFiles) slice.getLogFiles.count() else 0)
+              + (if (slice.getBaseFile.isPresent) 1 else 0)))))
+    } finally {
+      fsView.close()
+    }
+    totalLatestDataFiles
+  }
+
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
+    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  }
+
+  private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
+  }
+
+  private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_] = SparkHoodieBackedTableMetadataWriter.create(
+    storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_]]
 }
