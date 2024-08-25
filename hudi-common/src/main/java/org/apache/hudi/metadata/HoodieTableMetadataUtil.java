@@ -732,22 +732,6 @@ public class HoodieTableMetadataUtil {
         });
   }
 
-  /**
-   * Convert rollback action metadata to metadata table records.
-   * <p>
-   * We only need to handle FILES partition here as HUDI rollbacks on MOR table may end up adding a new log file. All other partitions
-   * are handled by actual rollback of the deltacommit which added records to those partitions.
-   */
-  public static Map<MetadataPartitionType, HoodieData<HoodieRecord>> convertMetadataToRecords(
-      HoodieEngineContext engineContext, HoodieTableMetaClient dataTableMetaClient, HoodieRollbackMetadata rollbackMetadata, String instantTime) {
-
-    List<HoodieRecord> filesPartitionRecords = convertMetadataToRollbackRecords(rollbackMetadata, instantTime, dataTableMetaClient);
-    final HoodieData<HoodieRecord> rollbackRecordsRDD = filesPartitionRecords.isEmpty() ? engineContext.emptyHoodieData()
-        : engineContext.parallelize(filesPartitionRecords, filesPartitionRecords.size());
-
-    return Collections.singletonMap(MetadataPartitionType.FILES, rollbackRecordsRDD);
-  }
-
   private static void reAddLogFilesFromRollbackPlan(HoodieTableMetaClient dataTableMetaClient, String instantTime,
                                                     Map<String, Map<String, Long>> partitionToFilesMap) {
     HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, instantTime);
