@@ -86,7 +86,7 @@ public class TestMercifulJsonConverter {
     rec.put("favorite_number", 1337);
     rec.put("favorite_color", "10");
 
-    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+    Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
