@@ -216,7 +216,7 @@ public class MercifulJsonConverter {
     ValidationUtils.checkArgument(
         processor != null, String.format("JsonConverter cannot handle type: %s", type));
     return processor;
-    }
+  }
 
   /**
    * Build type processor map for each avro type.
