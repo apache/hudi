@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieTableType}
 import org.apache.hudi.common.table.TableSchemaResolver
@@ -25,10 +25,11 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline
 import org.apache.hudi.common.testutils.HoodieTestTable
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.ExceptionUtil.getRootCause
-import org.apache.hudi.exception.HoodieTimeTravelException
+import org.apache.hudi.exception.{HoodieNotSupportedException, HoodieTimeTravelException}
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
-
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
@@ -37,6 +38,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
 import java.text.SimpleDateFormat
+import scala.collection.JavaConverters
 
 class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionSupport {
   var spark: SparkSession = _
@@ -225,6 +227,44 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
       .collect()
     // since there is no commit before the commit date, the query result should be empty.
     assertTrue(result4.isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testTimeTravelQueryForMDTTable(tableType: HoodieTableType): Unit = {
+    initMetaClient(tableType)
+    val _spark = spark
+    import _spark.implicits._
+
+    val opts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> ""
+    )
+
+    // First write
+    val df1 = Seq((1, "a1", 10, 1000)).toDF("id", "name", "value", "version")
+    writeBatch(df1, opts, Overwrite)
+
+    // Second write
+    val df2 = Seq((1, "a1", 12, 1001)).toDF("id", "name", "value", "version")
+    writeBatch(df2, opts)
+
+    val mdtMetaClient = HoodieSparkTable.create(getWriteConfig(opts), context, metaClient).getMetadataTable
+      .asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+    val secondInstant = mdtMetaClient.getActiveTimeline.getCommitsTimeline.nthInstant(1).get()
+    assertThrows(classOf[HoodieNotSupportedException]) {
+      spark.read.format("hudi")
+        .option("as.of.instant", secondInstant.getTimestamp)
+        .load(mdtMetaClient.getBasePath.toString)
+    }
+  }
+
+  protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {
+    val props = TypedProperties.fromMap(JavaConverters.mapAsJavaMapConverter(hudiOpts).asJava)
+    HoodieWriteConfig.newBuilder()
+      .withProps(props)
+      .withPath(basePath)
+      .build()
   }
 
   private def writeBatch(df: DataFrame, options: Map[String, String], mode: SaveMode = Append): String = {

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -27,9 +27,10 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeGenerator}
 import org.apache.hudi.config._
-import org.apache.hudi.exception.{HoodieNotSupportedException, HoodieWriteConflictException}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JavaConversions
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.lit
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -40,6 +41,7 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, Meth
 
 import java.util.Collections
 import java.util.concurrent.Executors
+
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -47,7 +49,7 @@ import scala.language.postfixOps
 import scala.util.Using
 
 @Tag("functional")
-class TestRecordLevelIndex extends RecordLevelIndexTestBase with ScalaAssertionSupport {
+class TestRecordLevelIndex extends RecordLevelIndexTestBase {
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
   def testRLIInitialization(tableType: HoodieTableType): Unit = {
@@ -137,13 +139,6 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with ScalaAssertionS
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    val mdtMetaClient = getMetadataMetaClient(hudiOpts)
-    val thirdInstant = mdtMetaClient.getActiveTimeline.getCommitsTimeline.nthInstant(3).get()
-    assertThrows(classOf[HoodieNotSupportedException]) {
-      spark.read.format("hudi")
-        .option("as.of.instant", thirdInstant.getTimestamp)
-        .load(mdtMetaClient.getBasePath.toString)
-    }
   }
 
   @ParameterizedTest
