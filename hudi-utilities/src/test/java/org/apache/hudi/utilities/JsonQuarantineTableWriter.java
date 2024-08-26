@@ -239,7 +239,6 @@ public class JsonQuarantineTableWriter<T extends ErrorEvent> extends BaseErrorTa
   public boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime) {
     boolean result = true;
     Option<Timer.Context> errorTableWriteTimerContextOpt = metricsOpt.map(HoodieStreamerMetrics::getErrorTableWriteTimerContext);
-
     if (errorEventsRdd != null) {
       try {
         errorEventsRdd.persist(StorageLevel.MEMORY_AND_DISK());
@@ -271,22 +270,21 @@ public class JsonQuarantineTableWriter<T extends ErrorEvent> extends BaseErrorTa
   @Override
   public JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime) {
     if (errorEventsRdd != null) {
-      try {
-        errorEventsRdd.persist(StorageLevel.MEMORY_AND_DISK());
-        return getErrorEvents(baseTableInstantTime, commitedInstantTime)
-            .map(rdd -> {
-              startCommit(errorTableInstantTime);
-              JavaRDD<WriteStatus> writeStatusJavaRDD = quarantineTableWriteClient.bulkInsert(rdd, errorTableInstantTime);
-              return writeStatusJavaRDD;
-            }).get();
-      } finally {
-        errorEventsRdd.unpersist();
-        errorEventsRdd = null;
-      }
+      errorEventsRdd.persist(StorageLevel.MEMORY_AND_DISK());
+      return getErrorEvents(baseTableInstantTime, commitedInstantTime)
+        .map(rdd -> {
+          startCommit(errorTableInstantTime);
+          JavaRDD<WriteStatus> writeStatusJavaRDD = quarantineTableWriteClient.bulkInsert(rdd, errorTableInstantTime);
+          return writeStatusJavaRDD;
+        }).get();
     }
     return null;
   }
 
+  /**
+   * caller should ensure writeStatuses is not null to avoid IllegalArgumentException during timeline operations
+   * as there won't be any inflight instant to be marked as complete
+   */
   @Override
   public boolean commit(String baseTableInstantTime, JavaRDD<WriteStatus> writeStatuses) {
     long totalRecords = writeStatuses.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
@@ -294,6 +292,10 @@ public class JsonQuarantineTableWriter<T extends ErrorEvent> extends BaseErrorTa
     boolean success = quarantineTableWriteClient.commit(baseTableInstantTime, writeStatuses, Option.empty(),
         COMMIT_ACTION, Collections.emptyMap());
     LOG.info("Result of error table commit {} is {}", baseTableInstantTime, success);
+    if (errorEventsRdd != null && !errorEventsRdd.getStorageLevel().equals(StorageLevel.NONE())) {
+      errorEventsRdd.unpersist();
+      errorEventsRdd = null;
+    }
     return success;
   }
 

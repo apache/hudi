@@ -141,6 +141,7 @@ import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_UNION_WITH_DATA_TABLE;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
@@ -256,6 +257,7 @@ public class StreamSync implements Serializable, Closeable {
   private transient HoodieMetrics hoodieMetrics;
 
   private final boolean autoGenerateRecordKeys;
+  private final boolean isErrorTableUnionWithDataTableEnabled;
 
   @VisibleForTesting
   StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
@@ -276,6 +278,8 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     this.errorTableWriter = errorTableWriter;
+    this.isErrorTableUnionWithDataTableEnabled =
+        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
   }
@@ -309,6 +313,8 @@ public class StreamSync implements Serializable, Closeable {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(cfg, sparkSession, props, hoodieSparkContext, fs, Option.of(metrics));
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
+    this.isErrorTableUnionWithDataTableEnabled =
+        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
     refreshTimeline();
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
@@ -840,16 +846,24 @@ public class StreamSync implements Serializable, Closeable {
     // write to hudi and fetch result
     WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
 
-    JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+    JavaRDD<WriteStatus> dataTableWriteStatusRDD, writeStatusRDD;
+    dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
 
     Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
     String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    Option<JavaRDD<WriteStatus>> errorTableWriteStatusOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
-    List<WriteStatus> statuses = errorTableWriteStatusOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(writeStatusRDD).collect()).orElse(writeStatusRDD.collect());
+    Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
+    if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
+      errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
+      writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
+    } else {
+      errorTableWriteStatusRDDOpt = Option.empty();
+      writeStatusRDD = dataTableWriteStatusRDD;
+    }
+
     // process write status
-    long totalErrorRecords = statuses.stream().mapToLong(WriteStatus::getTotalErrorRecords).sum();
-    long totalRecords = statuses.stream().mapToLong(WriteStatus::getTotalRecords).sum();
+    long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
+    long totalRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalRecords).sum().longValue();
     long totalSuccessfulRecords = totalRecords - totalErrorRecords;
     LOG.info(String.format("instantTime=%s, totalRecords=%d, totalErrorRecords=%d, totalSuccessfulRecords=%d",
         instantTime, totalRecords, totalErrorRecords, totalSuccessfulRecords));
@@ -876,9 +890,20 @@ public class StreamSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-      if (errorTableWriter.isPresent() && errorTableWriteStatusOpt.isPresent()) {
+
+      if (errorTableWriter.isPresent()) {
+        boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
-        boolean errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusOpt.get());
+        if (isErrorTableUnionWithDataTableEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
+          /**
+           * commit only if errorTableWriteStatus is not null to avoid IllegalArgumentException during timeline operations
+           * as there won't be any inflight instant to be marked as complete
+           */
+          errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+        } else if (!isErrorTableUnionWithDataTableEnabled) {
+          errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        }
+
         if (!errorTableSuccess) {
           switch (errorWriteFailureStrategy) {
             case ROLLBACK_COMMIT:
@@ -893,7 +918,7 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
       }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
+      boolean success = writeClient.commit(instantTime, dataTableWriteStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch());
@@ -914,7 +939,7 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
       LOG.error("Printing out the top 100 errors");
-      writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+      dataTableWriteStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
         LOG.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
           ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
@@ -928,7 +953,7 @@ public class StreamSync implements Serializable, Closeable {
 
     // Send DeltaStreamer Metrics
     metrics.updateStreamerMetrics(overallTimeNanos);
-    return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+    return Pair.of(scheduledCompactionInstant, dataTableWriteStatusRDD);
   }
 
   /**
