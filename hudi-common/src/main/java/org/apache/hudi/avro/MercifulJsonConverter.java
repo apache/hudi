@@ -918,12 +918,24 @@ public class MercifulJsonConverter {
     }
 
     private static JsonToAvroFieldProcessor generateStringTypeHandler() {
-      return new JsonToAvroFieldProcessor() {
-        @Override
-        public Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
-          return Pair.of(true, value.toString());
+      return new StringProcessor();
+    }
+
+    private static class StringProcessor extends JsonToAvroFieldProcessor {
+      private static final ObjectMapper STRING_MAPPER = new ObjectMapper();
+
+      @Override
+      protected Pair<Boolean, Object> convert(Object value, String name, Schema schema, boolean shouldSanitize, String invalidCharMask) {
+        if (value instanceof String) {
+          return Pair.of(true, value);
+        } else {
+          try {
+            return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
+          } catch (IOException ex) {
+            return Pair.of(false, null);
+          }
         }
-      };
+      }
     }
 
     private static JsonToAvroFieldProcessor generateBytesTypeHandler() {
