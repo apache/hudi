@@ -302,3 +302,7 @@ bd4188ad3ed [AUDIT-913] Changelog for release-v1.28.0 (#871)
 8f3a92b2d5f [ENG-12698][INTERNAL] Remove StreamProfile as its not required and used anymore (#873)
 4db312464b6 [ENG-12698][HUDI-8068] Hook up source partitions to s3 incr source (#865)
 b131896ba9c [ENG-12062][INTERNAL] Downgrade maven-checkstyle-plugin to lower required maven version (#872)
+
+---[2024-08-26 13:48:16] [release-v1.29.1] ---
+8e1ab9f1c00 [ENG-13432][MINOR] Update handling of non-string inputs for string fields in MercifulJsonConverter (#893)
+cf41c616d31 [AUDIT-920]: Changelog for release-v1.29.0
