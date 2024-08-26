@@ -18,16 +18,12 @@
 
 package org.apache.hudi.avro.processors;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
-import java.math.RoundingMode;
-import java.util.Base64;
 
 public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
 
