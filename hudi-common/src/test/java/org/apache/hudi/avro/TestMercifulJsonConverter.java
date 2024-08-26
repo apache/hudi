@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -68,6 +69,24 @@ public class TestMercifulJsonConverter {
     rec.put("favorite_color", color);
 
     Assertions.assertEquals(rec, CONVERTER.convert(json, simpleSchema));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "{\"first\":\"John\",\"last\":\"Smith\"}",
+      "[{\"first\":\"John\",\"last\":\"Smith\"}]",
+      "{\"first\":\"John\",\"last\":\"Smith\",\"suffix\":3}",
+  })
+  void nestedJsonAsString(String nameInput) throws IOException {
+    Schema simpleSchema = SchemaTestUtil.getSimpleSchema();
+    String json = String.format("{\"name\": %s, \"favorite_number\": 1337, \"favorite_color\": 10}", nameInput);
+
+    GenericRecord rec = new GenericData.Record(simpleSchema);
+    rec.put("name", nameInput);
+    rec.put("favorite_number", 1337);
+    rec.put("favorite_color", "10");
+
+    assertEquals(rec, CONVERTER.convert(json, simpleSchema));
   }
 
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
