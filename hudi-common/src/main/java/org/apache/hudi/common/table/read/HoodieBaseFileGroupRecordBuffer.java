@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.HoodieReaderState;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -65,6 +66,7 @@ import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordM
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
+  protected final HoodieReaderState readerState;
   protected final Schema readerSchema;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
@@ -79,25 +81,21 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
 
-  public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                         HoodieTableMetaClient hoodieTableMetaClient,
-                                         Option<String> partitionNameOverrideOpt,
-                                         Option<String[]> partitionPathFieldOpt,
-                                         HoodieRecordMerger recordMerger,
-                                         TypedProperties props) {
+  public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, HoodieReaderState readerState) {
     this.readerContext = readerContext;
-    this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
-    this.partitionNameOverrideOpt = partitionNameOverrideOpt;
-    this.partitionPathFieldOpt = partitionPathFieldOpt;
-    this.recordMergeMode = getRecordMergeMode(props);
-    this.recordMerger = recordMerger;
+    this.readerState = readerState;
+    this.readerSchema = readerState.getRequiredSchema();
+    this.partitionNameOverrideOpt = readerState.getPartitionNameOverrideOpt();
+    this.partitionPathFieldOpt = readerState.getPartitionPathFieldOpt();
+    this.recordMergeMode = getRecordMergeMode(readerState.getProps());
+    this.recordMerger = readerState.getRecordMerger();
     //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
     if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
       throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
     }
-    this.props = props;
-    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
-    this.hoodieTableMetaClient = hoodieTableMetaClient;
+    this.props = readerState.getProps();
+    this.internalSchema = readerState.getInternalSchema();
+    this.hoodieTableMetaClient = readerState.getMetaClient();
     long maxMemorySizeInBytes = props.getLong(MAX_MEMORY_FOR_MERGE.key(), MAX_MEMORY_FOR_MERGE.defaultValue());
     String spillableMapBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
     ExternalSpillableMap.DiskMapType diskMapType = ExternalSpillableMap.DiskMapType.valueOf(props.getString(SPILLABLE_DISK_MAP_TYPE.key(),

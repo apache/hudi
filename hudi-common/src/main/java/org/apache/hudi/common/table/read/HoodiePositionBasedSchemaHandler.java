@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.HoodieReaderState;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -39,19 +39,19 @@ import static org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupReco
 /**
  * This class is responsible for handling the schema for the file group reader that supports positional merge.
  */
-public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSchemaHandler<T> {
-  public HoodiePositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+public class HoodiePositionBasedSchemaHandler extends HoodieFileGroupReaderSchemaHandler {
+  public HoodiePositionBasedSchemaHandler(HoodieReaderState readerState,
                                           Schema dataSchema,
                                           Schema requestedSchema,
                                           Option<InternalSchema> internalSchemaOpt,
                                           HoodieTableConfig hoodieTableConfig) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
+    super(readerState, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
   }
 
   @Override
   protected Schema prepareRequiredSchema() {
     Schema preMergeSchema = super.prepareRequiredSchema();
-    return readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles()
+    return readerState.getShouldMergeUseRecordPosition() && readerState.getHasLogFiles()
         ? addPositionalMergeCol(preMergeSchema)
         : preMergeSchema;
   }
@@ -63,7 +63,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   @Override
   protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
-    if (!(readerContext.getShouldMergeUseRecordPosition() && readerContext.getHasLogFiles())) {
+    if (!(readerState.getShouldMergeUseRecordPosition() && readerState.getHasLogFiles())) {
       return super.doPruneInternalSchema(requiredSchema, internalSchema);
     }
 
@@ -80,7 +80,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
   @Override
   public Pair<List<Schema.Field>,List<Schema.Field>> getBootstrapRequiredFields() {
     Pair<List<Schema.Field>,List<Schema.Field>> dataAndMetaCols = super.getBootstrapRequiredFields();
-    if (readerContext.supportsParquetRowIndex()) {
+    if (readerState.getSupportsParquetRowIndex()) {
       if (!dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty()) {
         dataAndMetaCols.getLeft().add(getPositionalMergeField());
         dataAndMetaCols.getRight().add(getPositionalMergeField());

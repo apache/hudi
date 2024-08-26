@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.HoodieReaderState;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -69,6 +70,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
+                                      HoodieReaderState readerState,
                                       HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
@@ -78,7 +80,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
                                       HoodieRecordMerger recordMerger,
                                       RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
-    super(readerContext, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
+    super(readerContext, readerState, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
         forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, recordMergeMode, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
@@ -214,6 +216,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
    */
   public static class Builder<T> extends BaseHoodieLogRecordReader.Builder<T> {
     private HoodieReaderContext<T> readerContext;
+    private HoodieReaderState readerState;
     private HoodieStorage storage;
     private List<String> logFilePaths;
     private boolean reverseReader;
@@ -237,6 +240,12 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     @Override
     public Builder<T> withHoodieReaderContext(HoodieReaderContext<T> readerContext) {
       this.readerContext = readerContext;
+      return this;
+    }
+
+    @Override
+    public Builder<T> withHoodieReaderState(HoodieReaderState readerState) {
+      this.readerState = readerState;
       return this;
     }
 
@@ -322,13 +331,14 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       ValidationUtils.checkArgument(recordMerger != null, "Record Merger is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(recordBuffer != null, "Record Buffer is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(readerContext != null, "Reader Context is null in Merged Log Record Reader");
+      ValidationUtils.checkArgument(readerState != null, "Reader State is null in Merged Log Record Reader");
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(
-            new StoragePath(readerContext.getTablePath()), new StoragePath(this.logFilePaths.get(0)).getParent());
+            new StoragePath(readerState.getTablePath()), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(
-          readerContext, storage, logFilePaths,
+          readerContext,readerState, storage, logFilePaths,
           reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),

@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.HoodieReaderState;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -143,6 +144,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected HoodieFileGroupRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
+                                      HoodieReaderState readerState,
                                       HoodieStorage storage,
                                       List<String> logFilePaths,
                                       boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
@@ -154,11 +156,11 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
-    this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
-    this.latestInstantTime = readerContext.getLatestCommitTime();
+    this.readerSchema = readerState.getRequiredSchema();
+    this.latestInstantTime = readerState.getLatestCommitTime();
     this.hoodieTableMetaClient = HoodieTableMetaClient.builder()
         .setStorage(storage)
-        .setBasePath(readerContext.getTablePath()).build();
+        .setBasePath(readerState.getTablePath()).build();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -179,7 +181,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
+    this.internalSchema = readerState.getInternalSchema();
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
 
     if (keyFieldOverride.isPresent()) {
@@ -846,6 +848,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
    */
   public abstract static class Builder<T> {
     public abstract Builder withHoodieReaderContext(HoodieReaderContext<T> readerContext);
+
+    public abstract Builder withHoodieReaderState(HoodieReaderState readerState);
 
     public abstract Builder withStorage(HoodieStorage storage);
 
