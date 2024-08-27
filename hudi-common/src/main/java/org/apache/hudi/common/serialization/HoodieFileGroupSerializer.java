@@ -48,6 +48,10 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
   @Override
   public byte[] serialize(List<HoodieFileGroup> input) throws IOException {
     List<HoodieFileGroupLite> fileGroupLites = input.stream().map(fileGroup -> {
+      if (fileGroup.getTimeline() == null) {
+        throw new IllegalStateException("Timeline is null for FileGroup: '" + fileGroup.getFileGroupId().toString() + "'. All filegroup states: ["
+            + input.stream().map(fg -> fg.getFileGroupId().toString() + ":" + ((fg.getTimeline() == null) ? "NULL" : "OK")).collect(Collectors.joining(",")) + "]");
+      }
       fileGroupIdHoodieTimelineMap.put(fileGroup.getFileGroupId(), fileGroup.getTimeline());
       return new HoodieFileGroupLite(fileGroup.getAllRawFileSlices().collect(Collectors.toList()), fileGroup.getFileGroupId());
     }).collect(Collectors.toList());
@@ -58,7 +62,13 @@ public class HoodieFileGroupSerializer implements CustomSerializer<List<HoodieFi
   public List<HoodieFileGroup> deserialize(byte[] bytes) {
     List<HoodieFileGroupLite> fileGroupLites = SerializationUtils.deserialize(bytes);
     return fileGroupLites.stream().map(fileGroupLite -> {
-      HoodieFileGroup fileGroup = new HoodieFileGroup(fileGroupLite.fileGroupId, fileGroupIdHoodieTimelineMap.get(fileGroupLite.fileGroupId));
+      HoodieTimeline timeline = fileGroupIdHoodieTimelineMap.get(fileGroupLite.fileGroupId);
+      if (timeline == null) {
+        throw new IllegalStateException("Timeline for fileGroupId: '" + fileGroupLite.fileGroupId + "' was not found in the map. Available fileGroupId in map: ["
+            + fileGroupIdHoodieTimelineMap.keySet().stream().map(HoodieFileGroupId::toString).collect(Collectors.joining(",")) + "]. FileGroupId that we are deserializing: ["
+            + fileGroupLites.stream().map(fg -> fg.fileGroupId.toString()).collect(Collectors.joining(",")) + "]");
+      }
+      HoodieFileGroup fileGroup = new HoodieFileGroup(fileGroupLite.fileGroupId, timeline);
       fileGroupLite.fileSlices.forEach(fileGroup::addFileSlice);
       return fileGroup;
     }).collect(Collectors.toList());
