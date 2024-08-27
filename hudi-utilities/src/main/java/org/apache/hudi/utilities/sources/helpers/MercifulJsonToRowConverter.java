@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.Schema;
@@ -64,7 +65,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
   public MercifulJsonToRowConverter(boolean shouldSanitize, String invalidCharMask) {
-    this(new ObjectMapper(), shouldSanitize, invalidCharMask);
+    this(new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS), shouldSanitize, invalidCharMask);
   }
 
   /**

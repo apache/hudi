@@ -59,14 +59,6 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
     try {
       if (obj instanceof BigDecimal) {
         bigDecimal = ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
-      } else if (obj instanceof Number) {
-        Number number = (Number) obj;
-        // Special case integers and 0.0 to avoid conversion errors related to decimals with a scale of 0
-        if (obj instanceof Integer || obj instanceof Long || obj instanceof Short || obj instanceof Byte || number.doubleValue() == 0.0) {
-          bigDecimal = BigDecimal.valueOf(number.longValue());
-        } else {
-          bigDecimal = BigDecimal.valueOf(number.doubleValue());
-        }
       } else if (obj instanceof String) {
         // Case 2: Object is a number in String format.
         try {
@@ -76,10 +68,10 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
         } catch (IllegalArgumentException e) {
           //no-op
         }
-        // None fixed byte or fixed byte conversion failure would end up here.
-        if (bigDecimal == null) {
-          bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
-        }
+      }
+      // None fixed byte or fixed byte conversion failure would end up here.
+      if (bigDecimal == null) {
+        bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
       }
     } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
       /* ignore */
