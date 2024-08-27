@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.avro.MercifulJsonConverter;
 import org.apache.hudi.avro.processors.DateLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DecimalLogicalTypeProcessor;
 import org.apache.hudi.avro.processors.DurationLogicalTypeProcessor;
@@ -50,9 +51,9 @@ import java.util.Map;
 import scala.collection.JavaConverters;
 
 /**
- * Converts Json record to Avro Generic Record.
+ * Converts Json record to Row Record.
  */
-public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJsonConverter {
+public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
   /**
    * Uses a default objectMapper to deserialize a json string.
@@ -69,15 +70,15 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
   }
 
   /**
-   * Allows a configured ObjectMapper to be passed for converting json records to avro record.
+   * Allows a configured ObjectMapper to be passed for converting json records to row.
    */
   public MercifulJsonToRowConverter(ObjectMapper mapper, boolean shouldSanitize, String invalidCharMask) {
     super(mapper, shouldSanitize, invalidCharMask);
   }
 
   /**
-   * Converts json to Avro generic record.
-   * NOTE: if sanitization is needed for avro conversion, the schema input to this method is already sanitized.
+   * Converts json to row.
+   * NOTE: if sanitization is needed for row conversion, the schema input to this method is already sanitized.
    * During the conversion here, we sanitize the fields in the data
    *
    * @param json   Json record
@@ -114,7 +115,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
 
       if (schema.getType() == Type.FIXED && value instanceof List<?>) {
         // Case 1: Input is a list. It is expected to be raw Fixed byte array input, and we only support
-        // parsing it to Fixed avro type.
+        // parsing it to Fixed type.
         JsonFieldProcessor processor = generateFixedTypeHandler();
         Pair<Boolean, Object> fixedTypeResult = processor.convert(value, name, schema);
         if (fixedTypeResult.getLeft()) {
