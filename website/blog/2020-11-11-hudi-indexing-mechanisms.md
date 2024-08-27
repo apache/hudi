@@ -123,7 +123,7 @@ Some interesting work underway in this area:
 - Record level index implementation, as a secondary index using another Hudi table.
 
 Going forward, this will remain an area of active investment for the project. we are always looking for contributors who can drive these roadmap items forward.
-Please [engage](/contribute/get-involved) with our community if you want to get involved.
+Please [engage](/community/get-involved) with our community if you want to get involved.
  
 
 

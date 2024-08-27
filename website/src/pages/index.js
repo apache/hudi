@@ -11,13 +11,13 @@ import BlogsSlider from "@site/src/components/BlogsSlider";
 import styles from './styles.module.css';
 
 function NewReleaseMessage() {
-  return (
-    <div className="container">
-      <div className="wrapper">
-        <br />
-      </div>
-    </div>
-  );
+    return (
+        <div className="container">
+            <div className="wrapper">
+                <br />
+            </div>
+        </div>
+    );
 }
 
 export default function Home() {

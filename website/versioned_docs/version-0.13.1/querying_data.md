@@ -79,7 +79,7 @@ spark.sparkContext.hadoopConfiguration.setClass("mapreduce.input.pathFilter.clas
 #### Merge On Read tables
 No special configurations are needed for querying MERGE_ON_READ tables with Hudi version 0.9.0+
 
-If you are querying MERGE_ON_READ tables using Hudi version <= 0.8.0, you need to turn off the SparkSQL default parquet reader by setting: `spark.sql.hive.convertMetastoreParquet=false`.
+If you are querying MERGE_ON_READ tables using Hudi version \<= 0.8.0, you need to turn off the SparkSQL default parquet reader by setting: `spark.sql.hive.convertMetastoreParquet=false`.
 
 ```java
 $ spark-shell --driver-class-path /etc/hive/conf  --packages org.apache.hudi:hudi-spark-bundle_2.11:0.5.3,org.apache.spark:spark-avro_2.11:2.4.4 --conf spark.sql.hive.convertMetastoreParquet=false

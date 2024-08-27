@@ -1,85 +1,34 @@
 {
-  "version-0.8.0/docs": [
-    {
-      "type": "doc",
-      "id": "version-0.8.0/overview"
-    },
+  "docs": [
+    "overview",
     {
       "collapsed": false,
       "type": "category",
       "label": "Quick Start",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.8.0/quick-start-guide"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/flink-quick-start-guide"
-        }
+        "quick-start-guide",
+        "flink-quick-start-guide"
       ]
     },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/use_cases"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/writing_data"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/concurrency_control"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/querying_data"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/configurations"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/performance"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.8.0/deployment"
-    },
+    "use_cases",
+    "writing_data",
+    "concurrency_control",
+    "querying_data",
+    "configurations",
+    "performance",
+    "deployment",
     {
       "collapsed": true,
       "type": "category",
       "label": "Storage Configurations",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.8.0/cloud"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/s3_hoodie"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/gcs_hoodie"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/oss_hoodie"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/azure_hoodie"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/cos_hoodie"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/ibm_cos_hoodie"
-        }
+        "cloud",
+        "s3_hoodie",
+        "gcs_hoodie",
+        "oss_hoodie",
+        "azure_hoodie",
+        "cos_hoodie",
+        "ibm_cos_hoodie"
       ]
     },
     {
@@ -87,18 +36,9 @@
       "type": "category",
       "label": "Resources",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.8.0/docker_demo"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/metrics"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.8.0/privacy"
-        }
+        "docker_demo",
+        "metrics",
+        "privacy"
       ]
     }
   ]

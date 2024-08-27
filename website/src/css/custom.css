@@ -7,6 +7,7 @@
 
 /* You can override the default Infima variables here. */
 :root {
+  --ifm-menu-link-padding-horizontal: 1rem;
   --ifm-color-primary-text: rgb(13, 177, 249);
   --ifm-color-secondary-text: rgb(41, 85, 122);
   --ifm-color-black: rgba(28, 30, 33, 1);
@@ -54,7 +55,7 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
   display: flex;
   height: 30px;
   width: 30px;
-  
+
 }
 
 @media (max-width: 767px) {
@@ -71,10 +72,10 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
 }
 
 @media only screen and (max-width: 1460px){
-  .navbar__item {
+  .navbar__item, .navbar__link {
     font-size: 0.65em !important;
   }
-  
+
 
 }
 @media only screen and (max-width: 1250px){
@@ -82,8 +83,9 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
     font-size: 0.6em !important;
     padding: 5px;
   }
-  
-
+  .navbar__link {
+    font-size: 0.6em !important;
+  }
 }
 
 @media only screen and (max-width: 1055px){
@@ -91,6 +93,44 @@ html[data-theme='dark'] .docusaurus-highlight-code-line {
     font-size: 0.5em !important;
     padding: 5px;
   }
+  .navbar__link {
+    font-size: 0.5em !important;
+  }
+}
+.navbar__link {
+  width: max-content;
+}
+
+@media(max-width:1820px){
+  .navbar__item, .navbar__link {
+    font-size:90% !important;
+  }
+}
+@media(max-width:1602px){
+  .navbar__item, .navbar__link {
+    font-size:80% !important;
+  }
+}
+@media(max-width:1440px){
+  .navbar__item, .navbar__link {
+    font-size:70% !important;
+  }
+}
+@media(max-width:1440px){
+  .navbar__item, .navbar__link {
+    font-size:70% !important;
+  }
+}
+
+@media(max-width:1350px){
+  a.menu__link.navbarFontSize_src-theme-Navbar-MobileSidebar-PrimaryMenu-styles-module {
+    font-size: .9rem !important;
+  }
+}
+
+.navbar-sidebar__item .menu__link{
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .navbar__item {
@@ -209,11 +249,12 @@ table.features i.feather {
 
 footer .container {
   margin-block-start: 1.83em;
+  max-width: var(--ifm-container-width-xl) !important;
 }
 
 .blog-wrapper .container {
   max-width: 100%;
-  
+
 }
 
 .who-uses {
@@ -296,7 +337,7 @@ footer .container {
   display:inline;
   overflow: hidden;
   vertical-align: text-top;
-  
+
 }
 
 h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
@@ -376,6 +417,25 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   text-align: left;
 }
 
+.footer__logo {
+  max-width: 10rem;
+}
+
+.dropdown > .navbar__link:after {
+  border-color: currentColor transparent;
+  border-style: solid;
+  content: '';
+  position: relative;
+  top: -2px;
+  border: solid black;
+  border-width: 0 1.9px 1.9px 0;
+  display: inline-block;
+  padding: 2.5px;
+  transform: rotate(45deg);
+  margin-top: -13px;
+  margin-left: 8px;
+}
+
 @media(max-width:1524px) {
   .navbar__item {
     padding: var(--ifm-navbar-item-padding-vertical) 7px;
@@ -391,11 +451,68 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   }
 }
 
+.theme-doc-sidebar-item-link .menu__link{
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
 
+.tagsListInline {
+  margin-top: 10px !important;
+}
+
+.tagsListInline b {
+  display: none;
+}
+
+.tagsListInline ul {
+  margin-left: 10px !important;
+  font-size: .875rem !important;
+  margin-top: 10px !important;
+}
+
+.tagsListInline ul li {
+  margin: -5px 20px 0 -10px;
+}
+
+.tagsListInline ul li a{
+  padding: 0.3rem 5px 0.3rem;
+}
+
+/* Docusaurus-specific utility class */
+.docusaurus-mt-lg {
+  margin-top: 3rem;
+}
 
 div[class^="announcementBar"][role="banner"] {
   color: white;
   background-color: #29557A;
   padding: 5px 0;
   height: auto;
+}
+
+.theme-doc-sidebar-item-link .menu__link{
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.tagsListInline {
+  margin-top: 10px !important;
+}
+
+.tagsListInline b {
+  display: none;
+}
+
+.tagsListInline ul {
+  margin-left: 10px !important;
+  font-size: .875rem !important;
+  margin-top: 10px !important;
+}
+
+.tagsListInline ul li {
+  margin: -5px 20px 0 -10px;
+}
+
+.tagsListInline ul li a{
+  padding: 0.3rem 5px 0.3rem;
 }

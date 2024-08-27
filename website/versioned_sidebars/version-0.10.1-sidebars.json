@@ -1,26 +1,14 @@
 {
-  "version-0.10.1/docs": [
-    {
-      "type": "doc",
-      "id": "version-0.10.1/overview"
-    },
+  "docs": [
+    "overview",
     {
       "collapsed": false,
       "type": "category",
       "label": "Quick Start",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.10.1/quick-start-guide"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/flink-quick-start-guide"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/docker_demo"
-        }
+        "quick-start-guide",
+        "flink-quick-start-guide",
+        "docker_demo"
       ]
     },
     {
@@ -28,42 +16,15 @@
       "type": "category",
       "label": "Concepts",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.10.1/timeline"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/table_types"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/indexing"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/file_layouts"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/metadata"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/write_operations"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/schema_evolution"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/key_generation"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/concurrency_control"
-        }
+        "timeline",
+        "table_types",
+        "indexing",
+        "file_layouts",
+        "metadata",
+        "write_operations",
+        "schema_evolution",
+        "key_generation",
+        "concurrency_control"
       ]
     },
     {
@@ -71,30 +32,12 @@
       "type": "category",
       "label": "How To",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.10.1/table_management"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/writing_data"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/hoodie_deltastreamer"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/querying_data"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/flink_configuration"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/syncing_metastore"
-        }
+        "table_management",
+        "writing_data",
+        "hoodie_deltastreamer",
+        "querying_data",
+        "flink_configuration",
+        "syncing_metastore"
       ]
     },
     {
@@ -102,140 +45,53 @@
       "type": "category",
       "label": "Services",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.10.1/migration_guide"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/compaction"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/clustering"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/hoodie_cleaner"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/transforms"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/markers"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/file_sizing"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/snapshot_exporter"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/precommit_validator"
-        }
+        "migration_guide",
+        "compaction",
+        "clustering",
+        "hoodie_cleaner",
+        "transforms",
+        "markers",
+        "file_sizing",
+        "snapshot_exporter",
+        "precommit_validator"
       ]
     },
-    {
-      "type": "doc",
-      "id": "version-0.10.1/configurations"
-    },
+    "configurations",
     {
       "collapsed": true,
       "type": "category",
       "label": "Guides",
       "items": [
-        {
-          "type": "doc",
-          "id": "version-0.10.1/query_engine_setup"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/performance"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/deployment"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/cli"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/metrics"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/troubleshooting"
-        },
-        {
-          "type": "doc",
-          "id": "version-0.10.1/tuning-guide"
-        },
+        "query_engine_setup",
+        "performance",
+        "deployment",
+        "cli",
+        "metrics",
+        "troubleshooting",
+        "tuning-guide",
         {
           "collapsed": true,
           "type": "category",
           "label": "Storage Configurations",
           "items": [
-            {
-              "type": "doc",
-              "id": "version-0.10.1/cloud"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/s3_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/gcs_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/oss_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/azure_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/cos_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/ibm_cos_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/bos_hoodie"
-            },
-            {
-              "type": "doc",
-              "id": "version-0.10.1/jfs_hoodie"
-            }
+            "cloud",
+            "s3_hoodie",
+            "gcs_hoodie",
+            "oss_hoodie",
+            "azure_hoodie",
+            "cos_hoodie",
+            "ibm_cos_hoodie",
+            "bos_hoodie",
+            "jfs_hoodie"
           ]
         }
       ]
     },
-    {
-      "type": "doc",
-      "id": "version-0.10.1/use_cases"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.10.1/faq"
-    },
-    {
-      "type": "doc",
-      "id": "version-0.10.1/privacy"
-    }
+    "use_cases",
+    "faq",
+    "privacy"
   ],
-  "version-0.10.1/quick_links": [
+  "quick_links": [
     {
       "type": "link",
       "label": "Powered By",

@@ -54,7 +54,7 @@ Options useful for reading tables via `read.format.option(...)`
 ---
 
 > #### hoodie.datasource.read.end.instanttime
-> Instant time to limit incrementally fetched data to. New data written with an instant_time <= END_INSTANTTIME are fetched out.<br></br>
+> Instant time to limit incrementally fetched data to. New data written with an instant_time \<= END_INSTANTTIME are fetched out.<br></br>
 > **Default Value**: N/A (Required)<br></br>
 > `Config Param: END_INSTANTTIME`<br></br>
 
@@ -438,7 +438,7 @@ the dot notation eg: `a.b.c`<br></br>
 
 > #### hoodie.datasource.write.hive_style_partitioning
 > Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+If set true, the names of partition folders follow \<partition_column_name>=\<partition_value> format.
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING`<br></br>
@@ -710,10 +710,7 @@ The semantics is best effort because the compaction job would finally merge all 
 ---
 
 > #### hoodie.datasource.merge.type
-> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in
-1) skip_merge: read the base file records plus the log file records;
-2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the
-   log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
+> For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in 1) skip_merge: read the base file records plus the log file records; 2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the log file records(combines the two records with same key for base and log file records), then read the left log file records<br></br>
 > **Default Value**: payload_combine (Optional)<br></br>
 > `Config Param: MERGE_TYPE`<br></br>
 
@@ -1073,11 +1070,7 @@ This also directly translates into how much you can incrementally pull on this t
 ---
 
 > #### hoodie.datasource.query.type
-> Decides how data files need to be read, in
-1) Snapshot mode (obtain latest view, based on row &amp; columnar data);
-2) incremental mode (new data since an instantTime);
-3) Read Optimized mode (obtain latest view, based on columnar data)
-.Default: snapshot<br></br>
+> Decides how data files need to be read, in 1) Snapshot mode (obtain latest view, based on row &amp; columnar data); 2) incremental mode (new data since an instantTime); 3) Read Optimized mode (obtain latest view, based on columnar data) .Default: snapshot<br></br>
 > **Default Value**: snapshot (Optional)<br></br>
 > `Config Param: QUERY_TYPE`<br></br>
 
@@ -1268,7 +1261,7 @@ Configurations that persist across writes and read on a Hudi table  like  base, 
 
 > #### hoodie.datasource.write.hive_style_partitioning
 > Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+If set true, the names of partition folders follow \<partition_column_name>=\<partition_value> format.
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING_ENABLE`<br></br>
@@ -2154,7 +2147,7 @@ Hudi maintains keys (record key + partition path) for uniquely identifying a par
 
 > #### hoodie.datasource.write.hive_style_partitioning
 > Flag to indicate whether to use Hive style partitioning.
-If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.
+If set true, the names of partition folders follow \<partition_column_name>=\<partition_value> format.
 By default false (the names of partition folders are only partition values)<br></br>
 > **Default Value**: false (Optional)<br></br>
 > `Config Param: HIVE_STYLE_PARTITIONING_ENABLE`<br></br>
@@ -2730,7 +2723,7 @@ Configurations that control compaction (merging of log files onto a new base fil
 ---
 
 > #### hoodie.parquet.small.file.limit
-> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage  becomes a candidate to be selected as such a `small file`. By default, treat any file <= 100MB as a small file.<br></br>
+> During upsert operation, we opportunistically expand existing small files on storage, instead of writing new files, to keep number of files to an optimum. This config sets the file size limit below which a file on storage  becomes a candidate to be selected as such a `small file`. By default, treat any file \<= 100MB as a small file.<br></br>
 > **Default Value**: 104857600 (Optional)<br></br>
 > `Config Param: PARQUET_SMALL_FILE_LIMIT`<br></br>
 

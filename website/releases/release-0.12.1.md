@@ -40,10 +40,10 @@ If all of the following is applicable to you:
 
 1. Using Spark as an execution engine
 2. Using Bulk Insert (using row-writing
-   <https://hudi.apache.org/docs/next/configurations#hoodiedatasourcewriterowwriterenable>,
+   https://hudi.apache.org/docs/next/configurations#hoodiedatasourcewriterowwriterenable,
    enabled *by default*)
 3. Using Bloom Index (with range-pruning
-   <https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges>
+   https://hudi.apache.org/docs/next/basic_configurations/#hoodiebloomindexprunebyranges
    enabled, enabled *by default*) for "UPSERT" operations
 
 Recommended to upgrading to 0.12.1 to avoid getting duplicate records in your pipeline.

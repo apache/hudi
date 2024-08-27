@@ -36,7 +36,7 @@ const BlogsSlider = () => {
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
     slidesToScroll: 1,
-    align: 0
+    align: 'start'
   });
   const [activeIndex, setActiveIndex] = useState(0);
 

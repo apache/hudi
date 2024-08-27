@@ -335,7 +335,7 @@ Use `alt use` to use v1 version of docker-compose while running integration test
 ## Communication
 
 All communication is expected to align with the [Code of Conduct](https://www.apache.org/foundation/policies/conduct).
-Discussion about contributing code to Hudi happens on the [dev@ mailing list](/contribute/get-involved). Introduce yourself!
+Discussion about contributing code to Hudi happens on the [dev@ mailing list](/community/get-involved). Introduce yourself!
 
 ## Code & Project Structure
 

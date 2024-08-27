@@ -189,8 +189,7 @@ The available strategies are as follows:
 ### Update Strategy
 
 Currently, clustering can only be scheduled for tables/partitions not receiving any concurrent updates. By default,
-the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is set to ***
-SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
+the [config for update strategy](/docs/configurations/#hoodieclusteringupdatesstrategy) is set to ***SparkRejectUpdateStrategy***. If some file group has updates during clustering then it will reject updates and throw an
 exception. However, in some use-cases updates are very sparse and do not touch most file groups. The default strategy to
 simply reject updates does not seem fair. In such use-cases, users can set the config to ***SparkAllowUpdateStrategy***.
 

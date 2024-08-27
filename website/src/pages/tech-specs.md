@@ -33,23 +33,23 @@ At a high level, Hudi organizes data into a directory structure under the base p
 Note that, unlike Hive style partitioning, partition columns are not removed from data files and partitioning is a mere organization of data files. A special reserved *.hoodie* directory under the base path is used to store transaction logs and metadata.
 A special file `hoodie.properties` persists table level configurations, shared by writers and readers of the table. These configurations are explained [here](https://github.com/apache/hudi/blob/master/hudi-common/src/main/java/org/apache/hudi/common/table/HoodieTableConfig.java), 
 and any config without a default value needs to be specified during table creation.
-
-	/data/hudi_trips/ 					<== Base Path
-	├── .hoodie/      					<== Meta Path
-    |   └── hoodie.properties           <== Table Configs
-	│   └── metadata/                   <== Table Metadata
-	├── americas/
-	│   ├── brazil/
-	│   │   └── sao_paulo/				<== Partition Path 
-	│   │       ├── <data_files>
-	│   └── united_states/
-	│       └── san_francisco/
-	│           ├── <data_files>
-	└── asia/
-	    └── india/
-	        └── chennai/
-	            ├── <data_files>
-
+```plain
+/data/hudi_trips/                   <== Base Path
+├── .hoodie/                        <== Meta Path
+|   └── hoodie.properties           <== Table Configs
+│   └── metadata/                   <== Table Metadata
+├── americas/
+│   ├── brazil/
+│   │   └── sao_paulo/              <== Partition Path 
+│   │       ├── <data_files>
+│   └── united_states/
+│       └── san_francisco/
+│           ├── <data_files>
+└── asia/
+    └── india/
+        └── chennai/
+            ├── <data_files>
+```
 ### Table Types 
 
 Hudi storage format supports two table types offering different trade-offs between ingest and query performance and the data files are stored differently based on the chosen table type. 
@@ -102,8 +102,9 @@ Data consistency in Hudi is provided using Multi-version Concurrency Control (MV
 
 All actions and the state transitions are registered with the timeline using an atomic write of a special meta-file inside the  *.hoodie* directory. The requirement from the underlying storage system is to support an atomic-put and read-after-write consistency. 
 The meta file naming structure is as follows
-
-	[Action timestamp].[Action type].[Action state] 
+```$xslt
+[Action timestamp].[Action type].[Action state] 
+```
 
 **Action timestamp:** 
 Monotonically increasing value to denote strict ordering of actions in the timeline. This could be provided by an external token provider or rely on the system epoch time at millisecond granularity.
@@ -210,9 +211,9 @@ file pruning for filters and join conditions in the query. The payload is an ins
 | HoodieRecordIndexInfo   | `partitionName`      | string     | partition name to which the record belongs                                                                                                                                                                                    |
 |                         | `fileIdEncoding`     | int        | determines the fields used to deduce file id. When the encoding is 0, file Id can be deduced from fileIdLowBits, fileIdHighBits and fileIndex. When encoding is 1, file Id is available in raw string format in fileId field  |
 |                         | `fileId`             | string     | file id in raw string format is available when encoding is set to 1                                                                                                                                                           |
-|                         | `fileIdHighBits`     | long       | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
-|                         | `fileIdLowBits`      | long       | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
-|                         | `fileIndex`          | int        | file Id can be deduced as {UUID}-{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIdHighBits`     | long       | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIdLowBits`      | long       | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
+|                         | `fileIndex`          | int        | file Id can be deduced as \{UUID}-\{fileIndex} when encoding is set to 0. fileIdHighBits and fileIdLowBits form the UUID                                                                                                        |
 |                         | `instantTime`        | long       | Epoch time in millisecond representing the commit time at which record was added                                                                                                                                              |
 
 
@@ -228,7 +229,9 @@ As mentioned in the data model, data is partitioned coarsely through a directory
 
 The base file name format is:
 
-	[File Id]_[File Write Token]_[Transaction timestamp].[File Extension]
+```$xslt
+[File Id]_[File Write Token]_[Transaction timestamp].[File Extension]
+```
 
 - **File Id** - Uniquely identify a base file within the table. Multiple versions of the base file share the same file id.
 - **File Write Token** - Monotonically increasing token for every attempt to write the base file. This should help uniquely identifying the base file when there are failures and retries. Cleaning can remove partial/uncommitted base files if the write token is not the latest in the file group 
@@ -240,8 +243,9 @@ The base file name format is:
 ### Log File Format
 
 The log file name format is:
-
-	[File Id]_[Base Transaction timestamp].[Log File Extension].[Log File Version]_[File Write Token]
+```$xslt
+[File Id]_[Base Transaction timestamp].[Log File Extension].[Log File Version]_[File Write Token]
+```
 
 - **File Id** - File Id of the base file in the slice
 - **Base Transaction timestamp** - Commit timestamp on the base file for which the log file is updating the deletes/updates for

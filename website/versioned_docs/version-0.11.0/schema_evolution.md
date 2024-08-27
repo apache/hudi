@@ -60,9 +60,9 @@ ALTER TABLE tableName ADD COLUMNS(col_spec[, col_spec ...])
 
 For example:
 
-1. To add sub-column col1 to a nested struct type column column users struct<name: string, age: int>, set this field to users.col1.
+1. To add sub-column col1 to a nested struct type column column users struct\<name: string, age: int>, set this field to users.col1.
 
-2. To add sub-column col1 to a nested map type column memeber map<string, struct<n: string, a: int>>, set this field to member.value.col1.
+2. To add sub-column col1 to a nested map type column memeber map\<string, struct\<n: string, a: int>>, set this field to member.value.col1.
 
 **col_type** : type of the new column.
 
