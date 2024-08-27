@@ -18,8 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import org.apache.hudi.HoodieSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;

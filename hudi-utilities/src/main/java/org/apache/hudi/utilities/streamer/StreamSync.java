@@ -844,14 +844,14 @@ public class StreamSync implements Serializable, Closeable {
                                                                               Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
-    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
+    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime);
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
     Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
 
     // write to error table
     JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
-    String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    String errorTableInstantTime = writeClient.createNewInstantTime();
     Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
     if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
       errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));

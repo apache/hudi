@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Tuple3;
 
 import org.apache.hadoop.fs.Path;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
@@ -74,7 +75,7 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     assertEquals(totalRecords - errorRecords, baseDf.count());
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration())
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
         .setBasePath(tableBasePath).build();
     assertEquals(1, metaClient.getActiveTimeline().getInstants().size());
 
