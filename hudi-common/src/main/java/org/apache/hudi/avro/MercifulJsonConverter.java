@@ -38,7 +38,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieJsonConversionException;
 import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalType;
@@ -49,6 +48,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -115,7 +115,7 @@ public class MercifulJsonConverter {
     try {
       Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
       return convertJsonToAvro(jsonObjectMap, schema);
-    } catch (HoodieException | JsonProcessingException e) {
+    } catch (HoodieException | IOException e) {
       throw new HoodieJsonToAvroConversionException("failed to convert json to avro", e);
     }
   }
