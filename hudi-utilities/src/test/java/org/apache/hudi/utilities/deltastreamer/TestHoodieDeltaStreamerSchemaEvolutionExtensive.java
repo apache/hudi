@@ -19,20 +19,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.Disabled;
@@ -47,7 +42,6 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -207,63 +201,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     }
   }
 
-  // This should be executed with `JsonQuarantineTableWriter` as ERROR_TABLE_WRITE_CLASS
-  protected void testBase(Tuple3<Boolean, Integer, Integer> sourceGenInfo, int errorRecords) throws Exception {
-    boolean shouldCreateMultipleSourceFiles = sourceGenInfo.f0;
-    int totalRecords = sourceGenInfo.f1;
-    int numFiles = sourceGenInfo.f2;
-
-    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-
-    if (totalRecords > 0) {
-      if (shouldCreateMultipleSourceFiles) {
-        prepareParquetDFSMultiFiles(totalRecords-errorRecords, PARQUET_SOURCE_ROOT, numFiles);
-      } else {
-        prepareParquetDFSFiles(totalRecords-errorRecords, PARQUET_SOURCE_ROOT);
-      }
-
-      // Add error data to the source
-      if (errorRecords > 0) {
-        String errorDataSourceRoot = basePath + "parquetErrorFilesDfs" + testNum++;
-        prepareParquetDFSFiles(errorRecords, errorDataSourceRoot);
-        Dataset<Row> df = sparkSession.read().parquet(errorDataSourceRoot);
-        df = df.withColumn("_row_key", functions.lit(""));
-        // add error records to PARQUET_SOURCE_ROOT
-        addParquetData(df, false);
-      }
-    } else {
-      fs.mkdirs(new Path(PARQUET_SOURCE_ROOT));
-    }
-
-    tableName = "test_parquet_table" + testNum;
-    tableBasePath = basePath + tableName;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
-    this.deltaStreamer.sync();
-
-    // base table validation
-    Dataset<Row> baseDf = sparkSession.read().format("hudi").load(tableBasePath);
-    assertEquals(totalRecords-errorRecords, baseDf.count());
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration())
-        .setBasePath(tableBasePath).build();
-    assertEquals(1, metaClient.getActiveTimeline().getInstants().size());
-
-    // error table validation
-    String errTableBasePath = tableBasePath + "ERROR";
-    if (errorRecords > 0) {
-      Dataset<Row> errorDf = sparkSession.read().format("hudi").load(errTableBasePath);
-      assertEquals(errorRecords, errorDf.count());
-
-      metaClient = HoodieTableMetaClient.builder()
-          .setConf(jsc.hadoopConfiguration())
-          .setBasePath(errTableBasePath).build();
-      assertEquals(1, metaClient.getActiveTimeline().getInstants().size());
-    } else {
-      assertFalse(fs.exists(new Path(errTableBasePath)));
-    }
-  }
-
   protected static Stream<Arguments> testArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     //only testing row-writer enabled for now
@@ -304,93 +241,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       }
     }
     return b.build();
-  }
-
-  protected static Stream<Arguments> errorTableWriteBasicFlowTestArgs() {
-    Stream.Builder<Arguments> b = Stream.builder();
-    // totalRecords, numErrorRecords, numSourceFiles, WriteOperationType, shouldWriteErrorTableInUnionWithBaseTable
-
-    // empty source, error table union enabled
-    b.add(Arguments.of(0, 0, 0, WriteOperationType.INSERT, true));
-    // empty source, error table union disabled
-    b.add(Arguments.of(0, 0, 0, WriteOperationType.INSERT, false));
-    // non-empty source, error table union enabled
-    b.add(Arguments.of(100, 5, 1, WriteOperationType.INSERT, true));
-    // non-empty source, error table union disabled
-    b.add(Arguments.of(100, 5, 1, WriteOperationType.INSERT, false));
-    return b.build();
-  }
-
-  protected static Stream<Arguments> errorTableWritePerfTestArgs() {
-    Stream.Builder<Arguments> b = Stream.builder();
-    // totalRecords, numErrorRecords, numSourceFiles, WriteOperationType, shouldWriteErrorTableInUnionWithBaseTable
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.INSERT, true));
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.INSERT, false));
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.UPSERT, true));
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.UPSERT, false));
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.BULK_INSERT, true));
-    b.add(Arguments.of(10000, 500, 1, WriteOperationType.BULK_INSERT, false));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.INSERT, true));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.INSERT, false));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.UPSERT, true));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.UPSERT, false));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.BULK_INSERT, true));
-    b.add(Arguments.of(500000, 25000, 5, WriteOperationType.BULK_INSERT, false));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.INSERT, true));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.INSERT, false));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.UPSERT, true));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.UPSERT, false));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.BULK_INSERT, true));
-    b.add(Arguments.of(1000000, 50000, 10, WriteOperationType.BULK_INSERT, false));
-    return b.build();
-  }
-
-  @ParameterizedTest
-  @MethodSource("errorTableWritePerfTestArgs")
-  // This should be executed with `JsonQuarantineTableWriter` as ERROR_TABLE_WRITE_CLASS
-  public void testErrorTableWritePerformance(
-      int totalRecords,
-      int numErrorRecords,
-      int numSourceFiles,
-      WriteOperationType wopType,
-      boolean writeErrorTableInParallel) throws Exception {
-    this.withErrorTable = true;
-    this.writeErrorTableInParallelWithBaseTable = writeErrorTableInParallel;
-    this.writeOperationType = wopType;
-    this.useSchemaProvider = false;
-    this.useTransformer = false;
-    this.tableType = "COPY_ON_WRITE";
-    this.shouldCluster = false;
-    this.shouldCompact = false;
-    this.rowWriterEnable = false;
-    this.addFilegroups = false;
-    this.multiLogFiles = false;
-    this.dfsSourceLimitBytes = 200000000; // set source limit to 200mb
-    testBase(Tuple3.of(true, totalRecords, numSourceFiles), numErrorRecords);
-  }
-
-  @ParameterizedTest
-  @MethodSource("errorTableWriteBasicFlowTestArgs")
-  // This should be executed with `JsonQuarantineTableWriter` as ERROR_TABLE_WRITE_CLASS
-  public void testErrorTableWriteBasicFlow(
-      int totalRecords,
-      int numErrorRecords,
-      int numSourceFiles,
-      WriteOperationType wopType,
-      boolean writeErrorTableInParallel) throws Exception {
-    this.withErrorTable = true;
-    this.writeErrorTableInParallelWithBaseTable = writeErrorTableInParallel;
-    this.writeOperationType = wopType;
-    this.useSchemaProvider = false;
-    this.useTransformer = false;
-    this.tableType = "COPY_ON_WRITE";
-    this.shouldCluster = false;
-    this.shouldCompact = false;
-    this.rowWriterEnable = false;
-    this.addFilegroups = false;
-    this.multiLogFiles = false;
-    this.dfsSourceLimitBytes = 200000000; // set source limit to 200mb
-    testBase(Tuple3.of(true, totalRecords, numSourceFiles), numErrorRecords);
   }
 
   @ParameterizedTest

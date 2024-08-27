@@ -846,12 +846,12 @@ public class StreamSync implements Serializable, Closeable {
     // write to hudi and fetch result
     WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
 
-    JavaRDD<WriteStatus> dataTableWriteStatusRDD, writeStatusRDD;
-    dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+    JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
 
     Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
     String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    JavaRDD<WriteStatus> writeStatusRDD;
     Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
     if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
       errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
@@ -895,10 +895,6 @@ public class StreamSync implements Serializable, Closeable {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
         if (isErrorTableUnionWithDataTableEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
-          /**
-           * commit only if errorTableWriteStatus is not null to avoid IllegalArgumentException during timeline operations
-           * as there won't be any inflight instant to be marked as complete
-           */
           errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
         } else if (!isErrorTableUnionWithDataTableEnabled) {
           errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);

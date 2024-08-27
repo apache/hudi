@@ -87,8 +87,8 @@ public class HoodieErrorTableConfig {
   public static final ConfigProperty<Boolean> ERROR_ENABLE_UNION_WITH_DATA_TABLE = ConfigProperty
       .key("hoodie.errortable.write.union.enable")
       .defaultValue(false)
-      .withDocumentation("Enable error table union with data table when writing for improved commit performance. " +
-          "By default it is disabled meaning data table and error table writes are sequential");
+      .withDocumentation("Enable error table union with data table when writing for improved commit performance. "
+          + "By default it is disabled meaning data table and error table writes are sequential");
 
   public enum ErrorWriteFailureStrategy {
     ROLLBACK_COMMIT("Rollback the corresponding base table write commit for which the error events were triggered"),
