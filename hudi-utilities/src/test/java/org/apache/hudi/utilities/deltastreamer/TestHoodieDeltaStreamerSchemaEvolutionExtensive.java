@@ -396,12 +396,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
   @ParameterizedTest
   @MethodSource("testErrorTableArgs")
   public void testErrorTableWithTransformer(String tableType,
-                                            Boolean shouldCluster,
-                                            Boolean shouldCompact,
-                                            Boolean rowWriterEnable,
-                                            Boolean addFilegroups,
-                                            Boolean multiLogFiles,
-                                            Boolean writeErrorTableInParallel) throws Exception {
+                             Boolean shouldCluster,
+                             Boolean shouldCompact,
+                             Boolean rowWriterEnable,
+                             Boolean addFilegroups,
+                             Boolean multiLogFiles,
+                             Boolean writeErrorTableInParallel) throws Exception {
     this.withErrorTable = true;
     this.writeErrorTableInParallelWithBaseTable = writeErrorTableInParallel;
     this.useSchemaProvider = true;

@@ -887,7 +887,6 @@ public class StreamSync implements Serializable, Closeable {
             + totalErrorRecords + "/" + totalRecords);
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
-
       if (errorTableWriter.isPresent()) {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
