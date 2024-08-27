@@ -395,6 +395,7 @@ public class StreamSync implements Serializable, Closeable {
         .setBasePath(cfg.targetBasePath)
         .setPayloadClassName(cfg.payloadClassName)
         .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
+        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
         .build();
   }
 
