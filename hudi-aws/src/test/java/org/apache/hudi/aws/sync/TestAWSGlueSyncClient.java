@@ -72,7 +72,7 @@ class TestAWSGlueSyncClient {
   @BeforeEach
   void setUp() throws IOException {
     GlueTestUtil.setUp();
-    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, GlueTestUtil.getHiveSyncConfig());
+    awsGlueSyncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, GlueTestUtil.getHiveSyncConfig(), GlueTestUtil.getMetaClient());
   }
 
   @AfterEach

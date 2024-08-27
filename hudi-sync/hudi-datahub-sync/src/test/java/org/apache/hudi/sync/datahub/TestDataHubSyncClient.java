@@ -106,7 +106,7 @@ public class TestDataHubSyncClient {
   public class DataHubSyncClientStub extends DataHubSyncClient {
 
     public DataHubSyncClientStub(DataHubSyncConfig config) {
-      super(config);
+      super(config, null);
     }
 
     @Override

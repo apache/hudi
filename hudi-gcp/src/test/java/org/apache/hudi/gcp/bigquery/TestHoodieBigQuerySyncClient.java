@@ -70,6 +70,7 @@ public class TestHoodieBigQuerySyncClient {
   static @TempDir Path tempDir;
 
   private static String basePath;
+  private static HoodieTableMetaClient metaClient;
   private final BigQuery mockBigQuery = mock(BigQuery.class);
   private HoodieBigQuerySyncClient client;
   private Properties properties;
@@ -77,7 +78,7 @@ public class TestHoodieBigQuerySyncClient {
   @BeforeAll
   static void setupOnce() throws Exception {
     basePath = tempDir.toString();
-    HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TEST_TABLE)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -97,7 +98,7 @@ public class TestHoodieBigQuerySyncClient {
   void createTableWithManifestFile_partitioned() throws Exception {
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID.key(), "my-project.us.bl_connection");
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
-    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery, metaClient);
 
     Schema schema = Schema.of(Field.of("field", StandardSQLTypeName.STRING));
     ArgumentCaptor<JobInfo> jobInfoCaptor = ArgumentCaptor.forClass(JobInfo.class);
@@ -121,7 +122,7 @@ public class TestHoodieBigQuerySyncClient {
   @Test
   void createTableWithManifestFile_nonPartitioned() throws Exception {
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
-    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery, metaClient);
 
     Schema schema = Schema.of(Field.of("field", StandardSQLTypeName.STRING));
     ArgumentCaptor<JobInfo> jobInfoCaptor = ArgumentCaptor.forClass(JobInfo.class);
@@ -141,9 +142,9 @@ public class TestHoodieBigQuerySyncClient {
   }
 
   @Test
-  void skipUpdatingSchema_partitioned() throws Exception {
+  void skipUpdatingSchema_partitioned() {
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
-    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery, metaClient);
     Table mockTable = mock(Table.class);
     ExternalTableDefinition mockTableDefinition = mock(ExternalTableDefinition.class);
     // The table schema has no change: it contains a "field" and a "partition_field".
@@ -170,7 +171,7 @@ public class TestHoodieBigQuerySyncClient {
   @Test
   void testTableNotExistsOrDoesNotMatchSpecification() {
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
-    client = new HoodieBigQuerySyncClient(config, mockBigQuery);
+    client = new HoodieBigQuerySyncClient(config, mockBigQuery, metaClient);
     // table does not exist
     assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 

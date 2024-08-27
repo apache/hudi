@@ -59,14 +59,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieTableMetaClient metaClient;
   private static final String TEMP_SUFFIX = "_temp";
 
-  public HoodieSyncClient(HoodieSyncConfig config) {
+  public HoodieSyncClient(HoodieSyncConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
-        .setBasePath(config.getString(META_SYNC_BASE_PATH))
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    this.metaClient = metaClient;
   }
 
   public HoodieTimeline getActiveTimeline() {
