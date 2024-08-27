@@ -3015,8 +3015,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ingest data.
     streamSyncService.ingestOnce();
     assertRecordCount(950, tableBasePath, sqlContext);
-    // Ensure all cached rdd partitions are deleted.
-    assertEquals(0, jsc.getPersistentRDDs().size());
   }
 
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {

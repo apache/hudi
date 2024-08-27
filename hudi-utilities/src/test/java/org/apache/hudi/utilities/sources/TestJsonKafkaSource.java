@@ -300,9 +300,9 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
   }
 
-  @Test
-  public void testErrorEventsForDataInAvroFormat() throws IOException {
-
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testErrorEventsForDataInAvroFormat(boolean persistSourceRdd) throws IOException {
     // topic setup.
     final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat_" + persistSourceRdd;
 

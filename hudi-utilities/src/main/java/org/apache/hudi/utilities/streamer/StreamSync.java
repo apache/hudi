@@ -448,8 +448,10 @@ public class StreamSync implements Serializable, Closeable {
       Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
 
       if (inputBatchAndUseRowWriter != null) {
+        InputBatch inputBatch = inputBatchAndUseRowWriter.getLeft();
+        boolean useRowWriter = inputBatchAndUseRowWriter.getRight();
         initializeWriteClientAndRetryTableServices(inputBatch);
-        result = writeToSinkAndDoMetaSync(instantTime, inputBatch, metrics, overallTimerContext);
+        result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
       }
       // refresh schemas if need be before next batch
       if (schemaProvider != null) {
@@ -503,8 +505,6 @@ public class StreamSync implements Serializable, Closeable {
       if (pendingClusteringInstant.isPresent()) {
         writeClient.cluster(pendingClusteringInstant.get());
       }
-
-      result = writeToSinkAndDoMetaSync(instantTime, inputBatch, useRowWriter, metrics, overallTimerContext);
     }
   }
 
