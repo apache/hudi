@@ -359,12 +359,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean commit(String baseTableInstantTime, JavaRDD writeStatuses) {
+    public boolean commit(String errorTableInstantTime, JavaRDD writeStatuses) {
       if (writeStatuses == null) {
         throw new IllegalArgumentException("writeStatuses cannot be null");
       }
       commited.clear();
-      commited.put(baseTableInstantTime, Option.of(writeStatuses));
+      commited.put(errorTableInstantTime, Option.of(writeStatuses));
       return true;
     }
 

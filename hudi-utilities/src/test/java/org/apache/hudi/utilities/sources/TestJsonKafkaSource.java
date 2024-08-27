@@ -399,7 +399,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public boolean commit(String baseTableInstantTime, JavaRDD<WriteStatus> writeStatuses) {
+      public boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses) {
         return false;
       }
 
