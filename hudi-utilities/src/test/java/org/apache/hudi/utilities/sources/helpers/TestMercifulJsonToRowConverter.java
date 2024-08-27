@@ -54,7 +54,7 @@ class TestMercifulJsonToRowConverter {
   private static final String SIMPLE_AVRO_WITH_DEFAULT = "/schema/simple-test-with-default-value.avsc";
 
   @Test
-  public void basicConversion() throws IOException {
+  void basicConversion() throws IOException {
     Schema simpleSchema = SchemaTestUtil.getSchema(SIMPLE_AVRO_WITH_DEFAULT);
     String name = "John Smith";
     int number = 1337;
@@ -791,11 +791,11 @@ class TestMercifulJsonToRowConverter {
   }
 
   @Test
-  public void conversionWithFieldNameAliases() throws IOException {
+  void conversionWithFieldNameAliases() throws IOException {
     String schemaStringWithAliases = "{\"namespace\": \"example.avro\", \"type\": \"record\", \"name\": \"User\", \"fields\": [{\"name\": \"name\", \"type\": \"string\", \"aliases\": [\"$name\"]}, "
         + "{\"name\": \"favorite_number\",  \"type\": \"int\", \"aliases\": [\"unused\", \"favorite-number\"]}, {\"name\": \"favorite_color\", \"type\": \"string\", \"aliases\": "
         + "[\"favorite.color!\"]}, {\"name\": \"unmatched\", \"type\": \"string\", \"default\": \"default_value\"}]}";
-    Schema sanitizedSchema = Schema.parse(schemaStringWithAliases);
+    Schema sanitizedSchema = new Schema.Parser().parse(schemaStringWithAliases);
     String name = "John Smith";
     int number = 1337;
     String color = "Blue. No yellow!";

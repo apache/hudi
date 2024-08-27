@@ -138,14 +138,17 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     }
   }
 
+  @Override
   protected JsonFieldProcessor generateDecimalLogicalTypeHandler() {
     return new DecimalToRowLogicalTypeProcessor();
   }
 
+  @Override
   protected JsonFieldProcessor generateDateLogicalTypeHandler() {
     return new DateToRowLogicalTypeProcessor();
   }
 
+  @Override
   protected JsonFieldProcessor generateDurationLogicalTypeHandler() {
     return new DurationToRowLogicalTypeProcessor();
   }
@@ -167,6 +170,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     }
   }
 
+  @Override
   protected JsonFieldProcessor generateBytesTypeHandler() {
     return new JsonFieldProcessor() {
       @Override
@@ -176,6 +180,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     };
   }
 
+  @Override
   protected JsonFieldProcessor generateFixedTypeHandler() {
     return new FixedToRowTypeProcessor();
   }
@@ -187,6 +192,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     }
   }
 
+  @Override
   protected JsonFieldProcessor generateEnumTypeHandler() {
     return new EnumToRowTypeProcessor();
   }
@@ -198,6 +204,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     }
   }
 
+  @Override
   protected JsonFieldProcessor generateRecordTypeHandler() {
     return new JsonFieldProcessor() {
       @Override
@@ -207,6 +214,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     };
   }
 
+  @Override
   protected JsonFieldProcessor generateArrayTypeHandler() {
     return new JsonFieldProcessor() {
       private List<Object> convertToJavaObject(Object value, String name, Schema schema) {
@@ -229,6 +237,7 @@ public class MercifulJsonToRowConverter extends org.apache.hudi.avro.MercifulJso
     };
   }
 
+  @Override
   protected JsonFieldProcessor generateMapTypeHandler() {
     return new JsonFieldProcessor() {
       public Map<String, Object> convertToJavaObject(

@@ -50,12 +50,6 @@ public class RowConverter implements Serializable {
    */
   private transient MercifulJsonToRowConverter jsonConverter;
 
-
-  /**
-   * To be lazily initialized on executors.
-   */
-  private transient Injection<GenericRecord, byte[]> recordInjection;
-
   public RowConverter(String schemaStr) {
     this(schemaStr, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
   }
