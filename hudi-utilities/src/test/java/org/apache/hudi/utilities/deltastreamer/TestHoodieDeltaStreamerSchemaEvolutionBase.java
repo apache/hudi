@@ -346,11 +346,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static List<JavaRDD> errorEvents = new ArrayList<>();
     public static Map<String, Option<JavaRDD>> commited = new HashMap<>();
-    private JavaSparkContext jssc;
     public TestErrorTable(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
                           FileSystem fs) {
       super(cfg, sparkSession, props, hoodieSparkContext, fs);
-      jssc = hoodieSparkContext.getJavaSparkContext();
     }
 
     @Override
