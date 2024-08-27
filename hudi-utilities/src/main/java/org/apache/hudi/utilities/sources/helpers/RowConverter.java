@@ -20,9 +20,7 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import com.twitter.bijection.Injection;
 import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 
 import java.io.Serializable;
