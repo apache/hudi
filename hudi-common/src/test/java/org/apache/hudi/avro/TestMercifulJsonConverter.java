@@ -19,6 +19,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
@@ -97,7 +98,7 @@ public class TestMercifulJsonConverter {
     String json = MAPPER.writeValueAsString(data);
 
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(json, schema);
     });
   }
@@ -266,7 +267,7 @@ public class TestMercifulJsonConverter {
 
     Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(schemaFile);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(json, schema);
     });
   }
@@ -336,7 +337,7 @@ public class TestMercifulJsonConverter {
     Map<String, Object> data = new HashMap<>();
     data.put("dateField", input);
     String json = MAPPER.writeValueAsString(data);
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(json, schema);
     });
   }
@@ -442,7 +443,7 @@ public class TestMercifulJsonConverter {
     data.put("timestamp", input);
     String json = MAPPER.writeValueAsString(data);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(json, schema);
     });
   }
@@ -565,7 +566,7 @@ public class TestMercifulJsonConverter {
     data.put("timestampMillisField", validInput);
     data.put("timestampMicrosField", badInput);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(MAPPER.writeValueAsString(data), schema);
     });
 
@@ -573,7 +574,7 @@ public class TestMercifulJsonConverter {
     data.put("timestampMillisField", badInput);
     data.put("timestampMicrosField", validInput);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(MAPPER.writeValueAsString(data), schema);
     });
   }
@@ -657,7 +658,7 @@ public class TestMercifulJsonConverter {
     data.put("timeMicroField", validInput);
     data.put("timeMillisField", invalidInput);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(MAPPER.writeValueAsString(data), schema);
     });
 
@@ -665,7 +666,7 @@ public class TestMercifulJsonConverter {
     data.put("timeMicroField", invalidInput);
     data.put("timeMillisField", validInput);
     // Schedule with timestamp same as that of committed instant
-    assertThrows(MercifulJsonConverter.HoodieJsonToAvroConversionException.class, () -> {
+    assertThrows(HoodieJsonToAvroConversionException.class, () -> {
       CONVERTER.convert(MAPPER.writeValueAsString(data), schema);
     });
   }
