@@ -143,6 +143,7 @@ import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_UNION_WITH_DATA_TABLE;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
@@ -258,6 +259,7 @@ public class StreamSync implements Serializable, Closeable {
   private transient HoodieMetrics hoodieMetrics;
 
   private final boolean autoGenerateRecordKeys;
+  private final boolean isErrorTableUnionWithDataTableEnabled;
 
   private final boolean useRowWriter;
 
@@ -280,6 +282,8 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     this.errorTableWriter = errorTableWriter;
+    this.isErrorTableUnionWithDataTableEnabled =
+        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
     this.useRowWriter = useRowWriter;
@@ -321,6 +325,8 @@ public class StreamSync implements Serializable, Closeable {
           cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
+    this.isErrorTableUnionWithDataTableEnabled =
+        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
     refreshTimeline();
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
@@ -838,9 +844,19 @@ public class StreamSync implements Serializable, Closeable {
                                                                               Timer.Context overallTimerContext) {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
-    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime);
-    JavaRDD<WriteStatus> writeStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+    WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
+    Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+
+    // write to error table
+    JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+    JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
+    String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
+    Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
+    if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
+      errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
+      writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
+    }
 
     // process write status
     long totalErrorRecords = writeStatusRDD.mapToDouble(WriteStatus::getTotalErrorRecords).sum().longValue();
@@ -872,9 +888,14 @@ public class StreamSync implements Serializable, Closeable {
       }
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
       if (errorTableWriter.isPresent()) {
+        boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
-        Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
-        boolean errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        if (isErrorTableUnionWithDataTableEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
+          errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
+        } else if (!isErrorTableUnionWithDataTableEnabled) {
+          errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
+        }
+
         if (!errorTableSuccess) {
           switch (errorWriteFailureStrategy) {
             case ROLLBACK_COMMIT:
@@ -889,7 +910,7 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
       }
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
+      boolean success = writeClient.commit(instantTime, dataTableWriteStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty());
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
         this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch());
@@ -910,7 +931,7 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       LOG.error("Delta Sync found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
       LOG.error("Printing out the top 100 errors");
-      writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+      dataTableWriteStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
         LOG.error("Global error :", ws.getGlobalError());
         if (ws.getErrors().size() > 0) {
           ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
@@ -924,7 +945,7 @@ public class StreamSync implements Serializable, Closeable {
 
     // Send DeltaStreamer Metrics
     metrics.updateStreamerMetrics(overallTimeNanos);
-    return Pair.of(scheduledCompactionInstant, writeStatusRDD);
+    return Pair.of(scheduledCompactionInstant, dataTableWriteStatusRDD);
   }
 
   /**
