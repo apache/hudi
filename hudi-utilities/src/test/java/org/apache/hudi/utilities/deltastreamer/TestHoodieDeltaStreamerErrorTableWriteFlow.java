@@ -36,10 +36,11 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamerSchemaEvolutionBase {
-  protected void testBase(Tuple3<Boolean, Integer, Integer> sourceGenInfo, int errorRecords) throws Exception {
-    boolean shouldCreateMultipleSourceFiles = sourceGenInfo.f0;
-    int totalRecords = sourceGenInfo.f1;
+  protected void testBase(Tuple3<Integer, Integer, Integer> sourceGenInfo) throws Exception {
+    int totalRecords = sourceGenInfo.f0;
+    int errorRecords = sourceGenInfo.f1;
     int numFiles = sourceGenInfo.f2;
+    boolean shouldCreateMultipleSourceFiles = numFiles > 1;
 
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
 
@@ -87,14 +88,22 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     Stream.Builder<Arguments> b = Stream.builder();
     // totalRecords, numErrorRecords, numSourceFiles, WriteOperationType, shouldWriteErrorTableInUnionWithBaseTable
 
-    // empty source, error table union enabled
+    // empty source, error table union enabled, INSERT
     b.add(Arguments.of(0, 0, 0, WriteOperationType.INSERT, true));
-    // empty source, error table union disabled
+    // empty source, error table union disabled, INSERT
     b.add(Arguments.of(0, 0, 0, WriteOperationType.INSERT, false));
-    // non-empty source, error table union enabled
+    // non-empty source, error table union enabled, INSERT
     b.add(Arguments.of(100, 5, 1, WriteOperationType.INSERT, true));
-    // non-empty source, error table union disabled
+    // non-empty source, error table union disabled, INSERT
     b.add(Arguments.of(100, 5, 1, WriteOperationType.INSERT, false));
+    // non-empty source, error table union enabled, UPSERT
+    b.add(Arguments.of(100, 5, 1, WriteOperationType.UPSERT, true));
+    // non-empty source, error table union disabled, UPSERT
+    b.add(Arguments.of(100, 5, 1, WriteOperationType.UPSERT, false));
+    // non-empty source, error table union enabled, BULK_INSERT
+    b.add(Arguments.of(100, 5, 1, WriteOperationType.BULK_INSERT, true));
+    // non-empty source, error table union disabled, BULK_INSERT
+    b.add(Arguments.of(100, 5, 1, WriteOperationType.BULK_INSERT, false));
     return b.build();
   }
 
@@ -118,6 +127,6 @@ class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamer
     this.addFilegroups = false;
     this.multiLogFiles = false;
     this.dfsSourceLimitBytes = 100000000; // set source limit to 100mb
-    testBase(Tuple3.of(true, totalRecords, numSourceFiles), numErrorRecords);
+    testBase(Tuple3.of(totalRecords, numErrorRecords, numSourceFiles));
   }
 }
