@@ -25,6 +25,8 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.Base64;
 
 public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
@@ -53,31 +55,34 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
    */
   protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
     BigDecimal bigDecimal = null;
-    if (obj instanceof Number) {
-      Number number = (Number) obj;
-      // Special case integers and 0.0 to avoid conversion errors related to decimals with a scale of 0
-      if (obj instanceof Integer || obj instanceof Long || obj instanceof Short || obj instanceof Byte || number.doubleValue() == 0.0) {
-        bigDecimal = BigDecimal.valueOf(number.longValue());
-      } else {
-        bigDecimal = BigDecimal.valueOf(number.doubleValue());
-      }
-    } else if (obj instanceof String) {
-      // Case 2: Object is a number in String format.
-      try {
-        //encoded big decimal
-        bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
-            (LogicalTypes.Decimal) schema.getLogicalType());
-      } catch (IllegalArgumentException e) {
-        //no-op
-      }
-      // None fixed byte or fixed byte conversion failure would end up here.
-      if (bigDecimal == null) {
+    LogicalTypes.Decimal logicalType = (LogicalTypes.Decimal) schema.getLogicalType();
+    try {
+      if (obj instanceof BigDecimal) {
+        bigDecimal = ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+      } else if (obj instanceof Number) {
+        Number number = (Number) obj;
+        // Special case integers and 0.0 to avoid conversion errors related to decimals with a scale of 0
+        if (obj instanceof Integer || obj instanceof Long || obj instanceof Short || obj instanceof Byte || number.doubleValue() == 0.0) {
+          bigDecimal = BigDecimal.valueOf(number.longValue());
+        } else {
+          bigDecimal = BigDecimal.valueOf(number.doubleValue());
+        }
+      } else if (obj instanceof String) {
+        // Case 2: Object is a number in String format.
         try {
-          bigDecimal = new BigDecimal(((String) obj));
-        } catch (java.lang.NumberFormatException ignored) {
-          /* ignore */
+          //encoded big decimal
+          bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
+              (LogicalTypes.Decimal) schema.getLogicalType());
+        } catch (IllegalArgumentException e) {
+          //no-op
+        }
+        // None fixed byte or fixed byte conversion failure would end up here.
+        if (bigDecimal == null) {
+          bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
         }
       }
+    } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
+      /* ignore */
     }
 
     if (bigDecimal == null) {

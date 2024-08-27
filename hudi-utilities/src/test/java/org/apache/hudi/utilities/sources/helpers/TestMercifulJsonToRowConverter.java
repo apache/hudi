@@ -310,12 +310,12 @@ class TestMercifulJsonToRowConverter {
         // 18506 * MILLI_SECONDS_PER_DAY is 2020-08-31.
         // That's why you see for same 18506 days from avro side we can have different
         // row equivalence.
-        Arguments.of(18506, "2020-09-01", 18506), // epochDays
-        Arguments.of(18506, "2020-09-01", "2020-09-01"),  // dateString
-        Arguments.of(7323356, null, "+22020-09-01"),  // dateString, not supported by row
-        Arguments.of(18506, "2020-09-01", "18506"),  // epochDaysString, not supported by row
-        Arguments.of(Integer.MAX_VALUE, null, Integer.toString(Integer.MAX_VALUE)), // not supported by row
-        Arguments.of(Integer.MIN_VALUE, null, Integer.toString(Integer.MIN_VALUE)) // not supported by row
+        Arguments.of("2020-09-01", 18506), // epochDays
+        Arguments.of("2020-09-01", "2020-09-01"),  // dateString
+        Arguments.of(null, "+22020-09-01"),  // dateString, not supported by row
+        Arguments.of("2020-09-01", "18506"),  // epochDaysString, not supported by row
+        Arguments.of(null, Integer.toString(Integer.MAX_VALUE)), // not supported by row
+        Arguments.of(null, Integer.toString(Integer.MIN_VALUE)) // not supported by row
     );
   }
 
