@@ -19,19 +19,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Tuple3;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.junit.jupiter.api.Disabled;
@@ -184,15 +180,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     }
 
     if (withErrorTable) {
-      validateErrorTable(1, reason);
+      validateErrorTable(1, this.writeErrorTableInParallelWithBaseTable, reason);
     }
   }
 
-  private void validateErrorTable(int numErrorRecords) {
-    validateErrorTable(numErrorRecords, null);
+  protected static void validateErrorTable(int numErrorRecords, boolean isErrorTableUnionWriteEnabled) {
+    validateErrorTable(numErrorRecords, isErrorTableUnionWriteEnabled, null);
   }
 
-  private void validateErrorTable(int numErrorRecords, ErrorEvent.ErrorReason reason) {
+  protected static void validateErrorTable(int numErrorRecords, boolean isErrorTableUnionWriteEnabled, ErrorEvent.ErrorReason reason) {
     List recs = new ArrayList<>();
     for (String key : TestErrorTable.commited.keySet()) {
       Option<JavaRDD> errors = TestErrorTable.commited.get(key);
@@ -204,7 +200,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       }
     }
     if (numErrorRecords > 0) {
-      if (this.writeErrorTableInParallelWithBaseTable) {
+      if (isErrorTableUnionWriteEnabled) {
         // Union (parallel execution) is executed if values in committed map are of type WriteStatus
         assertTrue(recs.get(0) instanceof WriteStatus);
         assertEquals(numErrorRecords, recs.stream().mapToLong(e -> ((WriteStatus) e).getTotalRecords()).sum());
@@ -218,53 +214,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
       }
     } else {
       assertEquals(0, recs.size());
-    }
-  }
-
-  protected void testBase(Tuple3<Boolean, Integer, Integer> sourceGenInfo, int errorRecords) throws Exception {
-    boolean shouldCreateMultipleSourceFiles = sourceGenInfo.f0;
-    int totalRecords = sourceGenInfo.f1;
-    int numFiles = sourceGenInfo.f2;
-
-    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
-
-    if (totalRecords > 0) {
-      if (shouldCreateMultipleSourceFiles) {
-        prepareParquetDFSMultiFiles(totalRecords - errorRecords, PARQUET_SOURCE_ROOT, numFiles);
-      } else {
-        prepareParquetDFSFiles(totalRecords - errorRecords, PARQUET_SOURCE_ROOT);
-      }
-
-      // Add error data to the source
-      if (errorRecords > 0) {
-        String errorDataSourceRoot = basePath + "parquetErrorFilesDfs" + testNum++;
-        prepareParquetDFSFiles(errorRecords, errorDataSourceRoot);
-        Dataset<Row> df = sparkSession.read().parquet(errorDataSourceRoot);
-        df = df.withColumn("_row_key", functions.lit(""));
-        // add error records to PARQUET_SOURCE_ROOT
-        addParquetData(df, false);
-      }
-    } else {
-      fs.mkdirs(new Path(PARQUET_SOURCE_ROOT));
-    }
-
-    tableName = "test_parquet_table" + testNum;
-    tableBasePath = basePath + tableName;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
-    this.deltaStreamer.sync();
-
-    // base table validation
-    Dataset<Row> baseDf = sparkSession.read().format("hudi").load(tableBasePath);
-    assertEquals(totalRecords - errorRecords, baseDf.count());
-
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(jsc.hadoopConfiguration())
-        .setBasePath(tableBasePath).build();
-    assertEquals(1, metaClient.getActiveTimeline().getInstants().size());
-
-    // error table validation
-    if (withErrorTable) {
-      validateErrorTable(errorRecords);
     }
   }
 

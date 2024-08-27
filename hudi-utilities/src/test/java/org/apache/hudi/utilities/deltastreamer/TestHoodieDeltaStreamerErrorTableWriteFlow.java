@@ -20,15 +20,69 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Tuple3;
 
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.functions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-public class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamerSchemaEvolutionExtensive {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+class TestHoodieDeltaStreamerErrorTableWriteFlow extends TestHoodieDeltaStreamerSchemaEvolutionBase {
+  protected void testBase(Tuple3<Boolean, Integer, Integer> sourceGenInfo, int errorRecords) throws Exception {
+    boolean shouldCreateMultipleSourceFiles = sourceGenInfo.f0;
+    int totalRecords = sourceGenInfo.f1;
+    int numFiles = sourceGenInfo.f2;
+
+    PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
+
+    if (totalRecords > 0) {
+      if (shouldCreateMultipleSourceFiles) {
+        prepareParquetDFSMultiFiles(totalRecords - errorRecords, PARQUET_SOURCE_ROOT, numFiles);
+      } else {
+        prepareParquetDFSFiles(totalRecords - errorRecords, PARQUET_SOURCE_ROOT);
+      }
+
+      // Add error data to the source
+      if (errorRecords > 0) {
+        String errorDataSourceRoot = basePath + "parquetErrorFilesDfs" + testNum++;
+        prepareParquetDFSFiles(errorRecords, errorDataSourceRoot);
+        Dataset<Row> df = sparkSession.read().parquet(errorDataSourceRoot);
+        df = df.withColumn("_row_key", functions.lit(""));
+        // add error records to PARQUET_SOURCE_ROOT
+        addParquetData(df, false);
+      }
+    } else {
+      fs.mkdirs(new Path(PARQUET_SOURCE_ROOT));
+    }
+
+    tableName = "test_parquet_table" + testNum;
+    tableBasePath = basePath + tableName;
+    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
+    this.deltaStreamer.sync();
+
+    // base table validation
+    Dataset<Row> baseDf = sparkSession.read().format("hudi").load(tableBasePath);
+    assertEquals(totalRecords - errorRecords, baseDf.count());
+
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(jsc.hadoopConfiguration())
+        .setBasePath(tableBasePath).build();
+    assertEquals(1, metaClient.getActiveTimeline().getInstants().size());
+
+    // error table validation
+    if (withErrorTable) {
+      TestHoodieDeltaStreamerSchemaEvolutionExtensive.validateErrorTable(errorRecords, this.writeErrorTableInParallelWithBaseTable);
+    }
+  }
+
   protected static Stream<Arguments> testErrorTableWriteFlowArgs() {
     Stream.Builder<Arguments> b = Stream.builder();
     // totalRecords, numErrorRecords, numSourceFiles, WriteOperationType, shouldWriteErrorTableInUnionWithBaseTable
