@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[31167],{89500:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/videos/tags","slug":"/cn/videos/tags/amazon-sns","name":"amazon sns","count":3,"permalink":"/cn/videos/tags/amazon-sns"}')}}]);

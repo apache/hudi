@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[36826],{51934:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/change-data-capture","name":"Change Data Capture","count":6,"permalink":"/cn/blog/tags/change-data-capture"}')}}]);

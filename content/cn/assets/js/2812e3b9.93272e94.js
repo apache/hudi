@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[42995],{84408:s=>{s.exports=JSON.parse('{"blogBasePath":"/cn/videos","blogTitle":"Blog","authorsListPath":"/cn/videos/authors"}')}}]);

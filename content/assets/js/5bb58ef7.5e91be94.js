@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[88297],{73083:a=>{a.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/apache-kafka","name":"apache Kafka","count":7,"permalink":"/blog/tags/apache-kafka"}')}}]);

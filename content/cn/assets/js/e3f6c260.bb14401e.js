@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[23934],{53636:a=>{a.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/daft","name":"daft","count":3,"permalink":"/cn/blog/tags/daft"}')}}]);

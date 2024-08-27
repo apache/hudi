@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[10417],{33908:s=>{s.exports=JSON.parse('{"allTagsPath":"/cn/blog/tags","slug":"/cn/blog/tags/risingwave","name":"risingwave","count":1,"permalink":"/cn/blog/tags/risingwave"}')}}]);

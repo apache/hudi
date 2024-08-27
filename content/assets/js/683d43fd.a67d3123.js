@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[85737],{75722:e=>{e.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/venturebeat","name":"venturebeat","count":1,"permalink":"/blog/tags/venturebeat"}')}}]);

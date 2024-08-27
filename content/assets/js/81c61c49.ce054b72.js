@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[80356],{73266:s=>{s.exports=JSON.parse('{"allTagsPath":"/videos/tags","slug":"/videos/tags/commit-times","name":"commit times","count":1,"permalink":"/videos/tags/commit-times"}')}}]);
