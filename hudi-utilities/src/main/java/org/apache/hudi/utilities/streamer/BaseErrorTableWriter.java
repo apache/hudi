@@ -82,5 +82,5 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
 
   public abstract JavaRDD<WriteStatus> upsert(String errorTableInstantTime, String baseTableInstantTime, Option<String> commitedInstantTime);
 
-  public abstract boolean commit(String baseTableInstantTime, JavaRDD<WriteStatus> writeStatuses);
+  public abstract boolean commit(String errorTableInstantTime, JavaRDD<WriteStatus> writeStatuses);
 }

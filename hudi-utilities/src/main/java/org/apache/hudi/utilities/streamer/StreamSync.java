@@ -845,20 +845,17 @@ public class StreamSync implements Serializable, Closeable {
     Option<String> scheduledCompactionInstant = Option.empty();
     // write to hudi and fetch result
     WriteClientWriteResult  writeClientWriteResult = writeToSink(inputBatch, instantTime, useRowWriter);
-
-    JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
     Map<String, List<String>> partitionToReplacedFileIds = writeClientWriteResult.getPartitionToReplacedFileIds();
-
     Option<String> commitedInstantTime = getLatestInstantWithValidCheckpointInfo(commitsTimelineOpt);
+
+    // write to error table
+    JavaRDD<WriteStatus> dataTableWriteStatusRDD = writeClientWriteResult.getWriteStatusRDD();
+    JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
     String errorTableInstantTime = HoodieActiveTimeline.createNewInstantTime();
-    JavaRDD<WriteStatus> writeStatusRDD;
-    Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt;
+    Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
     if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
       errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
       writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
-    } else {
-      errorTableWriteStatusRDDOpt = Option.empty();
-      writeStatusRDD = dataTableWriteStatusRDD;
     }
 
     // process write status
