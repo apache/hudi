@@ -148,7 +148,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   public HoodieWriteMetadata<HoodieData<WriteStatus>> execute(HoodieData<HoodieRecord<T>> inputRecords) {
     // Cache the tagged records, so we don't end up computing both
     JavaRDD<HoodieRecord<T>> inputRDD = HoodieJavaRDD.getJavaRDD(inputRecords);
-    if (inputRDD.getStorageLevel() == StorageLevel.NONE()) {
+    if (!config.isSourceRddPersisted() || inputRDD.getStorageLevel() == StorageLevel.NONE()) {
       HoodieJavaRDD.of(inputRDD).persist(config.getTaggedRecordStorageLevel(),
           context, HoodieDataCacheKey.of(config.getBasePath(), instantTime));
     } else {
