@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.avro.JsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
@@ -41,13 +42,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TestMercifulJsonToRowConverter {
+class TestMercifulJsonToRowConverter extends JsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonToRowConverter CONVERTER = new MercifulJsonToRowConverter(true, "__");
 
@@ -126,27 +126,6 @@ class TestMercifulJsonToRowConverter {
     });
   }
 
-  static Stream<Object> decimalBadCases() {
-    return Stream.of(
-        // Invalid schema definition.
-        Arguments.of(DECIMAL_AVRO_FILE_INVALID_PATH, "123.45", null),
-        // Schema set precision as 5, input overwhelmed the precision.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "123333.45", null),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, null, 123333.45),
-        // Schema precision set to 5, scale set to 2, so there is only 3 digit to accommodate integer part.
-        // As we do not do rounding, any input with more than 3 digit integer would fail.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "1233", null),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, null, 1233D),
-        // Schema set scale as 2, input overwhelmed the scale.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "0.222", null),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, null, 0.222),
-        // Invalid string which cannot be parsed as number.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "", null),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "NotAValidString", null),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "-", null)
-    );
-  }
-
   /**
    * Covered case:
    * Avro Logical Type: Decimal
@@ -191,43 +170,24 @@ class TestMercifulJsonToRowConverter {
     assertEquals(expectRow, realRow);
   }
 
-  static Stream<Object> decimalGoodCases() {
-    return Stream.of(
-        // The schema all set precision as 5, scale as 2.
-        // Test dimension: Schema file, Ground truth, string input, number input, fixed byte array input.
-        // Test some random numbers.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "123.45", "123.45", null, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "123.45", null, 123.45, false),
-        // Test MIN/MAX allowed by the schema.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "999.99", null, 999.99, false),
-        // Test 0.
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", null, 0D, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", "0", null, false),
-        Arguments.of(DECIMAL_AVRO_FILE_PATH, "0", "000.00", null, false),
-        // Same set of coverage over schame using byte/fixed type.
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", "123.45", null, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", "-999.99", null, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, 999L, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999", null, (short) 999, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "100", null, (byte) 100, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0D, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, 0, false),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "0", null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", "000.00", null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "123.45", null, 123.45, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "-999.99", null, null, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "999.99", null, 999.99, true),
-        Arguments.of(DECIMAL_FIXED_AVRO_FILE_PATH, "0", null, null, true)
-
-    );
-  }
-
   private static final String DURATION_AVRO_FILE_PATH = "/duration-logical-type.avsc";
+
+  @ParameterizedTest
+  @MethodSource("zeroScaleDecimalCases")
+  void zeroScaleDecimalConversion(String inputValue, String expected, boolean shouldConvert) {
+    Schema schema = new Schema.Parser().parse("{\"namespace\": \"example.avro\",\"type\": \"record\",\"name\": \"decimalLogicalType\",\"fields\": [{\"name\": \"decimalField\", "
+        + "\"type\": {\"type\": \"bytes\", \"logicalType\": \"decimal\", \"precision\": 38, \"scale\": 0}}]}");
+    String json = String.format("{\"decimalField\":%s}", inputValue);
+
+    if (shouldConvert) {
+      BigDecimal bigDecimal = new BigDecimal(expected);
+      Row expectedRow = RowFactory.create(bigDecimal);
+      Row actualRow = CONVERTER.convertToRow(json, schema);
+      assertEquals(expectedRow, actualRow);
+    } else {
+      assertThrows(HoodieJsonToRowConversionException.class, () -> CONVERTER.convertToRow(json, schema));
+    }
+  }
 
   /**
    * Covered case:
@@ -261,19 +221,25 @@ class TestMercifulJsonToRowConverter {
     });
   }
 
-  static Stream<Object> durationGoodCases() {
-    return Stream.of(
-        // Normal inputs.
-        Arguments.of(1, 2, 3),
-        // Negative int would be interpreted as some unsigned int by Avro. They all 4-byte.
-        Arguments.of(-1, -2, -3),
-        // Signed -1 interpreted to unsigned would be unsigned MAX
-        Arguments.of(-1, -1, -1),
-        // Other special edge cases.
-        Arguments.of(0, 0, 0),
-        Arguments.of(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE),
-        Arguments.of(Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE)
-    );
+  @ParameterizedTest
+  @MethodSource("durationBadCases")
+  void durationLogicalTypeBadTest(Long months, Long days, Long millis) throws IOException {
+    // As duration uses 12 byte fixed type to store 3 unsigned int numbers, Long.MAX would cause overflow.
+    // Verify it is gracefully handled.
+    List<Long> num = new ArrayList<>();
+    num.add(months);
+    num.add(days);
+    num.add(millis);
+
+    Map<String, Object> data = new HashMap<>();
+    data.put("duration", num);
+    String json = MAPPER.writeValueAsString(data);
+
+    Schema schema = SchemaTestUtil.getSchema(DURATION_AVRO_FILE_PATH);
+    // Schedule with timestamp same as that of committed instant
+    assertThrows(HoodieJsonToRowConversionException.class, () -> {
+      CONVERTER.convertToRow(json, schema);
+    });
   }
 
   private static final String DATE_AVRO_FILE_PATH = "/date-type.avsc";
@@ -366,84 +332,6 @@ class TestMercifulJsonToRowConverter {
     assertEquals(rec, CONVERTER.convertToRow(json, schema));
   }
 
-  static Stream<Object> localTimestampGoodCaseProvider() {
-    return Stream.of(
-        // Test cases with 'T' as the separator
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
-            "2024-05-13T23:53:36.004", // Timestamp equivalence
-            "2024-05-13T23:53:36.004"),
-        Arguments.of(
-            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
-            "2024-05-13T23:53:36", // Timestamp equivalence
-            "2024-05-13T23:53:36"),
-        // Test cases with ' ' as the separator
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
-            "2024-05-13 23:53:36.004", // Timestamp equivalence
-            "2024-05-13 23:53:36.004"),
-        Arguments.of(
-            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
-            "2024-05-13 23:53:36", // Timestamp equivalence
-            "2024-05-13 23:53:36"),
-        Arguments.of(
-            2024L, "2", "2024"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            (long) (1715644416 * 1e3 + 4000000 / 1e6),
-            (long) (1715644416 * 1e6 + 4000000 / 1e3)),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            (long) (1715644416 * 1e3 + 4000000 / 1e6),
-            Long.toString((long) (1715644416 * 1e6 + 4000000 / 1e3))),
-        // Test higher precision that only micro sec unit can capture.
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e6),
-            "2024-05-13T23:53:36.000", // Timestamp equivalence
-            "2024-05-13T23:53:36.000004"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e6),
-            "2024-05-13 23:53:36.000", // Timestamp equivalence
-            "2024-05-13 23:53:36.000004"),
-        // Test full range of time
-        Arguments.of(
-            0L,
-            "1970-01-01T00:00:00.000", // Timestamp equivalence
-            "1970-01-01T00:00:00.000000"),
-        Arguments.of(
-            0L,
-            "1970-01-01 00:00:00.000", // Timestamp equivalence
-            "1970-01-01 00:00:00.000000"),
-        Arguments.of(
-            Long.MAX_VALUE,
-            "+294247-01-10T04:00:54.775", // Timestamp in far future must be prefixed with '+'
-            "+294247-01-10T04:00:54.775807"),
-        Arguments.of(
-            Long.MAX_VALUE,
-            "+294247-01-10 04:00:54.775", // Timestamp in far future must be prefixed with '+'
-            "+294247-01-10 04:00:54.775807"),
-        Arguments.of(
-            0L, 0L, 0L),
-        Arguments.of(
-            -1L * 1000, -1L, -1L * 1000),
-        Arguments.of(
-            Long.MIN_VALUE, Long.MIN_VALUE / 1000, Long.MIN_VALUE),
-        Arguments.of(
-            Long.MAX_VALUE, Long.MAX_VALUE / 1000, Long.MAX_VALUE),
-        Arguments.of(
-            -62167219200000000L, "0000-01-01T00:00:00.00000", "0000-01-01T00:00:00.00000"),
-        Arguments.of(
-            -62167219200000000L, -62167219200000000L / 1000, -62167219200000000L),
-        Arguments.of(
-            -62167219200000000L, "0000-01-01 00:00:00.00000", "0000-01-01 00:00:00.00000"),
-        Arguments.of(
-            -62167219200000000L, -62167219200000000L / 1000, -62167219200000000L)
-    );
-  }
-
-  private static final String LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH = "/local-timestamp-millis-logical-type.avsc";
-  private static final String LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH = "/local-timestamp-micros-logical-type.avsc";
-
   @ParameterizedTest
   @MethodSource("localTimestampBadCaseProvider")
   void localTimestampLogicalTypeBadTest(
@@ -457,45 +345,6 @@ class TestMercifulJsonToRowConverter {
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
       CONVERTER.convertToRow(json, schema);
     });
-  }
-
-  static Stream<Object> localTimestampBadCaseProvider() {
-    return Stream.of(
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1323:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-0-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-0-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "20242-05-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "20242-05-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13T23:53:36.0000000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13 23:53:36.0000000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "202-05-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-13T23:53:36.000Z"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-13 23:53:36.000Z"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1323:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-1 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-0-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-0-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "20242-05-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "20242-05-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13T23:53:36.0000000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13 23:53:36.0000000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13T23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "202-05-13 23:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-13T23:53:36.000Z"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05-13 23:53:36.000Z"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "Not a timestamp at all!"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024 05 13T23:00"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024 05 13 23:00"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2024-05"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03T10:15:30+01:00"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03 10:15:30+01:00"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03T10:15:30[Europe/ Paris]"),
-        Arguments.of(LOCAL_TIMESTAMP_MICRO_AVRO_FILE_PATH, "2011-12-03 10:15:30[Europe/ Paris]")
-    );
   }
 
   private static final String TIMESTAMP_AVRO_FILE_PATH = "/timestamp-logical-type2.avsc";
@@ -527,131 +376,6 @@ class TestMercifulJsonToRowConverter {
     assertEquals(rec, CONVERTER.convertToRow(json, schema));
   }
 
-  static Stream<Object> timestampGoodCaseProvider() {
-    return Stream.of(
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
-            "2024-05-13T23:53:36.004Z", // Timestamp equivalence
-            "2024-05-13T23:53:36.004Z"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3), // Num of micro sec since unix epoch
-            "2024-05-13 23:53:36.004Z", // Timestamp equivalence
-            "2024-05-13 23:53:36.004Z"),
-        Arguments.of(
-            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
-            "2024-05-13T23:53:36Z", // Timestamp equivalence
-            "2024-05-13T23:53:36Z"),
-        Arguments.of(
-            (long) (1715644416 * 1e6), // Num of micro sec since unix epoch
-            "2024-05-13 23:53:36Z", // Timestamp equivalence
-            "2024-05-13 23:53:36Z"),
-        // Test timestamps with no zone offset
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            "2024-05-13T23:53:36.004",
-            "2024-05-13T23:53:36.004"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            "2024-05-13 23:53:36.004",
-            "2024-05-13 23:53:36.004"),
-        // Test timestamps with different zone offsets
-        Arguments.of(
-            (long) (1715644416 * 1e6 - 2 * 3600 * 1e6),
-            "2024-05-13T23:53:36+02:00",
-            "2024-05-13T23:53:36+02:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 - 2 * 3600 * 1e6),
-            "2024-05-13 23:53:36+02:00",
-            "2024-05-13 23:53:36+02:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            "2024-05-13T23:53:36.004+00:00",
-            "2024-05-13T23:53:36.004+00:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            "2024-05-13 23:53:36.004+00:00",
-            "2024-05-13 23:53:36.004+00:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 - 3 * 3600 * 1e6 + 4000000 / 1e3),
-            "2024-05-13T23:53:36.004+03:00",
-            "2024-05-13T23:53:36.004+03:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 - 3 * 3600 * 1e6 + 4000000 / 1e3),
-            "2024-05-13 23:53:36.004+03:00",
-            "2024-05-13 23:53:36.004+03:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 6 * 3600 * 1e6 + 4000000 / 1e3),
-            "2024-05-13T23:53:36.004-06:00",
-            "2024-05-13T23:53:36.004-06:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 6 * 3600 * 1e6 + 4000000 / 1e3),
-            "2024-05-13 23:53:36.004-06:00",
-            "2024-05-13 23:53:36.004-06:00"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + (8 * 3600 + 1800) * 1e6 + 4000000 / 1e3),
-            "2024-05-13T23:53:36.004-08:30",
-            "2024-05-13T23:53:36.004-08:30"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + (8 * 3600 + 1800) * 1e6 + 4000000 / 1e3),
-            "2024-05-13 23:53:36.004-08:30",
-            "2024-05-13 23:53:36.004-08:30"),
-        Arguments.of(
-            2024L, "2", "2024"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            (long) (1715644416 * 1e3 + 4000000 / 1e6),
-            (long) (1715644416 * 1e6 + 4000000 / 1e3)),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e3),
-            (long) (1715644416 * 1e3 + 4000000 / 1e6),
-            Long.toString((long) (1715644416 * 1e6 + 4000000 / 1e3))),
-        // Test higher precision that only micro sec unit can capture.
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e6),
-            "2024-05-13T23:53:36.000Z", // Timestamp equivalence
-            "2024-05-13T23:53:36.000004Z"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + 4000000 / 1e6),
-            "2024-05-13 23:53:36.000Z",
-            "2024-05-13 23:53:36.000004Z"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + (2 * 3600 + 1800) * 1e6 + 4000000 / 1e6),
-            "2024-05-13T23:53:36.000-02:30",
-            "2024-05-13T23:53:36.000004-02:30"),
-        Arguments.of(
-            (long) (1715644416 * 1e6 + (2 * 3600 + 1800) * 1e6 + 4000000 / 1e6),
-            "2024-05-13 23:53:36.000-02:30",
-            "2024-05-13 23:53:36.000004-02:30"),
-        // Test full range of time
-        Arguments.of(
-            0L,
-            "1970-01-01T00:00:00.000Z", // Timestamp equivalence
-            "1970-01-01T00:00:00.000000Z"),
-        Arguments.of(
-            (long) (-3600 * 1e6),
-            "1970-01-01T00:00:00.000+01:00",
-            "1970-01-01T00:00:00.000000+01:00"),
-        // The test case leads to long overflow due to how java calculate duration between 2 timestamps
-        // Arguments.of(
-        //  Long.MAX_VALUE,
-        //  "+294247-01-10T04:00:54.775Z", // Timestamp in far future must be prefixed with '+'
-        //  "+294247-01-10T04:00:54.775807Z"),
-        Arguments.of(
-            0L, 0L, 0L),
-        Arguments.of(
-            -1L * 1000, -1L, -1L * 1000),
-        Arguments.of(
-            Long.MIN_VALUE, Long.MIN_VALUE / 1000, Long.MIN_VALUE),
-        Arguments.of(
-            Long.MAX_VALUE, Long.MAX_VALUE / 1000, Long.MAX_VALUE),
-        // The test case leads to long overflow due to how java calculate duration between 2 timestamps
-        // Arguments.of(
-        //  -62167219200000000L, "0000-01-01T00:00:00.00000Z", "0000-01-01T00:00:00.00000Z"),
-        Arguments.of(
-            -62167219200000000L, -62167219200000000L / 1000, -62167219200000000L)
-    );
-  }
-
   @ParameterizedTest
   @MethodSource("timestampBadCaseProvider")
   void timestampLogicalTypeBadTest(Object input) throws IOException {
@@ -666,14 +390,6 @@ class TestMercifulJsonToRowConverter {
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
       CONVERTER.convertToRow(json, schema);
     });
-  }
-
-  static Stream<Object> timestampBadCaseProvider() {
-    return Stream.of(
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1323:53:36.000"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "2024-05-1323:53:36.000 UTC"),
-        Arguments.of(LOCAL_TIMESTAMP_MILLI_AVRO_FILE_PATH, "Tue, 3 Jun 2008 11:05:30 GMT")
-    );
   }
 
   private static final String TIME_AVRO_FILE_PATH = "/time-logical-type.avsc";
@@ -706,35 +422,6 @@ class TestMercifulJsonToRowConverter {
     assertEquals(rec.get(1).toString(), realRow.get(1).toString());
   }
 
-  static Stream<Object> timeGoodCaseProvider() {
-    return Stream.of(
-        // 12 hours and 30 minutes in milliseconds / microseconds
-        Arguments.of((long) 4.5e10, (int) 4.5e7, (long) 4.5e10),
-        // 12 hours and 30 minutes in milliseconds / microseconds as string
-        Arguments.of((long) 4.5e10, Integer.toString((int) 4.5e7), Long.toString((long) 4.5e10)),
-        // 12 hours and 30 minutes
-        Arguments.of((long) 4.5e10, "12:30:00", "12:30:00"),
-        Arguments.of(
-            (long) (4.5e10 + 1e3), // 12 hours, 30 minutes and 0.001 seconds in microseconds
-            "12:30:00.001", // 12 hours, 30 minutes and 0.001 seconds
-            "12:30:00.001" // 12 hours, 30 minutes and 0.001 seconds
-        ),
-        // Test value ranges
-        Arguments.of(
-            0L,
-            "00:00:00.000",
-            "00:00:00.00000"
-        ),
-        Arguments.of(
-            86399999990L,
-            "23:59:59.999",
-            "23:59:59.99999"
-        ),
-        Arguments.of((long) Integer.MAX_VALUE, Integer.MAX_VALUE / 1000, (long) Integer.MAX_VALUE),
-        Arguments.of((long) Integer.MIN_VALUE, Integer.MIN_VALUE / 1000, (long) Integer.MIN_VALUE)
-    );
-  }
-
   @ParameterizedTest
   @MethodSource("timeBadCaseProvider")
   void timeLogicalTypeBadCaseTest(Object timeMilli, Object timeMicro) throws IOException {
@@ -749,12 +436,6 @@ class TestMercifulJsonToRowConverter {
     assertThrows(Exception.class, () -> {
       CONVERTER.convertToRow(json, schema);
     });
-  }
-
-  static Stream<Object> timeBadCaseProvider() {
-    return Stream.of(
-        Arguments.of(0L, "00:0", "00:0")
-    );
   }
 
   private static final String UUID_AVRO_FILE_PATH = "/uuid-logical-type.avsc";
@@ -780,14 +461,27 @@ class TestMercifulJsonToRowConverter {
     assertEquals(rec, CONVERTER.convertToRow(json, schema));
   }
 
-  static Stream<Object> uuidDimension() {
-    return Stream.of(
-        // Normal UUID
-        UUID.randomUUID().toString(),
-        // Arbitrary string will also pass as neither Avro library nor json convertor validate the string content.
-        "",
-        "NotAnUUID"
-    );
+  @ParameterizedTest
+  @MethodSource("nestedJsonAsString")
+  void nestedJsonAsString(String nameInput) throws IOException {
+    Schema simpleSchema = SchemaTestUtil.getSimpleSchema();
+    String json = String.format("{\"name\": %s, \"favorite_number\": 1337, \"favorite_color\": 10}", nameInput);
+
+    Row expectedRow = RowFactory.create(nameInput, 1337, "10");
+    assertEquals(expectedRow, CONVERTER.convertToRow(json, simpleSchema));
+  }
+
+  @ParameterizedTest
+  @MethodSource("nestedRecord")
+  void nestedRecordTest(String contactInput, boolean isString) {
+    String nestedSchemaStr = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}," +
+        "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\",\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
+    String json = isString ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
+        : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
+    Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
+
+    Row expected = RowFactory.create("Jane Smith", RowFactory.create(contactInput));
+    assertEquals(expected, CONVERTER.convertToRow(json, nestedSchema));
   }
 
   @Test
