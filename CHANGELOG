@@ -306,3 +306,11 @@ b131896ba9c [ENG-12062][INTERNAL] Downgrade maven-checkstyle-plugin to lower req
 ---[2024-08-26 13:48:16] [release-v1.29.1] ---
 8e1ab9f1c00 [ENG-13432][MINOR] Update handling of non-string inputs for string fields in MercifulJsonConverter (#893)
 cf41c616d31 [AUDIT-920]: Changelog for release-v1.29.0
+
+---[2024-08-28 09:53:01] [release-v1.30.0] ---
+4b28b1d4dc [ENG-13289][HUDI-8123] Fix MDT file listing to exclude non-existent log files in marker-based rollback (#886)
+168d5ab9e3 [ENG-13386][INTERNAL] throw exception on null in the hoodie fg serializer (#898)
+8e2b933727 [ENG-13143][HUDI-8105] Refactor MercifulJsonConverter to be extendible for Json to Row conversion (#880)
+645d1d3213 [AUDIT-925]: Changelog for release-v1.29.1 (#894)
+1b0b0bec12 [ENG-13432][MINOR] Update handling of non-string inputs for string fields in MercifulJsonConverter (#893)
+750444a035 [AUDIT-920]: Changelog for release-v1.29.0 (#885)
