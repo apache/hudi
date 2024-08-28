@@ -19,9 +19,9 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +82,6 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     FileIOUtils.deleteDirectory(baseDir);
     FileIOUtils.mkdir(baseDir);
     baseDir.deleteOnExit();
-    updateCurrentWriteFile(0, currentSortedFileIndex);
   }
 
   public void add(T record) {
@@ -117,86 +116,43 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     return file;
   }
 
-  @NotNull
-  @Override
-  public Iterator<T> iterator() {
-    return new Iterator<T>() {
-      private Option<BufferedRandomAccessFile> reader = Option.empty();
-      private Option<Entry> currentRecord = Option.empty();
-      private boolean init = false;
-      private int iterateCount = 0;
-
-      @Override
-      public boolean hasNext() {
-        if (!init) {
-          init();
-        }
-        if (currentRecord.isPresent()) {
-          return true;
-        }
-        LOG.debug("Total iterate count: " + iterateCount);
-        return false;
-      }
-
-      private void init() {
-        if (sortedFile.isPresent()) {
-          try {
-            reader = Option.of(new BufferedRandomAccessFile(sortedFile.get(), "r"));
-            // load first entry
-            currentRecord = readEntry(reader.get());
-            if (currentRecord.isEmpty()) {
-              reader.get().close();
-            }
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to read sorted file", e);
-          }
-        } else {
-          return;
-        }
-        init = true;
-      }
-
-      @Override
-      public T next() {
-        if (!init) {
-          init();
-        }
-        iterateCount++;
-        Entry current = currentRecord.get();
-        T record = SerializationUtils.deserialize(current.getRecord());
-        currentRecord = readEntry(reader.get());
-        if (currentRecord.isEmpty()) {
-          try {
-            reader.get().close();
-          } catch (IOException e) {
-            throw new HoodieIOException("Failed to close reader", e);
-          }
-        }
-        return record;
-      }
-    };
-  }
-
   private void sortAndWriteToFile() throws IOException {
     // TODO: consider merge during sort
+    // 1. sort in memory
     memoryRecords.sort(comparator);
+
+    // 2. create current write handle
+    createNewWriteFile(0, currentSortedFileIndex++);
+
+    // 3. write every record to file
     for (T record : memoryRecords) {
       Entry entry = Entry.newEntry(SerializationUtils.serialize(record));
       entry.writeToFile(writeOnlyFileHandle);
     }
-    writeOnlyFileHandle.flush();
-    writeOnlyFileHandle.close();
+
+    // 4. add current write file to current level files
     currentLevelFiles.add(writeOnlyFile);
+
+    // 5. flush and close current write handle
+    closePreviousWriteFile();
+
+    // 6. clear memory records
     memoryRecords.clear();
     currentMemoryUsage = 0;
-    updateCurrentWriteFile(0, ++currentSortedFileIndex);
   }
 
-  private void updateCurrentWriteFile(int level, int index) throws IOException {
+  private void createNewWriteFile(int level, int index) throws IOException {
     String writeFilePath = fileNameGenerate(level, index);
     writeOnlyFile = createFileForWrite(writeFilePath);
     writeOnlyFileStream = new FileOutputStream(writeOnlyFile, true);
     writeOnlyFileHandle = new SizeAwareDataOutputStream(writeOnlyFileStream, BUFFER_SIZE);
+  }
+
+  private void closePreviousWriteFile() throws IOException {
+    if (writeOnlyFileHandle != null) {
+      writeOnlyFileHandle.flush();
+      writeOnlyFileHandle.close();
+    }
   }
 
   private String fileNameGenerate(int level, int index) {
@@ -208,6 +164,12 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       // sort the remaining records in memory
       // TODO: don't need to flush to disk when there never exceed memory limit
       if (!memoryRecords.isEmpty()) {
+        if (currentSortedFileIndex == 0) {
+          // there are never exceed memory limit, only sort the memory records
+          sortMemoryRecords();
+          return;
+        }
+        // there has happened sort and write to file
         sortAndWriteToFile();
       }
       // merge the sorted files
@@ -217,20 +179,24 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     }
   }
 
+  private void sortMemoryRecords() {
+    this.timer.startTimer();
+    memoryRecords.sort(comparator);
+    this.totalTimeTakenToSortRecords = this.timer.endTimer();
+  }
+
+
   private void sortedMerge() throws IOException {
     this.timer.startTimer();
     int level = 0;
     int index = 0;
     while (currentLevelFiles.size() > 1) {
       List<File> nextLevelFiles = new ArrayList<>();
-      List<File> mergedFiles = new ArrayList<>();
       for (int i = 0; i < currentLevelFiles.size(); i += 2) {
         if (i + 1 < currentLevelFiles.size()) {
           File file1 = currentLevelFiles.get(i);
           File file2 = currentLevelFiles.get(i + 1);
           nextLevelFiles.add(mergeTwoFiles(file1, file2, level, index++));
-          mergedFiles.add(file1);
-          mergedFiles.add(file2);
         } else {
           // TODO: consider add the last file to first
           File file = currentLevelFiles.get(i);
@@ -244,7 +210,6 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
         }
       }
       // TODO: reduce data movement
-      mergedFiles.forEach(File::delete);
       currentLevelFiles.clear();
       currentLevelFiles.addAll(nextLevelFiles);
       level++;
@@ -255,8 +220,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   }
 
   private File mergeTwoFiles(File file1, File file2, int level, int index) throws IOException {
-    BufferedRandomAccessFile reader1 = new BufferedRandomAccessFile(file1, "r");
-    BufferedRandomAccessFile reader2 = new BufferedRandomAccessFile(file2, "r");
+    BufferedRandomAccessFile reader1 = new BufferedRandomAccessFile(file1, "r", BUFFER_SIZE);
+    BufferedRandomAccessFile reader2 = new BufferedRandomAccessFile(file2, "r", BUFFER_SIZE);
     String filePath = fileNameGenerate(level + 1, index);
     File mergedFile = createFileForWrite(filePath);
     FileOutputStream fileOutputStream = new FileOutputStream(mergedFile, true);
@@ -287,6 +252,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     outputStream.close();
     reader1.close();
     reader2.close();
+    file1.delete();
+    file2.delete();
     return mergedFile;
   }
 
@@ -323,22 +290,72 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       if (writeOnlyFileHandle != null) {
         writeOnlyFileHandle.close();
       }
-      if (writeOnlyFileStream != null) {
-        writeOnlyFileStream.close();
-      }
       if (writeOnlyFile != null) {
         writeOnlyFile.delete();
       }
       currentLevelFiles.forEach(File::delete);
       sortedFile.ifPresent(File::delete);
       memoryRecords.clear();
-      LOG.info("External sorter closed, stats: totalEntryCount=" + totalEntryCount + ", totalTimeTakenToSortRecords=" + totalTimeTakenToSortRecords + "ms" + ", sorted files num=" + currentSortedFileIndex + 1);
+      currentMemoryUsage = 0;
+
+      LOG.info(
+          "External sorter closed, stats: totalEntryCount=" + totalEntryCount + ", totalTimeTakenToSortRecords=" + totalTimeTakenToSortRecords + "ms" + ", sorted files num=" + currentSortedFileIndex +
+              1);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close external sorter", e);
     }
   }
 
-  public static final class Entry {
+  @Override
+  public Iterator<T> iterator() {
+    return sortedFile.isPresent() ? new SortedRecordInDiskIterator<>(sortedFile.get()) : memoryRecords.iterator();
+  }
+
+  private class SortedRecordInDiskIterator<T> implements ClosableIterator<T> {
+
+    private final BufferedRandomAccessFile reader;
+    private Option<Entry> currentRecord = Option.empty();
+    private int iterateCount = 0;
+
+    public SortedRecordInDiskIterator(File sortedFile) {
+      try {
+        reader = new BufferedRandomAccessFile(sortedFile, "r", BUFFER_SIZE);
+        // load first entry
+        currentRecord = readEntry(reader);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read sorted file", e);
+      }
+    }
+
+    @Override
+    public void close() {
+      try {
+        reader.close();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to close reader", e);
+      }
+      LOG.debug("Total iterate count: " + iterateCount);
+    }
+
+    @Override
+    public boolean hasNext() {
+      if (currentRecord.isPresent()) {
+        return true;
+      }
+      return false;
+    }
+
+    @Override
+    public T next() {
+      iterateCount++;
+      Entry current = currentRecord.get();
+      T record = SerializationUtils.deserialize(current.getRecord());
+      currentRecord = readEntry(reader);
+      return record;
+    }
+  }
+
+  private static final class Entry {
     public static final int MAGIC = 0x123321;
     private Integer magic;
     private Long crc;

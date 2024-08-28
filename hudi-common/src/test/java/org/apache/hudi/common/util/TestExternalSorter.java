@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.util;
 
-import org.jetbrains.annotations.NotNull;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,7 +50,7 @@ public class TestExternalSorter {
     }
 
     @Override
-    public int compareTo(@NotNull TestExternalSorter.Record o) {
+    public int compareTo(TestExternalSorter.Record o) {
       return Integer.compare(key, o.key);
     }
   }
@@ -58,8 +58,9 @@ public class TestExternalSorter {
   @TempDir
   private File tmpDir;
 
-  @Test
-  public void testSort() throws IOException {
+  @ParameterizedTest
+  @ValueSource(doubles = {0.01, 0.10, 0.50, 0.90, 100.00})
+  public void testSort(double ratio) throws IOException {
     // generate some random records
     SizeEstimator<Record> sizeEstimator = record -> 4 + 4 + 4 + record.getValue().length();
     int totalNum = 1 << 10;
@@ -67,7 +68,7 @@ public class TestExternalSorter {
     List<Record> records = random.ints(totalNum, 0, totalNum / 20).mapToObj(key -> new Record(key, "value")).collect(Collectors.toList());
     int totalSize = totalNum * (4 + 4 + 4 + 5);
     List<Record> sortedList = records.stream().sorted().collect(Collectors.toList());
-    ExternalSorter<Record> sorter = new ExternalSorter<Record>(tmpDir.getPath(), totalSize / 100, Record::compareTo, sizeEstimator);
+    ExternalSorter<Record> sorter = new ExternalSorter<Record>(tmpDir.getPath(), (long) (totalSize * ratio), Record::compareTo, sizeEstimator);
     for (Record record : records) {
       sorter.add(record);
     }
