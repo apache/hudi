@@ -494,7 +494,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     if (columnsToIndex.isEmpty()) {
       return Pair.of(fileGroupCount, engineContext.emptyHoodieData());
     }
-    HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionInfoList, dataWriteConfig.getMetadataConfig(), dataMetaClient,columnsToIndex);
+    HoodieData<HoodieRecord> records =
+        HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionInfoList, dataWriteConfig.getMetadataConfig(), dataMetaClient, columnsToIndex);
     return Pair.of(fileGroupCount, records);
   }
 
