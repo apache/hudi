@@ -6,16 +6,3 @@
 .globeIcon {
   margin-left: 5.5px;
 }
-
-.wrapper {
-  display: flex;
-  align-items: center;
-  &:hover {
-    path {
-      stroke: var(--ifm-navbar-link-hover-color);
-    }
-  }
-  &:after {
-    display: none !important;
-  }
-}
