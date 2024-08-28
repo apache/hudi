@@ -174,6 +174,14 @@ public class HoodieSyncConfig extends HoodieConfig {
       .defaultValue("")
       .markAdvanced()
       .withDocumentation("The spark version used when syncing with a metastore.");
+
+  public static final ConfigProperty<String> META_SYNC_EXCEPTION_ROLLBACK = ConfigProperty
+      .key("hoodie.meta_sync.exception.rollback")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("If true and an exception occurs during the meta sync, hudi transaction is rollback.");
+
   public static final ConfigProperty<String> META_SYNC_SNAPSHOT_WITH_TABLE_NAME = ConfigProperty
           .key("hoodie.meta.sync.sync_snapshot_with_table_name")
           .defaultValue("true")
