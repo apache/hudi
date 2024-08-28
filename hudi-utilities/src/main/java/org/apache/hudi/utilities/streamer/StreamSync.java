@@ -321,7 +321,7 @@ public class StreamSync implements Serializable, Closeable {
           cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
-    refreshTimeline();
+    initializeMetaClient(false);
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
@@ -333,11 +333,13 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
-   * Refresh Timeline.
+   * Creates a meta client for the table. If the table does not yet exist, it will be initialized.
    *
+   * @param refreshTimeline when set to true, loads the active timeline and updates the {@link #commitsTimelineOpt} and {@link #allCommitsTimelineOpt} values
+   * @return a meta client for the table
    * @throws IOException in case of any IOException
    */
-  public void refreshTimeline() throws IOException {
+  public HoodieTableMetaClient initializeMetaClient(boolean refreshTimeline) throws IOException {
     if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
         HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
@@ -346,16 +348,19 @@ public class StreamSync implements Serializable, Closeable {
             .setPayloadClassName(cfg.payloadClassName)
             .setRecordMergerStrategy(null)
             .build();
-        switch (meta.getTableType()) {
-          case COPY_ON_WRITE:
-          case MERGE_ON_READ:
-            // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-            this.commitsTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-            this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
-            break;
-          default:
-            throw new HoodieException("Unsupported table type :" + meta.getTableType());
+        if (refreshTimeline) {
+          switch (meta.getTableType()) {
+            case COPY_ON_WRITE:
+            case MERGE_ON_READ:
+              // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
+              this.commitsTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+              this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+              break;
+            default:
+              throw new HoodieException("Unsupported table type :" + meta.getTableType());
+          }
         }
+        return meta;
       } catch (HoodieIOException e) {
         LOG.warn("Full exception msg " + e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
@@ -370,12 +375,11 @@ public class StreamSync implements Serializable, Closeable {
               storage.exists(new StoragePath(basePathWithForwardSlash))
                   && storage.exists(new StoragePath(pathToHoodieProps))
                   && storage.exists(new StoragePath(pathToHoodiePropsBackup));
+
           if (!hoodiePropertiesExists) {
             LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
-            initializeEmptyTable();
+            HoodieTableMetaClient metaClientToValidate = initializeEmptyTable();
             // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
-            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder()
-                .setConf(HadoopFSUtils.getStorageConfWithCopy(conf)).setBasePath(cfg.targetBasePath).build();
             if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
               // Deleting the recreated hoodie.properties and throwing exception.
               storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
@@ -385,21 +389,21 @@ public class StreamSync implements Serializable, Closeable {
                   "hoodie.properties is missing. Likely due to some external entity. Please populate the hoodie.properties and restart the pipeline. ",
                   e.getIOException());
             }
+            return metaClientToValidate;
           }
-        } else {
-          throw e;
         }
+        throw e;
       }
     } else {
-      initializeEmptyTable();
+      return initializeEmptyTable();
     }
   }
 
-  private void initializeEmptyTable() throws IOException {
+  private HoodieTableMetaClient initializeEmptyTable() throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
     String partitionColumns = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props);
-    HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
@@ -434,13 +438,7 @@ public class StreamSync implements Serializable, Closeable {
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
-    refreshTimeline();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-        .setBasePath(cfg.targetBasePath)
-        .setRecordMergerStrategy(null)
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
-        .build();
+    HoodieTableMetaClient metaClient = initializeMetaClient(true);
     String instantTime = metaClient.createNewInstantTime();
 
     InputBatch inputBatch = readFromSource(instantTime, metaClient);
@@ -478,7 +476,7 @@ public class StreamSync implements Serializable, Closeable {
         if (pendingCompactionInstant.isPresent()) {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
           writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
-          refreshTimeline();
+          initializeMetaClient(true);
           reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
         }
       } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
