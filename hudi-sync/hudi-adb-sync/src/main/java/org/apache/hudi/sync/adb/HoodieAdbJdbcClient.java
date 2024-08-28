@@ -349,7 +349,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
 
     LOG.info("Updating columns' definition for table:{}", tableName);
     schemaDiff.getUpdateColumnTypes().forEach((columnName, columnType) ->
-        executeAdbSql(constructChangeColumnSql(tableName, columnName, columnType))
+        executeAdbSql(constructChangeColumnSql(tableName, columnName, columnType.getRight()))
     );
   }
 
