@@ -20,6 +20,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -51,6 +52,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
+import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -281,6 +283,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     if (runRollback) {
       // If enabled, rollback the failed delta commit
       client.rollback(instant2);
+      validateLogFilesExistInRollbackPlan();
       validateFileListingInMetadataTable();
     }
 
@@ -300,6 +303,28 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertEquals(
         compactionInstant,
         metaClient.reloadActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
+  }
+
+  private void validateLogFilesExistInRollbackPlan() throws IOException {
+    metaClient.reloadActiveTimeline();
+    HoodieRollbackPlan rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, metaClient.getActiveTimeline()
+        .filter(e -> HoodieActiveTimeline.ROLLBACK_ACTION.equals(e.getAction()))
+        .lastInstant().get());
+    assertTrue(rollbackPlan.getRollbackRequests().stream()
+        .map(request -> {
+          boolean allExist = true;
+          Path partitionPath = new Path(basePath(), request.getPartitionPath());
+          for (String logFile : request.getLogBlocksToBeDeleted().keySet()) {
+            try {
+              allExist = allExist && fs().exists(new Path(partitionPath, logFile));
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          }
+          return allExist;
+        })
+        .reduce(Boolean::logicalAnd)
+        .get());
   }
 
   private void validateFilesExistInCompactionPlan(String compactionInstant) {
