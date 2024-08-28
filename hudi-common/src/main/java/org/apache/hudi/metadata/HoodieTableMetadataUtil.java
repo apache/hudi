@@ -111,7 +111,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -2045,29 +2044,27 @@ public class HoodieTableMetadataUtil {
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
                                                                              List<DirectoryInfo> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
-                                                                             HoodieTableMetaClient dataTableMetaClient,List<String> columnsToIndex) {
-    int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+                                                                             HoodieTableMetaClient dataTableMetaClient) {
+    final List<String> columnsToIndex = metadataConfig.getColumnsEnabledForColumnStatsIndex();
+    if (columnsToIndex.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndex);
     // Create records for MDT
-    return createPartitionStatsRecords(engineContext, partitionInfoList, dataTableMetaClient, columnsToIndex, parallelism);
-  }
-
-  private static HoodieData<HoodieRecord> createPartitionStatsRecords(HoodieEngineContext engineContext,
-                                                                      List<DirectoryInfo> partitionInfoList,
-                                                                      HoodieTableMetaClient dataTableMetaClient, List<String> columnsToIndex, int parallelism) {
+    int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
     return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
       final String partitionPath = partitionInfo.getRelativePath();
       // Step 1: Collect Column Metadata for Each File
       List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
-              .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
-              .collect(toList());
+          .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
+          .collect(toList());
       // Step 2: Flatten and Group by Column Name
       Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
-              .flatMap(List::stream)
-              .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
+          .flatMap(List::stream)
+          .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
       // Step 3: Aggregate Column Ranges
       Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
-              .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
+          .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
       return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(toList()), false).iterator();
     });
   }
@@ -2119,41 +2116,24 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.toList());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
-      //TODO : Solve for HoodieDeltaWriteStat
-      return createPartitionStatsRecords(engineContext, createPartitionInfoListFromPartitionedWriteStats(partitionedWriteStats), dataMetaClient, columnsToIndex, parallelism);
+      return engineContext.parallelize(partitionedWriteStats, parallelism).flatMap(partitionedWriteStat -> {
+        final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
+        // Step 1: Collect Column Metadata for Each File
+        List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionedWriteStat.stream()
+            .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, columnsToIndex))
+            .collect(toList());
+        // Step 2: Flatten and Group by Column Name
+        Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
+            .flatMap(List::stream)
+            .collect(Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName, toList())); // Group by column name
+        // Step 3: Aggregate Column Ranges
+        Stream<HoodieColumnRangeMetadata<Comparable>> partitionStatsRangeMetadata = columnMetadataMap.entrySet().stream()
+            .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionName, entry.getValue()));
+        return HoodieMetadataPayload.createPartitionStatsRecords(partitionName, partitionStatsRangeMetadata.collect(toList()), false).iterator();
+      });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
-  }
-
-  private static List<DirectoryInfo> createPartitionInfoListFromPartitionedWriteStats(List<List<HoodieWriteStat>> partitionedWriteStats) {
-    return partitionedWriteStats.stream()
-            .filter(writeStats -> !writeStats.isEmpty())
-            .map(writeStats -> {
-              // Assume all stats in this inner list belong to the same partition
-              String partitionPath = writeStats.get(0).getPartitionPath();
-
-              // Find the maximum event time
-              long maxEventTime = writeStats.stream()
-                      .mapToLong(HoodieWriteStat::getMaxEventTime)
-                      .max()
-                      .orElse(Instant.now().toEpochMilli());
-
-              // Create StoragePathInfo objects
-              List<StoragePathInfo> pathInfos = writeStats.stream()
-                      .map(writeStat -> new StoragePathInfo(
-                              new StoragePath(writeStat.getPath()),
-                              writeStat.getFileSizeInBytes(),
-                              false,  // Not a directory
-                              (short) 0,  // Default replication factor
-                              0,  // Default block size
-                              0   // Default modification time
-                      ))
-                      .collect(Collectors.toList());
-              // Create and return the DirectoryInfo object
-              return new DirectoryInfo(partitionPath, pathInfos, String.valueOf(maxEventTime), new HashSet<>());
-            })
-            .collect(Collectors.toList());
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> translateWriteStatToFileStats(HoodieWriteStat writeStat,

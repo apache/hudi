@@ -144,7 +144,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withColumnStatsIndexForColumns("rider,driver")
             .withPartitionStatsIndexParallelism(1)
             .build(),
-        metaClient,columnsToIndex);
+        metaClient);
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
     // 3 partitions * 2 columns = 6 partition stats records
