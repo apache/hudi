@@ -460,26 +460,26 @@ public class MercifulJsonConverter {
     };
   }
 
-    private static JsonFieldProcessor generateStringTypeHandler() {
-      return new StringProcessor();
-    }
+  private static JsonFieldProcessor generateStringTypeHandler() {
+    return new StringProcessor();
+  }
 
-    private static class StringProcessor extends JsonFieldProcessor {
-      private static final ObjectMapper STRING_MAPPER = new ObjectMapper();
+  private static class StringProcessor extends JsonFieldProcessor {
+    private static final ObjectMapper STRING_MAPPER = new ObjectMapper();
 
-      @Override
-      protected Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
-        if (value instanceof String) {
-          return Pair.of(true, value);
-        } else {
-          try {
-            return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
-          } catch (IOException ex) {
-            return Pair.of(false, null);
-          }
+    @Override
+    public Pair<Boolean, Object> convert(Object value, String name, Schema schema) {
+      if (value instanceof String) {
+        return Pair.of(true, value);
+      } else {
+        try {
+          return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
+        } catch (IOException ex) {
+          return Pair.of(false, null);
         }
       }
     }
+  }
 
   protected JsonFieldProcessor generateBytesTypeHandler() {
     return new JsonFieldProcessor() {
