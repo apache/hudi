@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -47,14 +48,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -104,16 +107,27 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(names = {"APPEND"})
-  public void testMarkerBasedRollbackAppendWithLogFileMarkers(IOType testIOType) throws Exception {
+  @CsvSource(value = {"APPEND,true", "APPEND,false"})
+  public void testMarkerBasedRollbackAppendWithLogFileMarkers(IOType testIOType,
+                                                              boolean logFileExists) throws Exception {
     tearDown();
     tableType = HoodieTableType.MERGE_ON_READ;
     setUp();
+    String partitionPath = "partA";
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     String f0 = testTable.addRequestedCommit("000")
-        .getFileIdWithLogFile("partA");
+        .getFileIdWithLogFile(partitionPath);
     testTable.forCommit("001")
-        .withLogMarkerFile("partA", f0, testIOType);
+        .withLogMarkerFile(partitionPath, f0, testIOType);
+    String logFileName = EMPTY_STRING;
+    int logFileVersion = 1;
+    int logFileSize = 13042;
+    if (logFileExists) {
+      testTable.withLogFilesInPartition(
+          "partA", Collections.singletonList(Pair.of(f0, new Integer[] {logFileVersion, logFileSize})));
+      testTable.getLogFileNameById(f0, logFileVersion);
+      logFileName = testTable.getLogFileNameById(f0, logFileVersion);
+    }
 
     HoodieTable hoodieTable = HoodieSparkTable.create(getConfig(), context, metaClient);
     List<HoodieRollbackRequest> rollbackRequests = new MarkerBasedRollbackStrategy(hoodieTable, context, getConfig(), "002")
@@ -122,8 +136,14 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     HoodieRollbackRequest rollbackRequest = rollbackRequests.get(0);
     assertEquals("partA", rollbackRequest.getPartitionPath());
     assertEquals(f0, rollbackRequest.getFileId());
-    assertEquals(testIOType.equals(IOType.CREATE) ? 1 : 0, rollbackRequest.getFilesToBeDeleted().size());
-    assertEquals(1, rollbackRequest.getLogBlocksToBeDeleted().size());
+    assertEquals(0, rollbackRequest.getFilesToBeDeleted().size());
+    if (logFileExists) {
+      assertEquals(1, rollbackRequest.getLogBlocksToBeDeleted().size());
+      assertTrue(rollbackRequest.getLogBlocksToBeDeleted().containsKey(logFileName));
+      assertEquals(logFileSize, rollbackRequest.getLogBlocksToBeDeleted().get(logFileName));
+    } else {
+      assertEquals(0, rollbackRequest.getLogBlocksToBeDeleted().size());
+    }
   }
 
   @Test
