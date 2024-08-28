@@ -1,12 +1,11 @@
 package org.apache.hudi.avro;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.util.UUID;
 import java.util.stream.Stream;
 
-public class JsonConverterTestBase {
+public class MercifulJsonConverterTestBase {
 
   private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";

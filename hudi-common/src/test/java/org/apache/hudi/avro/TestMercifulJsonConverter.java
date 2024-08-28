@@ -31,7 +31,6 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -46,13 +45,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCODED_DECIMAL_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestMercifulJsonConverter extends JsonConverterTestBase {
+public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonConverter CONVERTER = new MercifulJsonConverter(true, "__");
 

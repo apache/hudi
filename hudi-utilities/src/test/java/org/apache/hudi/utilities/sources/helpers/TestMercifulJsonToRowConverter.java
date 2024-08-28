@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.avro.JsonConverterTestBase;
+import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
@@ -47,7 +47,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TestMercifulJsonToRowConverter extends JsonConverterTestBase {
+class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonToRowConverter CONVERTER = new MercifulJsonToRowConverter(true, "__");
 
