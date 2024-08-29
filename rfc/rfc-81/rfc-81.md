@@ -29,7 +29,7 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-8033
 Add lightweight LogCompaction to improve the writing performance of the write side, and improve the query performance of the read side (Spark/Presto, etc.) in some scenarios without having to wait for heavy and time-consuming operations such as Compaction or Clustering.
 
 ## Background
-The previous LogCompaction mainly merged log files through HoodieMergedLogRecordScanner, and used ExternalSpillableMap internally to achieve record merging, which resulted in performance loss of writing to disk.
+The previous LogCompaction mainly merged log files through HoodieMergedLogRecordScanner, and used ExternalSpillableMap internally to achieve record merging, which resulted in performance loss of writing to disk, when the amount of log data exceeds merge memory available.
 LogCompaction with Merge Sort is introduced to achieve lightweight minor compaction by merging records through N-way streaming of ordered data, thus improving the writing performance of the write side. At the same time, thanks to the ordered data, the query performance on the read side can be improved when the primary key is met.
 
 ## Implementation
