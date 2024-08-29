@@ -18,11 +18,12 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.ParquetUtils
@@ -34,10 +35,12 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.functions.{col, explode}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -225,5 +228,85 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
   private def parseRecords(records: Seq[String]) = {
     spark.read.json(spark.sparkContext.parallelize(records, 2))
+  }
+
+  @Test
+  def testTimeTravelQuery(): Unit = {
+    val dataGen = new HoodieTestDataGenerator()
+
+    val metadataOpts: Map[String, String] = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ"
+
+    )
+
+    val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
+
+    // Insert records
+    val newRecords = dataGen.generateInserts("001", 100)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
+
+    newRecordsDF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Update records
+    val updatedRecords = dataGen.generateUpdates("002", newRecords)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
+
+    updatedRecordsDF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val firstRead = getFiles(basePath)
+    val metaClient = HoodieTableMetaClient.builder
+      .setConf(storageConf().unwrapAs(Class[Configuration]))
+      .setBasePath(basePath)
+      .build
+
+    val firstTimestamp =  metaClient.getActiveTimeline.firstInstant().get().getTimestamp
+
+    val secondRead = getFilesAsOf(basePath, firstTimestamp)
+    assertEquals(6, firstRead.size)
+    assertEquals(3, secondRead.size)
+    assertEquals(3, firstRead.intersect(secondRead).size)
+
+
+    // more update records
+    val updatedRecords2 = dataGen.generateUpdates("003", updatedRecords)
+    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala)
+
+    updatedRecords2DF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+
+    val thirdRead = getFiles(basePath)
+    assertEquals(9, thirdRead.size)
+
+    val secondTimestamp =  metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp
+
+    val fourthRead = getFilesAsOf(basePath, secondTimestamp)
+
+    assertEquals(6, fourthRead.size)
+
+    assertEquals(6, fourthRead.intersect(firstRead).size)
+  }
+
+  private def getFilesAsOf(basePath: String, timestamp: String): scala.collection.GenSet[Any] = {
+    getFiles(basePath, Map(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key() -> timestamp))
+  }
+  private def getFiles(basePath: String): scala.collection.GenSet[Any] = {
+    getFiles(basePath, Map.empty)
+  }
+  private def getFiles(basePath: String, opts: Map[String, String]): scala.collection.GenSet[Any] = {
+    spark.read.format(hudi).options(opts).load(s"$basePath/.hoodie/metadata").where("type = 2").select(explode(col("filesystemMetadata"))).drop("value").rdd.map(r => r(0)).collect().toSet
   }
 }
