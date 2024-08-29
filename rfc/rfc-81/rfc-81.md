@@ -36,11 +36,11 @@ LogCompaction with Merge Sort is introduced to achieve lightweight minor compact
 ### Common Configuration
 - Add a new configuration item for the HoodieLogBlock streaming read buffer size. The default value is 10MB.
 - Add a new configuration item for whether to enable MergeSort in LogCompaction. The default value for Flink is true, while the default value for Spark is false.
-#### Flink
+### Flink
 - Add a new configuration item to enable LogCompaction. The default value is false.
-#### Note
+### Important Note
 1. LogCompaction with Merge Sort only supports AVRO log format. After LogCompaction turns on MergeSort, we need to check whether the hoodie.logfile.data.block.format configuration item is correct.
-2. After enabling MergeSort in LogCompaction, it does not guarantee that LogCompaction will necessarily use Merge Sort based merge. If it is found during execution that the IS_ORDERED in a LogBlock header is false (indicating that the LogBlock data is unordered), it will fall back to the default map-based merger.
+2. After enabling MergeSort in LogCompaction, it does not guarantee that LogCompaction will necessarily use Merge Sort based merger. If it is found during execution that the IS_ORDERED in a LogBlock header is false (indicating that the LogBlock data is unordered), it will fall back to the default map-based merger.
 
 ### LogBlock Header
 - HeaderMetadataType: Add a new enumeration type: IS_ORDERED, indicating whether the data in the LogBlock is ordered. The default value is false.
@@ -57,8 +57,11 @@ Flink has not yet fully implemented the LogCompaction feature, so the operator n
 3. LogCompactionCommitSink
 #### Spark & Flink
 Considering that when enabling LogCompaction with Merge Sort on the historical table or when multiple writers are involved and one of the writer does not enable Merge Sort, it may result in some LogBlock data being unordered and not meeting the conditions for executing MergeSort.
-Therefore, during the execution of the LogCompaction Operation, the HoodieUnMergedLogRecordScanner with skipProcessingBlocks will be used to check the IS_ORDERED header of all LogBlock files in that Operation. If not all LogBlocks are ordered, it will fall back to the map-based merger, HoodieMergedLogRecordScanner.
+Therefore, during the execution of the LogCompaction Operation, the HoodieUnMergedLogRecordScanner with skipProcessingBlocks will be used to check the IS_ORDERED header of all LogBlock files in that Operation. If the data within any LogBlocks is not ordered, it will fall back to the map-based merger, HoodieMergedLogRecordScanner.
 Otherwise, use the new log scanner: HoodieMergeSortLogRecordScanner to achieve N-way streaming record merging.
+
+Additionally, we do not check the IS_ORDERED flag in the LogBlock header during the LogCompaction scheduling plan phase to determine the scanner type. The main concern is that new LogBlocks might be added to the log file before the operation execution, and these new LogBlocks would not have had their headers checked for the IS_ORDERED flag, posing a risk.
+By checking the IS_ORDERED flag in the header during the operation execution phase, we only incur a minimal performance cost from reading a small amount of header information. This approach completely avoids the complex design required to maintain consistent scanning ranges between the scheduling plan and the operation execution phases.
 
 ### HoodieMergeSortLogRecordScanner
 Implement a min-heap. The heap node is a HoodieLogBlock object. The heap node comparison uses HoodieRecord#RecrodKey.
@@ -85,16 +88,16 @@ The buffer size can be adjusted by the configuration item.
 ### Conditions
 1. Machine Configuration and Environment: 7 vCore & 36GB, Flink 1.5, Hudi 0.15
 2. Table Configuration: Flink MOR with Bucket; Compaction disabled, only LogCompaction enabled; Flink Checkpoint Interval 60s
-3. Data Volume: 300GB added daily (AVRO format)
+3. Data Volume: 350GB added daily (AVRO format)
 
 ### Comparison Objects
 - Table A: LogCompaction with Map-Based Merger
 - Table B: LogCompaction with MergeSort-Based Merger
 
 ### Results
-Data freshness statistics for Table A and Table B:
+After running for seven days, Sampling statistics, the average data freshness for Table A and Table B:
 - Table A: 55 minutes
-- Table B: 20 minutes
+- Table B: 25 minutes
 
 ## Test Plan
 ### HoodieConfig etc
