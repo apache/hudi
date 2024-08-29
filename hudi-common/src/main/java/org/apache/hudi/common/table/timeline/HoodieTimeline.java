@@ -438,6 +438,25 @@ public interface HoodieTimeline extends Serializable {
   }
 
   /**
+   * Returns smaller of the two given timestamps. Returns the non null argument if one of the argument is null.
+   */
+  static String minTimestamp(String commit1, String commit2) {
+    if (StringUtils.isNullOrEmpty(commit1)) {
+      return commit2;
+    } else if (StringUtils.isNullOrEmpty(commit2)) {
+      return commit1;
+    }
+    return minInstant(commit1, commit2);
+  }
+
+  /**
+   * Returns the smaller of the given two instants.
+   */
+  static String minInstant(String instant1, String instant2) {
+    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
+  }
+
+  /**
    * Return true if specified timestamp is in range (startTs, endTs].
    */
   static boolean isInRange(String timestamp, String startTs, String endTs) {
