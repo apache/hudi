@@ -50,7 +50,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_ENCO
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
+class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final MercifulJsonConverter CONVERTER = new MercifulJsonConverter(true, "__");
 

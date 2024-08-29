@@ -72,9 +72,7 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     assertEquals(recRow, CONVERTER.convertToRow(json, simpleSchema));
   }
 
-  private static final String DECIMAL_AVRO_FILE_INVALID_PATH = "/decimal-logical-type-invalid.avsc";
   private static final String DECIMAL_AVRO_FILE_PATH = "/decimal-logical-type.avsc";
-
   /**
    * Covered case:
    * Avro Logical Type: Decimal
@@ -97,8 +95,6 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     Row realRow = CONVERTER.convertToRow(json, schema);
     assertEquals(expectRow, realRow);
   }
-
-  private static final String DECIMAL_FIXED_AVRO_FILE_PATH = "/decimal-logical-type-fixed-type.avsc";
 
   /**
    * Covered case:
