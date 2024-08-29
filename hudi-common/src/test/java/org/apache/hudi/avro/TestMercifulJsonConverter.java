@@ -475,8 +475,8 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
   @ParameterizedTest
   @MethodSource("nestedRecord")
   void nestedRecordTest(String contactInput, boolean isString) {
-    String nestedSchemaStr = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}," +
-        "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\",\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
+    String nestedSchemaStr = "{\"type\":\"record\",\"name\":\"User\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},"
+        + "{\"name\":\"contact\",\"type\":{\"type\":\"record\",\"name\":\"Contact\",\"fields\":[{\"name\":\"email\",\"type\":\"string\"}]}}]}";
     String json = isString ? String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":\"%s\"}}", contactInput)
         : String.format("{\"name\":\"Jane Smith\",\"contact\":{\"email\":%s}}", contactInput);
     Schema nestedSchema = new Schema.Parser().parse(nestedSchemaStr);
