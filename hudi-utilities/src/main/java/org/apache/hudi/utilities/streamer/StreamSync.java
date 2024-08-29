@@ -347,6 +347,7 @@ public class StreamSync implements Serializable, Closeable {
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
             .setRecordMergerStrategy(null)
+            .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
           switch (meta.getTableType()) {
@@ -450,7 +451,7 @@ public class StreamSync implements Serializable, Closeable {
       if (writeClient == null) {
         this.schemaProvider = inputBatch.getSchemaProvider();
         // Setup HoodieWriteClient and compaction now that we decided on schema
-        setupWriteClient(inputBatch.getBatch());
+        setupWriteClient(inputBatch.getBatch(), metaClient);
       } else {
         Schema newSourceSchema = inputBatch.getSchemaProvider().getSourceSchema();
         Schema newTargetSchema = inputBatch.getSchemaProvider().getTargetSchema();
@@ -460,7 +461,7 @@ public class StreamSync implements Serializable, Closeable {
           String targetStr = newTargetSchema == null ? NULL_PLACEHOLDER : newTargetSchema.toString(true);
           LOG.info("Seeing new schema. Source: {}, Target: {}", sourceStr, targetStr);
           // We need to recreate write client with new schema and register them.
-          reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch());
+          reInitWriteClient(newSourceSchema, newTargetSchema, inputBatch.getBatch(), metaClient);
           if (newSourceSchema != null) {
             processedSchema.addSchema(newSourceSchema);
           }
@@ -477,7 +478,7 @@ public class StreamSync implements Serializable, Closeable {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
           writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
           initializeMetaClient(true);
-          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null);
+          reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
         }
       } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
         // complete the pending clustering before writing to sink
@@ -1068,20 +1069,20 @@ public class StreamSync implements Serializable, Closeable {
    * SchemaProvider creation is a precursor to HoodieWriteClient and AsyncCompactor creation. This method takes care of
    * this constraint.
    */
-  private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
+  private void setupWriteClient(Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieTableMetaClient metaClient) throws IOException {
     if (null != schemaProvider) {
       Schema sourceSchema = schemaProvider.getSourceSchema();
       Schema targetSchema = schemaProvider.getTargetSchema();
-      reInitWriteClient(sourceSchema, targetSchema, recordsOpt);
+      reInitWriteClient(sourceSchema, targetSchema, recordsOpt, metaClient);
     }
   }
 
-  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, Option<JavaRDD<HoodieRecord>> recordsOpt) throws IOException {
+  private void reInitWriteClient(Schema sourceSchema, Schema targetSchema, Option<JavaRDD<HoodieRecord>> recordsOpt, HoodieTableMetaClient metaClient) throws IOException {
     LOG.info("Setting up new Hoodie Write Client");
     if (HoodieStreamerUtils.isDropPartitionColumns(props)) {
       targetSchema = HoodieAvroUtils.removeFields(targetSchema, HoodieStreamerUtils.getPartitionColumns(props));
     }
-    final Pair<HoodieWriteConfig, Schema> initialWriteConfigAndSchema = getHoodieClientConfigAndWriterSchema(targetSchema, true);
+    final Pair<HoodieWriteConfig, Schema> initialWriteConfigAndSchema = getHoodieClientConfigAndWriterSchema(targetSchema, true, metaClient);
     final HoodieWriteConfig initialWriteConfig = initialWriteConfigAndSchema.getLeft();
     registerAvroSchemas(sourceSchema, initialWriteConfigAndSchema.getRight());
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
@@ -1108,7 +1109,7 @@ public class StreamSync implements Serializable, Closeable {
    * Helper to construct Write Client config without a schema.
    */
   private HoodieWriteConfig getHoodieClientConfig() {
-    return getHoodieClientConfigAndWriterSchema(null, false).getLeft();
+    return getHoodieClientConfigAndWriterSchema(null, false, null).getLeft();
   }
 
   /**
@@ -1119,7 +1120,7 @@ public class StreamSync implements Serializable, Closeable {
    *
    * @return Pair of HoodieWriteConfig and writer schema.
    */
-  private Pair<HoodieWriteConfig, Schema> getHoodieClientConfigAndWriterSchema(Schema schema, boolean requireSchemaInConfig) {
+  private Pair<HoodieWriteConfig, Schema> getHoodieClientConfigAndWriterSchema(Schema schema, boolean requireSchemaInConfig, HoodieTableMetaClient metaClient) {
     final boolean combineBeforeUpsert = true;
     final boolean autoCommit = false;
 
@@ -1148,7 +1149,7 @@ public class StreamSync implements Serializable, Closeable {
     // If schema is required in the config, we need to handle the case where the target schema is null and should be fetched from previous commits
     final Schema returnSchema;
     if (requireSchemaInConfig) {
-      returnSchema = getSchemaForWriteConfig(schema);
+      returnSchema = getSchemaForWriteConfig(schema, metaClient);
       builder.withSchema(returnSchema.toString());
     } else {
       returnSchema = schema;
@@ -1186,21 +1187,16 @@ public class StreamSync implements Serializable, Closeable {
     return Pair.of(config, returnSchema);
   }
 
-  private Schema getSchemaForWriteConfig(Schema targetSchema) {
+  private Schema getSchemaForWriteConfig(Schema targetSchema, HoodieTableMetaClient metaClient) {
     Schema newWriteSchema = targetSchema;
     try {
       // check if targetSchema is equal to NULL schema
       if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
           && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
         // target schema is null. fetch schema from commit metadata and use it
-        HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-            .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .build();
-        int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
+        int totalCompleted = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
         if (totalCompleted > 0) {
-          TableSchemaResolver schemaResolver = new TableSchemaResolver(meta);
+          TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
           Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
           if (tableSchema.isPresent()) {
             newWriteSchema = tableSchema.get();
