@@ -436,6 +436,19 @@ h1.blogPostTitle_src-theme-BlogPostItem-styles-module{
   margin-left: 8px;
 }
 
+.locale-dropdown-wrapper {
+  display: flex;
+  align-items: center;
+  &:hover {
+    path {
+      stroke: var(--ifm-navbar-link-hover-color);
+    }
+  }
+  &:after {
+    display: none !important;
+  }
+}
+
 @media(max-width:1524px) {
   .navbar__item {
     padding: var(--ifm-navbar-item-padding-vertical) 7px;

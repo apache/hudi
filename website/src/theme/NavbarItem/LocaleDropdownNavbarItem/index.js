@@ -57,7 +57,7 @@ export default function LocaleDropdownNavbarItem({
     <DropdownNavbarItem
       {...props}
       mobile={mobile}
-      className={styles.wrapper}
+      className='locale-dropdown-wrapper'
       label={
         <>
           <IconLanguage className={styles.iconLaynguage} />
