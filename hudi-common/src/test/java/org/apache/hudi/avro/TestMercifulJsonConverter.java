@@ -280,7 +280,7 @@ public class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
    * Output: Object using the avro data type as the schema specified.
    * */
   @ParameterizedTest
-  @MethodSource("dataProvider")
+  @MethodSource("dateProviderForAvro")
   void dateLogicalTypeTest(int groundTruth, Object dateInput) throws IOException {
     // Define the schema for the date logical type
     Schema schema = SchemaTestUtil.getSchema(DATE_AVRO_FILE_PATH);

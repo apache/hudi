@@ -450,4 +450,30 @@ public class MercifulJsonConverterTestBase {
         Arguments.of("{\"primary\":\"def@xyz.com\"}", false)
     );
   }
+
+  static Stream<Object> dateProviderForAvro() {
+    return Stream.of(
+        Arguments.of(18506, 18506), // epochDays
+        Arguments.of(18506, "2020-09-01"),  // dateString
+        Arguments.of(7323356, "+22020-09-01"),  // dateString
+        Arguments.of(18506, "18506"),  // epochDaysString
+        Arguments.of(Integer.MAX_VALUE, Integer.toString(Integer.MAX_VALUE)),
+        Arguments.of(Integer.MIN_VALUE, Integer.toString(Integer.MIN_VALUE))
+    );
+  }
+
+  static Stream<Object> dateProviderForRow() {
+    return Stream.of(
+        // 18506 epoch days since Unix epoch is 2020-09-01, while
+        // 18506 * MILLI_SECONDS_PER_DAY is 2020-08-31.
+        // That's why you see for same 18506 days from avro side we can have different
+        // row equivalence.
+        Arguments.of("2020-09-01", 18506), // epochDays
+        Arguments.of("2020-09-01", "2020-09-01"),  // dateString
+        Arguments.of(null, "+22020-09-01"),  // dateString, not supported by row
+        Arguments.of("2020-09-01", "18506"),  // epochDaysString, not supported by row
+        Arguments.of(null, Integer.toString(Integer.MAX_VALUE)), // not supported by row
+        Arguments.of(null, Integer.toString(Integer.MIN_VALUE)) // not supported by row
+    );
+  }
 }

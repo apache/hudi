@@ -30,7 +30,6 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
@@ -42,7 +41,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -253,7 +251,7 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
    * Output: Object using the avro data type as the schema specified.
    */
   @ParameterizedTest
-  @MethodSource("dataProvider")
+  @MethodSource("dateProviderForRow")
   void dateLogicalTypeTest(String groundTruthRow, Object dateInput) throws IOException {
     // Define the schema for the date logical type
     Schema schema = SchemaTestUtil.getSchema(DATE_AVRO_FILE_PATH);
@@ -268,21 +266,6 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
     Row rec = RowFactory.create(java.sql.Date.valueOf(groundTruthRow));
     Row realRow = CONVERTER.convertToRow(json, schema);
     assertEquals(rec.getDate(0).toString(), realRow.getDate(0).toString());
-  }
-
-  static Stream<Object> dataProvider() {
-    return Stream.of(
-        // 18506 epoch days since Unix epoch is 2020-09-01, while
-        // 18506 * MILLI_SECONDS_PER_DAY is 2020-08-31.
-        // That's why you see for same 18506 days from avro side we can have different
-        // row equivalence.
-        Arguments.of("2020-09-01", 18506), // epochDays
-        Arguments.of("2020-09-01", "2020-09-01"),  // dateString
-        Arguments.of(null, "+22020-09-01"),  // dateString, not supported by row
-        Arguments.of("2020-09-01", "18506"),  // epochDaysString, not supported by row
-        Arguments.of(null, Integer.toString(Integer.MAX_VALUE)), // not supported by row
-        Arguments.of(null, Integer.toString(Integer.MIN_VALUE)) // not supported by row
-    );
   }
 
   /**
