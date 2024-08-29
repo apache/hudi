@@ -62,6 +62,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   private int currentSortedFileIndex = 0;
   private long currentMemoryUsage = 0;
   private long totalEntryCount = 0;
+  private long totalMemoryUsage = 0;
+  private long totalFileSize = 0;
   private long totalTimeTakenToSortRecords;
 
   private SizeAwareDataOutputStream writeOnlyFileHandle;
@@ -87,7 +89,9 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   public void add(T record) {
     memoryRecords.add(record);
     totalEntryCount++;
-    currentMemoryUsage += recordSizeEstimator.sizeEstimate(record);
+    long sizeEstimate = recordSizeEstimator.sizeEstimate(record);
+    currentMemoryUsage += sizeEstimate;
+    totalMemoryUsage += sizeEstimate;
     if (currentMemoryUsage > maxMemoryInBytes) {
       LOG.debug("Memory usage {} exceeds maxMemoryInBytes {}. Sorting records in memory.", currentMemoryUsage, maxMemoryInBytes);
       try {
@@ -105,6 +109,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   public long getTotalTimeTakenToSortRecords() {
     return totalTimeTakenToSortRecords;
   }
+
   public int getGeneratedSortedFileNum() {
     return currentSortedFileIndex + 1;
   }
@@ -157,6 +162,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
 
   private void closePreviousWriteFile() throws IOException {
     if (writeOnlyFileHandle != null) {
+      totalFileSize += writeOnlyFileHandle.getSize();
       writeOnlyFileHandle.flush();
       writeOnlyFileHandle.close();
     }
@@ -174,6 +180,10 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
         if (currentSortedFileIndex == 0) {
           // there are never exceed memory limit, only sort the memory records
           sortMemoryRecords();
+          LOG.info("External sorted completed, all in memory," +
+                  "total entry count => {}, total time taken to sort records => {} ms," +
+                  "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+              totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
           return;
         }
         // there has happened sort and write to file
@@ -181,11 +191,13 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       }
       // merge the sorted files
       sortedMerge();
+      LOG.info("External sorted completed," +
+              "total entry count => {}, total time taken to sort records => {} ms," +
+              "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+          totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to sort records", e);
     }
-    LOG.info("External sorted completed, total entry count => {}, total time taken to sort records => {} ms, generated sorted file num => {}",
-        totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum());
   }
 
   private void sortMemoryRecords() {
@@ -307,8 +319,10 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       memoryRecords.clear();
       currentMemoryUsage = 0;
 
-      LOG.info("External sorted closed, total entry count => {}, total time taken to sort records => {} ms, generated sorted file num => {}",
-          totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum());
+      LOG.info("External sorter closed," +
+              "total entry count => {}, total time taken to sort records => {} ms," +
+              "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+          totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close external sorter", e);
     }

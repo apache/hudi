@@ -109,7 +109,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     // sort it
     this.records.sort();
     scanEnd();
-    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TimeTakenToOnlyScanRecords => {}, TotalTimeTakenToSortRecords => {}, TotalTimeKenToScanAndSortRecords => {}, GeneratedSortedFileNum => {}, TotalRecordsScanned => {}",
+    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TimeTakenToOnlyScanRecords => {}, TotalTimeTakenToSortRecords => {}, TotalTimeTakenToScanAndSortRecords => {}, GeneratedSortedFileNum => {}, TotalRecordsScanned => {}",
         logFilePaths.size(), maxMemoryUsageForSorting, timeTakenToOnlyScanRecords, records.getTotalTimeTakenToSortRecords(), totalTimeTakenToScanRecords, records.getGeneratedSortedFileNum(), records.getTotalEntryCount());
   }
 
