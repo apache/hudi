@@ -102,29 +102,32 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
   }
 
   test("Test mandatory partitioning for timestamp key generator") {
-    withTempDir { tmp =>
-      spark.sql(
-        s"""
-           | CREATE TABLE should_fail (
-           |   id int,
-           |   name string,
-           |   precomb long,
-           |   ts long
-           | ) USING HUDI
-           | LOCATION '${tmp.getCanonicalPath + "/should_fail"}'
-           | TBLPROPERTIES (
-           |   type = 'COPY_ON_WRITE',
-           |   primaryKey = 'id',
-           |   preCombineField = 'precomb',
-           |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
-           |   ${timestampKeyGeneratorSettings.head}
-           | )
-           |""".stripMargin)
-      // should fail due to absent partitioning
-      assertThrows[HoodieException] {
-        spark.sql(s"INSERT INTO should_fail VALUES ${dataBatchesWithLongOfSeconds(0)}")
-      }
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName + "_should_fail"
+        spark.sql(
+          s"""
+             | CREATE TABLE $tableName (
+             |   id int,
+             |   name string,
+             |   precomb long,
+             |   ts long
+             | ) USING HUDI
+             | LOCATION '${tmp.getCanonicalPath + "/should_fail"}'
+             | TBLPROPERTIES (
+             |   type = '$tableType',
+             |   primaryKey = 'id',
+             |   preCombineField = 'precomb',
+             |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
+             |   ${timestampKeyGeneratorSettings.head}
+             | )
+             |""".stripMargin)
+        // should fail due to absent partitioning
+        assertThrows[HoodieException] {
+          spark.sql(s"INSERT INTO $tableName VALUES ${dataBatchesWithLongOfSeconds(0)}")
+        }
 
+      }
     }
   }
 }

@@ -41,7 +41,7 @@ import org.apache.spark.sql.{SaveMode, SparkSession, SparkSessionExtensions}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.function.Consumer
 
@@ -82,23 +82,26 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     testRecordKeysAutoGenInternal(recordType, op, tableType)
   }
 
-  @Test
-  def testRecordKeyAutoGenWithTimestampBasedKeyGen(): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testRecordKeyAutoGenWithTimestampBasedKeyGen(tableType: HoodieTableType): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
       classOf[TimestampBasedKeyGenerator].getName)
   }
 
-  @Test
-  def testRecordKeyAutoGenWithComplexKeyGen(): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testRecordKeyAutoGenWithComplexKeyGen(tableType: HoodieTableType): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
       classOf[ComplexKeyGenerator].getName,
       complexPartitionPath = true)
   }
 
-  @Test
-  def testRecordKeyAutoGenWithNonPartitionedKeyGen(): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
-      classOf[NonpartitionedKeyGenerator].getName, complexPartitionPath = false, nonPartitionedDataset = true)
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testRecordKeyAutoGenWithNonPartitionedKeyGen(tableType: HoodieTableType): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
+      classOf[NonpartitionedKeyGenerator].getName, nonPartitionedDataset = true)
   }
 
   def testRecordKeysAutoGenInternal(recordType: HoodieRecordType, op: String = "insert", tableType: HoodieTableType = HoodieTableType.COPY_ON_WRITE,
@@ -264,12 +267,14 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     assertEquals(5, snapshot0.count())
   }
 
-  @Test
-  def testUpsertsAndDeletesWithPkLess(): Unit = {
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testUpsertsAndDeletesWithPkLess(tableType: HoodieTableType): Unit = {
     val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
 
     var options: Map[String, String] = vanillaWriteOpts ++ Map(
-      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName,
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
 
     var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
