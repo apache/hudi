@@ -155,9 +155,8 @@ public class HoodieUnmergedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T
 
       setupWriteStatus();
 
-      LOG.info(String.format("CreateHandle for partitionPath %s fileID %s, took %d ms.",
-          writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
-          writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
+      LOG.info(String.format("UnmergedCreateHandle for partitionPath %s fileID %s, took %d ms.", writeStatus.getStat().getPartitionPath(),
+          writeStatus.getStat().getFileId(), writeStatus.getStat().getRuntimeStats().getTotalCreateTime()));
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {

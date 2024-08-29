@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ExternalSorter;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -54,6 +55,10 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
   private static final Logger LOG = LoggerFactory.getLogger(HoodieUnMergedSortedLogRecordScanner.class);
 
   public static final Comparator<HoodieKey> DEFAULT_KEY_COMPARATOR = Comparator.comparing(HoodieKey::getRecordKey);
+
+  private final HoodieTimer onlyScanTimer = HoodieTimer.create();
+
+  private long timeTakenToOnlyScanRecords;
 
   private final Comparator<HoodieRecord> defaultComparator = (o1, o2) -> {
 
@@ -91,20 +96,21 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize external sorter", e);
     }
-    // TODO: use external-sorter
+    // TODO: always enable full scan for now
     // scan all records but don't merge them
     performScan();
   }
 
   private void performScan() {
     scanStart();
+    onlyScanTimer.startTimer();
     scanInternal(Option.empty(), false);
+    timeTakenToOnlyScanRecords = onlyScanTimer.endTimer();
     // sort it
     this.records.sort();
     scanEnd();
-    if (LOG.isInfoEnabled()) {
-      LOG.info("Scanned {} log files with stats: RecordsNum => {}, took {} ms ", logFilePaths.size(), records.getTotalEntryCount(), totalTimeTakenToScanRecords);
-    }
+    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TimeTakenToOnlyScanRecords => {}, TotalTimeTakenToSortRecords => {}, TotalTimeKenToScanAndSortRecords => {}, GeneratedSortedFileNum => {}, TotalRecordsScanned => {}",
+        logFilePaths.size(), maxMemoryUsageForSorting, timeTakenToOnlyScanRecords, records.getTotalTimeTakenToSortRecords(), totalTimeTakenToScanRecords, records.getGeneratedSortedFileNum(), records.getTotalEntryCount());
   }
 
   public long getMaxMemoryUsageForSorting() {
@@ -113,7 +119,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
 
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) {
-    records.add(hoodieRecord);
+    records.add(hoodieRecord.copy());
   }
 
   @Override

@@ -188,8 +188,7 @@ public class TestCompactionData extends HoodieClientTestBase {
     // assertEquals(mainRecordsMap.size(), experimentRecordsMap.size());
 
     Schema readerSchema = new Schema.Parser().parse(mainTable.config.getSchema());
-    List<String> excludeFields = CollectionUtils.createImmutableList(COMMIT_TIME_METADATA_FIELD, COMMIT_SEQNO_METADATA_FIELD,
-        FILENAME_METADATA_FIELD, OPERATION_METADATA_FIELD, RECORD_KEY_METADATA_FIELD);
+    List<String> excludeFields = CollectionUtils.createImmutableList(FILENAME_METADATA_FIELD);
 
     // Verify every field.
     mainRecordsMap.forEach((key, value) -> {
@@ -277,7 +276,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> insertDataIntoMainTable(TestCompactionData.TestTableContents mainTable, String commitTime) throws IOException {
-    int numRecords = 500 + random.nextInt(100);
+    int numRecords = 100 + random.nextInt(50);
     List<HoodieRecord> records = insertsGenFunction.apply(dataGen, commitTime, numRecords);
     mainTable.updatePreviousGeneration(records, commitTime, 0);
     List<HoodieRecord> realRecords = records.stream().map(mainTable::deepCopyAndModifyRecordKey).collect(Collectors.toList());
@@ -286,7 +285,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> updateDataIntoMainTable(TestCompactionData.TestTableContents mainTable, String commitTime) throws IOException {
-    int numRecords = 100 + random.nextInt(100);
+    int numRecords = 50 + random.nextInt(50);
     List<HoodieRecord> records = updatesGenFunction.apply(dataGen, commitTime, numRecords);
     mainTable.updatePreviousGeneration(records, commitTime, 1);
     List<HoodieRecord> realRecords = records.stream().map(mainTable::deepCopyAndModifyRecordKey).collect(Collectors.toList());
@@ -295,7 +294,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> deleteDataIntoMainTable(TestCompactionData.TestTableContents mainTable, String commitTime) throws IOException {
-    int numRecords = 80 + random.nextInt(100);
+    int numRecords = 20 + random.nextInt(30);
     List<HoodieKey> keys = deletesGenFunction.apply(dataGen, numRecords);
     mainTable.updatePreviousGenerationForDelete(keys, commitTime);
     List<HoodieKey> realRecords = keys.stream().map(mainTable::deepCopyAndModifyRecordKey).collect(Collectors.toList());

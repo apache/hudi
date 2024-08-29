@@ -102,6 +102,13 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     return totalEntryCount;
   }
 
+  public long getTotalTimeTakenToSortRecords() {
+    return totalTimeTakenToSortRecords;
+  }
+  public int getGeneratedSortedFileNum() {
+    return currentSortedFileIndex + 1;
+  }
+
   private File createFileForWrite(String filePath) throws IOException {
     File file = new File(filePath);
     if (file.exists()) {
@@ -177,6 +184,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     } catch (IOException e) {
       throw new HoodieIOException("Failed to sort records", e);
     }
+    LOG.info("External sorted completed, total entry count => {}, total time taken to sort records => {} ms, generated sorted file num => {}",
+        totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum());
   }
 
   private void sortMemoryRecords() {
@@ -298,9 +307,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       memoryRecords.clear();
       currentMemoryUsage = 0;
 
-      LOG.info(
-          "External sorter closed, stats: totalEntryCount=" + totalEntryCount + ", totalTimeTakenToSortRecords=" + totalTimeTakenToSortRecords + "ms" + ", sorted files num=" + currentSortedFileIndex +
-              1);
+      LOG.info("External sorted closed, total entry count => {}, total time taken to sort records => {} ms, generated sorted file num => {}",
+          totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close external sorter", e);
     }

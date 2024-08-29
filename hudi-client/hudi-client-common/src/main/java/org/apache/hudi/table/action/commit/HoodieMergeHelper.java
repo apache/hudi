@@ -20,8 +20,8 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.ExternalSorter;
@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -81,12 +82,17 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     return MergeHelperHolder.HOODIE_MERGE_HELPER;
   }
 
-  private ClosableIterator<HoodieRecord> getBaseFileRecordIterator(HoodieFileReader baseFileReader, Schema readSchema, HoodieMergeHandle mergeHandle, long maxMemory, String sorterBasePath)
+  private ClosableIterator<HoodieRecord> getBaseFileRecordIterator(HoodieWriteConfig writeConfig, HoodieFileReader baseFileReader, Schema readSchema, HoodieMergeHandle mergeHandle, long maxMemory, String sorterBasePath)
       throws IOException {
     ClosableIterator<HoodieRecord> rawRecordItr = new CloseableMappingIterator<HoodieRecord, HoodieRecord>(baseFileReader.getRecordIterator(readSchema), record -> {
-      String recordKey = record.getRecordKey(readSchema, mergeHandle.getKeyGeneratorOpt());
-      record.setKey(new HoodieKey(recordKey, mergeHandle.getPartitionPath()));
-      return record;
+//      String recordKey = record.getRecordKey(readSchema, mergeHandle.getKeyGeneratorOpt());
+//      record.setKey(new HoodieKey(recordKey, mergeHandle.getPartitionPath()));
+      HoodieTableConfig tableConfig = mergeHandle.getHoodieTableMetaClient().getTableConfig();
+      try {
+        return record.wrapIntoHoodieRecordPayloadWithParams(readSchema, tableConfig.getProps(), Option.empty(), writeConfig.allowOperationMetadataField(), Option.of(mergeHandle.getPartitionPath()), tableConfig.populateMetaFields(), Option.empty());
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to wrap record into HoodieRecordPayload", e);
+      }
     });
     if (isSortedBaseFile(baseFileReader)) {
       LOG.info("Base file: {} is sorted. No need to sort the records before merging", mergeHandle.getOldFilePath());
@@ -94,7 +100,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
     LOG.info("Base file: {} is not sorted. Sort the records before merging", mergeHandle.getOldFilePath());
     // sort the base file records
-    return new SortedIterator(rawRecordItr, sorterBasePath, maxMemory, Comparator.comparing(HoodieRecord::getRecordKey),
+    return new SortedIterator(mergeHandle.getOldFilePath(), rawRecordItr, sorterBasePath, maxMemory, Comparator.comparing(HoodieRecord::getRecordKey),
         new HoodieRecordSizeEstimator<>(readSchema));
   }
 
@@ -105,8 +111,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     private Iterator<HoodieRecord> sortedIterator;
 
     private final ExternalSorter sorter;
+    private final StoragePath baseFilePath;
 
-    SortedIterator(ClosableIterator<HoodieRecord> rawIterator, String sorterBasePath, long maxMemoryInBytes, Comparator<HoodieRecord> comparator, SizeEstimator<HoodieRecord> sizeEstimator) {
+    SortedIterator(StoragePath filePath, ClosableIterator<HoodieRecord> rawIterator, String sorterBasePath, long maxMemoryInBytes, Comparator<HoodieRecord> comparator,
+                   SizeEstimator<HoodieRecord> sizeEstimator) {
+      this.baseFilePath = filePath;
       this.rawIterator = rawIterator;
       try {
         this.sorter = new ExternalSorter(sorterBasePath, maxMemoryInBytes, comparator, sizeEstimator);
@@ -125,7 +134,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       }
       this.sorter.sort();
       this.sortedIterator = sorter.iterator();
-      LOG.info("Finished sorting base-file records in " + hoodieTimer.endTimer() + "ms");
+      LOG.info("Finished sorting base-file: {} in {} ms", baseFilePath, hoodieTimer.endTimer());
     }
 
     @Override
@@ -206,7 +215,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         if (mergeHandle.isCompaction() && writeConfig.isSortedMergeCompactionEnabled()) {
           long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(table.getTaskContextSupplier(), writeConfig);
           String externalSorterBasePath = writeConfig.getExternalSorterBasePath();
-          recordIterator = getBaseFileRecordIterator(baseFileReader, recordSchema, mergeHandle, maxMemoryPerCompaction, externalSorterBasePath);
+          recordIterator = getBaseFileRecordIterator(writeConfig, baseFileReader, recordSchema, mergeHandle, maxMemoryPerCompaction, externalSorterBasePath);
         } else {
           recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema);
         }

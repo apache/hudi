@@ -115,8 +115,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-      String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-      TaskContextSupplier taskContextSupplier) {
+                            String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
+                            TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
     this.recordMap = recordMap;
     this.useWriterSchema = true;
@@ -250,5 +250,11 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     RuntimeStats runtimeStats = new RuntimeStats();
     runtimeStats.setTotalCreateTime(timer.endTimer());
     stat.setRuntimeStats(runtimeStats);
+
+    LOG.info("CreateHandle Stats: TotalWrites=" + recordsWritten + ", " + "TotalDeletes=" + recordsDeleted + ", "
+        + "TotalInserts=" + insertRecordsWritten + ", "
+        + "TotalErrors=" + writeStatus.getTotalErrorRecords() + ", " + "TotalBytesWritten=" + fileSize + ", "
+        + "TotalCreateTime=" + runtimeStats.getTotalCreateTime());
+
   }
 }

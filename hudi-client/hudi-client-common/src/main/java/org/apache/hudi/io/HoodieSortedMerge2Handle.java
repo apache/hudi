@@ -191,8 +191,9 @@ public class HoodieSortedMerge2Handle<T, I, K, O> extends HoodieMergeHandle<T, I
           + "TotalErrors=" + writeStatus.getTotalErrorRecords() + ", " + "TotalBytesWritten=" + fileSizeInBytes + ", "
           + "TotalRecordsSize=" + recordsMerge + ", " + "TotalUpsertTime=" + runtimeStats.getTotalUpsertTime() + " ("
           + runtimeStats.getTotalUpsertTime() + "ms)");
-      LOG.info(String.format("SortedMergeHandle2 for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
+      LOG.info(String.format("SortedMerge2Handle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
           stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+      LOG.info("SortedMerge2Handle successfully merge: {} to a new file: {}", oldFilePath, newFilePath);
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
