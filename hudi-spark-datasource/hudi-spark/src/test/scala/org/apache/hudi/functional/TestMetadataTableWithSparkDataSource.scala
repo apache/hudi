@@ -35,7 +35,6 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions.{col, explode}
@@ -265,7 +264,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     val firstRead = getFiles(basePath)
     val metaClient = HoodieTableMetaClient.builder
-      .setConf(storageConf().unwrapAs(Class[Configuration]))
+      .setConf(storageConf())
       .setBasePath(basePath)
       .build
 
