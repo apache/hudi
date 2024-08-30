@@ -23,6 +23,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -30,8 +33,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -49,6 +55,8 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SaveMode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -57,6 +65,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,6 +76,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
+
+  private static Stream<Arguments> lastNFileSlicesTestArgs() {
+    return Stream.of(
+        Arguments.of(-1),
+        Arguments.of(1),
+        Arguments.of(3),
+        Arguments.of(4),
+        Arguments.of(5)
+    );
+  }
 
   @Test
   public void testMetadataTableValidation() {
@@ -177,6 +196,73 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
       // validate that all 3 partitions are returned
       assertEquals(mdtPartitions, validator.validatePartitions(engineContext, baseStoragePath, metaClient));
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("lastNFileSlicesTestArgs")
+  public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws IOException {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(),"2");
+
+    Dataset<Row> inserts = makeInsertDf("000", 10).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    for (int i = 0; i < 6; i++) {
+      inserts.write().format("hudi").options(writeOptions)
+          .mode(SaveMode.Append)
+          .save(basePath);
+    }
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    config.ignoreFailed = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getStorageConf()).build();
+
+    validator.run();
+    assertFalse(validator.hasValidationFailure());
+
+    // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges.
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
+    List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
+    FileSlice earliestFileSlice = allFileSlices.get(allFileSlices.size() - 1);
+    HoodieLogFile earliestLogFile = earliestFileSlice.getLogFiles().collect(Collectors.toList()).get(0);
+    metaClient.getStorage().deleteFile(earliestLogFile.getPath());
+
+    HoodieMetadataTableValidator.Config finalConfig = config;
+    HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, finalConfig);
+    localValidator.run();
+    assertTrue(localValidator.hasValidationFailure());
+    assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+
+    // lets set lastN file slices to 2 and so validation should succeed. (bcoz, there will be mis-match only on first file slice)
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    if (lastNFileSlices != -1) {
+      config.validateLastNFileSlices = String.valueOf(lastNFileSlices);
+    }
+    config.ignoreFailed = true;
+    validator = new HoodieMetadataTableValidator(jsc, config);
+    validator.run();
+    if (lastNFileSlices != -1 && lastNFileSlices < 4) {
+      assertFalse(validator.hasValidationFailure());
+    } else {
+      assertTrue(validator.hasValidationFailure());
+      assertTrue(validator.getThrowables().get(0) instanceof HoodieValidationException);
     }
   }
 
