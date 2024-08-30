@@ -54,25 +54,46 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
    * BigDecimal value.
    */
   protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
+    BigDecimal bigDecimal = null;
     LogicalTypes.Decimal logicalType = (LogicalTypes.Decimal) schema.getLogicalType();
     try {
       if (obj instanceof BigDecimal) {
-        return Pair.of(true, ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY));
-      }
-      if (schema.getType() == Schema.Type.BYTES && (obj instanceof String)) {
+        bigDecimal = ((BigDecimal) obj).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+      } else if (obj instanceof String) {
+        // Case 2: Object is a number in String format.
         try {
           //encoded big decimal
-          return Pair.of(true, HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj), logicalType));
+          bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj),
+              (LogicalTypes.Decimal) schema.getLogicalType());
         } catch (IllegalArgumentException e) {
           //no-op
         }
       }
-      BigDecimal bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
-      return Pair.of(true, bigDecimal);
+      // None fixed byte or fixed byte conversion failure would end up here.
+      if (bigDecimal == null) {
+        bigDecimal = new BigDecimal(obj.toString(), new MathContext(logicalType.getPrecision(), RoundingMode.UNNECESSARY)).setScale(logicalType.getScale(), RoundingMode.UNNECESSARY);
+      }
     } catch (java.lang.NumberFormatException | ArithmeticException ignored) {
       /* ignore */
     }
-    return Pair.of(false, null);
+
+    if (bigDecimal == null) {
+      return Pair.of(false, null);
+    }
+    // As we don't do rounding, the validation will enforce the scale part and the integer part are all within the
+    // limit. As a result, if scale is 2 precision is 5, we only allow 3 digits for the integer.
+    // Allowed: 123.45, 123, 0.12
+    // Disallowed: 1234 (4 digit integer while the scale has already reserved 2 digit out of the 5 digit precision)
+    //             123456, 0.12345
+    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
+    if (bigDecimal.scale() > decimalType.getScale()
+        || (bigDecimal.precision() - bigDecimal.scale()) > (decimalType.getPrecision() - decimalType.getScale())) {
+      // Correspond to case
+      // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 5 as scale 2 without rounding.
+      // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 3 as scale 2 without rounding
+      return Pair.of(false, null);
+    }
+    return Pair.of(true, bigDecimal);
   }
 
   protected static byte[] decodeStringToBigDecimalBytes(Object value) {
