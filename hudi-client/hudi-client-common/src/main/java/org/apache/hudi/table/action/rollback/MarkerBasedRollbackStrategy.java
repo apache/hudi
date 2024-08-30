@@ -156,6 +156,11 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
       try {
         StoragePathInfo pathInfo = table.getMetaClient().getStorage().getPathInfo(logFileToRollback.getPath());
         if (pathInfo != null) {
+          if (baseCommitTime.equals(instantToRollback.getTimestamp())) {
+            return new HoodieRollbackRequest(relativePartitionPath, EMPTY_STRING, EMPTY_STRING,
+                Collections.singletonList(logFileToRollback.getPath().toString()),
+                Collections.emptyMap());
+          }
           logBlocksToBeDeleted = Collections.singletonMap(
               logFileToRollback.getPath().getName(), pathInfo.getLength());
         } else {
