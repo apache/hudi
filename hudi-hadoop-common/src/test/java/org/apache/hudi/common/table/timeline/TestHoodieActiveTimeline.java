@@ -138,7 +138,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());

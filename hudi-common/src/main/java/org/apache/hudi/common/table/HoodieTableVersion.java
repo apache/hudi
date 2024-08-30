@@ -28,32 +28,39 @@ import java.util.Arrays;
  */
 public enum HoodieTableVersion {
   // < 0.6.0 versions
-  ZERO(0),
+  ZERO(0, "0.3.0"),
   // 0.6.0 onwards
-  ONE(1),
+  ONE(1, "0.6.0"),
   // 0.9.0 onwards
-  TWO(2),
+  TWO(2, "0.9.0"),
   // 0.10.0 onwards
-  THREE(3),
+  THREE(3, "0.10.0"),
   // 0.11.0 onwards
-  FOUR(4),
+  FOUR(4, "0.11.0"),
   // 0.12.0 onwards
-  FIVE(5),
+  FIVE(5, "0.12.0"),
   // 0.14.0 onwards
-  SIX(6),
+  SIX(6, "0.14.0"),
   // 0.16.0
-  SEVEN(7),
-  // 1.0 beta
-  EIGHT(8);
+  SEVEN(7, "0.16.0"),
+  // 1.0
+  EIGHT(8, "1.0.0");
   
   private final int versionCode;
 
-  HoodieTableVersion(int versionCode) {
+  private final String firstReleaseVersion;
+
+  HoodieTableVersion(int versionCode, String firstReleaseVersion) {
     this.versionCode = versionCode;
+    this.firstReleaseVersion = firstReleaseVersion;
   }
 
   public int versionCode() {
     return versionCode;
+  }
+
+  public String firstReleaseVersion() {
+    return firstReleaseVersion;
   }
 
   public static HoodieTableVersion current() {

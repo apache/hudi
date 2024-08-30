@@ -161,7 +161,7 @@ public class HiveTestCluster implements BeforeAllCallback, AfterAllCallback, Bef
     String tablePathStr = tablePath(dbName, tableName);
     Path path = new Path(tablePathStr);
     FileIOUtils.deleteDirectory(new File(path.toString()));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)

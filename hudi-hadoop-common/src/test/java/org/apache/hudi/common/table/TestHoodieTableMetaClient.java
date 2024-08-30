@@ -186,7 +186,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
                                        Option<String> payloadType,
                                        Option<String> recordMergerStrategy,
                                        RecordMergeMode expectedRecordMergeMode) {
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table_name");
     if (payloadClassName.isPresent()) {
@@ -235,7 +235,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
                                                   Option<String> recordMergerStrategy,
                                                   RecordMergeMode recordMergeMode,
                                                   String expectedErrorMessage) {
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table_name")
         .setRecordMergeMode(recordMergeMode);

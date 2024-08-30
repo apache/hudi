@@ -60,7 +60,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 
 import scala.Tuple2;
 
@@ -139,12 +138,10 @@ public class HDFSParquetImporter implements Serializable {
 
       if (!fs.exists(new Path(cfg.targetPath))) {
         // Initialize target hoodie table.
-        Properties properties = HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
             .setTableName(cfg.tableName)
             .setTableType(cfg.tableType)
-            .build();
-        HoodieTableMetaClient.initTableAndGetMetaClient(
-            HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetPath, properties);
+            .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetPath);
       }
 
       // Get schema.

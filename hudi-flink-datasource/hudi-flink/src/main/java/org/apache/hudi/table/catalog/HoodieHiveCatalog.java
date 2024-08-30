@@ -718,7 +718,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
               .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
-          HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
+          HoodieTableMetaClient.newTableBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
               .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 

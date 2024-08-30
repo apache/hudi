@@ -99,8 +99,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue("Database name can't have default value as it's used to toggle Hive incremental query feature. See HUDI-2837")
-      .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
+      .noDefaultValue()
+      .withDocumentation("Database name. If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
@@ -111,7 +111,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieTableType> TYPE = ConfigProperty
       .key("hoodie.table.type")
       .defaultValue(HoodieTableType.COPY_ON_WRITE)
-      .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.");
+      .withDocumentation("The table type for the underlying data.");
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty
       .key("hoodie.table.version")
@@ -119,6 +119,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
+  // TODO: hows this used?
   public static final ConfigProperty<HoodieTableVersion> INITIAL_VERSION = ConfigProperty
           .key("hoodie.table.initial.version")
           .defaultValue(HoodieTableVersion.ZERO)
@@ -126,6 +127,7 @@ public class HoodieTableConfig extends HoodieConfig {
                   + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
                   + "when the table is initially setup.");
 
+  // TODO: is this this called precombine in 1.0. ..
   public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
@@ -135,8 +137,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_FIELDS = ConfigProperty
       .key("hoodie.table.partition.fields")
       .noDefaultValue()
-      .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
-          + "the partition path, by invoking toString(). These fields also include the partition type which is used by custom key generators");
+      .withDocumentation("Comma separated field names used to partition the table. These field names also include "
+          + "the partition type which is used by custom key generators");
 
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
@@ -156,10 +158,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation(HoodieCDCSupplementalLoggingMode.class)
       .sinceVersion("0.13.0");
 
+  // TODO: is this necessary? won't we just use a table schema.
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
       .noDefaultValue()
-      .withDocumentation("Schema used when creating the table, for the first time.");
+      .withDocumentation("Schema used when creating the table");
 
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.base.file.format")
@@ -178,17 +181,19 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
 
+  //TODO: why is this the default? not OVERWRITE_WITH_LATEST?
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
       .sinceVersion("1.0.0")
+      // TODO: whats this doing. would it serialize any java class names
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
       .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
-      .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
+      .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
@@ -259,6 +264,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
+  // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
@@ -303,6 +309,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
 
+  // TODO: understand why is writing/changing all these. this has to work on both HDFS and Cloud.
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
       .key("hoodie.table.metadata.partitions.inflight")
       .noDefaultValue()
@@ -323,6 +330,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
+  // TODO: should this have a default value?
   public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
       .key("hoodie.table.index.defs.path")
       .noDefaultValue()
@@ -354,13 +362,12 @@ public class HoodieTableConfig extends HoodieConfig {
         needStore = true;
       }
       if (needStore) {
-        // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (OutputStream outputStream = storage.create(propertyPath)) {
           storeProperties(props, outputStream);
         }
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
+      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
     }
   }
 
@@ -470,6 +477,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties).
+   *
+   * TODO: this directory creation etc should happen in the HoodieTableMetaClient.
    */
   public static void create(HoodieStorage storage, StoragePath metadataFolder, Properties properties)
       throws IOException {
@@ -479,6 +488,9 @@ public class HoodieTableConfig extends HoodieConfig {
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     try (OutputStream outputStream = storage.create(propertyPath)) {
+
+      // TODO: this is where we need logic to write table configs based on target table version.
+
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }

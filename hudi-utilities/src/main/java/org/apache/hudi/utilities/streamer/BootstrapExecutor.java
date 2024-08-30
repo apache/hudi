@@ -204,7 +204,7 @@ public class BootstrapExecutor implements Serializable {
       throw new IllegalArgumentException("Bootstrap source base path and Hudi table base path must be different");
     }
 
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)

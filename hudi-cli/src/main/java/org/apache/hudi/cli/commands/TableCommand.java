@@ -149,7 +149,7 @@ public class TableCommand {
       throw new IllegalStateException("Table already existing in path : " + path);
     }
 
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableTypeStr)
         .setTableName(name)
         .setArchiveLogFolder(archiveFolder)

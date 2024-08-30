@@ -205,7 +205,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         "The database names from this hoodie path and this catalog table is not same.")
       val recordName = AvroSchemaUtils.getAvroRecordQualifiedName(table.identifier.table)
       // just persist hoodie.table.create.schema
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableCreateSchema(SchemaConverters.toAvroType(dataSchema, recordName = recordName).toString())
@@ -221,7 +221,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         table.partitionColumnNames.mkString(",")
       }
 
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)

@@ -60,7 +60,7 @@ class TestStreamingSource extends StreamTest {
   test("test cow stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
@@ -113,7 +113,7 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
@@ -160,7 +160,7 @@ class TestStreamingSource extends StreamTest {
   test("Test cow from latest offset") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
@@ -193,7 +193,7 @@ class TestStreamingSource extends StreamTest {
   test("Test cow from specified offset") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
-      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(COPY_ON_WRITE)
         .setTableName(getTableName(tablePath))
         .setRecordKeyFields("id")
@@ -230,7 +230,7 @@ class TestStreamingSource extends StreamTest {
   test("test mor stream source with compaction") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_mor_stream"
-      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(MERGE_ON_READ)
         .setTableName(getTableName(tablePath))
         .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)

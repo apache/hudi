@@ -181,8 +181,8 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
-    HoodieTableMetaClient.PropertyBuilder builder =
-        HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder =
+        HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
             .setTableType(tableType)
@@ -198,9 +198,8 @@ public class HoodieTestUtils {
       builder.setPartitionFields("some_nonexistent_field");
     }
 
-    Properties processedProperties = builder.fromProperties(properties).build();
-
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, processedProperties);
+    return builder.fromProperties(properties)
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
