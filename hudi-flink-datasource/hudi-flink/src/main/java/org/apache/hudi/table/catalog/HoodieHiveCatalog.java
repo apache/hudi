@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
@@ -101,6 +102,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
+import static org.apache.flink.util.Preconditions.checkArgument;
+import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 import static org.apache.hudi.adapter.HiveCatalogConstants.ALTER_DATABASE_OP;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_LOCATION_URI;
 import static org.apache.hudi.adapter.HiveCatalogConstants.DATABASE_OWNER_NAME;
@@ -111,10 +116,6 @@ import static org.apache.hudi.configuration.FlinkOptions.PATH;
 import static org.apache.hudi.table.catalog.TableOptionProperties.COMMENT;
 import static org.apache.hudi.table.catalog.TableOptionProperties.PK_CONSTRAINT_NAME;
 import static org.apache.hudi.table.catalog.TableOptionProperties.SPARK_SOURCE_PROVIDER;
-import static org.apache.flink.table.factories.FactoryUtil.CONNECTOR;
-import static org.apache.flink.util.Preconditions.checkArgument;
-import static org.apache.flink.util.Preconditions.checkNotNull;
-import static org.apache.flink.util.StringUtils.isNullOrWhitespaceOnly;
 
 /**
  * A catalog implementation for Hoodie based on MetaStore.
@@ -356,7 +357,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   private Table isHoodieTable(Table hiveTable) {
     if (!hiveTable.getParameters().getOrDefault(SPARK_SOURCE_PROVIDER, "").equalsIgnoreCase("hudi")
         && !isFlinkHoodieTable(hiveTable)) {
-      throw new HoodieCatalogException(String.format("the %s is not hoodie table", hiveTable.getTableName()));
+      throw new HoodieCatalogException(String.format("Table %s is not a hoodie table", hiveTable.getTableName()));
     }
     return hiveTable;
   }
@@ -373,7 +374,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     } catch (NoSuchObjectException e) {
       throw new TableNotExistException(getName(), tablePath);
     } catch (TException e) {
-      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()));
+      throw new HoodieCatalogException(String.format("Failed to get table %s from Hive metastore", tablePath.getObjectName()), e);
     }
   }
 
@@ -502,6 +503,9 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.setString(FlinkOptions.PARTITION_PATH_FIELD, partitions);
+      final String[] pks = flinkConf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
+      StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
 
     if (!catalogTable.isPartitioned()) {
@@ -549,6 +553,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     hiveTable.setCreateTime((int) (System.currentTimeMillis() / 1000));
 
     Map<String, String> properties = new HashMap<>(table.getOptions());
+    if (properties.containsKey(FlinkOptions.INDEX_TYPE.key())
+        && !properties.containsKey(HoodieIndexConfig.INDEX_TYPE.key())) {
+      properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
+    }
+    properties.remove(FlinkOptions.INDEX_TYPE.key());
+    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
@@ -705,11 +715,12 @@ public class HoodieHiveCatalog extends AbstractCatalog {
           //update hoodie
           StorageDescriptor sd = hiveTable.getSd();
           String location = sd.getLocation();
-          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location).setConf(hiveConf).build();
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(location)
+              .setConf(HadoopFSUtils.getStorageConfWithCopy(hiveConf)).build();
           //Init table with new name
           HoodieTableMetaClient.withPropertyBuilder().fromProperties(metaClient.getTableConfig().getProps())
               .setTableName(newTableName)
-              .initTable(hiveConf, location);
+              .initTable(HadoopFSUtils.getStorageConfWithCopy(hiveConf), location);
 
           hiveTable.setTableName(newTableName);
           client.alter_table(
@@ -732,7 +743,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
   }
 
   public void alterTable(ObjectPath tablePath, CatalogBaseTable newCatalogTable, List tableChanges,
-      boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
+                         boolean ignoreIfNotExists) throws TableNotExistException, CatalogException {
     HoodieCatalogUtil.alterTable(this, tablePath, newCatalogTable, tableChanges, ignoreIfNotExists, hiveConf, this::inferTablePath, this::refreshHMSTable);
   }
 
@@ -801,7 +812,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     try (HoodieFlinkWriteClient<?> writeClient = HoodieCatalogUtil.createWriteClient(tablePath, table, hiveConf, this::inferTablePath)) {
       boolean hiveStylePartitioning = Boolean.parseBoolean(table.getOptions().get(FlinkOptions.HIVE_STYLE_PARTITIONING.key()));
       writeClient.deletePartitions(
-          Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
+              Collections.singletonList(HoodieCatalogUtil.inferPartitionPath(hiveStylePartitioning, partitionSpec)),
               writeClient.createNewInstantTime())
           .forEach(writeStatus -> {
             if (writeStatus.hasErrors()) {

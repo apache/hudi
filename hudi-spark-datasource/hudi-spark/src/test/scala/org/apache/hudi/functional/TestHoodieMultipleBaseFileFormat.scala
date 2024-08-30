@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, SparkDatasetMixin}
+
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -64,7 +65,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -85,7 +86,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
 
   def insertAndValidateSnapshot(basePath: String, tableType: String): Unit = {
     // Insert records in Parquet format to one of the partitions.
-    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 10, DEFAULT_FIRST_PARTITION_PATH)).asScala
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("001", 10, DEFAULT_FIRST_PARTITION_PATH)).asScala.toSeq
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("hudi")
       .options(commonOpts)
@@ -94,7 +95,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
       .save(basePath)
 
     // Insert records to a new partition in ORC format.
-    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("002", 10, DEFAULT_SECOND_PARTITION_PATH)).asScala
+    val records2 = recordsToStrings(dataGen.generateInsertsForPartition("002", 10, DEFAULT_SECOND_PARTITION_PATH)).asScala.toSeq
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("hudi")
       .options(commonOpts)
@@ -108,7 +109,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     assertEquals(0, hudiDf.count())
 
     // Update and generate new slice across partitions.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 10)).asScala.toSeq
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("hudi")
       .options(commonOpts)

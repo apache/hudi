@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.BoundReference;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.ExpressionVisitor;
 import org.apache.hudi.expression.Literal;
+import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
@@ -33,7 +33,7 @@ public class FilterGenVisitor implements ExpressionVisitor<String> {
     return String.format("%s %s %s", left, operator.sqlOperator, right);
   }
 
-  private String quoteStringLiteral(String value) {
+  protected String quoteStringLiteral(String value) {
     if (!value.contains("\"")) {
       return "\"" + value + "\"";
     } else if (!value.contains("'")) {

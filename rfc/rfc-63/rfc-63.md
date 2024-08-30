@@ -197,18 +197,19 @@ We discuss the design and implementation details of each component to realize th
 
 #### SQL
 
-A new keyword `FUNCTION` is introduced to indicate that a functional index is intended to be created. This keyword is
-ANSI-compliant and also present in [spark-sql](https://spark.apache.org/docs/latest/sql-ref-ansi-compliance.html).
+Functional index can be created with the usual `CREATE INDEX` command. The function itself can be specified as `func` property in `OPTIONS`.
 
 ```sql
 -- PROPOSED SYNTAX WITH FUNCTION KEYWORD --
-CREATE [FUNCTION] INDEX index_name ON table_name [ USING index_type ] ( { column_name | expression } );
+CREATE INDEX [IF NOT EXISTS] index_name ON [TABLE] table_name
+    [USING index_type]
+    (column_name1 [OPTIONS(key1=value1, key2=value2, ...)], column_name2 [OPTIONS(key1=value1, key2=value2, ...)], ...)
+    [OPTIONS (key1=value1, key2=value2, ...)]
 -- Examples --
-CREATE FUNCTION INDEX last_name_idx ON employees (UPPER(last_name)); -- functional index using column stats for UPPER(last_name)
-CREATE FUNCTION INDEX datestr ON hudi_table (DATE_FORMAT(ts, '%Y-%m-%d')); -- functional index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
-CREATE INDEX city_id_idx ON hudi_table (city_id); -- usual column stats within MT column_stats partition
-CREATE FUNCTION INDEX hour_of_day ON hudi_table USING BITMAP (DATE_FORMAT(ts, '%H')); -- functional index using bitmap for DATE_FORMAT(ts, '%H')
-CREATE FUNCTION INDEX income_idx ON employees (salary + (salary*commission_pct)); --  functional index using column stats for given expression
+CREATE INDEX idx_datestr on hudi_table USING column_stats(ts) OPTIONS(func='from_unixtime', format='yyyy-MM-dd') -- functional index using column stats for DATE_FORMAT(ts, '%Y-%m-%d')
+CREATE INDEX last_name_idx ON employees USING column_stats(last_name) (func='upper'); -- functional index using column stats for UPPER(last_name)
+CREATE INDEX city_id_idx ON hudi_table USING bloom_filters (city_id); -- usual bloom filters within metadata table
+
 -- NO CHANGE IN DROP INDEX --
 DROP INDEX last_name_idx;
 ```

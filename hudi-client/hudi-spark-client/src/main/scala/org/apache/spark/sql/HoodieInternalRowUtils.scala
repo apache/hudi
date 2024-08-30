@@ -18,11 +18,12 @@
 
 package org.apache.spark.sql
 
-import org.apache.avro.Schema
-import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
 import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
+
+import org.apache.avro.Schema
+import org.apache.hbase.thirdparty.com.google.common.base.Supplier
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
@@ -33,11 +34,12 @@ import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
 import java.util.function.{Function => JFunction}
+import java.util.{ArrayDeque => JArrayDeque, Collections => JCollections, Deque => JDeque, Map => JMap}
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
 
 object HoodieInternalRowUtils {
 
@@ -73,13 +75,6 @@ object HoodieInternalRowUtils {
       .getOrElseUpdate((from, to), generateUnsafeProjection(from, to))
   }
 
-  /**
-   * due to scala2.11 and HoodieCatalystExpressionUtils is both an object and trait,
-   * we can't directly call generateUnsafeProjection from java code
-   */
-  def generateUnsafeProjectionAlias(from: StructType, to: StructType): UnsafeProjection = {
-    generateUnsafeProjection(from, to)
-  }
   /**
    * Provides cached instance of [[UnsafeRowWriter]] transforming provided [[InternalRow]]s from
    * one [[StructType]] and into another [[StructType]]

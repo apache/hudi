@@ -18,9 +18,10 @@
 package org.apache.hudi
 
 
-import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.{HoodieInstant, TimelineUtils}
 import org.apache.hudi.common.util.CommitUtils
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
@@ -28,7 +29,8 @@ import org.apache.spark.sql.{Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions
+
+import scala.collection.JavaConverters._
 
 /**
  * Relation to implement the Hoodie's timeline view for the table
@@ -111,7 +113,7 @@ class TimelineRelation(val sqlContext: SQLContext,
 
     // Using deprecated `JavaConversions` to be compatible with scala versions < 2.12.
     // Can replace with JavaConverters.seqAsJavaList(...) once the support for scala versions < 2.12 is stopped
-    sqlContext.createDataFrame(JavaConversions.seqAsJavaList(data), schema).rdd
+    sqlContext.createDataFrame(data.asJava, schema).rdd
   }
 
   private def toJavaConsumer[T](consumer: (T) => Unit): Consumer[T] = {

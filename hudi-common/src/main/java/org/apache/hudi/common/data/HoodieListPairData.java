@@ -201,6 +201,11 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
     return super.collectAsList();
   }
 
+  @Override
+  public int deduceNumPartitions() {
+    return 1;
+  }
+
   public static <K, V> HoodieListPairData<K, V> lazy(List<Pair<K, V>> data) {
     return new HoodieListPairData<>(data, true);
   }

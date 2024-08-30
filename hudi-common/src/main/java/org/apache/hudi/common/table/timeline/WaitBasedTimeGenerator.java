@@ -19,8 +19,8 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.function.Consumer;
 
@@ -30,8 +30,8 @@ import java.util.function.Consumer;
 public class WaitBasedTimeGenerator extends TimeGeneratorBase {
   private final long maxExpectedClockSkewMs;
 
-  public WaitBasedTimeGenerator(HoodieTimeGeneratorConfig config, SerializableConfiguration hadoopConf) {
-    super(config, hadoopConf);
+  public WaitBasedTimeGenerator(HoodieTimeGeneratorConfig config, StorageConfiguration<?> storageConf) {
+    super(config, storageConf);
     this.maxExpectedClockSkewMs = config.getMaxExpectedClockSkewMs();
   }
 

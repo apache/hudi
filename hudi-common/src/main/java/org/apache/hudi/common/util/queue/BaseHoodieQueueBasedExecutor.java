@@ -98,7 +98,8 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
 
   protected abstract void doConsume(HoodieMessageQueue<I, O> queue, HoodieConsumer<O, E> consumer);
 
-  protected void setUp() {}
+  protected void setUp() {
+  }
 
   /**
    * Start producing
@@ -215,7 +216,7 @@ public abstract class BaseHoodieQueueBasedExecutor<I, O, E> implements HoodieExe
         // to be interrupted as well
         Thread.currentThread().interrupt();
       }
-      // throw if we have any other exception seen already. There is a chance that cancellation/closing of producers with CompeletableFuture wins before the actual exception
+      // throw if we have any other exception seen already. There is a chance that cancellation/closing of producers with CompletableFuture wins before the actual exception
       // is thrown.
       if (this.queue.getThrowable() != null) {
         throw new HoodieException(queue.getThrowable());

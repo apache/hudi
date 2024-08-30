@@ -45,13 +45,13 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieFileReaderFactory;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -176,14 +176,17 @@ public class HoodieIndexUtils {
    *
    * @param filePath            - File to filter keys from
    * @param candidateRecordKeys - Candidate keys to filter
+   * @param storage
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(Path filePath, List<String> candidateRecordKeys,
-                                                            Configuration configuration) throws HoodieIndexException {
+  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                            List<String> candidateRecordKeys,
+                                                            HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    try (HoodieFileReader fileReader = HoodieFileReaderFactory.getReaderFactory(HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, configuration, filePath)) {
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecordType.AVRO)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       if (!candidateRecordKeys.isEmpty()) {
         HoodieTimer timer = HoodieTimer.start();
@@ -232,7 +235,7 @@ public class HoodieIndexUtils {
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
@@ -240,7 +243,7 @@ public class HoodieIndexUtils {
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()))
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()))
         .getMergedRecords().iterator());
   }
 
@@ -287,12 +290,9 @@ public class HoodieIndexUtils {
     // the tagging partitions and locations
     // NOTE: The incoming records may only differ in record position, however, for the purpose of
     //       merging in case of partition updates, it is safe to ignore the record positions.
-    HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
+    HoodieData<Pair<String, String>> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
-        .map(p -> new HoodieRecordGlobalLocation(
-            p.getRight().get().getPartitionPath(),
-            p.getRight().get().getInstantTime(),
-            p.getRight().get().getFileId()))
+        .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
@@ -396,8 +396,8 @@ public class HoodieIndexUtils {
    */
   public static String getPartitionNameFromPartitionType(MetadataPartitionType partitionType, HoodieTableMetaClient metaClient, String indexName) {
     if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType)) {
-      checkArgument(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");
-      return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
+      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
     return partitionType.getPartitionPath();
   }

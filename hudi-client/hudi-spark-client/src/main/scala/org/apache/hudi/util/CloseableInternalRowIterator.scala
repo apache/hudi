@@ -20,6 +20,7 @@
 package org.apache.hudi.util
 
 import org.apache.hudi.common.util.collection.ClosableIterator
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.vectorized.ColumnarBatch
 

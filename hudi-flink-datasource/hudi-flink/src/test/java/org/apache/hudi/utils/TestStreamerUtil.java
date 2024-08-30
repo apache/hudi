@@ -20,6 +20,7 @@ package org.apache.hudi.utils;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -62,10 +63,7 @@ public class TestStreamerUtil {
     StreamerUtil.initTableIfNotExists(conf);
 
     // Validate the partition fields & preCombineField in hoodie.properties.
-    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.builder()
-        .setBasePath(tempFile.getAbsolutePath())
-        .setConf(new org.apache.hadoop.conf.Configuration())
-        .build();
+    HoodieTableMetaClient metaClient1 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
     assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
         "Missing partition columns in the hoodie.properties.");
     assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
@@ -76,10 +74,7 @@ public class TestStreamerUtil {
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     FileIOUtils.deleteDirectory(tempFile);
     StreamerUtil.initTableIfNotExists(conf);
-    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
-        .setBasePath(tempFile.getAbsolutePath())
-        .setConf(new org.apache.hadoop.conf.Configuration())
-        .build();
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
     assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
   }

@@ -22,10 +22,11 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteOperationType}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.{DataSourceReadOptions, HoodieCLIUtils, HoodieDataSourceHelpers, HoodieFileIndex}
 
 import org.apache.hadoop.conf.Configuration
@@ -35,6 +36,7 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StringType, StructField,
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.util
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
@@ -443,8 +445,8 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
 
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
-      val instants = metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.iterator().asScala.map(_.getTimestamp).toSeq
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
+      val instants = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.getTimestamp).toSeq
       assert(2 == instants.size)
 
       checkExceptionContain(
@@ -452,14 +454,14 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       )("specific 000000 instants is not exist")
       metaClient.reloadActiveTimeline()
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(2 == metaClient.getActiveTimeline.filterPendingReplaceTimeline.getInstants.size())
+      assert(2 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
       // specific instants will not schedule new cluster plan
       spark.sql(s"call run_clustering(table => '$tableName', instants => '${instants.mkString(",")}')")
       metaClient.reloadActiveTimeline()
       assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline.getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       // test with operator schedule
       checkExceptionContain(
@@ -474,11 +476,11 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       // test with operator execute
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
       metaClient.reloadActiveTimeline()
-      val instants2 = metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.iterator().asScala.map(_.getTimestamp).toSeq
+      val instants2 = metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.iterator().asScala.map(_.getTimestamp).toSeq
       spark.sql(s"call run_clustering(table => '$tableName', instants => '${instants2.mkString(",")}', op => 'execute')")
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline.getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
     }
   }
 
@@ -507,29 +509,29 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate"-> "false"))
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+      assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
       metaClient.reloadActiveTimeline()
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
       metaClient.reloadActiveTimeline()
       assert(1 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       spark.sql(s"call run_clustering(table => '$tableName')")
       metaClient.reloadActiveTimeline()
       assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       spark.sql(s"call run_clustering(table => '$tableName')")
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       checkExceptionContain(s"call run_clustering(table => '$tableName', op => 'null')")("Invalid value")
     }
@@ -578,7 +580,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       // insert records
       writeRecords(fileNum, numRecords, 0, basePath,  metadataOpts ++ Map("hoodie.avro.schema.validate"-> "false"))
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       val avgSize = avgRecord(metaClient.getActiveTimeline)
       val avgCount = Math.ceil(1.0 * numRecords / fileNum).toLong
 
@@ -742,9 +744,9 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
      """.stripMargin)
 
       val conf = new Configuration
-      val metaClient = HoodieTableMetaClient.builder.setConf(conf).setBasePath(basePath).build
+      val metaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(conf), basePath)
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(metaClient.getActiveTimeline.filterPendingReplaceTimeline().empty())
+      assert(metaClient.getActiveTimeline.filterPendingClusteringTimeline().empty())
 
       writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
@@ -754,12 +756,12 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
 
       metaClient.reloadActiveTimeline()
       assert(0 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(2 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(2 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       spark.sql(s"call run_clustering(table => '$tableName', op => 'execute')")
       metaClient.reloadActiveTimeline()
       assert(2 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(0 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(0 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
 
       writeRecords(2, 4, 0, basePath, Map("hoodie.avro.schema.validate" -> "false"))
       spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
@@ -770,7 +772,7 @@ class TestClusteringProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"call run_clustering(table => '$tableName', op => 'execute', limit => 1)")
       metaClient.reloadActiveTimeline()
       assert(3 == metaClient.getActiveTimeline.getCompletedReplaceTimeline.getInstants.size())
-      assert(1 == metaClient.getActiveTimeline.filterPendingReplaceTimeline().getInstants.size())
+      assert(1 == metaClient.getActiveTimeline.filterPendingClusteringTimeline().getInstants.size())
     }
   }
 

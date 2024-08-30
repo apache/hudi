@@ -17,7 +17,7 @@
  */
 
 import org.apache.hudi.QuickstartUtils._
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import org.apache.spark.sql.SaveMode._
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.DataSourceWriteOptions._
@@ -29,7 +29,7 @@ val database = "default"
 val tableName = "trips"
 val basePath = "file:///tmp/hudi-bundles/tests/" + tableName
 val dataGen = new DataGenerator
-val inserts = convertToStringList(dataGen.generateInserts(expected))
+val inserts = convertToStringList(dataGen.generateInserts(expected)).asScala.toSeq
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).

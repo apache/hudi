@@ -125,6 +125,8 @@
                                     <include>io.prometheus:simpleclient_dropwizard</include>
                                     <include>io.prometheus:simpleclient_pushgateway</include>
                                     <include>io.prometheus:simpleclient_common</include>
+                                    <include>com.uber.m3:tally-m3</include>
+                                    <include>com.uber.m3:tally-core</include>
                                     <include>com.google.protobuf:protobuf-java</include>
 
                                     <include>org.scala-lang:*</include>
@@ -182,6 +184,10 @@
                                     <pattern>com.fasterxml.jackson.</pattern>
                                     <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                                 </relocation>
+                                <relocation>
+                                    <pattern>com.uber.m3.</pattern>
+                                    <shadedPattern>org.apache.hudi.com.uber.m3.</shadedPattern>
+                                </relocation>
                             </relocations>
                             <filters>
                                 <filter>
@@ -205,9 +211,6 @@
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
-            </resource>
-            <resource>
-                <directory>src/test/resources</directory>
             </resource>
         </resources>
     </build>

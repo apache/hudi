@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Test cases for timeline based checkpoint metadata.
  */
-public class TestWriteWithTimelineBasedCkpMetadata extends TestWriteCopyOnWrite {
+public class TestWriteWithTimelineBasedCkpMetadata extends TestWriteBase {
 
   @Override
   protected void setUp(Configuration conf) {
@@ -59,5 +60,4 @@ public class TestWriteWithTimelineBasedCkpMetadata extends TestWriteCopyOnWrite 
         .checkWrittenDataCOW(EXPECTED5)
         .end();
   }
-
 }

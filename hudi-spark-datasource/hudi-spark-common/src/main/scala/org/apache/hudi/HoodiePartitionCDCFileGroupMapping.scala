@@ -19,7 +19,6 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.model.HoodieFileGroupId
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.spark.sql.catalyst.InternalRow
 

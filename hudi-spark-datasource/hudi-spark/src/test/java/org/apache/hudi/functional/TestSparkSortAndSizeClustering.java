@@ -39,6 +39,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -67,11 +68,11 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     initPath();
     initSparkContexts();
     initTestDataGenerator();
-    initFileSystem();
+    initHoodieStorage();
     Properties props = getPropertiesForKeyGen(true);
     props.putAll(options);
     props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
-    metaClient = HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
+    metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, props);
     config = getConfigBuilder().withProps(props)
         .withAutoCommit(false)
         .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(maxFileSize).build())
@@ -111,7 +112,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
     String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
-        metaClient, HoodieTimeline.getReplaceCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
+        metaClient, HoodieTimeline.getClusteringCommitRequestedInstant(clusteringTime)).map(Pair::getRight).get();
 
     List<HoodieClusteringGroup> inputGroups = plan.getInputGroups();
     Assertions.assertEquals(1, inputGroups.size(), "Clustering plan will contain 1 input group");

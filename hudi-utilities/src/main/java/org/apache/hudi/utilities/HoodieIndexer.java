@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -240,7 +241,8 @@ public class HoodieIndexer {
     if (indexExists(partitionTypes)) {
       return Option.empty();
     }
-    Option<String> indexingInstant = client.scheduleIndexing(partitionTypes);
+
+    Option<String> indexingInstant = client.scheduleIndexing(partitionTypes, Collections.emptyList());
     if (!indexingInstant.isPresent()) {
       LOG.error("Scheduling of index action did not return any instant.");
     }

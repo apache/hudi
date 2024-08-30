@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -32,6 +31,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -227,7 +227,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   private List<FileStatus> listStatusForSnapshotMode(JobConf job,
                                                      Map<String, HoodieTableMetaClient> tableMetaClientMap,
                                                      List<Path> snapshotPaths) {
-    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(job);
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf(job));
     List<FileStatus> targetFiles = new ArrayList<>();
 
     TypedProperties props = new TypedProperties(new Properties());
@@ -254,7 +254,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
                 tableMetaClient,
                 props,
                 HoodieTableQueryType.SNAPSHOT,
-                partitionPaths,
+                partitionPaths.stream().map(HadoopFSUtils::convertToStoragePath).collect(Collectors.toList()),
                 queryCommitInstant,
                 shouldIncludePendingCommits);
 
@@ -273,7 +273,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
         // If hoodie.metadata.enabled is set to false and the table doesn't have the metadata,
         // read the table using fs view cache instead of file index.
         // This is because there's no file index in non-metadata table.
-        String basePath = tableMetaClient.getBasePathV2().toString();
+        String basePath = tableMetaClient.getBasePath().toString();
         Map<HoodieTableMetaClient, HoodieTableFileSystemView> fsViewCache = new HashMap<>();
         HoodieTimeline timeline = getActiveTimeline(tableMetaClient, shouldIncludePendingCommits);
         Option<String> queryInstant = queryCommitInstant.or(() -> timeline.lastInstant().map(HoodieInstant::getTimestamp));
@@ -287,7 +287,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
           List<FileSlice> filteredFileSlices = new ArrayList<>();
 
           for (Path p : entry.getValue()) {
-            String relativePartitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), p);
+            String relativePartitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), p);
 
             List<FileSlice> fileSlices = queryInstant.map(
                 instant -> fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, instant))

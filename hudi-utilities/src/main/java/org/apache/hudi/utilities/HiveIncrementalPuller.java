@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
@@ -280,7 +281,8 @@ public class HiveIncrementalPuller {
     if (!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
       return "0";
     }
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(targetDataPath).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(targetDataPath).build();
 
     Option<HoodieInstant> lastCommit =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
@@ -313,7 +315,9 @@ public class HiveIncrementalPuller {
   }
 
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(sourceTableLocation).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
+        .setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
         .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
@@ -321,7 +325,7 @@ public class HiveIncrementalPuller {
       LOG.warn(
           "Nothing to sync. All commits in "
               + config.sourceTable + " are " + metadata.getActiveTimeline().getCommitsTimeline()
-                  .filterCompletedInstants().getInstants()
+              .filterCompletedInstants().getInstants()
               + " and from commit time is " + config.fromCommitTime);
       return null;
     }

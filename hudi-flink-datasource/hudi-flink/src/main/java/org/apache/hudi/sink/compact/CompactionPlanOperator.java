@@ -42,7 +42,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static java.util.stream.Collectors.toList;
 
@@ -146,8 +148,18 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       WriteMarkersFactory
           .get(table.getConfig().getMarkersType(), table, compactionInstantTime)
           .deleteMarkerDir(table.getContext(), table.getConfig().getMarkersDeleteParallelism());
+      Map<String, Integer> fileIdIndexMap = new HashMap<>();
+      int index = 0;
       for (CompactionOperation operation : operations) {
-        output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
+        int operationIndex;
+        if (fileIdIndexMap.containsKey(operation.getFileId())) {
+          operationIndex = fileIdIndexMap.get(operation.getFileId());
+        } else {
+          operationIndex = index;
+          fileIdIndexMap.put(operation.getFileId(), operationIndex);
+          index++;
+        }
+        output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation, operationIndex)));
       }
     }
   }

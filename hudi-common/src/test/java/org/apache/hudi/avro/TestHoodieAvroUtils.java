@@ -60,6 +60,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -628,5 +629,36 @@ public class TestHoodieAvroUtils {
     // validate properties are properly copied over
     assertEquals("custom_schema_property_value", schemaWithMetadata.getProp("custom_schema_property"));
     assertEquals("value", originalFieldsInUpdatedSchema.get(0).getProp("custom_field_property"));
+  }
+
+  @Test
+  void testSafeAvroToJsonStringMissingRequiredField() {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    record.put("timestamp", 3.5);
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
+    assertEquals("{\"timestamp\": 3.5, \"_row_key\": null, \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
+  }
+
+  @Test
+  void testSafeAvroToJsonStringBadDataType() {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("_row_key", "key");
+    record.put("pii_col", "val2");
+    record.put("timestamp", "foo");
+    String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
+    assertEquals("{\"timestamp\": \"foo\", \"_row_key\": \"key\", \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
+  }
+
+  @Test
+  void testCreateFullName() {
+    String result = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")));
+    String resultSingle = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")));
+    assertEquals("c.b.a", result);
+    assertEquals("a", resultSingle);
   }
 }

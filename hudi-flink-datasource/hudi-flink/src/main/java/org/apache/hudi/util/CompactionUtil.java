@@ -131,7 +131,7 @@ public class CompactionUtil {
    */
   public static void inferMetadataConf(Configuration conf, HoodieTableMetaClient metaClient) {
     String path = HoodieTableMetadata.getMetadataTableBasePath(conf.getString(FlinkOptions.PATH));
-    if (!StreamerUtil.tableExists(path, metaClient.getHadoopConf())) {
+    if (!StreamerUtil.tableExists(path, (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap())) {
       conf.setBoolean(FlinkOptions.METADATA_ENABLED, false);
     }
   }

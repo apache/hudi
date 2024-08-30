@@ -42,7 +42,7 @@ public class BootstrapBaseFileMapping implements Serializable {
   }
 
   public BaseFile getBootstrapBaseFile() {
-    return new BaseFile(FileStatusUtils.toFileStatus(bootstrapFileStatus));
+    return new BaseFile(FileStatusUtils.toStoragePathInfo(bootstrapFileStatus));
   }
 
   @Override

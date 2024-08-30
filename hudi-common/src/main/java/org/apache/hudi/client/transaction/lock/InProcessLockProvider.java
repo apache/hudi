@@ -26,8 +26,8 @@ import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.lock.LockState;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +55,7 @@ public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLoc
   private final String basePath;
   private final long maxWaitTimeMillis;
 
-  public InProcessLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public InProcessLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     TypedProperties typedProperties = lockConfiguration.getConfig();
     basePath = lockConfiguration.getConfig().getProperty(HoodieCommonConfig.BASE_PATH.key());
     ValidationUtils.checkArgument(basePath != null);

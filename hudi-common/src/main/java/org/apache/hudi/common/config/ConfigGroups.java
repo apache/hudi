@@ -30,6 +30,7 @@ public class ConfigGroups {
    * {@link ConfigGroups#getDescription}.
    */
   public enum Names {
+    TABLE_CONFIG("Hudi Table Config"),
     ENVIRONMENT_CONFIG("Environment Config"),
     SPARK_DATASOURCE("Spark Datasource Configs"),
     FLINK_SQL("Flink Sql Configs"),
@@ -40,8 +41,7 @@ public class ConfigGroups {
     RECORD_PAYLOAD("Record Payload Config"),
     KAFKA_CONNECT("Kafka Connect Configs"),
     AWS("Amazon Web Services Configs"),
-    HUDI_STREAMER("Hudi Streamer Configs"),
-    INDEXING("Indexing Configs");
+    HUDI_STREAMER("Hudi Streamer Configs");
 
     public final String name;
 
@@ -77,10 +77,7 @@ public class ConfigGroups {
         "Configurations controlling the behavior of reading source data."),
     NONE(
         "None",
-        "No subgroup. This description should be hidden."),
-    FUNCTIONAL_INDEX(
-        "Functional Index Configs",
-        "Configurations controlling the behavior of functional index.");
+        "No subgroup. This description should be hidden.");
 
     public final String name;
     private final String description;
@@ -98,9 +95,12 @@ public class ConfigGroups {
   public static String getDescription(Names names) {
     String description;
     switch (names) {
+      case TABLE_CONFIG:
+        description = "Basic Hudi Table configuration parameters.";
+        break;
       case ENVIRONMENT_CONFIG:
         description = "Hudi supports passing configurations via a configuration file "
-            + "`hudi-default.conf` in which each line consists of a key and a value "
+            + "`hudi-defaults.conf` in which each line consists of a key and a value "
             + "separated by whitespace or = sign. For example:\n"
             + "```\n"
             + "hoodie.datasource.hive_sync.mode               jdbc\n"

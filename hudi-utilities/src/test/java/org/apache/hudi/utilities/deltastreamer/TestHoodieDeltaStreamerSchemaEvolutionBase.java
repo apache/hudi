@@ -136,7 +136,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   @AfterAll
   static void teardownAll() {
     defaultSchemaProviderClassName = FilebasedSchemaProvider.class.getName();
-    HoodieDeltaStreamerTestBase.cleanupKafkaTestUtils();
   }
 
   protected HoodieStreamer deltaStreamer;
@@ -157,10 +156,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
                                                               TypedProperties extraProps) throws IOException {
-    extraProps.setProperty(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     extraProps.setProperty("hoodie.datasource.write.table.type", tableType);
     extraProps.setProperty("hoodie.datasource.write.row.writer.enable", rowWriterEnable.toString());
-    extraProps.setProperty(DataSourceWriteOptions.HANDLE_MISSING_COLUMNS_WITH_LOSSLESS_TYPE_PROMOTIONS().key(), Boolean.toString(nullForDeletedCols));
+    extraProps.setProperty(DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS().key(), Boolean.toString(nullForDeletedCols));
 
     //we set to 0 so that we create new base files on insert instead of adding inserts to existing filegroups via small file handling
     extraProps.setProperty("hoodie.parquet.small.file.limit", "0");
@@ -207,7 +205,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           transformerClassNames, PROPS_FILENAME_TEST_AVRO_KAFKA, false,  useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
     } else {
       prepareParquetDFSSource(false, hasTransformer, sourceSchemaFile, targetSchemaFile, PROPS_FILENAME_TEST_PARQUET,
-          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps);
+          PARQUET_SOURCE_ROOT, false, "partition_path", "", extraProps, false);
       cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
           transformerClassNames, PROPS_FILENAME_TEST_PARQUET, false,
           useSchemaProvider, 100000, false, null, tableType, "timestamp", null);
@@ -334,9 +332,10 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static List<JavaRDD> errorEvents = new ArrayList<>();
     public static Map<String,Option<JavaRDD>> commited = new HashMap<>();
+
     public TestErrorTable(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
-                          FileSystem fs) {
-      super(cfg, sparkSession, props, hoodieSparkContext, fs);
+                          FileSystem fileSystem) {
+      super(cfg, sparkSession, props, hoodieSparkContext, fileSystem);
     }
 
     @Override

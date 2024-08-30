@@ -12,7 +12,7 @@ _If medium or high, explain what verification was done to mitigate the risks._
 
 ### Documentation Update
 
-_Describe any necessary documentation update if there is any new feature, config, or user-facing change_
+_Describe any necessary documentation update if there is any new feature, config, or user-facing change. If not, put "none"._
 
 - _The config description must be updated if new configs are added or the default value of the configs are changed_
 - _Any new feature or user-facing change requires updating the Hudi website. Please create a Jira ticket, attach the

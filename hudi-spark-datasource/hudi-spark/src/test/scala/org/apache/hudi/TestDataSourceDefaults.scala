@@ -17,18 +17,19 @@
 
 package org.apache.hudi
 
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.testutils.{SchemaTestUtil, PreCombineTestUtils}
+import org.apache.hudi.common.testutils.{PreCombineTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities
+
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.StructType
@@ -262,7 +263,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
 
     // Record's key field not specified
-    assertThrows(classOf[StringIndexOutOfBoundsException]) {
+    assertThrows(classOf[HoodieKeyException]) {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
       val keyGen = new ComplexKeyGenerator(props)
@@ -494,7 +495,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       val props = new TypedProperties()
       props.setProperty(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partitionField")
 
-      assertThrows(classOf[StringIndexOutOfBoundsException]) {
+      assertThrows(classOf[HoodieKeyException]) {
         new GlobalDeleteKeyGenerator(props).getRecordKey(baseRecord)
       }
     }

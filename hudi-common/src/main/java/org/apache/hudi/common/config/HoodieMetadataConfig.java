@@ -330,6 +330,46 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating functional index.");
 
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.enable")
+      .defaultValue(true)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable aggregating stats for each column at the storage partition level.");
+
+  public static final ConfigProperty<Integer> METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.file.group.count")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Metadata partition stats file group count. This controls the size of the base and "
+          + "log files and read parallelism in the partition stats index.");
+
+  public static final ConfigProperty<Integer> PARTITION_STATS_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating partition stats index.");
+
+  public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable secondary index within the Metadata Table.");
+
+  public static final ConfigProperty<String> SECONDARY_INDEX_COLUMN = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.column")
+      .noDefaultValue()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Column for which secondary index will be enabled within the Metadata Table.");
+
+  public static final ConfigProperty<Integer> SECONDARY_INDEX_PARALLELISM = ConfigProperty
+      .key(METADATA_PREFIX + ".index.secondary.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Parallelism to use, when generating secondary index.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -346,7 +386,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return Math.max(getInt(HoodieMetadataConfig.FILE_LISTING_PARALLELISM_VALUE), 1);
   }
 
-  public boolean enabled() {
+  public boolean isEnabled() {
     return getBoolean(ENABLE);
   }
 
@@ -359,7 +399,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isRecordIndexEnabled() {
-    return getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
+    return isEnabled() && getBooleanOrDefault(RECORD_INDEX_ENABLE_PROP);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -398,7 +438,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(METADATA_INDEX_CHECK_TIMEOUT_SECONDS);
   }
 
-  public boolean enableMetrics() {
+  public boolean isMetricsEnabled() {
     return getBoolean(METRICS_ENABLE);
   }
 
@@ -406,20 +446,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getString(DIR_FILTER_REGEX);
   }
 
-  public boolean ignoreSpuriousDeletes() {
+  public boolean shouldIgnoreSpuriousDeletes() {
     return getBoolean(IGNORE_SPURIOUS_DELETES);
   }
 
-  public boolean doEnableOptimizedLogBlocksScan() {
+  public boolean isOptimizedLogBlocksScanEnabled() {
     return getBoolean(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
   }
 
   public int getMaxNumDeltacommitsWhenPending() {
     return getIntOrDefault(METADATA_MAX_NUM_DELTACOMMITS_WHEN_PENDING);
-  }
-
-  public boolean enableRecordIndex() {
-    return enabled() && getBoolean(RECORD_INDEX_ENABLE_PROP);
   }
 
   public int getRecordIndexMinFileGroupCount() {
@@ -464,6 +500,31 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getFunctionalIndexParallelism() {
     return getInt(FUNCTIONAL_INDEX_PARALLELISM);
+  }
+
+  public boolean isPartitionStatsIndexEnabled() {
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
+  }
+
+  public int getPartitionStatsIndexFileGroupCount() {
+    return getInt(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT);
+  }
+
+  public int getPartitionStatsIndexParallelism() {
+    return getInt(PARTITION_STATS_INDEX_PARALLELISM);
+  }
+
+  public boolean isSecondaryIndexEnabled() {
+    // Secondary index is enabled only iff record index (primary key index) is also enabled
+    return isRecordIndexEnabled() && getBoolean(SECONDARY_INDEX_ENABLE_PROP);
+  }
+
+  public String getSecondaryIndexColumn() {
+    return getString(SECONDARY_INDEX_COLUMN);
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return getInt(SECONDARY_INDEX_PARALLELISM);
   }
 
   public static class Builder {
@@ -646,6 +707,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withFunctionalIndexParallelism(int parallelism) {
       metadataConfig.setValue(FUNCTIONAL_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStatsFileGroupCount(int fileGroupCount) {
+      metadataConfig.setValue(METADATA_INDEX_PARTITION_STATS_FILE_GROUP_COUNT, String.valueOf(fileGroupCount));
+      return this;
+    }
+
+    public Builder withPartitionStatsIndexParallelism(int parallelism) {
+      metadataConfig.setValue(PARTITION_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
       return this;
     }
 

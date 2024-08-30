@@ -34,8 +34,12 @@ import java.util.Map;
 
 public interface HoodieFileGroupRecordBuffer<T> {
   enum BufferType {
-    KEY_BASED,
-    POSITION_BASED
+    // Merging based on record key.
+    KEY_BASED_MERGE,
+    // Merging based on record position.
+    POSITION_BASED_MERGE,
+    // No Merging at all.
+    UNMERGED
   }
 
   /**

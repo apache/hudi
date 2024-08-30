@@ -23,13 +23,13 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -37,7 +37,6 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -48,24 +47,19 @@ import java.util.Map;
  * {@link #hasNext} method is called.
  */
 public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
+
   public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                             Schema readerSchema,
-                                             Schema baseFileSchema,
+                                             HoodieTableMetaClient hoodieTableMetaClient,
                                              Option<String> partitionNameOverrideOpt,
                                              Option<String[]> partitionPathFieldOpt,
                                              HoodieRecordMerger recordMerger,
-                                             TypedProperties payloadProps,
-                                             long maxMemorySizeInBytes,
-                                             String spillableMapBasePath,
-                                             ExternalSpillableMap.DiskMapType diskMapType,
-                                             boolean isBitCaskDiskMapCompressionEnabled) {
-    super(readerContext, readerSchema, baseFileSchema, partitionNameOverrideOpt, partitionPathFieldOpt,
-        recordMerger, payloadProps, maxMemorySizeInBytes, spillableMapBasePath, diskMapType, isBitCaskDiskMapCompressionEnabled);
+                                             TypedProperties props) {
+    super(readerContext, hoodieTableMetaClient, partitionNameOverrideOpt, partitionPathFieldOpt, recordMerger, props);
   }
 
   @Override
   public BufferType getBufferType() {
-    return BufferType.KEY_BASED;
+    return BufferType.KEY_BASED_MERGE;
   }
 
   @Override
@@ -102,7 +96,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   }
 
   @Override
-  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
+  public void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException {
     Iterator<DeleteRecord> it = Arrays.stream(deleteBlock.getRecordsToDelete()).iterator();
     while (it.hasNext()) {
       DeleteRecord record = it.next();
@@ -126,43 +120,24 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     return records.containsKey(recordKey);
   }
 
+  protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
+    String recordKey = readerContext.getRecordKey(baseRecord, readerSchema);
+    Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
+    return hasNextBaseRecord(baseRecord, logRecordInfo);
+  }
+
   @Override
   protected boolean doHasNext() throws IOException {
     ValidationUtils.checkState(baseFileIterator != null, "Base file iterator has not been set yet");
 
     // Handle merging.
     while (baseFileIterator.hasNext()) {
-      T baseRecord = baseFileIterator.next();
-
-      String recordKey = readerContext.getRecordKey(baseRecord, baseFileSchema);
-      Pair<Option<T>, Map<String, Object>> logRecordInfo = records.remove(recordKey);
-      Map<String, Object> metadata = readerContext.generateMetadataForRecord(
-          baseRecord, baseFileSchema);
-
-      Option<T> resultRecord = logRecordInfo != null
-          ? merge(Option.of(baseRecord), metadata, logRecordInfo.getLeft(), logRecordInfo.getRight())
-          : merge(Option.empty(), Collections.emptyMap(), Option.of(baseRecord), metadata);
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
+      if (hasNextBaseRecord(baseFileIterator.next())) {
         return true;
       }
     }
 
     // Handle records solely from log files.
-    if (logRecordIterator == null) {
-      logRecordIterator = records.values().iterator();
-    }
-
-    while (logRecordIterator.hasNext()) {
-      Pair<Option<T>, Map<String, Object>> nextRecordInfo = logRecordIterator.next();
-      Option<T> resultRecord;
-      resultRecord = merge(Option.empty(), Collections.emptyMap(),
-          nextRecordInfo.getLeft(), nextRecordInfo.getRight());
-      if (resultRecord.isPresent()) {
-        nextRecord = readerContext.seal(resultRecord.get());
-        return true;
-      }
-    }
-    return false;
+    return hasNextLogRecord();
   }
 }

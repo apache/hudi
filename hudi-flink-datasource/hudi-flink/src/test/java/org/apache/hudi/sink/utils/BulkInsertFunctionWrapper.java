@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.adapter.TestStreamConfigs;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -72,14 +73,14 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
+  private StreamWriteOperatorCoordinator coordinator;
   private final boolean needSortInput;
 
   private BulkInsertWriteFunction<RowData> writeFunction;
   private MapFunction<RowData, RowData> mapFunction;
   private Map<String, String> bucketIdToFileId;
   private SortOperator sortOperator;
-  private CollectorOutput<RowData> output;
+  private CollectOutputAdapter<RowData> output;
 
   public BulkInsertFunctionWrapper(String tablePath, Configuration conf) throws Exception {
     ioManager = new IOManagerAsync();
@@ -160,6 +161,13 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
 
+  public void restartCoordinator() throws Exception {
+    this.coordinator.close();
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
   public void checkpointFails(long checkpointId) {
     coordinator.notifyCheckpointAborted(checkpointId);
   }
@@ -220,7 +228,7 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     SortOperatorGen sortOperatorGen = BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId);
     this.sortOperator = (SortOperator) sortOperatorGen.createSortOperator(conf);
     this.sortOperator.setProcessingTimeService(new TestProcessingTimeService());
-    this.output = new CollectorOutput<>();
+    this.output = new CollectOutputAdapter<>();
     StreamConfig streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
     RowDataSerializer inputSerializer = new RowDataSerializer(rowTypeWithFileId);

@@ -82,7 +82,7 @@ public class TestCompactionUtil {
     this.metaClient = table.getMetaClient();
     // initialize the metadata table path
     if (conf.getBoolean(FlinkOptions.METADATA_ENABLED)) {
-      FlinkHoodieBackedTableMetadataWriter.create(table.getHadoopConf(), table.getConfig(),
+      FlinkHoodieBackedTableMetadataWriter.create(table.getStorageConf(), table.getConfig(),
           table.getContext(), Option.empty());
     }
   }
@@ -132,6 +132,7 @@ public class TestCompactionUtil {
   void testScheduleCompaction() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
+    options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_TRIGGER_STRATEGY.key(), FlinkOptions.TIME_ELAPSED);
     options.put(FlinkOptions.COMPACTION_DELTA_SECONDS.key(), "0");
     beforeEach(options);

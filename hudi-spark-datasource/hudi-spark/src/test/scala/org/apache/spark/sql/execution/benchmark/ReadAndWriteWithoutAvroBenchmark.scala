@@ -18,13 +18,12 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hadoop.fs.Path
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
-import org.apache.hudi.config.HoodieCompactionConfig
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 import org.apache.spark.sql.functions._
@@ -55,7 +54,7 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }

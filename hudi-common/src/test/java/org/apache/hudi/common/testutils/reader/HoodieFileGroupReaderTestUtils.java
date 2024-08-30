@@ -19,18 +19,19 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 
 public class HoodieFileGroupReaderTestUtils {
   public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
@@ -42,30 +43,28 @@ public class HoodieFileGroupReaderTestUtils {
       long start,
       long length,
       TypedProperties properties,
-      Configuration hadoopConf,
-      HoodieTableConfig tableConfig,
-      HoodieReaderContext<IndexedRecord> readerContext
+      HoodieStorage storage,
+      HoodieReaderContext<IndexedRecord> readerContext,
+      HoodieTableMetaClient metaClient
   ) {
     assert (fileSliceOpt.isPresent());
     return new HoodieFileGroupReaderBuilder()
         .withReaderContext(readerContext)
-        .withHadoopConf(hadoopConf)
+        .withStorage(storage)
         .withFileSlice(fileSliceOpt.get())
         .withStart(start)
         .withLength(length)
         .withProperties(properties)
-        .withTableConfig(tableConfig)
-        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition);
+        .build(basePath, latestCommitTime, schema, shouldUseRecordPosition, metaClient);
   }
 
   public static class HoodieFileGroupReaderBuilder {
     private HoodieReaderContext<IndexedRecord> readerContext;
     private FileSlice fileSlice;
-    private Configuration hadoopConf;
+    private HoodieStorage storage;
     private TypedProperties props;
     private long start;
     private long length;
-    private HoodieTableConfig tableConfig;
 
     public HoodieFileGroupReaderBuilder withReaderContext(
         HoodieReaderContext<IndexedRecord> context) {
@@ -78,8 +77,8 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReaderBuilder withHadoopConf(Configuration hadoopConf) {
-      this.hadoopConf = hadoopConf;
+    public HoodieFileGroupReaderBuilder withStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
@@ -98,36 +97,31 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReaderBuilder withTableConfig(
-        HoodieTableConfig tableConfig
-    ) {
-      this.tableConfig = tableConfig;
-      return this;
-    }
-
     public HoodieFileGroupReader<IndexedRecord> build(
         String basePath,
         String latestCommitTime,
         Schema schema,
-        boolean shouldUseRecordPosition
+        boolean shouldUseRecordPosition,
+        HoodieTableMetaClient metaClient
     ) {
+      props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(1024 * 1024 * 1000));
+      props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
+      props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
+      props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
       return new HoodieFileGroupReader<>(
           readerContext,
-          hadoopConf,
+          storage,
           basePath,
           latestCommitTime,
           fileSlice,
           schema,
           schema,
+          Option.empty(),
+          metaClient,
           props,
-          tableConfig,
           start,
           length,
-          shouldUseRecordPosition,
-          1024 * 1024 * 1000,
-          basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME,
-          ExternalSpillableMap.DiskMapType.ROCKS_DB,
-          false);
+          shouldUseRecordPosition);
     }
   }
 }

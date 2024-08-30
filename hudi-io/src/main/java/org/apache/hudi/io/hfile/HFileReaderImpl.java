@@ -20,8 +20,8 @@
 package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.io.SeekableDataInputStream;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.logging.log4j.util.Strings;
 
 import java.io.ByteArrayInputStream;
@@ -38,7 +38,7 @@ import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
  * An implementation a {@link HFileReader}.
  */
 public class HFileReaderImpl implements HFileReader {
-  private final FSDataInputStream stream;
+  private final SeekableDataInputStream stream;
   private final long fileSize;
 
   private final HFileCursor cursor;
@@ -51,7 +51,7 @@ public class HFileReaderImpl implements HFileReader {
   private Option<BlockIndexEntry> currentDataBlockEntry;
   private Option<HFileDataBlock> currentDataBlock;
 
-  public HFileReaderImpl(FSDataInputStream stream, long fileSize) {
+  public HFileReaderImpl(SeekableDataInputStream stream, long fileSize) {
     this.stream = stream;
     this.fileSize = fileSize;
     this.cursor = new HFileCursor();
@@ -255,7 +255,7 @@ public class HFileReaderImpl implements HFileReader {
    * @return {@link HFileTrailer} instance.
    * @throws IOException upon error.
    */
-  private static HFileTrailer readTrailer(FSDataInputStream stream,
+  private static HFileTrailer readTrailer(SeekableDataInputStream stream,
                                           long fileSize) throws IOException {
     int bufferSize = HFileTrailer.getTrailerSize();
     long seekPos = fileSize - bufferSize;

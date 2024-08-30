@@ -20,6 +20,7 @@ package org.apache.hudi.aws.credentials;
 
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieAWSConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -41,9 +42,12 @@ public class HoodieConfigAWSAssumedRoleCredentialsProvider implements AwsCredent
 
   public HoodieConfigAWSAssumedRoleCredentialsProvider(Properties props) {
     String roleArn = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_ARN.key());
+    String externalId = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_EXTERNAL_ID.key());
+    String sessionName = props.getProperty(HoodieAWSConfig.AWS_ASSUME_ROLE_SESSION_NAME.key());
     AssumeRoleRequest req = AssumeRoleRequest.builder()
           .roleArn(roleArn)
-          .roleSessionName("hoodie")
+          .roleSessionName(sessionName)
+          .externalId(externalId)
           .build();
     StsClient stsClient = StsClient.builder().build();
 

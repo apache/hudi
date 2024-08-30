@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,7 +54,7 @@ public class ITTestMarkersCommand extends HoodieCLIIntegrationTestBase {
   @BeforeEach
   public void init() throws IOException {
     String tableName = "test_table";
-    tablePath = basePath + HoodieLocation.SEPARATOR + tableName;
+    tablePath = basePath + StoragePath.SEPARATOR + tableName;
 
     // Create table and connect
     new TableCommand().createTable(

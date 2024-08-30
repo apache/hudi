@@ -20,6 +20,7 @@ package org.apache.hudi.keygen.factory;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
@@ -31,8 +32,6 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 
 import org.junit.jupiter.api.Test;
-
-import java.io.IOException;
 
 import static org.apache.hudi.config.HoodieWriteConfig.KEYGENERATOR_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,7 +66,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
   }
 
   @Test
-  public void testKeyGeneratorFactory() throws IOException {
+  public void testKeyGeneratorFactory() {
     TypedProperties props = getCommonProps();
 
     // set KeyGenerator type only
@@ -91,7 +90,7 @@ public class TestHoodieSparkKeyGeneratorFactory {
     // set wrong class name
     final TypedProperties props2 = getCommonProps();
     props2.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), TestHoodieSparkKeyGeneratorFactory.class.getName());
-    assertThrows(IOException.class, () -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(props2));
+    assertThrows(HoodieException.class, () -> HoodieSparkKeyGeneratorFactory.createKeyGenerator(props2));
 
     // set wrong keyGenerator type
     final TypedProperties props3 = getCommonProps();

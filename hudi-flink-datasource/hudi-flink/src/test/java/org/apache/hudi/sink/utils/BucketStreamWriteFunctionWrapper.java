@@ -169,6 +169,17 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
+  @Override
+  public void inlineCompaction() {
+    if (asyncCompaction) {
+      try {
+        compactFunctionWrapper.compact(1); // always uses a constant checkpoint ID.
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    }
+  }
+
   public void close() throws Exception {
     coordinator.close();
     ioManager.close();

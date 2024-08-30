@@ -21,10 +21,8 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.io.ByteBufferBackedInputStream;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.PositionedReadable;
-import org.apache.hadoop.fs.Seekable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -439,7 +437,7 @@ public class TestHFileReader {
   public static HFileReader getHFileReader(String filename) throws IOException {
     byte[] content = readHFileFromResources(filename);
     return new HFileReaderImpl(
-        new FSDataInputStream(new SeekableByteArrayInputStream(content)), content.length);
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(content)), content.length);
   }
 
   private static void verifyHFileRead(String filename,
@@ -602,38 +600,6 @@ public class TestHFileReader {
 
     public String getExpectedValue() {
       return expectedValue;
-    }
-  }
-
-  static class SeekableByteArrayInputStream extends ByteBufferBackedInputStream implements Seekable,
-      PositionedReadable {
-    public SeekableByteArrayInputStream(byte[] buf) {
-      super(buf);
-    }
-
-    @Override
-    public long getPos() throws IOException {
-      return getPosition();
-    }
-
-    @Override
-    public boolean seekToNewSource(long targetPos) throws IOException {
-      return false;
-    }
-
-    @Override
-    public int read(long position, byte[] buffer, int offset, int length) throws IOException {
-      return copyFrom(position, buffer, offset, length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer) throws IOException {
-      read(position, buffer, 0, buffer.length);
-    }
-
-    @Override
-    public void readFully(long position, byte[] buffer, int offset, int length) throws IOException {
-      read(position, buffer, offset, length);
     }
   }
 }

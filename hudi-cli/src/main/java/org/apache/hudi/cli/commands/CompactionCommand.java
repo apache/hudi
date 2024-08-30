@@ -42,11 +42,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.compact.OperationResult;
 import org.apache.hudi.utilities.UtilHelpers;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.slf4j.Logger;
@@ -70,6 +70,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.cli.utils.CommitUtil.getTimeDaysAgo;
+import static org.apache.hudi.util.JavaScalaConverters.convertJavaPropertiesToScalaMap;
 
 /**
  * CLI command to display compaction related options.
@@ -204,10 +205,10 @@ public class CompactionCommand {
     String compactionInstantTime = client.createNewInstantTime();
 
     String sparkPropertiesPath =
-        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+        Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String cmd = SparkCommand.COMPACT_SCHEDULE.toString();
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, client.getBasePath(),
+    sparkLauncher.addAppArgs(cmd, master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), compactionInstantTime, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();
@@ -253,9 +254,9 @@ public class CompactionCommand {
       compactionInstantTime = firstPendingInstant.get();
     }
     String sparkPropertiesPath =
-        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+        Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), master, sparkMemory, client.getBasePath(),
+    sparkLauncher.addAppArgs(SparkCommand.COMPACT_RUN.toString(), master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), compactionInstantTime, parallelism, schemaFilePath,
         retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
@@ -288,9 +289,9 @@ public class CompactionCommand {
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
     String sparkPropertiesPath =
-        Utils.getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+        Utils.getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory, client.getBasePath(),
+    sparkLauncher.addAppArgs(SparkCommand.COMPACT_SCHEDULE_AND_EXECUTE.toString(), master, sparkMemory, HoodieCLI.basePath,
         client.getTableConfig().getTableName(), parallelism, schemaFilePath,
         retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
@@ -320,7 +321,7 @@ public class CompactionCommand {
         .filter(pair -> pair.getRight() != null)
         .collect(Collectors.toList());
 
-    Set<String> committedInstants = timeline.getCommitTimeline().filterCompletedInstants()
+    Set<String> committedInstants = timeline.getCommitAndReplaceTimeline().filterCompletedInstants()
         .getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
 
     List<Comparable[]> rows = new ArrayList<>();
@@ -432,9 +433,9 @@ public class CompactionCommand {
     return TMP_DIR + UUID.randomUUID().toString() + ".ser";
   }
 
-  private <T> T deSerializeOperationResult(String inputP, FileSystem fs) throws Exception {
-    Path inputPath = new Path(inputP);
-    InputStream inputStream = fs.open(inputPath);
+  private <T> T deSerializeOperationResult(StoragePath inputPath,
+                                           HoodieStorage storage) throws Exception {
+    InputStream inputStream = storage.open(inputPath);
     ObjectInputStream in = new ObjectInputStream(inputStream);
     try {
       T result = (T) in.readObject();
@@ -458,18 +459,17 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
-          .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+          .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_VALIDATE.toString(), master, sparkMemory, client.getBasePath(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_VALIDATE.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism);
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
@@ -477,7 +477,7 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to validate compaction for " + compactionInstant;
       }
-      List<ValidationOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<ValidationOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       boolean valid = res.stream().map(OperationResult::isSuccess).reduce(Boolean::logicalAnd).orElse(true);
       String message = "\n\n\t COMPACTION PLAN " + (valid ? "VALID" : "INVALID") + "\n\n";
       List<Comparable[]> rows = new ArrayList<>();
@@ -502,8 +502,8 @@ public class CompactionCommand {
           headerOnly, rows);
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -523,18 +523,17 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
-          .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+          .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString(), master, sparkMemory, client.getBasePath(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_PLAN.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism, Boolean.valueOf(skipV).toString(),
           Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
@@ -543,13 +542,13 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output =
           getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "unschedule pending compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -568,18 +567,17 @@ public class CompactionCommand {
       @ShellOption(value = {"--desc"}, help = "Ordering", defaultValue = "false") boolean descending,
       @ShellOption(value = {"--headeronly"}, help = "Header Only", defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
-          .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+          .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString(), master, sparkMemory, client.getBasePath(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_UNSCHEDULE_FILE.toString(), master, sparkMemory, HoodieCLI.basePath,
           fileId, partitionPath, outputPathStr, "1", Boolean.valueOf(skipV).toString(),
           Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
@@ -588,13 +586,13 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for file " + fileId;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly,
           "unschedule file from pending compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;
@@ -614,18 +612,17 @@ public class CompactionCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only",
               defaultValue = "false") boolean headerOnly)
       throws Exception {
-    HoodieTableMetaClient client = checkAndGetMetaClient();
     boolean initialized = HoodieCLI.initConf();
     HoodieCLI.initFS(initialized);
 
     String outputPathStr = getTmpSerializerFile();
-    Path outputPath = new Path(outputPathStr);
+    StoragePath outputPath = new StoragePath(outputPathStr);
     String output;
     try {
       String sparkPropertiesPath = Utils
-          .getDefaultPropertiesFile(scala.collection.JavaConversions.propertiesAsScalaMap(System.getProperties()));
+          .getDefaultPropertiesFile(convertJavaPropertiesToScalaMap(System.getProperties()));
       SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-      sparkLauncher.addAppArgs(SparkCommand.COMPACT_REPAIR.toString(), master, sparkMemory, client.getBasePath(),
+      sparkLauncher.addAppArgs(SparkCommand.COMPACT_REPAIR.toString(), master, sparkMemory, HoodieCLI.basePath,
           compactionInstant, outputPathStr, parallelism, Boolean.valueOf(dryRun).toString());
       Process process = sparkLauncher.launch();
       InputStreamConsumer.captureOutput(process);
@@ -633,12 +630,12 @@ public class CompactionCommand {
       if (exitCode != 0) {
         return "Failed to unschedule compaction for " + compactionInstant;
       }
-      List<RenameOpResult> res = deSerializeOperationResult(outputPathStr, HoodieCLI.fs);
+      List<RenameOpResult> res = deSerializeOperationResult(outputPath, HoodieCLI.storage);
       output = getRenamesToBePrinted(res, limit, sortByField, descending, headerOnly, "repair compaction");
     } finally {
       // Delete tmp file used to serialize result
-      if (HoodieCLI.fs.exists(outputPath)) {
-        HoodieCLI.fs.delete(outputPath, false);
+      if (HoodieCLI.storage.exists(outputPath)) {
+        HoodieCLI.storage.deleteFile(outputPath);
       }
     }
     return output;

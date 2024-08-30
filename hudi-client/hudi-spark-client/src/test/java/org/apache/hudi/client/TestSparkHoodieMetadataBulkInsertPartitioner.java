@@ -25,13 +25,9 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkHoodieMetadataBulkInsertPartitioner;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
-
-import scala.Tuple2;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +37,11 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import scala.Tuple2;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkHoodieMetadataBulkInsertPartitioner extends SparkClientFunctionalTestHarness {
   @Test

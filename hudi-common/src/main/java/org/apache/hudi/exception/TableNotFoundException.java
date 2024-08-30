@@ -18,9 +18,9 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -44,12 +44,12 @@ public class TableNotFoundException extends HoodieException {
     return "Hoodie table not found in path " + basePath;
   }
 
-  public static void checkTableValidity(FileSystem fs, Path basePathDir, Path metaPathDir) {
+  public static void checkTableValidity(HoodieStorage storage, StoragePath basePathDir, StoragePath metaPathDir) {
     // Check if the base and meta paths are found
     try {
       // Since metaPath is within the basePath, it is enough to check the metaPath exists
-      FileStatus status = fs.getFileStatus(metaPathDir);
-      if (!status.isDirectory()) {
+      StoragePathInfo pathInfo = storage.getPathInfo(metaPathDir);
+      if (!pathInfo.isDirectory()) {
         throw new TableNotFoundException(metaPathDir.toString());
       }
     } catch (FileNotFoundException | IllegalArgumentException e) {

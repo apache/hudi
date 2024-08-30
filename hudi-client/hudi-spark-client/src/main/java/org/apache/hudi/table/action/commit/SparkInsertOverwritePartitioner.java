@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
@@ -38,8 +39,8 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
   private static final Logger LOG = LoggerFactory.getLogger(SparkInsertOverwritePartitioner.class);
 
   public SparkInsertOverwritePartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
-                                         HoodieWriteConfig config) {
-    super(profile, context, table, config);
+                                         HoodieWriteConfig config, WriteOperationType operationType) {
+    super(profile, context, table, config, operationType);
   }
 
   @Override

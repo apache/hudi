@@ -19,7 +19,6 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -40,6 +39,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -196,7 +196,7 @@ public class HoodieCDCLogger implements Closeable {
         HoodieLogBlock block = new HoodieCDCDataBlock(records, cdcDataBlockHeader, keyField);
         AppendResult result = cdcWriter.appendBlocks(Collections.singletonList(block));
 
-        Path cdcAbsPath = result.logFile().getPath();
+        Path cdcAbsPath = new Path(result.logFile().getPath().toUri());
         if (!cdcAbsPaths.contains(cdcAbsPath)) {
           cdcAbsPaths.add(cdcAbsPath);
         }
@@ -216,7 +216,7 @@ public class HoodieCDCLogger implements Closeable {
       for (Path cdcAbsPath : cdcAbsPaths) {
         String cdcFileName = cdcAbsPath.getName();
         String cdcPath = StringUtils.isNullOrEmpty(partitionPath) ? cdcFileName : partitionPath + "/" + cdcFileName;
-        stats.put(cdcPath, FSUtils.getFileSize(fs, cdcAbsPath));
+        stats.put(cdcPath, HadoopFSUtils.getFileSize(fs, cdcAbsPath));
       }
     } catch (IOException e) {
       throw new HoodieUpsertException("Failed to get cdc write stat", e);

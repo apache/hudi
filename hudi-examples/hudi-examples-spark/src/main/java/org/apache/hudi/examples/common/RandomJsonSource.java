@@ -18,16 +18,18 @@
 
 package org.apache.hudi.examples.common;
 
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JsonSource;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -42,7 +44,8 @@ public class RandomJsonSource extends JsonSource {
     super(props, sparkContext, sparkSession, schemaProvider);
     dataGen = new HoodieExampleDataGenerator<>();
     timeGenerator = TimeGenerators
-        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""), sparkContext.hadoopConfiguration());
+        .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""),
+            HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration()));
   }
 
   protected InputBatch<JavaRDD<String>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {

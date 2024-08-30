@@ -54,7 +54,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  private final HoodieTable<T,I,K,O> hoodieTable;
+  protected final HoodieTable<T,I,K,O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
 

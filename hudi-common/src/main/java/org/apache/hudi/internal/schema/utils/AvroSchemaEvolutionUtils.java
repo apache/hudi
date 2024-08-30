@@ -18,18 +18,22 @@
 
 package org.apache.hudi.internal.schema.utils;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
+import org.apache.hudi.internal.schema.action.TableChangesHelper;
 
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.MAKE_NEW_COLUMNS_NULLABLE;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter.convert;
 
@@ -37,6 +41,8 @@ import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverte
  * Utility methods to support evolve old avro schema based on a given schema.
  */
 public class AvroSchemaEvolutionUtils {
+  private static final Set<String> META_FIELD_NAMES = Arrays.stream(HoodieRecord.HoodieMetadataField.values())
+      .map(HoodieRecord.HoodieMetadataField::getFieldName).collect(Collectors.toSet());
 
   /**
    * Support reconcile from a new avroSchema.
@@ -51,16 +57,18 @@ public class AvroSchemaEvolutionUtils {
    * for example: incoming schema:  int a, int b, int d;   oldTableSchema int a, int b, int c, int d
    * we must guarantee the column c is missing semantic, instead of delete semantic.
    *
-   * @param incomingSchema implicitly evolution of avro when hoodie write operation
-   * @param oldTableSchema old internalSchema
+   * @param incomingSchema            implicitly evolution of avro when hoodie write operation
+   * @param oldTableSchema            old internalSchema
+   * @param makeMissingFieldsNullable if true, fields missing from the incoming schema when compared to the oldTableSchema will become
+   *                                  nullable in the result. Otherwise, no updates will be made to those fields.
    * @return reconcile Schema
    */
-  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema) {
+  public static InternalSchema reconcileSchema(Schema incomingSchema, InternalSchema oldTableSchema, boolean makeMissingFieldsNullable) {
     /* If incoming schema is null, we fall back on table schema. */
     if (incomingSchema.getType() == Schema.Type.NULL) {
       return oldTableSchema;
     }
-    InternalSchema inComingInternalSchema = convert(incomingSchema);
+    InternalSchema inComingInternalSchema = convert(incomingSchema, oldTableSchema.getNameToPosition());
     // check column add/missing
     List<String> colNamesFromIncoming = inComingInternalSchema.getAllColsFullName();
     List<String> colNamesFromOldSchema = oldTableSchema.getAllColsFullName();
@@ -115,11 +123,28 @@ public class AvroSchemaEvolutionUtils {
       typeChange.updateColumnType(col, inComingInternalSchema.findType(col));
     });
 
+    if (makeMissingFieldsNullable) {
+      // mark columns missing from incoming schema as nullable
+      Set<String> visited = new HashSet<>();
+      diffFromOldSchema.stream()
+          // ignore meta fields
+          .filter(col -> !META_FIELD_NAMES.contains(col))
+          .sorted()
+          .forEach(col -> {
+            // if parent is marked as nullable, only update the parent and not all the missing children field
+            String parent = TableChangesHelper.getParentName(col);
+            if (!visited.contains(parent)) {
+              typeChange.updateColumnNullability(col, true);
+            }
+            visited.add(col);
+          });
+    }
+
     return SchemaChangeUtils.applyTableChanges2Schema(internalSchemaAfterAddColumns, typeChange);
   }
 
-  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema) {
-    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema)), oldTableSchema.getFullName());
+  public static Schema reconcileSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return convert(reconcileSchema(incomingSchema, convert(oldTableSchema), makeMissingFieldsNullable), oldTableSchema.getFullName());
   }
 
   /**
@@ -136,10 +161,9 @@ public class AvroSchemaEvolutionUtils {
    *
    * @param sourceSchema source schema that needs reconciliation
    * @param targetSchema target schema that source schema will be reconciled against
-   * @param opts         config options
    * @return schema (based off {@code source} one) that has nullability constraints and datatypes reconciled
    */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, Map<String, String> opts) {
+  public static Schema reconcileSchemaRequirements(Schema sourceSchema, Schema targetSchema, boolean shouldReorderColumns) {
     if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
       return sourceSchema;
     }
@@ -148,19 +172,18 @@ public class AvroSchemaEvolutionUtils {
       return targetSchema;
     }
 
-    InternalSchema sourceInternalSchema = convert(sourceSchema);
     InternalSchema targetInternalSchema = convert(targetSchema);
+    // Use existing fieldIds for consistent field ordering between commits when shouldReorderColumns is true
+    InternalSchema sourceInternalSchema = convert(sourceSchema, shouldReorderColumns ? targetInternalSchema.getNameToPosition() : Collections.emptyMap());
 
     List<String> colNamesSourceSchema = sourceInternalSchema.getAllColsFullName();
     List<String> colNamesTargetSchema = targetInternalSchema.getAllColsFullName();
-    boolean makeNewColsNullable = "true".equals(opts.get(MAKE_NEW_COLUMNS_NULLABLE.key()));
 
     List<String> nullableUpdateColsInSource = new ArrayList<>();
     List<String> typeUpdateColsInSource = new ArrayList<>();
     colNamesSourceSchema.forEach(field -> {
       // handle columns that needs to be made nullable
-      if ((makeNewColsNullable && !colNamesTargetSchema.contains(field))
-          || colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
+      if (colNamesTargetSchema.contains(field) && sourceInternalSchema.findField(field).isOptional() != targetInternalSchema.findField(field).isOptional()) {
         nullableUpdateColsInSource.add(field);
       }
       // handle columns that needs type to be updated

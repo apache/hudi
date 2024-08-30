@@ -17,27 +17,28 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.FileSystem
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.functional.TestBasicSchemaEvolution.{dropColumn, injectColumnAt}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, ScalaAssertionSupport}
+
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
 import org.apache.spark.sql.{HoodieUnsafeUtils, Row, SaveMode, SparkSession, SparkSessionExtensions, functions}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
-import scala.collection.JavaConversions.asScalaBuffer
+
 import scala.collection.JavaConverters._
 
 class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAssertionSupport {
@@ -49,6 +50,8 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     "hoodie.bulkinsert.shuffle.parallelism" -> "2",
     "hoodie.delete.shuffle.parallelism" -> "1",
     HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key() -> "true",
+    HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> classOf[OverwriteWithLatestAvroPayload].getName,
+    HoodieWriteConfig.WRITE_PAYLOAD_TYPE.key() -> "OVERWRITE_LATEST_AVRO",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
     DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
@@ -58,7 +61,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  override def getSparkSessionExtensionsInjector: util.Option[Consumer[SparkSessionExtensions]] =
+  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
     toJavaOption(
       Some(
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
@@ -69,7 +72,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown(): Unit = {
@@ -117,10 +120,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     }
 
     def loadTable(loadAllVersions: Boolean = true): (StructType, Seq[Row]) = {
-      val tableMetaClient = HoodieTableMetaClient.builder()
-        .setConf(spark.sparkContext.hadoopConfiguration)
-        .setBasePath(basePath)
-        .build()
+      val tableMetaClient = createMetaClient(spark, basePath)
 
       tableMetaClient.reloadActiveTimeline()
 
@@ -136,10 +136,10 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       val df =
         spark.read.format("org.apache.hudi")
           .load(tablePath)
-          .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+          .drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
           .orderBy(functions.col("_row_key").cast(IntegerType))
 
-      (latestTableSchema, df.collectAsList().toSeq)
+      (latestTableSchema, df.collectAsList.asScala.toSeq)
     }
 
     //
@@ -177,6 +177,14 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         StructField("timestamp", IntegerType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) :: Nil)
 
+    val secondSchemaWithOrdering = StructType(
+      StructField("_row_key", StringType, nullable = true) ::
+        StructField("first_name", StringType, nullable = false) ::
+        StructField("last_name", StringType, nullable = true) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) :: Nil)
+
     val secondBatch = Seq(
       Row("4", "John", "Green", "10", 1, 1),
       Row("5", "Jack", "Sparrow", "13", 1, 1),
@@ -193,12 +201,28 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     //       entailing that the data in the added columns for table's existing records will be added w/ nulls,
     //       in case new column is nullable, and would fail otherwise
     if (true) {
-      assertEquals(secondSchema, tableSchemaAfterSecondBatch)
+      if (shouldReconcileSchema) {
+        assertEquals(secondSchema, tableSchemaAfterSecondBatch)
+        val ageColOrd = secondSchema.indexWhere(_.name == "age")
+        val rowsToAdd = secondBatch
 
-      val ageColOrd = secondSchema.indexWhere(_.name == "age")
-      val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ secondBatch
+        val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ rowsToAdd
+        assertEquals(expectedRows, rowsAfterSecondBatch)
+      } else {
+        // Second schema for the table is expected to reconcile ordering if enabled
 
-      assertEquals(expectedRows, rowsAfterSecondBatch)
+        // Reorder batch based on the expected schema
+        val secondBatchWithProperOrder = Seq(
+          Row("4", "John", "Green", 1, 1, "10"),
+          Row("5", "Jack", "Sparrow", 1, 1, "13"),
+          Row("6", "Jill", "Fiorella", 1, 1, "12"))
+
+        assertEquals(secondSchemaWithOrdering, tableSchemaAfterSecondBatch)
+        val ageColOrd = secondSchemaWithOrdering.indexWhere(_.name == "age")
+        val rowsToAdd = secondBatchWithProperOrder
+        val expectedRows = injectColumnAt(firstBatch, ageColOrd, null) ++ rowsToAdd
+        assertEquals(expectedRows, rowsAfterSecondBatch)
+      }
     }
 
     //
@@ -212,6 +236,13 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
         StructField("age", StringType, nullable = true) ::
         StructField("timestamp", IntegerType, nullable = true) ::
         StructField("partition", IntegerType, nullable = true) :: Nil)
+
+    val thirdSchemaWithOrdering = StructType(
+      StructField("_row_key", StringType, nullable = true) ::
+        StructField("first_name", StringType, nullable = false) ::
+        StructField("timestamp", IntegerType, nullable = true) ::
+        StructField("partition", IntegerType, nullable = true) ::
+        StructField("age", StringType, nullable = true) :: Nil)
 
     val thirdBatch = Seq(
       Row("7", "Harry", "15", 1, 1),
@@ -242,10 +273,15 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     } else {
-      assertEquals(thirdSchema, tableSchemaAfterThirdBatch)
+      assertEquals(thirdSchemaWithOrdering, tableSchemaAfterThirdBatch)
 
-      val lastNameColOrd = secondSchema.indexWhere(_.name == "last_name")
-      val expectedRows = dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ thirdBatch
+      val lastNameColOrd = secondSchemaWithOrdering.indexWhere(_.name == "last_name")
+      // properly maintain order of columns
+      val rowsToAdd = Seq(
+        Row("7", "Harry", 1, 1, "15"),
+        Row("8", "Ron", 1, 1, "14"),
+        Row("9", "Germiona", 1, 1, "16"))
+      val expectedRows = dropColumn(rowsAfterSecondBatch, lastNameColOrd) ++ rowsToAdd
 
       assertEquals(expectedRows, rowsAfterThirdBatch)
     }
@@ -284,12 +320,22 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       appendData(fourthSchema, fourthBatch, shouldAllowDroppedColumns = true)
       val (latestTableSchema, rows) = loadTable()
 
-      assertEquals(fourthSchema, latestTableSchema)
+      val fourthSchemaWithOrdering = StructType(
+        StructField("_row_key", StringType, nullable = true) ::
+          StructField("timestamp", IntegerType, nullable = true) ::
+          StructField("partition", IntegerType, nullable = true) ::
+          StructField("age", StringType, nullable = true) :: Nil)
+      assertEquals(fourthSchemaWithOrdering, latestTableSchema)
 
-      val firstNameColOrd = thirdSchema.indexWhere(_.name == "first_name")
+      val firstNameColOrd = thirdSchemaWithOrdering.indexWhere(_.name == "first_name")
 
+      // Order the columns
+      val rowsToAdd = Seq(
+        Row("10", 1, 1, "15"),
+        Row("11", 1, 1, "14"),
+        Row("12", 1, 1, "16"))
       val expectedRecords =
-        dropColumn(rowsAfterThirdBatch, firstNameColOrd) ++ fourthBatch
+        dropColumn(rowsAfterThirdBatch, firstNameColOrd) ++ rowsToAdd
 
       assertEquals(expectedRecords, rows)
     }

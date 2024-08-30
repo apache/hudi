@@ -85,14 +85,14 @@ public class CloudSourceConfig extends HoodieConfig {
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.select.relpath.prefix")
       .markAdvanced()
-      .withDocumentation("Only selects objects in the bucket whose relative path matches this prefix");
+      .withDocumentation("Only selects objects in the bucket whose relative path starts with this prefix");
 
   public static final ConfigProperty<String> IGNORE_RELATIVE_PATH_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.ignore.relpath.prefix")
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.ignore.relpath.prefix")
       .markAdvanced()
-      .withDocumentation("Ignore objects in the bucket whose relative path matches this prefix");
+      .withDocumentation("Ignore objects in the bucket whose relative path starts this prefix");
 
   public static final ConfigProperty<String> IGNORE_RELATIVE_PATH_SUBSTR = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.ignore.relpath.substring")

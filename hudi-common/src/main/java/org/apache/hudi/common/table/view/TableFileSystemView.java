@@ -108,6 +108,14 @@ public interface TableFileSystemView {
     Stream<FileSlice> getLatestFileSlices(String partitionPath);
 
     /**
+     * Get the latest file slices for a given partition including the inflight ones.
+     *
+     * @param partitionPath The partition path of interest
+     * @return Stream of latest {@link FileSlice} in the partition path.
+     */
+    Stream<FileSlice> getLatestFileSlicesIncludingInflight(String partitionPath);
+
+    /**
      * Stream all the latest file slices in the given partition
      * without caching the file group mappings.
      *
@@ -246,5 +254,11 @@ public interface TableFileSystemView {
   /**
    * Load all partition and file slices into view
    */
-  Void loadAllPartitions();
+  void loadAllPartitions();
+
+  /**
+   * Load all partition and file slices into view for the provided partition paths
+   * @param partitionPaths List of partition paths to load
+   */
+  void loadPartitions(List<String> partitionPaths);
 }

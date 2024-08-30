@@ -20,7 +20,7 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.storage.HoodieLocation;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -99,7 +99,7 @@ public class FilePathUtils {
     int i = 0;
     for (Map.Entry<String, String> e : partitionKVs.entrySet()) {
       if (i > 0) {
-        suffixBuf.append(HoodieLocation.SEPARATOR);
+        suffixBuf.append(StoragePath.SEPARATOR);
       }
       if (hivePartition) {
         suffixBuf.append(escapePathName(e.getKey()));
@@ -109,7 +109,7 @@ public class FilePathUtils {
       i++;
     }
     if (sepSuffix) {
-      suffixBuf.append(HoodieLocation.SEPARATOR);
+      suffixBuf.append(StoragePath.SEPARATOR);
     }
     return suffixBuf.toString();
   }
@@ -463,6 +463,10 @@ public class FilePathUtils {
    * Transforms the Hadoop path to Flink path.
    */
   public static org.apache.flink.core.fs.Path toFlinkPath(Path path) {
+    return new org.apache.flink.core.fs.Path(path.toUri());
+  }
+
+  public static org.apache.flink.core.fs.Path toFlinkPath(StoragePath path) {
     return new org.apache.flink.core.fs.Path(path.toUri());
   }
 

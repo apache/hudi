@@ -30,6 +30,31 @@ import java.util.List;
  * @param <T> The target type after applying the transformation. Represents the type of the indexed value.
  */
 public interface HoodieFunctionalIndex<S, T> extends Serializable {
+
+  public static final String SPARK_DATE_FORMAT = "date_format";
+  public static final String SPARK_DAY = "day";
+  public static final String SPARK_MONTH = "month";
+  public static final String SPARK_YEAR = "year";
+  public static final String SPARK_HOUR = "hour";
+  public static final String SPARK_FROM_UNIXTIME = "from_unixtime";
+  public static final String SPARK_UNIX_TIMESTAMP = "unix_timestamp";
+  public static final String SPARK_TO_DATE = "to_date";
+  public static final String SPARK_TO_TIMESTAMP = "to_timestamp";
+  public static final String SPARK_DATE_ADD = "date_add";
+  public static final String SPARK_DATE_SUB = "date_sub";
+  public static final String SPARK_CONCAT = "concat";
+  public static final String SPARK_SUBSTRING = "substring";
+  public static final String SPARK_UPPER = "upper";
+  public static final String SPARK_LOWER = "lower";
+  public static final String SPARK_TRIM = "trim";
+  public static final String SPARK_LTRIM = "ltrim";
+  public static final String SPARK_RTRIM = "rtrim";
+  public static final String SPARK_LENGTH = "length";
+  public static final String SPARK_REGEXP_REPLACE = "regexp_replace";
+  public static final String SPARK_REGEXP_EXTRACT = "regexp_extract";
+  public static final String SPARK_SPLIT = "split";
+  public static final String SPARK_IDENTITY = "identity";
+
   /**
    * Get the name of the index.
    *

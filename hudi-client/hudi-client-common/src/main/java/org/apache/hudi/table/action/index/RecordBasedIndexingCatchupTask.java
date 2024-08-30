@@ -66,7 +66,8 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
 
   private HoodieData<HoodieRecord> readRecordKeysFromFileSlices(HoodieInstant instant) throws IOException {
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
-    HoodieTableMetadata metadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString(), false);
+    HoodieTableMetadata metadata = HoodieTableMetadata.create(
+        engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), false);
     HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filter(i -> i.equals(instant)), metadata);
     // Collect the list of latest file slices present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();

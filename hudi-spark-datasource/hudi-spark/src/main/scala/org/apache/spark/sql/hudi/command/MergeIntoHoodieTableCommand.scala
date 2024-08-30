@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.avro.Schema
 import org.apache.hudi.AvroConversionUtils.convertStructTypeToAvroSchema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
@@ -31,6 +30,8 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.JFunction.scalaFunction1Noop
 import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSparkSqlWriter, HoodieSparkUtils, SparkAdapterSupport}
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{MatchCast, attributeEquals}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
@@ -40,7 +41,7 @@ import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.hudi.ProvidesHoodieConfig.combineOptions
+import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.failAnalysis
 import org.apache.spark.sql.hudi.command.MergeIntoHoodieTableCommand.{CoercedAttributeReference, encodeAsBase64String, stripCasting, toStructType}
 import org.apache.spark.sql.hudi.command.PartialAssignmentMode.PartialAssignmentMode
@@ -49,6 +50,7 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
 import org.apache.spark.sql.types.{BooleanType, StructField, StructType}
 
 import java.util.Base64
+
 import scala.collection.JavaConverters._
 
 /**
@@ -729,7 +731,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       RECORDKEY_FIELD.key -> tableConfig.getRawRecordKeyFieldProp,
       PRECOMBINE_FIELD.key -> preCombineField,
       TBL_NAME.key -> hoodieCatalogTable.tableName,
-      PARTITIONPATH_FIELD.key -> tableConfig.getPartitionFieldProp,
+      PARTITIONPATH_FIELD.key -> getPartitionPathFieldWriteConfig(
+        tableConfig.getKeyGeneratorClassName, tableConfig.getPartitionFieldProp, hoodieCatalogTable),
       HIVE_STYLE_PARTITIONING.key -> tableConfig.getHiveStylePartitioningEnable,
       URL_ENCODE_PARTITIONING.key -> tableConfig.getUrlEncodePartitioning,
       KEYGENERATOR_CLASS_NAME.key -> keyGeneratorClassName,

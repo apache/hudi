@@ -22,6 +22,7 @@ package org.apache.hudi.sync.datahub;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hive.SchemaDifference;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.HoodieSyncException;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
@@ -101,7 +102,7 @@ public class DataHubSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType schema) {
+  public void updateTableSchema(String tableName, MessageType schema, SchemaDifference schemaDifference) {
     try (RestEmitter emitter = config.getRestEmitter()) {
       DatahubResponseLogger responseLogger = new DatahubResponseLogger();
       MetadataChangeProposalWrapper schemaChange = createSchemaMetadataUpdate(tableName);

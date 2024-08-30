@@ -25,11 +25,10 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
@@ -39,7 +38,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.io.TempDir
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.time.Instant
 import java.util.Collections
@@ -691,6 +690,6 @@ object TestDataSourceForBootstrap {
   def sort(df: DataFrame): Dataset[Row] = df.sort("_row_key")
 
   def dropMetaCols(df: DataFrame): DataFrame =
-    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala: _*)
+    df.drop(HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq: _*)
 
 }

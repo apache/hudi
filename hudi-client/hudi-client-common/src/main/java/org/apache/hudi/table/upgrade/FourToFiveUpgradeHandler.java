@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.fs.FileSystem;
@@ -87,7 +88,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       String[] partitions = tableConfig.getPartitionFields().get();
       checkPartitionPath = partitions[0] + "=" + DEPRECATED_DEFAULT_PARTITION_PATH;
     }
-    FileSystem fs = new Path(config.getBasePath()).getFileSystem(table.getHadoopConf());
+    FileSystem fs = HadoopFSUtils.getFs(config.getBasePath(), table.getStorageConf());
     return fs.exists(new Path(config.getBasePath() + "/" + checkPartitionPath));
   }
 }

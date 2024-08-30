@@ -19,6 +19,7 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.model.HoodieRecord;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.catalyst.util.ArrayData;
