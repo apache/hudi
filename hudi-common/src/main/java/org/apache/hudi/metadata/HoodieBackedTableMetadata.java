@@ -35,6 +35,7 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
@@ -428,7 +429,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // Open the log record scanner using the log files from the latest file slice
       List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
       Pair<HoodieMetadataLogRecordReader, Long> logRecordScannerOpenTimePair =
-          getLogRecordScanner(logFiles, partitionName, Option.empty());
+          getLogRecordScanner(logFiles, partitionName, Option.empty(), Option.empty());
       HoodieMetadataLogRecordReader logRecordScanner = logRecordScannerOpenTimePair.getKey();
       final long logScannerOpenMs = logRecordScannerOpenTimePair.getValue();
 
@@ -462,7 +463,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public Pair<HoodieMetadataLogRecordReader, Long> getLogRecordScanner(List<HoodieLogFile> logFiles,
                                                                        String partitionName,
-                                                                       Option<Boolean> allowFullScanOverride) {
+                                                                       Option<Boolean> allowFullScanOverride,
+                                                                       Option<String> timeTravelInstant) {
     HoodieTimer timer = HoodieTimer.start();
     List<String> sortedLogFilePaths = logFiles.stream()
         .sorted(HoodieLogFile.getLogFileComparator())
@@ -476,6 +478,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
     Option<HoodieInstant> latestMetadataInstant = metadataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant();
     String latestMetadataInstantTime = latestMetadataInstant.map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+    if (timeTravelInstant.isPresent()) {
+      latestMetadataInstantTime = HoodieTimeline.minTimestamp(latestMetadataInstantTime, timeTravelInstant.get());
+    }
 
     boolean allowFullScan = allowFullScanOverride.orElseGet(() -> isFullScanAllowedForPartition(partitionName));
 
