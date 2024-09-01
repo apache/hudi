@@ -20,13 +20,13 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -36,6 +36,7 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -69,6 +70,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
@@ -98,19 +100,61 @@ public class SchemaEvolutionContext {
   public SchemaEvolutionContext(InputSplit split, JobConf job, Option<HoodieTableMetaClient> metaClientOption) throws IOException {
     this.split = split;
     this.job = job;
-    this.metaClient = metaClientOption.isPresent() ? metaClientOption.get() : setUpHoodieTableMetaClient();
-    if (this.metaClient == null) {
+    if (!job.getBoolean(HIVE_EVOLUTION_ENABLE, true)) {
+      LOG.info("schema evolution is disabled for split: {}", split);
       internalSchemaOption = Option.empty();
+      this.metaClient = null;
       return;
     }
-    try {
-      TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-      this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
-    } catch (Exception e) {
-      internalSchemaOption = Option.empty();
-      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePath()), e);
+    this.metaClient = metaClientOption.isPresent() ? metaClientOption.get() : setUpHoodieTableMetaClient();
+    this.internalSchemaOption = getInternalSchemaFromCache();
+  }
+
+  public Option<InternalSchema> getInternalSchemaFromCache() throws IOException {
+    Option<InternalSchema> internalSchema = getCachedData(
+        HoodieCombineHiveInputFormat.INTERNAL_SCHEMA_CACHE_KEY_PREFIX,
+        json -> SerDeHelper.fromJson(json)
+    );
+    if (internalSchema != null && internalSchema.isPresent()) {
+      return internalSchema;
     }
-    LOG.info("finish init schema evolution for split: {}", split);
+    return Option.empty();
+  }
+
+  public Schema getAvroSchemaFromCache() throws IOException {
+    Schema avroSchema = getCachedData(
+        HoodieCombineHiveInputFormat.SCHEMA_CACHE_KEY_PREFIX,
+        json -> new Schema.Parser().parse(json)
+    );
+    return avroSchema;
+  }
+
+  private <T> T getCachedData(String keyPrefix, Function<String, T> parser) throws IOException {
+    Option<StoragePath> tablePath = getTablePath(job, split);
+    if (!tablePath.isPresent()) {
+      return null;
+    }
+    String cacheKey = keyPrefix + "." + tablePath.get().toUri();
+    String cachedJson = job.get(cacheKey);
+    if (cachedJson == null) {
+      return null;
+    }
+    try {
+      return parser.apply(cachedJson);
+    } catch (Exception e) {
+      LOG.warn(String.format("Failed to parse data from cache with key: %s", cacheKey), e);
+      return null;
+    }
+  }
+
+  private Option<StoragePath> getTablePath(JobConf job, InputSplit split) throws IOException {
+    if (split instanceof FileSplit) {
+      Path path = ((FileSplit) split).getPath();
+      FileSystem fs = path.getFileSystem(job);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
+    }
+    return Option.empty();
   }
 
   private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
@@ -122,7 +166,7 @@ public class SchemaEvolutionContext {
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
-      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
+      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit) split).getPath()), e);
       return null;
     }
   }
@@ -139,7 +183,7 @@ public class SchemaEvolutionContext {
       return;
     }
     if (internalSchemaOption.isPresent()) {
-      Schema tableAvroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+      Schema tableAvroSchema = getAvroSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
       InternalSchema prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(),
           requiredColumns);
@@ -171,7 +215,7 @@ public class SchemaEvolutionContext {
     if (internalSchemaOption.isPresent()) {
       // reading hoodie schema evolution table
       job.setBoolean(HIVE_EVOLUTION_ENABLE, true);
-      Path finalPath = ((FileSplit)split).getPath();
+      Path finalPath = ((FileSplit) split).getPath();
       InternalSchema prunedSchema;
       List<String> requiredColumns = getRequireColumn(job);
       // No need trigger schema evolution for count(*)/count(1) operation
@@ -223,12 +267,12 @@ public class SchemaEvolutionContext {
   private TypeInfo constructHiveSchemaFromType(Type type, TypeInfo typeInfo) {
     switch (type.typeId()) {
       case RECORD:
-        Types.RecordType record = (Types.RecordType)type;
+        Types.RecordType record = (Types.RecordType) type;
         List<Types.Field> fields = record.fields();
-        ArrayList<TypeInfo>  fieldTypes = new ArrayList<>();
-        ArrayList<String>  fieldNames = new ArrayList<>();
+        ArrayList<TypeInfo> fieldTypes = new ArrayList<>();
+        ArrayList<String> fieldNames = new ArrayList<>();
         for (int index = 0; index < fields.size(); index++) {
-          StructTypeInfo structTypeInfo = (StructTypeInfo)typeInfo;
+          StructTypeInfo structTypeInfo = (StructTypeInfo) typeInfo;
           TypeInfo subTypeInfo = getSchemaSubTypeInfo(structTypeInfo.getAllStructFieldTypeInfos().get(index), fields.get(index).type());
           fieldTypes.add(subTypeInfo);
           String name = fields.get(index).name();
@@ -239,14 +283,14 @@ public class SchemaEvolutionContext {
         structTypeInfo.setAllStructFieldTypeInfos(fieldTypes);
         return structTypeInfo;
       case ARRAY:
-        ListTypeInfo listTypeInfo = (ListTypeInfo)typeInfo;
+        ListTypeInfo listTypeInfo = (ListTypeInfo) typeInfo;
         Types.ArrayType array = (Types.ArrayType) type;
         TypeInfo subTypeInfo = getSchemaSubTypeInfo(listTypeInfo.getListElementTypeInfo(), array.elementType());
         listTypeInfo.setListElementTypeInfo(subTypeInfo);
         return listTypeInfo;
       case MAP:
-        Types.MapType map = (Types.MapType)type;
-        MapTypeInfo mapTypeInfo = (MapTypeInfo)typeInfo;
+        Types.MapType map = (Types.MapType) type;
+        MapTypeInfo mapTypeInfo = (MapTypeInfo) typeInfo;
         TypeInfo keyType = getSchemaSubTypeInfo(mapTypeInfo.getMapKeyTypeInfo(), map.keyType());
         TypeInfo valueType = getSchemaSubTypeInfo(mapTypeInfo.getMapValueTypeInfo(), map.valueType());
         MapTypeInfo mapType = new MapTypeInfo();
@@ -296,9 +340,9 @@ public class SchemaEvolutionContext {
         for (int i = 0; i < size; i++) {
           ExprNodeDesc expr = exprNodes.poll();
           if (expr instanceof ExprNodeColumnDesc) {
-            String oldColumn = ((ExprNodeColumnDesc)expr).getColumn();
+            String oldColumn = ((ExprNodeColumnDesc) expr).getColumn();
             String newColumn = InternalSchemaUtils.reBuildFilterName(oldColumn, fileSchema, querySchema);
-            ((ExprNodeColumnDesc)expr).setColumn(newColumn);
+            ((ExprNodeColumnDesc) expr).setColumn(newColumn);
           }
           List<ExprNodeDesc> children = expr.getChildren();
           if (children != null) {
