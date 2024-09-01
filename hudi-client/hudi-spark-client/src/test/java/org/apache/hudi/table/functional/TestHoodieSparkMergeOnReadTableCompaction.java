@@ -57,7 +57,6 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.HoodieMergeOnReadTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -208,8 +207,8 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
 
   @ParameterizedTest
   @CsvSource(value = {"true,true", "true,false", "false,true", "false,false"})
-  public void testCompactionSchedulingWithUncommittedLogFileOrRollback(boolean enableMetadataTable,
-                                                                       boolean runRollback) throws IOException {
+  void testCompactionSchedulingWithUncommittedLogFileOrRollback(boolean enableMetadataTable,
+                                                                boolean runRollback) throws IOException {
     Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -233,16 +232,16 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, props);
     client = getHoodieWriteClient(config);
 
-    // Instant 1: write inserts and commit, generating base files
+    // instant 1: write inserts and commit, generating base files
     String instant1 = HoodieActiveTimeline.createNewInstantTime();
     writeData(instant1, 100, true, false);
     assertEquals(100, readTableTotalRecordsNum());
     validateFileListingInMetadataTable();
-    // Instant 2: write updates in log files and simulate failed deltacommit
+    // instant 2: write updates in log files and simulate failed deltacommit
     String instant2 = HoodieActiveTimeline.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(instant2, 100, false, true);
 
-    // Remove half of the log files written to simulate the failure case
+    // remove half of the log files written to simulate the failure case
     // where the marker is created but the log file is not written
     List<StoragePathInfo> files = hoodieStorage().listFiles(new StoragePath(basePath()));
     int numTotalLogFiles = 0;
@@ -276,7 +275,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertEquals(instant1, metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp());
     assertEquals(100, readTableTotalRecordsNum());
 
-    // Instant 3: write updates in log files and make a successful deltacommit
+    // instant 3: write updates in log files and make a successful deltacommit
     String instant3 = HoodieActiveTimeline.createNewInstantTime();
     writeData(instant3, 100, true, true);
 
@@ -313,10 +312,10 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertTrue(rollbackPlan.getRollbackRequests().stream()
         .map(request -> {
           boolean allExist = true;
-          Path partitionPath = new Path(basePath(), request.getPartitionPath());
+          StoragePath partitionPath = new StoragePath(basePath(), request.getPartitionPath());
           for (String logFile : request.getLogBlocksToBeDeleted().keySet()) {
             try {
-              allExist = allExist && fs().exists(new Path(partitionPath, logFile));
+              allExist = allExist && hoodieStorage().exists(new StoragePath(partitionPath, logFile));
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
@@ -332,15 +331,15 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     assertTrue(compactionPlan.getOperations().stream()
         .map(op -> {
           boolean allExist;
-          Path partitionPath = new Path(basePath(), op.getPartitionPath());
+          StoragePath partitionPath = new StoragePath(basePath(), op.getPartitionPath());
           try {
-            allExist = fs().exists(new Path(partitionPath, op.getDataFilePath()));
+            allExist = hoodieStorage().exists(new StoragePath(partitionPath, op.getDataFilePath()));
           } catch (IOException e) {
             throw new RuntimeException(e);
           }
           for (String logFilePath : op.getDeltaFilePaths()) {
             try {
-              allExist = allExist && fs().exists(new Path(partitionPath, logFilePath));
+              allExist = allExist && hoodieStorage().exists(new StoragePath(partitionPath, logFilePath));
             } catch (IOException e) {
               throw new RuntimeException(e);
             }
@@ -354,7 +353,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
   private void validateFileListingInMetadataTable() {
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(context(), hoodieStorage(), basePath(), false, false)
         .stream()
-        .map(e -> new Path(basePath(), e).toString())
+        .map(e -> new StoragePath(basePath(), e).toString())
         .collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> filesFromStorage = FSUtils.getFilesInPartitions(
         context(),

@@ -124,7 +124,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
     int logFileVersion = 1;
     int logFileSize = 13042;
     String logFileBaseInstantTime = logFileInNewFileGroup ? "001" : "000";
-    // Log file name should still use the base instant time
+    // log file name should still use the base instant time
     testTable.addInflightDeltaCommit("001")
         .withLogMarkerFile(logFileBaseInstantTime, partitionPath, f0, testIOType, logFileVersion);
     if (logFileExists) {
@@ -152,7 +152,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         assertEquals(0, rollbackRequest.getLogBlocksToBeDeleted().size());
       } else {
         // log file is written to an existing file group in the failed instant; the rollback plan
-        // should include it in the "logBlocksToBeDeleted" field so it is kept on storage rolled
+        // should include it in the "logBlocksToBeDeleted" field, so it is kept on storage rolled
         // back through a command log block
         assertEquals(0, rollbackRequest.getFilesToBeDeleted().size());
         assertEquals(1, rollbackRequest.getLogBlocksToBeDeleted().size());
