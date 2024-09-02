@@ -29,10 +29,12 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
+import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand.validateTableSchema
 import org.apache.spark.sql.internal.StaticSQLConf.SCHEMA_STRING_LENGTH_THRESHOLD
 import org.apache.spark.sql.types.StructType
 
@@ -76,6 +78,9 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     }
 
     try {
+      if (!validateTableSchema(table.schema, hoodieCatalogTable.tableSchemaWithoutMetaFields)) {
+        throw new HoodieException("The defined schema is inconsistent with the schema in the hoodie metadata directory.")
+      }
       // create catalog table for this hoodie table
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
@@ -87,6 +92,17 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
 }
 
 object CreateHoodieTableCommand {
+
+  def validateTableSchema(userDefinedSchema: StructType, hoodieTableSchema: StructType): Boolean = {
+    if (userDefinedSchema.fields.length != hoodieTableSchema.fields.length) {
+      false
+    } else {
+      hoodieTableSchema.fields.zip(userDefinedSchema).forall {
+        case (hoodieTableColumn, userDefinedColumn) =>
+          hoodieTableColumn == userDefinedColumn
+      }
+    }
+  }
 
   def validateTblProperties(hoodieCatalogTable: HoodieCatalogTable): Unit = {
     if (hoodieCatalogTable.hoodieTableExists) {
