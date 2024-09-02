@@ -215,6 +215,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withRecordMerger(config.getRecordMerger())
         .withTableMetaClient(metaClient)
         .withExternalSorterBasePath(config.getExternalSorterBasePath())
+        .withSorterType(config.getExternalSorterType())
         .build();
     } else {
       scanner = HoodieMergedLogRecordScanner.newBuilder()

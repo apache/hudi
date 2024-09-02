@@ -175,7 +175,9 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     this.numMergedRecordsInLog = records.size();
 
     if (LOG.isInfoEnabled()) {
-      LOG.info("Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes, DiskBasedMap => {} entries, {} total bytes, MemoryEntryHitRatio => {}, MemorySizeHitRatio => {}",
+      LOG.info(
+          "Scanned {} log files with stats: MaxMemoryInBytes => {}, MemoryBasedMap => {} entries, {} total bytes,"
+              + " DiskBasedMap => {} entries, {} total bytes, MemoryEntryHitRatio => {}, MemorySizeHitRatio => {}",
           logFilePaths.size(), maxMemorySizeInBytes, records.getInMemoryMapNumEntries(), records.getCurrentInMemoryMapSize(),
           records.getDiskBasedMapNumEntries(), records.getSizeOfFileOnDiskInBytes(),
           records.getInMemoryMapNumEntries() / (double) records.getDiskBasedMapNumEntries(), records.getCurrentInMemoryMapSize() / (double) records.getSizeOfFileOnDiskInBytes());
@@ -213,7 +215,8 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
       records.put((K) key, SpillableMapUtils.generateEmptyPayload(key,
           deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(
+          new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put((K) key, record);
     }
   }

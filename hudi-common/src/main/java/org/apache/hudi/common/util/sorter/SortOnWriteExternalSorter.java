@@ -16,16 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.util.sorter;
 
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
+import org.apache.hudi.common.util.BinaryUtil;
+import org.apache.hudi.common.util.BufferedRandomAccessFile;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -35,30 +40,21 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.UUID;
 
 // TODO: Just a simple external-sorter, optimize it later
-public class ExternalSorter<T extends Serializable> implements Closeable, Iterable<T> {
+public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalSorter<R> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ExternalSorter.class);
-  private static final String SUBFOLDER_PREFIX = "hudi/external-sorter";
+  private static final Logger LOG = LoggerFactory.getLogger(SortOnWriteExternalSorter.class);
 
   // TODO: configure an appropriate buffer size
   public static final int BUFFER_SIZE = 128 * 1024; // 128 KB
 
+  private int readBuffer = BUFFER_SIZE;
+
   // A timer for calculating elapsed time in millis
   private final HoodieTimer timer = HoodieTimer.create();
 
-  private final String basePath;
-
-  private final long maxMemoryInBytes;
-
-  private final Comparator<T> comparator;
-
-  private final List<T> memoryRecords;
-
-  // Size Estimator for record
-  private final SizeEstimator<T> recordSizeEstimator;
+  private final List<R> memoryRecords;
   private int currentSortedFileIndex = 0;
   private long currentMemoryUsage = 0;
   private long totalEntryCount = 0;
@@ -74,32 +70,9 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
 
   private Option<File> sortedFile = Option.empty();
 
-  public ExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<T> comparator, SizeEstimator<T> recordSizeEstimator) throws IOException {
-    this.maxMemoryInBytes = maxMemoryInBytes;
-    this.comparator = comparator;
+  public SortOnWriteExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> recordSizeEstimator) throws IOException {
+    super(baseFilePath, maxMemoryInBytes, comparator, recordSizeEstimator);
     this.memoryRecords = new LinkedList<>();
-    this.recordSizeEstimator = recordSizeEstimator;
-    this.basePath = String.format("%s/%s-%s", baseFilePath, SUBFOLDER_PREFIX, UUID.randomUUID());
-    File baseDir = new File(basePath);
-    FileIOUtils.deleteDirectory(baseDir);
-    FileIOUtils.mkdir(baseDir);
-    baseDir.deleteOnExit();
-  }
-
-  public void add(T record) {
-    memoryRecords.add(record);
-    totalEntryCount++;
-    long sizeEstimate = recordSizeEstimator.sizeEstimate(record);
-    currentMemoryUsage += sizeEstimate;
-    totalMemoryUsage += sizeEstimate;
-    if (currentMemoryUsage > maxMemoryInBytes) {
-      LOG.debug("Memory usage {} exceeds maxMemoryInBytes {}. Sorting records in memory.", currentMemoryUsage, maxMemoryInBytes);
-      try {
-        sortAndWriteToFile();
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to sort records", e);
-      }
-    }
   }
 
   public long getTotalEntryCount() {
@@ -137,7 +110,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     createNewWriteFile(0, currentSortedFileIndex++);
 
     // 3. write every record to file
-    for (T record : memoryRecords) {
+    for (R record : memoryRecords) {
       Entry entry = Entry.newEntry(SerializationUtils.serialize(record));
       entry.writeToFile(writeOnlyFileHandle);
     }
@@ -172,7 +145,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     return String.format("%s/%d-%d", this.basePath, level, index);
   }
 
-  public void sort() {
+  private void sort() {
     try {
       // sort the remaining records in memory
       // TODO: don't need to flush to disk when there never exceed memory limit
@@ -180,9 +153,9 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
         if (currentSortedFileIndex == 0) {
           // there are never exceed memory limit, only sort the memory records
           sortMemoryRecords();
-          LOG.info("External sorted completed, all in memory," +
-                  "total entry count => {}, total time taken to sort records => {} ms," +
-                  "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+          LOG.info("SortOnWriteExternalSorter sort completed, all in memory,"
+                  + "total entry count => {}, total time taken to sort records => {} ms,"
+                  + "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
               totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
           return;
         }
@@ -191,9 +164,9 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       }
       // merge the sorted files
       sortedMerge();
-      LOG.info("External sorted completed," +
-              "total entry count => {}, total time taken to sort records => {} ms," +
-              "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+      LOG.info("SortOnWriteExternalSorter sort completed,"
+              + "total entry count => {}, total time taken to sort records => {} ms,"
+              + "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
           totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to sort records", e);
@@ -205,7 +178,6 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     memoryRecords.sort(comparator);
     this.totalTimeTakenToSortRecords = this.timer.endTimer();
   }
-
 
   private void sortedMerge() throws IOException {
     this.timer.startTimer();
@@ -241,8 +213,8 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   }
 
   private File mergeTwoFiles(File file1, File file2, int level, int index) throws IOException {
-    BufferedRandomAccessFile reader1 = new BufferedRandomAccessFile(file1, "r", BUFFER_SIZE);
-    BufferedRandomAccessFile reader2 = new BufferedRandomAccessFile(file2, "r", BUFFER_SIZE);
+    BufferedRandomAccessFile reader1 = new BufferedRandomAccessFile(file1, "r", readBuffer);
+    BufferedRandomAccessFile reader2 = new BufferedRandomAccessFile(file2, "r", readBuffer);
     String filePath = fileNameGenerate(level + 1, index);
     File mergedFile = createFileForWrite(filePath);
     FileOutputStream fileOutputStream = new FileOutputStream(mergedFile, true);
@@ -306,7 +278,7 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   }
 
   @Override
-  public void close() {
+  public void closeSorter() {
     try {
       if (writeOnlyFileHandle != null) {
         writeOnlyFileHandle.close();
@@ -319,9 +291,9 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
       memoryRecords.clear();
       currentMemoryUsage = 0;
 
-      LOG.info("External sorter closed," +
-              "total entry count => {}, total time taken to sort records => {} ms," +
-              "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
+      LOG.info("SortOnWriteExternalSorter closed,"
+              + "total entry count => {}, total time taken to sort records => {} ms,"
+              + "generated sorted file num => {}, total memory usage => {} bytes, total file write size => {} bytes",
           totalEntryCount, totalTimeTakenToSortRecords, getGeneratedSortedFileNum(), totalMemoryUsage, totalFileSize);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to close external sorter", e);
@@ -329,11 +301,41 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
   }
 
   @Override
-  public Iterator<T> iterator() {
-    return sortedFile.isPresent() ? new SortedRecordInDiskIterator<>(sortedFile.get()) : memoryRecords.iterator();
+  protected void addInner(R record) {
+    memoryRecords.add(record);
+    totalEntryCount++;
+    long sizeEstimate = sizeEstimator.sizeEstimate(record);
+    currentMemoryUsage += sizeEstimate;
+    totalMemoryUsage += sizeEstimate;
+    if (currentMemoryUsage > maxMemoryInBytes) {
+      LOG.debug("Memory usage {} exceeds maxMemoryInBytes {}. Sorting records in memory.", currentMemoryUsage, maxMemoryInBytes);
+      try {
+        sortAndWriteToFile();
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to sort records", e);
+      }
+    }
   }
 
-  private class SortedRecordInDiskIterator<T> implements ClosableIterator<T> {
+  @Override
+  protected void addAllInner(Iterator<R> records) {
+    while (records.hasNext()) {
+      addInner(records.next());
+    }
+  }
+
+  @Override
+  protected void finishInner() {
+    // trigger sort
+    sort();
+  }
+
+  @Override
+  protected ClosableIterator<R> getIteratorInner() {
+    return sortedFile.isPresent() ? new SortedRecordInDiskIterator<>(sortedFile.get()) : ClosableIterator.wrap(memoryRecords.iterator());
+  }
+
+  private class SortedRecordInDiskIterator<R> implements ClosableIterator<R> {
 
     private final BufferedRandomAccessFile reader;
     private Option<Entry> currentRecord = Option.empty();
@@ -368,10 +370,10 @@ public class ExternalSorter<T extends Serializable> implements Closeable, Iterab
     }
 
     @Override
-    public T next() {
+    public R next() {
       iterateCount++;
       Entry current = currentRecord.get();
-      T record = SerializationUtils.deserialize(current.getRecord());
+      R record = SerializationUtils.deserialize(current.getRecord());
       currentRecord = readEntry(reader);
       return record;
     }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -30,27 +31,26 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-public class TestExternalSorter {
+public class TestSortOnWriteExternalSorter {
+
+  private static final int DATA_SIZE = 1024; // 1KB
+  private static final byte[] DATA = new byte[DATA_SIZE];
 
   private static class Record implements Comparable<Record>, Serializable {
     private final int key;
-    private final String value;
+    private final byte[] data;
 
-    public Record(int key, String value) {
+    public Record(int key) {
       this.key = key;
-      this.value = value;
+      this.data = new byte[DATA_SIZE];
     }
 
     public int getKey() {
       return key;
     }
 
-    public String getValue() {
-      return value;
-    }
-
     @Override
-    public int compareTo(TestExternalSorter.Record o) {
+    public int compareTo(TestSortOnWriteExternalSorter.Record o) {
       return Integer.compare(key, o.key);
     }
   }
@@ -58,25 +58,48 @@ public class TestExternalSorter {
   @TempDir
   private File tmpDir;
 
+  private static int totalNum;
+  private static int totalSize;
+  private static SizeEstimator<Record> sizeEstimator = record -> 4 + 4 + 4 + DATA_SIZE;
+  private static List<Record> records;
+  private static List<Record> sortedRecords;
+
+  @BeforeAll
+  public static void setUp() {
+    // total 100MB data
+    totalNum = 1 << 19;
+    totalSize = totalNum * (4 + 4 + 4 + DATA_SIZE);
+    // generate random records
+    Random random = new Random();
+    records = random.ints(totalNum, 0, totalNum / 20).mapToObj(key -> new Record(key)).collect(Collectors.toList());
+    sortedRecords = records.stream().sorted().collect(Collectors.toList());
+  }
+
   @ParameterizedTest
   @ValueSource(doubles = {0.01, 0.10, 0.50, 0.90, 100.00})
-  public void testSort(double ratio) throws IOException {
-    // generate some random records
-    SizeEstimator<Record> sizeEstimator = record -> 4 + 4 + 4 + record.getValue().length();
-    int totalNum = 1 << 10;
-    Random random = new Random();
-    List<Record> records = random.ints(totalNum, 0, totalNum / 20).mapToObj(key -> new Record(key, "value")).collect(Collectors.toList());
-    int totalSize = totalNum * (4 + 4 + 4 + 5);
-    List<Record> sortedList = records.stream().sorted().collect(Collectors.toList());
-    ExternalSorter<Record> sorter = new ExternalSorter<Record>(tmpDir.getPath(), (long) (totalSize * ratio), Record::compareTo, sizeEstimator);
+  public void benchBuffer(double ratio) throws IOException {
+
+  }
+
+  public void verifySort(List<Record> records, Iterator<Record> iterator) {
     for (Record record : records) {
-      sorter.add(record);
-    }
-    sorter.sort();
-    Iterator<Record> iterator = sorter.iterator();
-    for (Record record : sortedList) {
       Record next = iterator.next();
-      assert record.getKey() == next.getKey() && record.getValue().equals(next.getValue());
+      assert record.getKey() == next.getKey();
+    }
+  }
+
+  private static class SortStat {
+    long insertAndWriteTime;
+    long sortTime;
+    long readTime;
+
+    @Override
+    public String toString() {
+      return "SortStat{"
+          + "insertAndWriteTime=" + insertAndWriteTime
+          + ", sortTime=" + sortTime
+          + ", readTime=" + readTime
+          + '}';
     }
   }
 

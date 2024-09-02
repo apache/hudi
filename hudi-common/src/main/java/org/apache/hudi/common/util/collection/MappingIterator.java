@@ -43,4 +43,8 @@ public class MappingIterator<I, O> implements Iterator<O> {
   public O next() {
     return mapper.apply(source.next());
   }
+
+  public static <I, O> MappingIterator<I, O> wrap(Iterator source, Function mapper) {
+    return new MappingIterator(source, mapper);
+  }
 }

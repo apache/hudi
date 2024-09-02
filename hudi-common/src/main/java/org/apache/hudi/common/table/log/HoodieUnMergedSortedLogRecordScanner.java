@@ -26,9 +26,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.ExternalSorter;
+import org.apache.hudi.common.util.collection.MappingIterator;
+import org.apache.hudi.common.util.sorter.ExternalSorter;
+import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
+import org.apache.hudi.common.util.sorter.ExternalSorterType;
+import org.apache.hudi.common.util.sorter.SortEngine;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
-import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -37,11 +40,11 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -56,12 +59,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
 
   public static final Comparator<HoodieKey> DEFAULT_KEY_COMPARATOR = Comparator.comparing(HoodieKey::getRecordKey);
 
-  private final HoodieTimer onlyScanTimer = HoodieTimer.create();
-
-  private long timeTakenToOnlyScanRecords;
-
   private final Comparator<HoodieRecord> defaultComparator = (o1, o2) -> {
-
     // Compare by key first
     int keyCompareResult = DEFAULT_KEY_COMPARATOR.compare(o1.getKey(), o2.getKey());
     if (keyCompareResult != 0) {
@@ -75,10 +73,12 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     return order1.compareTo(order2);
   };
 
-  private final ExternalSorter<HoodieRecord> records;
+  private final ExternalSorter<WrapNaturalOrderHoodieRecord> records;
 
   private final Comparator<HoodieRecord> hoodieRecordComparator;
+  private final Comparator<WrapNaturalOrderHoodieRecord> wrapNaturalOrderHoodieRecordComparator;
   private long maxMemoryUsageForSorting;
+  private long totalLogRecords;
 
   protected HoodieUnMergedSortedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                                  String latestInstantTime, boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
@@ -86,13 +86,22 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
                                                  InternalSchema internalSchema, Option<String> keyFieldOverride,
                                                  boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
                                                  Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
-                                                 Option<Comparator<HoodieRecord>> comparator, long maxMemoryUsageForSorting, String externalSorterBasePath) {
+                                                 Option<Comparator<HoodieRecord>> comparator, long maxMemoryUsageForSorting, String externalSorterBasePath, ExternalSorterType sorterType,
+                                                 SortEngine sortEngine) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange, withOperationField, forceFullScan, partitionNameOverride, internalSchema,
         keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, hoodieTableMetaClientOption);
     this.hoodieRecordComparator = comparator.orElse(defaultComparator);
+    this.wrapNaturalOrderHoodieRecordComparator = (o1, o2) -> {
+      int compare = hoodieRecordComparator.compare(o1.getRecord(), o2.getRecord());
+      if (compare != 0) {
+        return compare;
+      }
+      return Long.compare(o1.getNaturalOrder(), o2.getNaturalOrder());
+    };
     this.maxMemoryUsageForSorting = maxMemoryUsageForSorting;
     try {
-      this.records = new ExternalSorter<HoodieRecord>(externalSorterBasePath, maxMemoryUsageForSorting, this.hoodieRecordComparator, new HoodieRecordSizeEstimator<>(readerSchema));
+      this.records = ExternalSorterFactory.create(sorterType, externalSorterBasePath, maxMemoryUsageForSorting,
+          wrapNaturalOrderHoodieRecordComparator, new HoodieRecordSizeEstimator<>(readerSchema), sortEngine);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize external sorter", e);
     }
@@ -101,16 +110,35 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     performScan();
   }
 
+  static class WrapNaturalOrderHoodieRecord implements Serializable {
+    private long naturalOrder;
+    private HoodieRecord record;
+
+    private WrapNaturalOrderHoodieRecord(long naturalOrder, HoodieRecord record) {
+      this.naturalOrder = naturalOrder;
+      this.record = record;
+    }
+
+    public HoodieRecord getRecord() {
+      return record;
+    }
+
+    public long getNaturalOrder() {
+      return naturalOrder;
+    }
+
+    public static WrapNaturalOrderHoodieRecord of(long naturalOrder, HoodieRecord record) {
+      return new WrapNaturalOrderHoodieRecord(naturalOrder, record);
+    }
+  }
+
   private void performScan() {
     scanStart();
-    onlyScanTimer.startTimer();
     scanInternal(Option.empty(), false);
-    timeTakenToOnlyScanRecords = onlyScanTimer.endTimer();
-    // sort it
-    this.records.sort();
+    this.records.finish();
     scanEnd();
-    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TimeTakenToOnlyScanRecords => {}, TotalTimeTakenToSortRecords => {}, TotalTimeTakenToScanAndSortRecords => {}, GeneratedSortedFileNum => {}, TotalRecordsScanned => {}",
-        logFilePaths.size(), maxMemoryUsageForSorting, timeTakenToOnlyScanRecords, records.getTotalTimeTakenToSortRecords(), totalTimeTakenToScanRecords, records.getGeneratedSortedFileNum(), records.getTotalEntryCount());
+    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TimeTakenToInsertAndWriteRecord => {}, TotalTimeTakenToScan => {}",
+        logFilePaths.size(), maxMemoryUsageForSorting, records.getTimeTakenToInsertAndWriteRecord(), totalTimeTakenToScanRecords);
   }
 
   public long getMaxMemoryUsageForSorting() {
@@ -119,7 +147,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
 
   @Override
   protected <T> void processNextRecord(HoodieRecord<T> hoodieRecord) {
-    records.add(hoodieRecord.copy());
+    records.add(WrapNaturalOrderHoodieRecord.of(totalLogRecords++, hoodieRecord.copy()));
   }
 
   @Override
@@ -130,13 +158,12 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     } else {
       record = new HoodieEmptyRecord(new HoodieKey(deleteRecord.getRecordKey(), deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
     }
-    records.add(record);
+    records.add(WrapNaturalOrderHoodieRecord.of(totalLogRecords++, record));
   }
 
-  @NotNull
   @Override
   public Iterator<HoodieRecord> iterator() {
-    return this.records.iterator();
+    return MappingIterator.wrap(records.getIterator(), wrapRecord -> ((WrapNaturalOrderHoodieRecord) wrapRecord).getRecord());
   }
 
   @Override
@@ -170,6 +197,8 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     private Option<Comparator<HoodieRecord>> comparator = Option.empty();
     protected HoodieTableMetaClient hoodieTableMetaClient;
     private String externalSorterBasePath;
+    private ExternalSorterType sorterType = ExternalSorterType.SORT_ON_READ;
+    private SortEngine sortEngine = SortEngine.HEAP;
 
     @Override
     public Builder withStorage(HoodieStorage storage) {
@@ -287,6 +316,16 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
       return this;
     }
 
+    public Builder withSorterType(ExternalSorterType sorterType) {
+      this.sorterType = sorterType;
+      return this;
+    }
+
+    public Builder withSortEngine(SortEngine sortEngine) {
+      this.sortEngine = sortEngine;
+      return this;
+    }
+
     @Override
     public HoodieUnMergedSortedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
@@ -296,7 +335,8 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
       return new HoodieUnMergedSortedLogRecordScanner(
           storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan, Option.ofNullable(partitionName), internalSchema, keyFieldOverride,
-          enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient), comparator, maxMemorySizeInBytes, externalSorterBasePath);
+          enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient), comparator, maxMemorySizeInBytes, externalSorterBasePath,
+          sorterType, sortEngine);
     }
   }
 }

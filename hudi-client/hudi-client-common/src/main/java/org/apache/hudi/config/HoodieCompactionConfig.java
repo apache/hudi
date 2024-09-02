@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.util.sorter.ExternalSorterType;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
@@ -201,6 +202,14 @@ public class HoodieCompactionConfig extends HoodieConfig {
   public static final ConfigProperty<String> SORTED_MERGE_COMPACTION = ConfigProperty
       .key("hoodie.compaction.sortedmerge")
       .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
+          + "This is useful way to speed up the compaction process.");
+
+  public static final ConfigProperty<String> EXTERNAL_SORTER_TYPE = ConfigProperty
+      .key("hoodie.compaction.externalsortertype")
+      .defaultValue("sort_on_read")
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
@@ -490,6 +499,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withCompactionSpecifyPartitionPathRegex(String partitionPathRegex) {
       compactionConfig.setValue(COMPACTION_SPECIFY_PARTITION_PATH_REGEX, partitionPathRegex);
+      return this;
+    }
+
+    public Builder withSortedMergeCompactionExternalSorterType(ExternalSorterType type) {
+      compactionConfig.setValue(EXTERNAL_SORTER_TYPE, type.getValue());
       return this;
     }
 

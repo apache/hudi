@@ -38,6 +38,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.sorter.ExternalSorterType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -66,11 +67,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_SEQNO_METADATA_FIELD;
-import static org.apache.hudi.common.model.HoodieRecord.COMMIT_TIME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
-import static org.apache.hudi.common.model.HoodieRecord.OPERATION_METADATA_FIELD;
-import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertGenericRecords;
@@ -81,6 +78,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   private static final String RECORD_KEY_APPEND_VALUE1 = "-EXP1";
   private static final String RECORD_KEY_APPEND_VALUE2 = "-EXP2";
   private static final String RECORD_KEY_APPEND_VALUE3 = "-EXP3";
+  private static final String RECORD_KEY_APPEND_VALUE4 = "-EXP4";
 
   private static final int PARALLELISM = 2;
   private final Random random = new Random();
@@ -135,10 +133,14 @@ public class TestCompactionData extends HoodieClientTestBase {
     // Setup third table.
     TestCompactionData.TestTableContents experimentTable2 = setupTestTable3();
 
+    // Setup fourth table.
+    TestCompactionData.TestTableContents experimentTable3 = setupTestTable4();
+
     // Initialize the first write action to be `insert`.
     writeOnMainTable(mainTable, WriteAction.INSERT);
     writeOnExperimentTable(mainTable, experimentTable1);
     writeOnExperimentTable(mainTable, experimentTable2);
+    writeOnExperimentTable(mainTable, experimentTable3);
 
     int totalCompactions = 10;
     int compactionCount = 0;
@@ -152,15 +154,20 @@ public class TestCompactionData extends HoodieClientTestBase {
 
         scheduleCompactionOnExperimentTable(experimentTable2);
 
+        scheduleCompactionOnExperimentTable(experimentTable3);
+
         // Verify that no compaction plans are left on the timeline.
         assertEquals(0, mainTable.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
         assertEquals(0, experimentTable1.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
         assertEquals(0, experimentTable2.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
+        assertEquals(0, experimentTable3.metaClient.reloadActiveTimeline().filterPendingCompactionTimeline().countInstants());
 
         // Verify the records in both the tables.
         verifyRecords(mainTable, experimentTable1);
         verifyRecords(mainTable, experimentTable2);
+        verifyRecords(mainTable, experimentTable3);
         verifyRecords(experimentTable1, experimentTable2);
+        verifyRecords(experimentTable1, experimentTable3);
         LOG.warn("For compaction No." + compactionCount + ", verification passed. Last ingestion commit timestamp is " + mainTable.commitTimeOnMainTable);
         compactionCount++;
       } else {
@@ -168,14 +175,17 @@ public class TestCompactionData extends HoodieClientTestBase {
         // Write data into experiment table.
         writeOnExperimentTable(mainTable, experimentTable1);
         writeOnExperimentTable(mainTable, experimentTable2);
+        writeOnExperimentTable(mainTable, experimentTable3);
       }
     }
     mainTable.client.close();
     experimentTable1.client.close();
     experimentTable2.client.close();
+    experimentTable3.client.close();
 
     LOG.info("Compaction stats for experiment table 1: " + experimentTable1.compactionStats);
     LOG.info("Compaction stats for experiment table 2: " + experimentTable2.compactionStats);
+    LOG.info("Compaction stats for experiment table 3: " + experimentTable3.compactionStats);
   }
 
   private void verifyRecords(TestCompactionData.TestTableContents mainTable, TestCompactionData.TestTableContents experimentTable) {
@@ -185,7 +195,7 @@ public class TestCompactionData extends HoodieClientTestBase {
         GenericRecordValidationTestUtils.getRecordsMap(experimentTable.config, storageConf, dataGen);
 
     // Verify row count.
-    // assertEquals(mainRecordsMap.size(), experimentRecordsMap.size());
+    assertEquals(mainRecordsMap.size(), experimentRecordsMap.size());
 
     Schema readerSchema = new Schema.Parser().parse(mainTable.config.getSchema());
     List<String> excludeFields = CollectionUtils.createImmutableList(FILENAME_METADATA_FIELD);
@@ -285,7 +295,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> updateDataIntoMainTable(TestCompactionData.TestTableContents mainTable, String commitTime) throws IOException {
-    int numRecords = 50 + random.nextInt(50);
+    int numRecords = 40 + random.nextInt(30);
     List<HoodieRecord> records = updatesGenFunction.apply(dataGen, commitTime, numRecords);
     mainTable.updatePreviousGeneration(records, commitTime, 1);
     List<HoodieRecord> realRecords = records.stream().map(mainTable::deepCopyAndModifyRecordKey).collect(Collectors.toList());
@@ -294,7 +304,7 @@ public class TestCompactionData extends HoodieClientTestBase {
   }
 
   private JavaRDD<WriteStatus> deleteDataIntoMainTable(TestCompactionData.TestTableContents mainTable, String commitTime) throws IOException {
-    int numRecords = 20 + random.nextInt(30);
+    int numRecords = 20 + random.nextInt(20);
     List<HoodieKey> keys = deletesGenFunction.apply(dataGen, numRecords);
     mainTable.updatePreviousGenerationForDelete(keys, commitTime);
     List<HoodieKey> realRecords = keys.stream().map(mainTable::deepCopyAndModifyRecordKey).collect(Collectors.toList());
@@ -422,13 +432,34 @@ public class TestCompactionData extends HoodieClientTestBase {
         HoodieTableType.MERGE_ON_READ, properties);
     HoodieWriteConfig config2 = getConfigBuilderForSecondTable(tableName2, basePath2,
         TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).withSortedMergeCompaction(true).withInlineCompaction(true).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).withSortedMergeCompaction(true).withSortedMergeCompactionExternalSorterType(
+            ExternalSorterType.SORT_ON_WRITE).withInlineCompaction(true).build())
         .withAutoCommit(true).build();
 
     // Create writeClient
     SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, config2);
 
     return new TestCompactionData.TestTableContents(basePath2, tableName2, metaClient2, config2, client2, RECORD_KEY_APPEND_VALUE3);
+  }
+
+  // sorted merge compaction table
+  private TestCompactionData.TestTableContents setupTestTable4() throws IOException {
+    String tableName2 = "test-trip-table4";
+    String basePath2 = createBasePathForSecondTable(thirdTableBasePath, 4);
+    Properties properties = new Properties();
+    properties.put(HoodieTableConfig.NAME.key(), tableName2);
+
+    HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(storageConf, basePath2,
+        HoodieTableType.MERGE_ON_READ, properties);
+    HoodieWriteConfig config2 = getConfigBuilderForSecondTable(tableName2, basePath2,
+        TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.INMEMORY)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(1).withSortedMergeCompaction(true).withInlineCompaction(true).build())
+        .withAutoCommit(true).build();
+
+    // Create writeClient
+    SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, config2);
+
+    return new TestCompactionData.TestTableContents(basePath2, tableName2, metaClient2, config2, client2, RECORD_KEY_APPEND_VALUE4);
   }
 
   private String createBasePathForSecondTable(java.nio.file.Path secondTableBasePath, int num) throws IOException {

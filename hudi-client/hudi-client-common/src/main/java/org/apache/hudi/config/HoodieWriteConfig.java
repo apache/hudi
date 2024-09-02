@@ -63,6 +63,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.queue.DisruptorWaitStrategyType;
 import org.apache.hudi.common.util.queue.ExecutorType;
+import org.apache.hudi.common.util.sorter.ExternalSorterType;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
@@ -2765,6 +2766,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isSortedMergeCompactionEnabled() {
     return commonConfig.getBoolean(HoodieCompactionConfig.SORTED_MERGE_COMPACTION);
+  }
+
+  public ExternalSorterType getExternalSorterType() {
+    return ExternalSorterType.fromValue(commonConfig.getString(HoodieCompactionConfig.EXTERNAL_SORTER_TYPE));
   }
 
   public static class Builder {
