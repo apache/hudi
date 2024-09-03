@@ -247,7 +247,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
               }
 
               // Validate ts field is still of type int in the table
-              validateTsFieldSchema(tablePath)
+              validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
             }
           }
         }
@@ -332,8 +332,8 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
             testSecondRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
 
             // Validate ts field is still of type int in the table
-            validateTsFieldSchema(tablePathCustom1)
-            validateTsFieldSchema(tablePathCustom2)
+            validateTsFieldSchema(tablePathCustom1, "ts", Schema.Type.INT)
+            validateTsFieldSchema(tablePathCustom2, "ts", Schema.Type.INT)
           }
           }
         }
@@ -397,7 +397,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
           }
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePath)
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
         }
         }
       }
@@ -423,11 +423,6 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
           createTableWithSql(tableName, tablePath,
             s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields', "
               + keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
-
-          // INSERT INTO should fail due to conflict between write and table config of partition path fields
-          val sourceTableName = tableName + "_source"
-          prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-          // INSERT INTO should succeed now
           testFirstRoundInserts(tableName, extractPartition, tsGenFunc, customPartitionFunc)
           assertEquals(7, spark.sql(
             s"""
@@ -444,18 +439,18 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                | """.stripMargin).count())
 
           // Validate ts field is still of type int in the table
-          validateTsFieldSchema(tablePath)
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
         }
         }
       }
     }
   }
 
-  private def validateTsFieldSchema(tablePath: String): Unit = {
+  private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: Schema.Type): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val nullableIntSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.INT))
-    assertEquals(nullableIntSchema, schemaResolver.getTableAvroSchema(true).getField("ts").schema())
+    val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
+    assertEquals(nullableSchema, schemaResolver.getTableAvroSchema(true).getField(fieldName).schema())
   }
 
   private def testFirstRoundInserts(tableName: String,

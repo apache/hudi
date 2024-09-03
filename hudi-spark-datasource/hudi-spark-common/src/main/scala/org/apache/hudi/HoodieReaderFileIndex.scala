@@ -28,6 +28,17 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.types.StructType
 
+/**
+ * The reader file index inherits the HoodieFileIndex and maintains the same functionality except
+ * for changes around partition values and partition schema. For custom key generator where fields
+ * have timestamp partition type, the schema type for such partition columns is set as STRING instead
+ * of the base schema type for that field. This makes sure that with output partition format as DD/MM/YYYY,
+ * there are no incompatible schema errors while reading the table.
+ * Further the partition values are also updated to string. For example if output partition format is YYYY,
+ * it can represented as integer if the base schema type is integer. But since we are upgrading the schema
+ * to STRING for all output formats, we need to update the partition values to STRING format as well to avoid
+ * errors.
+ */
 class HoodieReaderFileIndex(override val spark: SparkSession,
                             override val metaClient: HoodieTableMetaClient,
                             override val schemaSpec: Option[StructType],
@@ -45,46 +56,14 @@ class HoodieReaderFileIndex(override val spark: SparkSession,
     shouldEmbedFileSlices = shouldEmbedFileSlices) {
 
   /**
-   *
-   * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
-   * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
-   * timestamp.
-   */
-  private def getTimestampPartitionIndex(): Set[Int] = {
-    val tableConfig = metaClient.getTableConfig
-    val keyGeneratorClassNameOpt = Option.apply(tableConfig.getKeyGeneratorClassName)
-    val recordKeyFieldOpt = common.util.Option.ofNullable(tableConfig.getRawRecordKeyFieldProp)
-    val keyGeneratorClassName = keyGeneratorClassNameOpt.getOrElse(KeyGenUtils.inferKeyGeneratorType(recordKeyFieldOpt, tableConfig.getPartitionFieldProp).getClassName)
-    if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
-      || keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP_AVRO.getClassName)) {
-      Set(0)
-    } else if (keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM.getClassName)
-      || keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName)) {
-      val partitionFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())
-      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields)
-      var partitionIndexes: Set[Int] = Set.empty
-      for (i <- 0 until partitionTypes.size()) {
-        if (partitionTypes.get(i).equals(PartitionKeyType.TIMESTAMP)) {
-          partitionIndexes = partitionIndexes + i
-        }
-      }
-      partitionIndexes
-    } else {
-      Set.empty
-    }
-  }
-
-  /**
-   * Invoked by Spark to fetch list of latest base files per partition.
-   *
-   * @param partitionFilters partition column filters
-   * @param dataFilters      data columns filters
-   * @return list of PartitionDirectory containing partition to base files mapping
+   * Invoked by Spark to fetch list of latest base files per partition. The method uses the base
+   * implementation of listFiles and does post processing to convert partition values to STRING type
+   * for partition columns with timestamp partition type.
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val partitionDirectories = super.listFiles(partitionFilters, dataFilters)
 
-    val timestampPartitionIndexes = getTimestampPartitionIndex()
+    val timestampPartitionIndexes = HoodieReaderFileIndex.getTimestampPartitionIndex(metaClient.getTableConfig)
     if (timestampPartitionIndexes.isEmpty) {
       partitionDirectories
     } else {
@@ -112,7 +91,43 @@ class HoodieReaderFileIndex(override val spark: SparkSession,
     }
   }
 
+  /**
+   * Returns partition schema for the table. For custom key generator where fields have timestamp partition type, the
+   * schema type for such partition columns is set as STRING instead of the base schema type for that field. This makes
+   * sure that with output partition format as DD/MM/YYYY, there are no incompatible schema errors while reading the table.
+   */
   override def getPartitionSchema(): StructType = {
     sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, handleCustomKeyGenerator = true)
+  }
+}
+
+object HoodieReaderFileIndex {
+  /**
+   *
+   * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
+   * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
+   * timestamp.
+   */
+  def getTimestampPartitionIndex(tableConfig: HoodieTableConfig): Set[Int] = {
+    val keyGeneratorClassNameOpt = Option.apply(tableConfig.getKeyGeneratorClassName)
+    val recordKeyFieldOpt = common.util.Option.ofNullable(tableConfig.getRawRecordKeyFieldProp)
+    val keyGeneratorClassName = keyGeneratorClassNameOpt.getOrElse(KeyGenUtils.inferKeyGeneratorType(recordKeyFieldOpt, tableConfig.getPartitionFieldProp).getClassName)
+    if (keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
+      || keyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP_AVRO.getClassName)) {
+      Set(0)
+    } else if (keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM.getClassName)
+      || keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName)) {
+      val partitionFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())
+      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields)
+      var partitionIndexes: Set[Int] = Set.empty
+      for (i <- 0 until partitionTypes.size()) {
+        if (partitionTypes.get(i).equals(PartitionKeyType.TIMESTAMP)) {
+          partitionIndexes = partitionIndexes + i
+        }
+      }
+      partitionIndexes
+    } else {
+      Set.empty
+    }
   }
 }

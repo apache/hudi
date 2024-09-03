@@ -180,13 +180,19 @@ object HoodieAnalysis extends SparkAdapterSupport {
    * In Spark < 3.2 however, this is worked around by simply removing any meta-fields from the output
    * of the [[LogicalRelation]] resolving into Hudi table. Note that, it's a safe operation since we
    * actually need to ignore these values anyway
+   *
+   * This function also adds transformations to the logical plan so that the HadoopFSRelation does not use
+   * HoodieReaderFileIndex while performing write operations since that index is created only for reading
+   * the hudi tables. The reader file index changes the reader schema to ensure timestamp partition fields can be
+   * read using CustomKeyGenerator.
+   * Only InsertIntoStatement, MergeIntoTable, UpdateTable and DeleteFromTable are modified in the funtion.
    */
   case class AdaptIngestionTargetLogicalRelations(spark: SparkSession) extends Rule[LogicalPlan] {
 
     /**
      * The function updates the HadoopFSRelation so that it uses HoodieFileIndex instead of
-     * HoodieFileIndexTimestampKeyGen. Also the data type for output attributes of the plan are changed
-     * accordingly. HoodieFileIndexTimestampKeyGen is used by HoodieBaseRelation for reading tables with
+     * HoodieReaderFileIndex. Also the data type for output attributes of the plan are changed
+     * accordingly. HoodieReaderFileIndex is used by HoodieBaseRelation for reading tables with
      * Timestamp or custom key generator.
      */
     private def transformReaderFSRelation(logicalPlan: Option[LogicalPlan]): Option[LogicalPlan] = {
@@ -221,26 +227,25 @@ object HoodieAnalysis extends SparkAdapterSupport {
       logicalPlan.map(relation => {
         val catalogTableOpt = sparkAdapter.resolveHoodieTable(relation)
         val fsRelation = getHadoopFsRelation(relation)
-        if (fsRelation.isDefined && fsRelation.get.location.isInstanceOf[HoodieReaderFileIndex]) {
-          relation transformUp {
-            case lr: LogicalRelation =>
-              val finalAttrs: List[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output.toSet)
-              val newFsRelation: BaseRelation = lr.relation match {
-                case fsRelation: HadoopFsRelation =>
-                  if (catalogTableOpt.isDefined) {
-                    // replace HoodieFileIndexTimestampKeyGen with HoodieFileIndex instance
-                    val fileIndex = fsRelation.location.asInstanceOf[HoodieFileIndex].copy()
-                    fsRelation.copy(location = fileIndex, partitionSchema = fileIndex.partitionSchema)(spark)
-                  } else {
-                    fsRelation
-                  }
-                case _ => lr.relation
-              }
-              lr.copy(output = finalAttrs, relation = newFsRelation)
-          }
-        } else {
-          relation
-        }
+        fsRelation.collect {
+          case fsRelation: HadoopFsRelation if fsRelation.location.isInstanceOf[HoodieReaderFileIndex] =>
+            relation transformUp {
+              case lr: LogicalRelation =>
+                val finalAttrs: List[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output.toSet)
+                val newFsRelation: BaseRelation = lr.relation match {
+                  case fsRelation: HadoopFsRelation =>
+                    if (catalogTableOpt.isDefined) {
+                      // replace HoodieReaderFileIndex with HoodieFileIndex instance
+                      val fileIndex = fsRelation.location.asInstanceOf[HoodieFileIndex].copy()
+                      fsRelation.copy(location = fileIndex, partitionSchema = fileIndex.partitionSchema)(spark)
+                    } else {
+                      fsRelation
+                    }
+                  case _ => lr.relation
+                }
+                lr.copy(output = finalAttrs, relation = newFsRelation)
+            }
+        }.getOrElse(relation)
       })
     }
 
@@ -312,6 +317,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
           case ut @ UpdateTable(relation @ ResolvesToHudiTable(_), _, _) =>
             val updatedRelation: LogicalPlan = transformReaderFSRelation(Option.apply(relation)).get
             ut.copy(table = updatedRelation)
+
+          case dft@DeleteFromTable(plan@ResolvesToHudiTable(_), _) =>
+            val updatedPlan = transformReaderFSRelation(Option.apply(plan))
+            dft.copy(table = updatedPlan.getOrElse(plan))
+
+          case ct @ CreateTable(_, _, queryOpt) =>
+            val updatedQuery = transformReaderFSRelation(queryOpt)
+            ct.copy(query = updatedQuery.orElse(queryOpt))
 
           case logicalPlan: LogicalPlan if logicalPlan.resolved =>
             sparkAdapter.getCatalystPlanUtils.maybeApplyForNewFileFormat(logicalPlan)

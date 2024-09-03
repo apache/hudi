@@ -37,6 +37,12 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
                      timeZone: TimeZone,
                      validatePartitionValues: Boolean = false): InternalRow
 
+  /**
+   * This function generates the partition schema for hoodie file index. This method is used by both HoodieFileIndex and
+   * HoodieReaderFileIndex. For HoodieReaderFileIndex it upgrades the schema of partition columns with timestamp partition
+   * type to STRING whereas for HoodieFileIndex it uses the base schema type of such partition columns. This makes sure
+   * that with output partition format as DD/MM/YYYY, there are no incompatible schema errors while reading the table.
+   */
   def getPartitionSchema(tableConfig: HoodieTableConfig, schema: StructType, handleCustomKeyGenerator: Boolean): StructType = {
     val nameFieldMap: Map[String, StructField] = generateFieldMap(schema)
     val partitionColumns = tableConfig.getPartitionFields
@@ -85,7 +91,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
       partitionFields
     }
 
-    if (partitionColumns.isPresent) {
+    val partitionSchema = if (partitionColumns.isPresent) {
       // Note that key generator class name could be null
       val keyGeneratorPartitionFieldsOpt = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig)
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
@@ -104,6 +110,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
         " Partition pruning will not work")
       new StructType()
     }
+    partitionSchema
   }
 
   /**
