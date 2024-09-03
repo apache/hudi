@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -46,7 +45,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -103,14 +101,14 @@ public class HoodieIndexUtils {
    * @return the list of {@link FileSlice}
    */
   public static List<FileSlice> getLatestFileSlicesForPartition(
-          final String partition,
-          final HoodieTable hoodieTable) {
+      final String partition,
+      final HoodieTable hoodieTable) {
     Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
-            .filterCompletedInstants().lastInstant();
+        .filterCompletedInstants().lastInstant();
     if (latestCommitTime.isPresent()) {
       return hoodieTable.getHoodieView()
-              .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
-              .collect(toList());
+          .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
+          .collect(toList());
     }
     return Collections.emptyList();
   }
@@ -206,14 +204,14 @@ public class HoodieIndexUtils {
 
   /**
    * Check if the given commit timestamp is valid for the timeline.
-   *
+   * <p>
    * The commit timestamp is considered to be valid if:
-   *   1. the commit timestamp is present in the timeline, or
-   *   2. the commit timestamp is less than the first commit timestamp in the timeline
+   * 1. the commit timestamp is present in the timeline, or
+   * 2. the commit timestamp is less than the first commit timestamp in the timeline
    *
-   * @param commitTimeline  The timeline
-   * @param commitTs        The commit timestamp to check
-   * @return                true if the commit timestamp is valid for the timeline
+   * @param commitTimeline The timeline
+   * @param commitTs       The commit timestamp to check
+   * @return true if the commit timestamp is valid for the timeline
    */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
@@ -386,19 +384,5 @@ public class HoodieIndexUtils {
       default:
         throw new HoodieIndexException("Unsupported record type: " + recordType);
     }
-  }
-
-  /**
-   * Get the partition name from the metadata partition type.
-   * NOTE: For certain types of metadata partition, such as functional index and secondary index,
-   * partition path defined enum is just the prefix to denote the type of metadata partition.
-   * The actual partition name is contained in the index definition.
-   */
-  public static String getPartitionNameFromPartitionType(MetadataPartitionType partitionType, HoodieTableMetaClient metaClient, String indexName) {
-    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType) || MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
-      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present");
-      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
-    }
-    return partitionType.getPartitionPath();
   }
 }

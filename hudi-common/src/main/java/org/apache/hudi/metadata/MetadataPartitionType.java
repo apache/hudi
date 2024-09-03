@@ -193,6 +193,12 @@ public enum MetadataPartitionType {
       }
       return false;
     }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+    }
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
@@ -218,6 +224,12 @@ public enum MetadataPartitionType {
       payload.secondaryIndexMetadata = new HoodieSecondaryIndexInfo(
           secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
           (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
+    }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
     }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
@@ -317,6 +329,16 @@ public enum MetadataPartitionType {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
     this.recordType = recordType;
+  }
+
+  /**
+   * Get the partition name from the metadata partition type.
+   * NOTE: For certain types of metadata partition, such as functional index and secondary index,
+   * partition path defined enum is just the prefix to denote the type of metadata partition.
+   * The actual partition name is contained in the index definition.
+   */
+  public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+    return getPartitionPath();
   }
 
   public String getPartitionPath() {

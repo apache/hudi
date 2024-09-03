@@ -32,11 +32,15 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for {@link MetadataPartitionType}.
@@ -182,5 +186,41 @@ public class TestMetadataPartitionType {
     assertEquals(5, MetadataPartitionType.RECORD_INDEX.getRecordType());
     assertEquals(6, MetadataPartitionType.PARTITION_STATS.getRecordType());
     assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType());
+  }
+
+  @Test
+  public void testGetFunctionalIndexPath() {
+    MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    String indexName = "testIndex";
+
+    Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
+    indexDefinitions.put(
+        indexName,
+        new HoodieIndexDefinition("func_index_testIndex", "column_stats", "lower", Collections.singletonList("name"), null));
+    HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
+
+    String result = partitionType.getPartitionPath(metaClient, indexName);
+    assertEquals("func_index_testIndex", result);
+  }
+
+  @Test
+  public void testGetNonFunctionalIndexPath() {
+    MetadataPartitionType partitionType = MetadataPartitionType.COLUMN_STATS;
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+
+    String result = partitionType.getPartitionPath(metaClient, null);
+    assertEquals(partitionType.getPartitionPath(), result);
+  }
+
+  @Test
+  public void testExceptionForMissingFunctionalIndexMetadata() {
+    MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getIndexMetadata()).thenReturn(Option.empty());
+
+    assertThrows(IllegalArgumentException.class,
+        () -> partitionType.getPartitionPath(metaClient, "testIndex"));
   }
 }

@@ -67,7 +67,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -114,9 +113,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readRecordKeysFro
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromBaseFiles;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.readSecondaryKeysFromFileSlices;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
-import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 import static org.apache.hudi.metadata.MetadataPartitionType.getEnabledPartitions;
 
@@ -448,7 +445,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
       // Perform the commit using bulkCommit
       HoodieData<HoodieRecord> records = fileGroupCountAndRecordsPair.getValue();
-      String partitionPath = (partitionType == FUNCTIONAL_INDEX || partitionType == SECONDARY_INDEX) ? dataWriteConfig.getIndexingConfig().getIndexName() : partitionType.getPartitionPath();
+      String partitionPath = partitionType.getPartitionPath(dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
       bulkCommit(commitTimeForPartition, partitionPath, records, fileGroupCount);
       metadataMetaClient.reloadActiveTimeline();
 
@@ -844,7 +841,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount) throws IOException {
-    String partitionName = HoodieIndexUtils.getPartitionNameFromPartitionType(metadataPartition, dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
+    String partitionName = metadataPartition.getPartitionPath(dataMetaClient, dataWriteConfig.getIndexingConfig().getIndexName());
     // Remove all existing file groups or leftover files in the partition
     final StoragePath partitionPath = new StoragePath(metadataWriteConfig.getBasePath(), partitionName);
     HoodieStorage storage = metadataMetaClient.getStorage();
@@ -1394,10 +1391,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * This is used to optimize the initial commit to the MDT partition which may contains a large number of
    * records and hence is more suited to bulkInsert for write performance.
    *
-   * @param instantTime    - Action instant time for this commit
-   * @param partitionName  - The MDT partition to which records are to be committed
-   * @param records        - records to be bulk inserted
-   * @param fileGroupCount - The maximum number of file groups to which the records will be written.
+   * @param instantTime    Action instant time for this commit
+   * @param partitionName  MDT partition to which records are to be committed. The relative path of the partition is same as the partition name.
+   *                       For functional and secondary indexes, partition name is the index name, which is recorded in index definition.
+   * @param records        records to be bulk inserted
+   * @param fileGroupCount The maximum number of file groups to which the records will be written.
    */
   protected abstract void bulkCommit(
       String instantTime, String partitionName, HoodieData<HoodieRecord> records,
@@ -1669,24 +1667,22 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs;
     try (HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata)) {
-      partitionBaseFilePairs = replaceCommitMetadata
+      List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
           .getPartitionToReplaceFileIds()
           .keySet().stream()
           .flatMap(partition -> fsView.getLatestBaseFiles(partition).map(f -> Pair.of(partition, f)))
           .collect(Collectors.toList());
+      return readRecordKeysFromBaseFiles(
+          engineContext,
+          dataWriteConfig,
+          partitionBaseFilePairs,
+          true,
+          dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
+          dataMetaClient.getBasePath(),
+          storageConf,
+          this.getClass().getSimpleName());
     }
-
-    return readRecordKeysFromBaseFiles(
-        engineContext,
-        dataWriteConfig,
-        partitionBaseFilePairs,
-        true,
-        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism(),
-        dataMetaClient.getBasePath(),
-        storageConf,
-        this.getClass().getSimpleName());
   }
 
   private HoodieData<HoodieRecord> getRecordIndexAdditionalUpserts(HoodieData<HoodieRecord> updatesFromWriteStatuses, HoodieCommitMetadata commitMetadata) {
