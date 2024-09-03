@@ -24,6 +24,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.ParquetUtils
@@ -232,80 +234,162 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
   @Test
   def testTimeTravelQuery(): Unit = {
     val dataGen = new HoodieTestDataGenerator()
-
     val metadataOpts: Map[String, String] = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
-      DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ"
-
+      DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5"
     )
-
     val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
 
-    // Insert records
-    val newRecords = dataGen.generateInserts("001", 100)
-    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala.toSeq)
-
+    // Insert T0
+    val newRecords = dataGen.generateInserts("000", 100)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
     newRecordsDF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    // Update records
-    val updatedRecords = dataGen.generateUpdates("002", newRecords)
-    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala.toSeq)
+    //Validate T0
+    val metaClient = HoodieTableMetaClient.builder
+      .setConf(storageConf())
+      .setBasePath(s"$basePath/.hoodie/metadata")
+      .build
+    val timelineT0 = metaClient.getActiveTimeline
+    assertEquals(3, timelineT0.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT0.lastInstant().get().getAction)
+    val t0 = timelineT0.lastInstant().get().getTimestamp
 
+    val filesT0 = getFiles(basePath)
+    assertEquals(3, filesT0.size)
+
+    val baseMetaClient = HoodieTableMetaClient.builder
+      .setConf(storageConf())
+      .setBasePath(basePath)
+      .build
+    val filesT0FS = getFilesFromFs(baseMetaClient)
+    assertEquals(3, filesT0FS.size)
+    assertEquals(3, filesT0.intersect(filesT0FS).size)
+
+    // Update T1
+    val updatedRecords = dataGen.generateUpdates("001", newRecords)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
     updatedRecordsDF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
-    val firstRead = getFiles(basePath)
-    val metaClient = HoodieTableMetaClient.builder
-      .setConf(storageConf())
-      .setBasePath(basePath)
-      .build
+    //Validate T1
+    val timelineT1 = metaClient.reloadActiveTimeline()
+    assertEquals(4, timelineT1.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT1.lastInstant().get().getAction)
+    val t1 =  timelineT1.lastInstant().get().getTimestamp
 
-    val firstTimestamp =  metaClient.getActiveTimeline.firstInstant().get().getTimestamp
+    val filesT1 = getFiles(basePath)
+    assertEquals(6, filesT1.size)
+    assertEquals(3, filesT1.diff(filesT0).size)
 
-    val secondRead = getFilesAsOf(basePath, firstTimestamp)
-    assertEquals(6, firstRead.size)
-    assertEquals(3, secondRead.size)
-    assertEquals(3, firstRead.intersect(secondRead).size)
+    val filesT1FS = getFilesFromFs(baseMetaClient)
+    assertEquals(6, filesT1FS.size)
+    assertEquals(6, filesT1.intersect(filesT1FS).size)
 
+    val filesT1travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT1travelT0.size)
+    assertEquals(3, filesT1travelT0.intersect(filesT0).size)
 
-    // more update records
-    val updatedRecords2 = dataGen.generateUpdates("003", updatedRecords)
-    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala.toSeq)
-
+    //Update T2
+    val updatedRecords2 = dataGen.generateUpdates("002", updatedRecords)
+    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala)
     updatedRecords2DF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
+    //Validate T2
+    val timelineT2 = metaClient.reloadActiveTimeline()
+    assertEquals(5, timelineT2.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.lastInstant().get().getAction)
+    val t2 =  timelineT2.lastInstant().get().getTimestamp
 
-    val thirdRead = getFiles(basePath)
-    assertEquals(9, thirdRead.size)
+    val filesT2 = getFiles(basePath)
+    assertEquals(9, filesT2.size)
+    assertEquals(3, filesT2.diff(filesT1).size)
 
-    val secondTimestamp =  metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp
+    val filesT2FS = getFilesFromFs(baseMetaClient)
+    assertEquals(9, filesT2FS.size)
+    assertEquals(9, filesT2.intersect(filesT2FS).size)
 
-    val fourthRead = getFilesAsOf(basePath, secondTimestamp)
+    val filesT2travelT1 = getFilesAsOf(basePath, t1)
+    assertEquals(6, filesT2travelT1.size)
+    assertEquals(6, filesT2travelT1.intersect(filesT1).size)
 
-    assertEquals(6, fourthRead.size)
+    val filesT2travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT2travelT0.size)
+    assertEquals(3, filesT2travelT0.intersect(filesT0).size)
 
-    assertEquals(6, fourthRead.intersect(firstRead).size)
+    //Update T3
+    val updatedRecords3 = dataGen.generateUpdates("003", updatedRecords2)
+    val updatedRecords3DF = parseRecords(recordsToStrings(updatedRecords3).asScala)
+    updatedRecords3DF.write.format(hudi)
+      .options(combinedOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    //Validate T3
+    val timelineT3 = metaClient.reloadActiveTimeline()
+    assertEquals(7, timelineT3.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
+    assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
+
+    val filesT3 = getFiles(basePath)
+    assertEquals(12, filesT3.size)
+    assertEquals(3, filesT3.diff(filesT2).size)
+
+    val filesT3FS = getFilesFromFs(baseMetaClient)
+    assertEquals(12, filesT3FS.size)
+    assertEquals(12, filesT3.intersect(filesT3FS).size)
+
+    val filesT3travelT2 = getFilesAsOf(basePath, t2)
+    assertEquals(9, filesT3travelT2.size)
+    assertEquals(9, filesT3travelT2.intersect(filesT2).size)
+
+    val filesT3travelT1 = getFilesAsOf(basePath, t1)
+    assertEquals(6, filesT3travelT1.size)
+    assertEquals(6, filesT3travelT1.intersect(filesT1).size)
+
+    val filesT3travelT0 = getFilesAsOf(basePath, t0)
+    assertEquals(3, filesT3travelT0.size)
+    assertEquals(3, filesT3travelT0.intersect(filesT0).size)
   }
 
   private def getFilesAsOf(basePath: String, timestamp: String): scala.collection.GenSet[Any] = {
     getFiles(basePath, Map(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key() -> timestamp))
   }
+
   private def getFiles(basePath: String): scala.collection.GenSet[Any] = {
     getFiles(basePath, Map.empty)
   }
+
   private def getFiles(basePath: String, opts: Map[String, String]): scala.collection.GenSet[Any] = {
     spark.read.format(hudi).options(opts).load(s"$basePath/.hoodie/metadata").where("type = 2").select(explode(col("filesystemMetadata"))).drop("value").rdd.map(r => r(0)).collect().toSet
+  }
+
+  private def getFilesFromFs(metaClient: HoodieTableMetaClient): scala.collection.GenSet[Any] = {
+    val engineContext = new HoodieSparkEngineContext(jsc())
+    val files = new util.ArrayList[String]()
+    val fsview = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
+      metaClient, HoodieMetadataConfig.newBuilder.enable(false).build())
+    fsview.loadAllPartitions()
+    fsview.getAllFileGroups.forEach(fg => {
+      fg.getAllFileSlices.forEach(fileSlice => {
+        fileSlice.getBaseFile.ifPresent(baseFile => files.add(baseFile.getFileName))
+        fileSlice.getLogFiles.forEach(logFile => files.add(logFile.getFileName))
+      })
+    })
+    files.toArray.toSet
   }
 }
