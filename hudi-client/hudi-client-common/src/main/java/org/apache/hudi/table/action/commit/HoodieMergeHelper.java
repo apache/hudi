@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.sorter.ExternalSorter;
 import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
 import org.apache.hudi.common.util.sorter.ExternalSorterType;
@@ -125,7 +126,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       this.baseFileSize = fileSize;
       this.rawIterator = rawIterator;
       try {
-        this.sorter = ExternalSorterFactory.create(sorterType, sorterBasePath, maxMemoryInBytes, comparator, sizeEstimator, sortEngine);
+        this.sorter = ExternalSorterFactory.create(sorterType, sorterBasePath, maxMemoryInBytes, comparator, sizeEstimator, new SampleEstimator(), sortEngine);
       } catch (IOException e) {
         throw new HoodieException("Failed to initialize sorter", e);
       }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.sorter;
 
+import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SizeEstimator;
 
 import java.io.IOException;
@@ -27,12 +28,12 @@ import java.util.Comparator;
 public class ExternalSorterFactory<R extends Serializable> {
 
   public static <R extends Serializable> ExternalSorter<R> create(ExternalSorterType sorterType, String basePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> sizeEstimator,
-                                                                  SortEngine engine) throws IOException {
+                                                                  SampleEstimator sampleEstimator, SortEngine engine) throws IOException {
     switch (sorterType) {
       case SORT_ON_WRITE:
-        return new SortOnWriteExternalSorter<R>(basePath, maxMemoryInBytes, comparator, sizeEstimator);
+        return new SortOnWriteExternalSorter<R>(basePath, maxMemoryInBytes, comparator, sizeEstimator, sampleEstimator);
       case SORT_ON_READ:
-        return new SortOnReadExternalSorter<R>(basePath, maxMemoryInBytes, comparator, sizeEstimator, engine);
+        return new SortOnReadExternalSorter<R>(basePath, maxMemoryInBytes, comparator, sizeEstimator, sampleEstimator, engine);
       default:
         throw new IllegalArgumentException("Unsupported sorter type: " + sorterType);
     }

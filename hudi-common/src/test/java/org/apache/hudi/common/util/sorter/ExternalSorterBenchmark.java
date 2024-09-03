@@ -16,13 +16,9 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.util;
+package org.apache.hudi.common.util.sorter;
 
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.sorter.ExternalSorter;
-import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
-import org.apache.hudi.common.util.sorter.ExternalSorterType;
-import org.apache.hudi.common.util.sorter.SortEngine;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -40,19 +36,15 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
-import java.util.stream.Collectors;
 
 @BenchmarkMode(Mode.AverageTime)
 @Measurement(iterations = 3)
 @State(Scope.Benchmark)
 @Threads(Threads.MAX)
-public class ExternalSorterBenchmark {
+public class ExternalSorterBenchmark extends ExternalSorterBenchmarkHarness {
 
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
@@ -62,45 +54,9 @@ public class ExternalSorterBenchmark {
     new Runner(opt).run();
   }
 
-
-  private static final int DATA_SIZE = 1024; // 1KB
-
-  private static class Record implements Comparable<Record>, Serializable {
-    private final int key;
-    private final byte[] data;
-
-    public Record(int key) {
-      this.key = key;
-      this.data = new byte[DATA_SIZE];
-    }
-
-    public int getKey() {
-      return key;
-    }
-
-    @Override
-    public int compareTo(Record o) {
-      return Integer.compare(key, o.key);
-    }
-  }
-
-  private int totalNum;
-  private int totalSize;
-  private SizeEstimator<Record> sizeEstimator = record -> 4 + 4 + 4 + DATA_SIZE;
-  private List<Record> records;
-  private List<Record> sortedRecords;
-  private File tmpDir;
-
   @Setup(Level.Trial)
   public void setUp() {
-    // total 100MB data
-    totalNum = 1 << 19;
-    totalSize = totalNum * (4 + 4 + 4 + DATA_SIZE);
-    // generate random records
-    Random random = new Random();
-    records = random.ints(totalNum, 0, totalNum / 20).mapToObj(key -> new Record(key)).collect(Collectors.toList());
-    sortedRecords = records.stream().sorted().collect(Collectors.toList());
-    tmpDir = new File(System.getProperty("java.io.tmpdir"));
+    prepare();
   }
 
   @Param({"0.01", "0.10", "0.50", "0.90", "100.00"})
@@ -113,7 +69,7 @@ public class ExternalSorterBenchmark {
   public void benchExternalSorter() throws IOException {
     long maxMemory = (long) (ratio * totalSize);
     ExternalSorter<Record> sorter =
-        ExternalSorterFactory.create(sorterType, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, SortEngine.HEAP);
+        ExternalSorterFactory.create(sorterType, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, null, SortEngine.HEAP);
     sorter.addAll(records.iterator());
     sorter.finish();
     ClosableIterator<Record> sorterIterator = sorter.getIterator();

@@ -20,6 +20,8 @@ package org.apache.hudi.common.util.sorter;
 
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
@@ -37,7 +39,8 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
   protected final String basePath;
   protected final long maxMemoryInBytes;
   protected final Comparator<R> comparator;
-  protected final SizeEstimator<R> sizeEstimator;
+  private final SizeEstimator<R> sizeEstimator;
+  private final Option<SampleEstimator> sampleEstimatorOpt;
   protected State state = State.INIT;
   private HoodieTimer insertTimer = HoodieTimer.create();
   protected long timeTakenToInsertAndWriteRecord; // ms
@@ -49,12 +52,24 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
     CLOSED
   }
 
-  public ExternalSorter(String basePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> sizeEstimator) throws IOException {
+  public ExternalSorter(String basePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> sizeEstimator, SampleEstimator sampleEstimator) throws IOException {
     this.basePath = String.format("%s/%s-%s", basePath, SUBFOLDER_PREFIX, UUID.randomUUID());
     this.maxMemoryInBytes = maxMemoryInBytes;
     this.comparator = comparator;
     this.sizeEstimator = sizeEstimator;
+    if (sampleEstimator != null) {
+      this.sampleEstimatorOpt = Option.of(sampleEstimator);
+    } else {
+      this.sampleEstimatorOpt = Option.empty();
+    }
     initBaseDir();
+  }
+
+  protected long sizeEstimate(R record) {
+    if (sampleEstimatorOpt.isPresent()) {
+      return sampleEstimatorOpt.get().estimate(() -> sizeEstimator.sizeEstimate(record));
+    }
+    return sizeEstimator.sizeEstimate(record);
   }
 
   public void initBaseDir() throws IOException {

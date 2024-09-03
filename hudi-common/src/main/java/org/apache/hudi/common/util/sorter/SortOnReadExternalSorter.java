@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -86,8 +87,9 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
   private List<R> memoryEntries;
 
-  public SortOnReadExternalSorter(String baseFilePath, long maxMemorySize, Comparator<R> comparator, SizeEstimator<R> sizeEstimator, SortEngine sortEngine) throws IOException {
-    super(baseFilePath, maxMemorySize, comparator, sizeEstimator);
+  public SortOnReadExternalSorter(String baseFilePath, long maxMemorySize, Comparator<R> comparator,
+                                  SizeEstimator<R> sizeEstimator, SampleEstimator sampleEstimator, SortEngine sortEngine) throws IOException {
+    super(baseFilePath, maxMemorySize, comparator, sizeEstimator, sampleEstimator);
     this.sortEngine = sortEngine;
     this.collectionSorter = (collection) -> {
       collection.sort(comparator);
@@ -98,7 +100,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
   @Override
   public void closeSorter() {
-    LOG.info("ExternalSorter2 closed, max memory size => {}, total memory size => {}, current memory size => {} \n"
+    LOG.info("SortOnReadExternalSorter closed, max memory size => {}, total memory size => {}, current memory size => {} \n"
             + " total entry count => {}, current memory entry count => {} \n"
             + " total sorted file count => {}, total sorted file size => {} \n"
             + " total time taken to insert and write record => {}", maxMemoryInBytes, totalMemorySize, currentMemorySize, totalEntryCount, currentMemoryEntryCount,
@@ -132,9 +134,9 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
     memoryEntries.add(record);
     currentMemoryEntryCount++;
     totalEntryCount++;
-    long sizeEstimate = sizeEstimator.sizeEstimate(record);
-    currentMemorySize += sizeEstimate;
-    totalMemorySize += sizeEstimate;
+    long sizeEstimated = sizeEstimate(record);
+    currentMemorySize += sizeEstimated;
+    totalMemorySize += sizeEstimated;
     if (currentMemorySize >= maxMemoryInBytes) {
       spill(memoryEntries);
       memoryEntries.clear();
@@ -357,7 +359,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
         Entry entry = entryOpt.get();
         R record = (R) serializeFunc.deserialize(entry.getRecord());
         batchRecords.add(record);
-        currentReadBatchSize += sizeEstimator.sizeEstimate(record);
+        currentReadBatchSize += sizeEstimate(record);
       }
       if (isEOF && currentReadBatchSize == 0) {
         LOG.debug("SortedEntryFileReader: {} reach end", readerId);
