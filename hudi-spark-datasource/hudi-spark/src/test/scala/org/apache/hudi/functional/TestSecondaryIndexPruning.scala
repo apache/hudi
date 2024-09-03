@@ -37,6 +37,8 @@ import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.scalatest.Assertions.assertResult
 
 import scala.collection.JavaConverters
@@ -66,14 +68,16 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @Test
-  def testSecondaryIndexWithFilters(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testSecondaryIndexWithFilters(tableType: String): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
-        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
-      tableName += "test_secondary_index_with_filters"
+      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
+      tableName += "test_secondary_index_with_filters" + sqlTableType
 
       spark.sql(
         s"""
@@ -85,6 +89,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |) using hudi
            | options (
            |  primaryKey ='record_key_col',
+           |  type = '$sqlTableType',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
@@ -208,14 +213,16 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  def testSecondaryIndexWithPartitionStatsIndex(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testSecondaryIndexWithPartitionStatsIndex(tableType: String): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
-        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
-      tableName += "test_secondary_index_with_partition_stats_index"
+      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
+      tableName += "test_secondary_index_with_partition_stats_index" + sqlTableType
 
       spark.sql(
         s"""
@@ -228,6 +235,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |) using hudi
            | options (
            |  primaryKey ='record_key_col',
+           |  type = '$sqlTableType',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
