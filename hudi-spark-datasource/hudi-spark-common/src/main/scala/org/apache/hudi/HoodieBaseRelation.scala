@@ -69,7 +69,7 @@ import org.apache.spark.sql.execution.datasources.parquet.{LegacyHoodieParquetFi
 import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, PrunedFilteredScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.util.SerializableConfiguration
+import org.apache.spark.SerializableWritable
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -848,7 +848,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
                                 filters: Seq[Filter],
                                 options: Map[String, String],
                                 hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    val storageConfBroadcast = spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
+    val storageConfBroadcast = spark.sparkContext.broadcast(new SerializableWritable(hadoopConf))
 
     partitionedFile => {
       val hadoopConf = storageConfBroadcast.value.value
