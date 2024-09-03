@@ -244,7 +244,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Insert T0
     val newRecords = dataGen.generateInserts("000", 100)
-    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala)
+    val newRecordsDF = parseRecords(recordsToStrings(newRecords).asScala.toSeq)
     newRecordsDF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -274,7 +274,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     // Update T1
     val updatedRecords = dataGen.generateUpdates("001", newRecords)
-    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala)
+    val updatedRecordsDF = parseRecords(recordsToStrings(updatedRecords).asScala.toSeq)
     updatedRecordsDF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
@@ -301,7 +301,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Update T2
     val updatedRecords2 = dataGen.generateUpdates("002", updatedRecords)
-    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala)
+    val updatedRecords2DF = parseRecords(recordsToStrings(updatedRecords2).asScala.toSeq)
     updatedRecords2DF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
@@ -332,7 +332,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Update T3
     val updatedRecords3 = dataGen.generateUpdates("003", updatedRecords2)
-    val updatedRecords3DF = parseRecords(recordsToStrings(updatedRecords3).asScala)
+    val updatedRecords3DF = parseRecords(recordsToStrings(updatedRecords3).asScala.toSeq)
     updatedRecords3DF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
