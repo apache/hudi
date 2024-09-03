@@ -20,16 +20,22 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +44,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
+import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -49,23 +59,30 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
 
   @Override
-  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+  public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               String instantTime,
+                                               SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     UpgradeDowngradeUtils.runCompaction(table, context, config, upgradeDowngradeHelper);
     UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath()).build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(config.getBasePath()).build();
     List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
     if (!instants.isEmpty()) {
       context.map(instants, instant -> {
         if (instant.getFileName().contains(UNDERSCORE)) {
           try {
-            // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x to the ${instant_time}.action[.state] format in version 0.x.
+            // Rename the metadata file name from the ${instant_time}_${completion_time}.action[.state] format in version 1.x
+            // to the ${instant_time}.action[.state] format in version 0.x.
             StoragePath fromPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName());
             StoragePath toPath = new StoragePath(metaClient.getMetaPath(), instant.getFileName().replaceAll(UNDERSCORE + "\\d+", ""));
             boolean success = metaClient.getStorage().rename(fromPath, toPath);
-            // TODO: We need to rename the action-related part of the metadata file name here when we bring separate action name for clustering/compaction in 1.x as well.
+            // TODO: We need to rename the action-related part of the metadata file name here
+            //  when we bring separate action name for clustering/compaction in 1.x as well.
             if (!success) {
               throw new HoodieIOException("an error that occurred while renaming " + fromPath + " to: " + toPath);
             }
@@ -79,17 +96,60 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
 
     downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
+    downgradeMetadataPartitions(metaClient, context, tablePropsToAdd);
     return tablePropsToAdd;
   }
 
-  private static void downgradePartitionFields(HoodieWriteConfig config, HoodieEngineContext context, SupportsUpgradeDowngrade upgradeDowngradeHelper,
+  private static void downgradePartitionFields(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
                                                Map<ConfigProperty, String> tablePropsToAdd) {
     HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
     String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
-    if (keyGenerator != null && partitionPathField != null
-        && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
+    if (keyGenerator != null
+        && partitionPathField != null
+        && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName())
+          || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
       tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
+    }
+  }
+
+  static void downgradeMetadataPartitions(HoodieTableMetaClient metaClient,
+                                          HoodieEngineContext context,
+                                          Map<ConfigProperty, String> tablePropsToAdd) {
+    metaClient.reloadActiveTimeline();
+    StoragePath basePath = metaClient.getBasePath();
+
+    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(
+            (Configuration) context.getStorageConf().unwrap()))
+        .setBasePath(
+            new Path(basePath.toString(),
+                HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+
+    // Delete partitions.
+    deleteMetadataPartition(context, metaClient.getStorage(), mdtMetaClient);
+
+    // No matter if partitions have been removed, block their creation.
+    tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, "");
+  }
+
+  static void deleteMetadataPartition(HoodieEngineContext context,
+                                      HoodieStorage hoodieStorage,
+                                      HoodieTableMetaClient mdtMetaClient) {
+    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(
+        context, hoodieStorage, mdtMetaClient.getBasePath(), true);
+
+    for (String partitionPath : metadataPartitions) {
+      if (partitionPath.equals(FUNCTIONAL_INDEX.getPartitionPath())
+          || partitionPath.equals(SECONDARY_INDEX.getPartitionPath())
+          || partitionPath.equals(PARTITION_STATS.getPartitionPath())) {
+        HoodieTableMetadataUtil.deleteMetadataTablePartition(
+            mdtMetaClient, context, partitionPath, true);
+      }
     }
   }
 }
