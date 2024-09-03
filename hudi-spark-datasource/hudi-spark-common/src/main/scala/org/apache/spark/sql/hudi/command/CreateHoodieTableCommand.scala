@@ -93,13 +93,16 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
 object CreateHoodieTableCommand {
 
   def validateTableSchema(userDefinedSchema: StructType, hoodieTableSchema: StructType): Boolean = {
-    if (userDefinedSchema.fields.length != hoodieTableSchema.fields.length) {
+    if (userDefinedSchema.fields.length != 0 &&
+      userDefinedSchema.fields.length != hoodieTableSchema.fields.length) {
       false
-    } else {
+    } else if (userDefinedSchema.fields.length != 0) {
       hoodieTableSchema.fields.zip(userDefinedSchema).forall {
         case (hoodieTableColumn, userDefinedColumn) =>
           hoodieTableColumn == userDefinedColumn
       }
+    } else {
+      true
     }
   }
 
