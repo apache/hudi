@@ -133,6 +133,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     }
 
     private void init() {
+      LOG.info("Start to sort base-file: {} with file-size: {}", baseFilePath, baseFileSize);
       HoodieTimer hoodieTimer = HoodieTimer.create();
       hoodieTimer.startTimer();
       // scan all records and sort them

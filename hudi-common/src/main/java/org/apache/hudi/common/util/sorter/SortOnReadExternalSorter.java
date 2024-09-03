@@ -61,9 +61,6 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
   private int totalEntryCount;
 
-  // ms
-  private long timeTakenToInsertAndWriteRecord;
-
   // TODO: better sorter
   private CollectionSorter<List<R>> collectionSorter;
 
@@ -105,7 +102,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
             + " total entry count => {}, current memory entry count => {} \n"
             + " total sorted file count => {}, total sorted file size => {} \n"
             + " total time taken to insert and write record => {}", maxMemoryInBytes, totalMemorySize, currentMemorySize, totalEntryCount, currentMemoryEntryCount,
-        fileManager.fileCount, fileManager.totalFileSize, timeTakenToInsertAndWriteRecord);
+        fileManager.fileCount, fileManager.totalFileSize, getTimeTakenToInsertAndWriteRecord());
     fileManager.clear();
     memoryEntries.clear();
   }
@@ -128,7 +125,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
             + " total entry count => {}, current memory entry count => {} \n"
             + " total sorted file count => {}, total sorted file size => {} \n"
             + " total time taken to insert and write record => {}", maxMemoryInBytes, totalMemorySize, currentMemorySize, totalEntryCount, currentMemoryEntryCount,
-        fileManager.fileCount, fileManager.totalFileSize, timeTakenToInsertAndWriteRecord);
+        fileManager.fileCount, fileManager.totalFileSize, getTimeTakenToInsertAndWriteRecord());
   }
 
   private void addRecord(R record) {
@@ -157,7 +154,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
     if (fileManager.fileCount > 0) {
       long maxBatchSize = (maxMemoryInBytes - currentMemorySize) / fileManager.fileCount;
       for (int i = 0; i < fileManager.fileCount; i++) {
-        readers.add(new SortedEntryFileReader(i, fileManager.files.get(i), maxBatchSize));
+        readers.add(new SortedEntryFileReader(i, maxBatchSize, fileManager.files.get(i)));
       }
     }
     if (currentMemorySize > 0) {
@@ -200,14 +197,10 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   }
 
   class DiskFileWriter implements Closeable {
-    private final File writedFile;
     private final FileOutputStream fileOutputStream;
     private final SizeAwareDataOutputStream writeStream;
-    private final int writeBufferSize;
 
     public DiskFileWriter(File file, int writeBufferSize) throws IOException {
-      this.writeBufferSize = writeBufferSize;
-      this.writedFile = file;
       this.fileOutputStream = new FileOutputStream(file, true);
       this.writeStream = new SizeAwareDataOutputStream(fileOutputStream, writeBufferSize);
     }
@@ -226,6 +219,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   }
 
   private class SortedFileManager {
+    public static final int DEFAULT_FILE_DELETE_RETRY_TIMES = 3;
     private int fileCount;
     private long totalFileSize;
     private List<File> files;
@@ -239,8 +233,8 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
     public CompletedCallback<File> createFileForWrite() throws IOException {
       String fileName = String.format("%s/%d.%s", SortOnReadExternalSorter.this.basePath, fileCount, SPILL_FILE_SUFFIX);
       File file = new File(fileName);
-      if (file.exists()) {
-        file.delete();
+      if (!deleteWithRetry(file, DEFAULT_FILE_DELETE_RETRY_TIMES)) {
+        throw new HoodieIOException("Failed to delete spill file: " + file.getAbsolutePath());
       }
       if (!file.getParentFile().exists()) {
         file.getParentFile().mkdir();
@@ -254,8 +248,17 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
           return;
         }
         LOG.error("Failed to write file: " + file.getAbsolutePath());
-        file.delete();
+        if (!deleteWithRetry(file, DEFAULT_FILE_DELETE_RETRY_TIMES)) {
+          throw new HoodieIOException("Failed to delete spill file: " + file.getAbsolutePath());
+        }
       });
+    }
+
+    private boolean deleteWithRetry(File file, int retryTimes) {
+      for (int i = 0; i < retryTimes && file.exists() && !file.delete(); i++) {
+        LOG.warn("Failed to delete spill file: {} for {} times", file.getAbsolutePath(), i + 1);
+      }
+      return !file.exists();
     }
 
     public void addFile(File file) {
@@ -318,23 +321,17 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
     }
   }
 
-  private class SortedEntryFileReader implements SortedEntryReader {
-    private final int readerId;
+  private class SortedEntryFileReader extends SortedEntryReader {
     private final File file;
     private final BufferedRandomAccessFile reader;
     private List<R> batchRecords;
     private boolean closed;
     private boolean isEOF;
-
-    private int batchId;
-    private long batchSize;
-
     private long currentReadBatchSize;
 
-    public SortedEntryFileReader(int readerId, File file, long batchSize) {
-      this.readerId = readerId;
+    public SortedEntryFileReader(int readerId, long batchSize, File file) {
+      super(readerId, batchSize);
       this.file = file;
-      this.batchSize = batchSize;
       try {
         this.reader = new BufferedRandomAccessFile(file, "r", DEFAULT_READ_BUFFER);
       } catch (IOException e) {
@@ -414,14 +411,11 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
     }
   }
 
-  private class SortedEntryMemoryReader implements SortedEntryReader {
-    private final int readerId;
+  private class SortedEntryMemoryReader extends SortedEntryReader {
     private final List<R> entries;
-    private int batchId;
-    private int batchSize;
 
     public SortedEntryMemoryReader(int readerId, List<R> entries) {
-      this.readerId = readerId;
+      super(readerId, 0);
       this.entries = entries;
     }
 

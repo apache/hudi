@@ -200,20 +200,19 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
   public static final ConfigProperty<String> SORTED_MERGE_COMPACTION = ConfigProperty
-      .key("hoodie.compaction.sortedmerge")
+      .key("hoodie.compaction.sort.merge")
       .defaultValue("false")
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.14.0")
       .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
           + "This is useful way to speed up the compaction process.");
 
   public static final ConfigProperty<String> EXTERNAL_SORTER_TYPE = ConfigProperty
-      .key("hoodie.compaction.externalsortertype")
+      .key("hoodie.compaction.external.sorter.type")
       .defaultValue("sort_on_read")
       .markAdvanced()
-      .sinceVersion("1.0.0")
-      .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
-          + "This is useful way to speed up the compaction process.");
+      .sinceVersion("0.14.0")
+      .withDocumentation("When we enable sort merge compaction, we use the external-sorter with type from this property.");
 
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead

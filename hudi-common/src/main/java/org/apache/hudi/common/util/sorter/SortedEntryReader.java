@@ -21,8 +21,17 @@ package org.apache.hudi.common.util.sorter;
 import java.io.Closeable;
 import java.util.Iterator;
 
-public interface SortedEntryReader<R> extends Closeable {
-  Iterator<R> readBatch();
+public abstract class SortedEntryReader<R> implements Closeable {
+  protected final int readerId;
+  protected int batchId;
+  protected final long batchSize;
 
-  void releaseBatch();
+  protected SortedEntryReader(int readerId, long batchSize) {
+    this.readerId = readerId;
+    this.batchSize = batchSize;
+  }
+
+  abstract Iterator<R> readBatch();
+
+  abstract void releaseBatch();
 }

@@ -40,7 +40,7 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
   protected final SizeEstimator<R> sizeEstimator;
   protected State state = State.INIT;
   private HoodieTimer insertTimer = HoodieTimer.create();
-  private long timeTakenToInsertAndWriteRecord; // ms
+  protected long timeTakenToInsertAndWriteRecord; // ms
 
   enum State {
     INIT,
@@ -54,10 +54,10 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
     this.maxMemoryInBytes = maxMemoryInBytes;
     this.comparator = comparator;
     this.sizeEstimator = sizeEstimator;
-    initBaseFile();
+    initBaseDir();
   }
 
-  public void initBaseFile() throws IOException {
+  public void initBaseDir() throws IOException {
     File baseDir = new File(basePath);
     FileIOUtils.deleteDirectory(baseDir);
     FileIOUtils.mkdir(baseDir);
