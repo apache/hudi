@@ -20,8 +20,11 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
+import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.internal.SQLConf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
@@ -64,6 +67,25 @@ class TestProvidesHoodieConfig {
       customKeyGenPartitionFieldWriteConfig,
       ProvidesHoodieConfig.getPartitionPathFieldWriteConfig(
         classOf[CustomKeyGenerator].getName, partitionFieldNames, mockTable))
+  }
+
+  @Test
+  def testInferPrecombineFieldFromTableConfig(): Unit = {
+    // ProvidesHoodieConfig should be able to infer precombine field from table config
+    val mockCatalog = Mockito.mock(classOf[HoodieCatalogTable])
+    when(mockCatalog.catalogProperties).thenReturn(Map.empty[String, String])
+
+    val props = new TypedProperties()
+    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "segment")
+    val mockTableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    when(mockTableConfig.getProps).thenReturn(props)
+    val mockSqlConf = Mockito.mock(classOf[SQLConf])
+    when(mockSqlConf.getAllConfs).thenReturn(Map.empty[String, String])
+
+    assertEquals(
+      "segment",
+      ProvidesHoodieConfig.combineOptions(mockCatalog, mockTableConfig, mockSqlConf, Map.empty)
+        .getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, ""))
   }
 
   private def mockPartitionWriteConfigInCatalogProps(mockTable: HoodieCatalogTable,
