@@ -388,7 +388,9 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     fsview.loadAllPartitions()
     convertJavaListToScalaSeq(fsview.getAllFileGroups.collect(Collectors.toList())).foreach(fg => {
       convertJavaListToScalaSeq(fg.getAllFileSlices.collect(Collectors.toList())).foreach(fileSlice => {
-        fileSlice.getBaseFile.ifPresent(baseFile => files.add(baseFile.getFileName))
+        if (fileSlice.getBaseFile.isPresent) {
+          files.add(fileSlice.getBaseFile.get().getFileName)
+        }
         convertJavaListToScalaSeq(fileSlice.getLogFiles.collect(Collectors.toList())).foreach(logFile => files.add(logFile.getFileName))
       })
     })
