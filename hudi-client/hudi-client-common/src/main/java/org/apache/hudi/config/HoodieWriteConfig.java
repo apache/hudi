@@ -2776,6 +2776,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return commonConfig.getInt(HoodieCompactionConfig.COMPACTION_PROGRESS_LOG_INTERNAL_NUM);
   }
 
+  public double getMagnificationRatioForBaseFile() {
+    return commonConfig.getDouble(HoodieCompactionConfig.MAGNIFICATION_RATION_FOR_BASE_FILE);
+  }
+
+  public double getMagnificationRatioForLogFile() {
+    return commonConfig.getDouble(HoodieCompactionConfig.MAGNIFICATION_RATION_FOR_LOG_FILE);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();

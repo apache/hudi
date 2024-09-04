@@ -25,6 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -42,9 +43,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieCompactionHandler;
@@ -52,6 +57,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.apache.avro.Schema;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -168,6 +175,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    Option<InstantRange> instantRange,
                                    TaskContextSupplier taskContextSupplier,
                                    CompactionExecutionHelper executionHelper) throws IOException {
+    CompactionContext context = new CompactionContext();
     HoodieStorage storage = metaClient.getStorage();
     Schema readerSchema;
     Option<InternalSchema> internalSchemaOption = Option.empty();
@@ -191,11 +199,63 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
+    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
             new StoragePath(FSUtils.constructAbsolutePath(
                 metaClient.getBasePath(), operation.getPartitionPath()), p).toString())
         .collect(toList());
+
+    Option<HoodieBaseFile> oldDataFileOpt =
+        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
+
+    long maxMemoryForLogScanner = maxMemoryPerCompaction;
+    // calculate the max available memory in compaction
+    FileSystem fileSystem = (FileSystem) storage.getFileSystem();
+    long logFilesSize = logFiles.stream().map(logFile -> {
+      try {
+        return HadoopFSUtils.getFileSize(fileSystem, new Path(logFile));
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to get file size for log file " + logFile, e);
+      }
+    }).reduce(Long::sum).orElse(0L);
+    long estimatedLogFilesSize = (long) (logFilesSize * config.getMagnificationRatioForLogFile());
+    // set log files related context
+    context.setLogFilesContext(logFiles, logFilesSize, estimatedLogFilesSize);
+
+    if (oldDataFileOpt.isPresent()) {
+      StoragePath oldDataPath = oldDataFileOpt.get().getStoragePath();
+      HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storage.newInstance(oldDataPath, storage.getConf().newInstance()))
+          .getReaderFactory(config.getRecordMerger().getRecordType())
+          .getFileReader(config, oldDataFileOpt.get().getStoragePath());
+      long baseFileSize = HadoopFSUtils.getFileSize(fileSystem, new Path(oldDataPath.toUri()));
+      long estimatedBaseFileSize = (long) (baseFileSize * config.getMagnificationRatioForBaseFile());
+      // set base file related context
+      context.setBaseFileContext(oldDataPath.toString(), baseFileSize, estimatedBaseFileSize, baseFileReader.isSorted());
+      if (!context.isBaseFileSorted() && estimatedLogFilesSize + estimatedBaseFileSize > 0) {
+        // calculate max memory can be used for log scanner, because base-file's sorting also need memory
+        maxMemoryForLogScanner = maxMemoryPerCompaction * (estimatedLogFilesSize) / (estimatedLogFilesSize + estimatedBaseFileSize);
+      }
+
+      // set sort merge join compaction context
+      context.setSortMergeJoinCompactionContext(true, maxMemoryForLogScanner);
+    }
+
+    if (config.isSortedMergeCompactionEnabled()) {
+      // TODO: determine whether to use sort merge join compaction, now always true when sorted merge configuration is enabled
+      context.setSortMergeCompaction(true);
+    }
+
+    if (context.isSortMergeCompaction()) {
+      // when decide to use sort merge join compaction
+      if (context.hasBaseFile() && !context.isBaseFileSorted() && context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize() > 0) {
+        // calculate max memory can be used for log scanner, because base-file's sorting also need memory
+        maxMemoryForLogScanner = maxMemoryPerCompaction * (context.getEstimatedLogFileSize()) / (context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize());
+        context.setMaxMemoryForLogScanner(maxMemoryForLogScanner);
+      }
+    }
+
+    LOG.info("Compaction context: {}", context);
 
     AbstractHoodieLogRecordScanner scanner;
     if (config.isSortedMergeCompactionEnabled()) {
@@ -210,7 +270,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withOperationField(config.allowOperationMetadataField())
         .withPartition(operation.getPartitionPath())
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+        .withMaxMemorySizeInBytes(context.getMaxMemoryForLogScanner())
         .withOptimizedLogBlocksScan(executionHelper.enableOptimizedLogBlockScan(config))
         .withRecordMerger(config.getRecordMerger())
         .withTableMetaClient(metaClient)
@@ -226,7 +286,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withLatestInstantTime(executionHelper.instantTimeToUseForScanning(instantTime, maxInstantTime))
         .withInstantRange(instantRange)
         .withInternalSchema(internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
-        .withMaxMemorySizeInBytes(maxMemoryPerCompaction)
+        .withMaxMemorySizeInBytes(context.getMaxMemoryForCompaction())
         .withReverseReader(config.getCompactionReverseLogReadEnabled())
         .withBufferSize(config.getMaxDFSStreamBufferSize())
         .withSpillableMapBasePath(config.getSpillableMapBasePath())
@@ -239,8 +299,6 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
         .withTableMetaClient(metaClient)
         .build();
     }
-    Option<HoodieBaseFile> oldDataFileOpt =
-        operation.getBaseFile(metaClient.getBasePath().toString(), operation.getPartitionPath());
 
     // Considering following scenario: if all log blocks in this fileSlice is rollback, it returns an empty scanner.
     // But in this case, we need to give it a base file. Otherwise, it will lose base file in following fileSlice.
@@ -264,7 +322,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     // Compacting is very similar to applying updates to existing file
     Iterator<List<WriteStatus>> result;
-    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt);
+    result = executionHelper.writeFileAndGetWriteStats(compactionHandler, operation, instantTime, scanner, oldDataFileOpt, context);
     scanner.close();
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {

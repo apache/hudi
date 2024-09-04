@@ -20,6 +20,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.CompactionContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
@@ -37,10 +38,10 @@ import java.util.Map;
  */
 public interface HoodieCompactionHandler<T> {
   Iterator<List<WriteStatus>> handleUpdate(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile) throws IOException;
+                                           Map<String, HoodieRecord<T>> keyToNewRecords, HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException;
 
   Iterator<List<WriteStatus>> handleInsert(String instantTime, String partitionPath, String fileId,
-                                           Map<String, HoodieRecord<?>> recordMap);
+                                           Map<String, HoodieRecord<?>> recordMap, CompactionContext compactionContext);
 
   default Iterator<List<WriteStatus>> handleInsertsForLogCompaction(String instantTime, String partitionPath, String fileId,
                                                            Map<String, HoodieRecord<?>> recordMap,
@@ -49,8 +50,8 @@ public interface HoodieCompactionHandler<T> {
   }
 
   Iterator<List<WriteStatus>> handleUpdateWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
-                                                               Iterator<HoodieRecord> unMergedRecordsItr, HoodieBaseFile oldDataFile) throws IOException;
+                                                               Iterator<HoodieRecord> unMergedRecordsItr, HoodieBaseFile oldDataFile, CompactionContext compactionContext) throws IOException;
 
   Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId,
-                                                               Iterator<HoodieRecord> unMergedRecordsItr) throws IOException;
+                                                               Iterator<HoodieRecord> unMergedRecordsItr, CompactionContext compactionContext) throws IOException;
 }

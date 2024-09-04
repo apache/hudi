@@ -103,7 +103,7 @@ public class HoodieMergeHandleFactory {
   }
 
   /**
-   * Creates a merge handle for compaction path.
+   * Creates a sort merge join compaction merge handle for compaction path.
    */
   public static <T, I, K, O> HoodieMergeHandle<T, I, K, O> create(
       HoodieWriteConfig writeConfig,
