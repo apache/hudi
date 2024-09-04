@@ -2366,9 +2366,6 @@
           <family>mac</family>
           <arch>aarch64</arch>
         </os>
-        <property>
-          <name>spark2.4</name>
-        </property>
       </activation>
     </profile>
 
