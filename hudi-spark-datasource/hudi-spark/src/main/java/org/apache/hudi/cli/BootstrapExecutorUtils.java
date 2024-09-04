@@ -239,6 +239,7 @@ public class BootstrapExecutorUtils implements Serializable {
         .setTableType(cfg.tableType)
         .setDatabaseName(cfg.database)
         .setTableName(cfg.tableName)
+        .setTableVersion(bootstrapConfig.getWriteVersion())
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
         .setPreCombineField(props.getString(PRECOMBINE_FIELD_NAME.key(), null))
         .setPopulateMetaFields(props.getBoolean(

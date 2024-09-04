@@ -70,7 +70,7 @@ public class DataSourceInternalWriterHelper {
 
     this.metaClient = HoodieTableMetaClient.builder()
         .setConf(storageConf.newInstance()).setBasePath(writeConfig.getBasePath()).build();
-    this.metaClient.validateTableProperties(writeConfig.getProps());
+    this.writeClient.validateAgainstTableProperties(this.metaClient.getTableConfig(), writeConfig);
     this.writeClient.preWrite(instantTime, WriteOperationType.BULK_INSERT, metaClient);
   }
 

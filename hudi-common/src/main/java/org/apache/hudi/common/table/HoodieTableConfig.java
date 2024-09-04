@@ -587,7 +587,7 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static HoodieTableVersion getTableVersion(HoodieConfig config) {
     return contains(VERSION, config)
-        ? HoodieTableVersion.versionFromCode(config.getInt(VERSION))
+        ? HoodieTableVersion.fromVersionCode(config.getInt(VERSION))
         : VERSION.defaultValue();
   }
 
@@ -616,7 +616,7 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieTableVersion getTableInitialVersion() {
     return contains(INITIAL_VERSION)
-            ? HoodieTableVersion.versionFromCode(getInt(INITIAL_VERSION))
+            ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
             : INITIAL_VERSION.defaultValue();
   }
 

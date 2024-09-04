@@ -67,10 +67,10 @@ public enum HoodieTableVersion {
     return EIGHT;
   }
 
-  public static HoodieTableVersion versionFromCode(int versionCode) {
+  public static HoodieTableVersion fromVersionCode(int versionCode) {
     return Arrays.stream(HoodieTableVersion.values())
         .filter(v -> v.versionCode == versionCode).findAny()
-        .orElseThrow(() -> new HoodieException("Unknown versionCode:" + versionCode));
+        .orElseThrow(() -> new HoodieException("Unknown table versionCode:" + versionCode));
   }
 
   public boolean greaterThan(HoodieTableVersion other) {

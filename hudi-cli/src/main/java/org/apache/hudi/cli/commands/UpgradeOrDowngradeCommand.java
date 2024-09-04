@@ -89,7 +89,7 @@ public class UpgradeOrDowngradeCommand {
 
     try {
       int versionCode = Integer.parseInt(versionOption);
-      return HoodieTableVersion.versionFromCode(versionCode).name();
+      return HoodieTableVersion.fromVersionCode(versionCode).name();
     } catch (NumberFormatException e) {
       // The version option from the CLI is not a number, returns the original String
       return versionOption;

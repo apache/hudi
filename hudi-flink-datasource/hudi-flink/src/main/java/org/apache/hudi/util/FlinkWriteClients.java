@@ -160,6 +160,8 @@ public class FlinkWriteClients {
             .withEngineType(EngineType.FLINK)
             .withPath(conf.getString(FlinkOptions.PATH))
             .combineInput(conf.getBoolean(FlinkOptions.PRE_COMBINE), true)
+            // TODO(vc): if unspecified, would this pick up the default.
+            .withWriteTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
             .withMergeAllowDuplicateOnInserts(OptionsResolver.insertClustering(conf))
             .withClusteringConfig(
                 HoodieClusteringConfig.newBuilder()

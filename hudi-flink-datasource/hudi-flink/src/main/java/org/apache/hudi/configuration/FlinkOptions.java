@@ -397,6 +397,13 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(WriteOperationType.UPSERT.value())
       .withDescription("The write operation, that this write should do");
 
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_TABLE_VERSION = ConfigOptions
+      .key(HoodieWriteConfig.WRITE_TABLE_VERSION.key())
+      .intType()
+      .defaultValue(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue())
+      .withDescription("Table version produced by this writer.");
+
   /**
    * Flag to indicate whether to drop duplicates before insert/upsert.
    * By default false to gain extra performance.

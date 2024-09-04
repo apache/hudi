@@ -62,10 +62,16 @@ public class UpgradeDowngrade {
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
-    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    // Ensure versions are same
-    return toVersion.versionCode() != fromVersion.versionCode();
+  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+
+    if (!config.autoUpgrade() && fromTableVersion.versionCode() < toWriteVersion.versionCode()) {
+      throw new HoodieUpgradeDowngradeException(String.format("Table version mismatch. "
+              + "Please upgrade table from version %s to %s. ", fromTableVersion, toWriteVersion));
+    }
+
+    // allow upgrades/downgrades otherwise.
+    return toWriteVersion.versionCode() != fromTableVersion.versionCode();
   }
 
   /**
@@ -136,14 +142,14 @@ public class UpgradeDowngrade {
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
-        HoodieTableVersion nextVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() + 1);
+        HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
         tableProps.putAll(upgrade(fromVersion, nextVersion, instantTime));
         fromVersion = nextVersion;
       }
     } else {
       // downgrade
       while (fromVersion.versionCode() > toVersion.versionCode()) {
-        HoodieTableVersion prevVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() - 1);
+        HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
         tableProps.putAll(downgrade(fromVersion, prevVersion, instantTime));
         fromVersion = prevVersion;
       }

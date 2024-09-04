@@ -152,9 +152,9 @@ public class HoodieTableMetaClient implements Serializable {
    * Can only be called if table already exists
    */
   protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
-                                  ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
-                                  String payloadClassName, String recordMergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
-                                  FileSystemRetryConfig fileSystemRetryConfig) {
+                                ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
+                                String payloadClassName, String recordMergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
+                                FileSystemRetryConfig fileSystemRetryConfig) {
     LOG.info("Loading HoodieTableMetaClient from " + basePath);
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
@@ -408,11 +408,11 @@ public class HoodieTableMetaClient implements Serializable {
         consistencyGuard);
   }
 
-  public void setHoodieStorage(HoodieStorage storage) {
+  public void setStorage(HoodieStorage storage) {
     this.storage = storage;
   }
 
-  public HoodieStorage getRawHoodieStorage() {
+  public HoodieStorage getRawStorage() {
     return getStorage().getRawStorage();
   }
 
@@ -530,64 +530,6 @@ public class HoodieTableMetaClient implements Serializable {
         : new HoodieArchivedTimeline(this, startTs);
   }
 
-  /**
-   * Validate table properties.
-   *
-   * @param properties Properties from writeConfig.
-   */
-  public void validateTableProperties(Properties properties) {
-    // Once meta fields are disabled, it cant be re-enabled for a given table.
-    if (!getTableConfig().populateMetaFields()
-        && Boolean.parseBoolean((String) properties.getOrDefault(HoodieTableConfig.POPULATE_META_FIELDS.key(), HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()))) {
-      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
-    }
-
-    // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator}, {@code NonpartitionedKeyGenerator} is used
-    if (!getTableConfig().populateMetaFields()) {
-      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(properties));
-      if (StringUtils.isNullOrEmpty(keyGenClass)) {
-        keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
-      }
-      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
-        throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
-      }
-    }
-
-    //Check to make sure it's not a COW table with consistent hashing bucket index
-    if (tableType == HoodieTableType.COPY_ON_WRITE) {
-      String indexType = properties.getProperty("hoodie.index.type");
-      if (indexType != null && indexType.equals("BUCKET")) {
-        String bucketEngine = properties.getProperty("hoodie.index.bucket.engine");
-        if (bucketEngine != null && bucketEngine.equals("CONSISTENT_HASHING")) {
-          throw new HoodieException("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table.");
-        }
-      }
-    }
-  }
-
-  /**
-   * Helper method to initialize a given path as a hoodie table with configs passed in as Properties.
-   *
-   * @return Instance of HoodieTableMetaClient
-   */
-  public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, String basePath,
-                                                                Properties props) throws IOException {
-    return initTableAndGetMetaClient(storageConf, new StoragePath(basePath), props);
-  }
-
-  public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, StoragePath basePath,
-                                                                Properties props) throws IOException {
-    createTableLayoutOnStorage(storageConf, basePath, props);
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
-            .setMetaserverConfig(props)
-            .build();
-    LOG.info("Finished initializing Table of type {} from {}", metaClient.getTableConfig().getTableType(), basePath);
-    return metaClient;
-  }
-
-  // TODO: is this idempotent, in face of failures?
   private static void createTableLayoutOnStorage(StorageConfiguration<?> storageConf,
                                                  StoragePath basePath,
                                                  Properties props) throws IOException {
@@ -628,9 +570,6 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     initializeBootstrapDirsIfNotExists(basePath, storage);
-    // When the table is initialized, set the initial version to be the current version.
-    // TODO: this needs to change to the actual configured table version?
-    props.put(INITIAL_VERSION.key(), String.valueOf(HoodieTableVersion.current().versionCode()));
     HoodieTableConfig.create(storage, metaPathDir, props);
   }
 
@@ -998,8 +937,8 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setTableVersion(String tableVersion) {
-      return setTableVersion(HoodieTableVersion.versionFromCode(Integer.parseInt(tableVersion)));
+    public TableBuilder setTableVersion(int tableVersion) {
+      return setTableVersion(HoodieTableVersion.fromVersionCode(tableVersion));
     }
 
     public TableBuilder setTableCreateSchema(String tableCreateSchema) {
@@ -1198,7 +1137,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
 
       if (hoodieConfig.contains(VERSION)) {
-        setTableVersion(hoodieConfig.getString(VERSION));
+        setTableVersion(hoodieConfig.getInt(VERSION));
       }
 
       if (hoodieConfig.contains(HoodieTableConfig.TYPE)) {
@@ -1318,8 +1257,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != tableVersion) {
         tableConfig.setTableVersion(tableVersion);
+        tableConfig.setValue(INITIAL_VERSION, Integer.toString(tableVersion.versionCode()));
       } else {
         tableConfig.setTableVersion(HoodieTableVersion.current());
+        tableConfig.setValue(INITIAL_VERSION, Integer.toString(HoodieTableVersion.current().versionCode()));
       }
 
       if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -1429,14 +1370,18 @@ public class HoodieTableMetaClient implements Serializable {
       return tableConfig.getProps();
     }
 
-    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
-        throws IOException {
-      return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath) throws IOException {
+      return initTable(configuration, new StoragePath(basePath));
     }
 
-    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, StoragePath basePath)
-        throws IOException {
-      return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    public HoodieTableMetaClient initTable(StorageConfiguration<?> storageConf, StoragePath basePath) throws IOException {
+      Properties props = build();
+      createTableLayoutOnStorage(storageConf, basePath, props);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
+          .setMetaserverConfig(props)
+          .build();
+      LOG.info("Finished initializing Table of type {} from {}", metaClient.getTableConfig().getTableType(), basePath);
+      return metaClient;
     }
 
     private void inferRecordMergeMode() {

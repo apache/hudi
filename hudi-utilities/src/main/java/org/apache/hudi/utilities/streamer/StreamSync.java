@@ -405,6 +405,8 @@ public class StreamSync implements Serializable, Closeable {
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
+        .setTableVersion(props.getInteger(HoodieWriteConfig.WRITE_TABLE_VERSION.key(),
+            HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))

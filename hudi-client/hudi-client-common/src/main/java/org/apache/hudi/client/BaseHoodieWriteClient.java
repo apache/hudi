@@ -33,15 +33,18 @@ import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -74,6 +77,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -86,6 +90,7 @@ import org.apache.hudi.table.action.savepoint.SavepointHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.upgrade.SupportsUpgradeDowngrade;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
+import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
 import org.apache.avro.Schema;
@@ -99,8 +104,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
@@ -318,6 +325,27 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // update SCHEMA_KEY
       metadata.addMetadata(SCHEMA_KEY, AvroInternalSchemaConverter.convert(evolvedSchema, avroSchema.getFullName()).toString());
     }
+  }
+
+  protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
+                                               BiFunction<HoodieWriteConfig, HoodieEngineContext, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context);
+    CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    return table;
+  }
+
+  @FunctionalInterface
+  protected interface TriFunction<T, U, V, R> {
+    R apply(T t, U u, V v);
+  }
+
+  protected HoodieTable createTableAndValidate(HoodieWriteConfig writeConfig,
+                                               HoodieTableMetaClient metaClient,
+                                               TriFunction<HoodieWriteConfig, HoodieEngineContext,
+                                                   HoodieTableMetaClient, HoodieTable> createTableFn) {
+    HoodieTable table = createTableFn.apply(writeConfig, context, metaClient);
+    CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    return table;
   }
 
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config);
@@ -742,14 +770,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public boolean rollback(final String commitInstantTime) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, false, false);
   }
 
   @Deprecated
   public boolean rollback(final String commitInstantTime, String rollbackInstantTimestamp) throws HoodieRollbackException {
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty());
     Option<HoodiePendingRollbackInfo> pendingRollbackInfo = tableServiceClient.getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false);
+    return tableServiceClient.rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTimestamp, false, false);
   }
 
   /**
@@ -881,6 +909,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Provides a new commit time for a write operation (insert/update/delete/insert_overwrite/insert_overwrite_table) with specified action.
    */
   public String startCommit(String actionType, HoodieTableMetaClient metaClient) {
+    if (needsUpgradeOrDowngrade(metaClient)) {
+      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
+    }
+
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
 
@@ -907,22 +939,26 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Completes a new commit time for a write operation (insert/update/delete) with specified action.
+   * Starts a new commit time for a write operation (insert/update/delete) with specified action.
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
+    if (needsUpgradeOrDowngrade(metaClient)) {
+      //TODO(vc): is the first argument correct?
+      executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
+    }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites());
     startCommit(instantTime, actionType, metaClient);
   }
 
   private void startCommit(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
-    LOG.info("Generate a new instant time: " + instantTime + " action: " + actionType);
+    LOG.info("Generate a new instant time: {} action: {}", instantTime, actionType);
     // check there are no inflight restore before starting a new commit.
     HoodieTimeline inflightRestoreTimeline = metaClient.getActiveTimeline().getRestoreTimeline().filterInflightsAndRequested();
     ValidationUtils.checkArgument(inflightRestoreTimeline.countInstants() == 0,
         "Found pending restore in active timeline. Please complete the restore fully before proceeding. As of now, "
             + "table could be in an inconsistent state. Pending restores: " + Arrays.toString(inflightRestoreTimeline.getInstantsAsStream()
-            .map(instant -> instant.getTimestamp()).collect(Collectors.toList()).toArray()));
+            .map(HoodieInstant::getTimestamp).collect(Collectors.toList()).toArray()));
 
     if (config.getFailedWritesCleanPolicy().isLazy()) {
       this.heartbeatClient.start(instantTime);
@@ -1224,10 +1260,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
-    this.txnManager.beginTransaction(ownerInstant, Option.empty());
-    try {
+    executeUsingTxnManager(ownerInstant, () -> {
       tryUpgrade(metaClient, instantTime);
       initMetadataTable(instantTime, metaClient);
+    });
+  }
+
+  private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
+    this.txnManager.beginTransaction(ownerInstant, Option.empty());
+    try {
+      r.run();
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
@@ -1271,7 +1313,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config, metaClient);
 
     // Validate table properties
-    metaClient.validateTableProperties(config.getProps());
+    validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
 
     switch (operationType) {
       case INSERT:
@@ -1293,6 +1335,42 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     return table;
+  }
+
+  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+    // mismatch of table versions.
+    CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
+
+    Properties properties = writeConfig.getProps();
+    // Once meta fields are disabled, it cant be re-enabled for a given table.
+    if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
+      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    }
+
+    // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
+    // {@code NonpartitionedKeyGenerator} is used
+    if (!tableConfig.populateMetaFields()) {
+      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(properties));
+      if (StringUtils.isNullOrEmpty(keyGenClass)) {
+        keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
+      }
+      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
+        throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
+      }
+    }
+
+    //Check to make sure it's not a COW table with consistent hashing bucket index
+    if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      HoodieIndex.IndexType indexType = writeConfig.getIndexType();
+      if (indexType != null && indexType.equals(HoodieIndex.IndexType.BUCKET)) {
+        String bucketEngine = properties.getProperty("hoodie.index.bucket.engine");
+        if (bucketEngine != null && bucketEngine.equals("CONSISTENT_HASHING")) {
+          throw new HoodieException("Consistent hashing bucket index does not work with COW table. Use simple bucket index or an MOR table.");
+        }
+      }
+    }
   }
 
   /**
@@ -1365,7 +1443,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (!instantsToRollback.isEmpty()) {
         Map<String, Option<HoodiePendingRollbackInfo>> pendingRollbacks = tableServiceClient.getPendingRollbackInfos(metaClient);
         instantsToRollback.forEach(entry -> pendingRollbacks.putIfAbsent(entry, Option.empty()));
-        tableServiceClient.rollbackFailedWrites(pendingRollbacks, true);
+        tableServiceClient.rollbackFailedWrites(pendingRollbacks, true, true);
       }
 
       new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper)
@@ -1373,6 +1451,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
       metaClient.reloadActiveTimeline();
     }
+  }
+
+  private boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient) {
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
+    return upgradeDowngrade.needsUpgradeOrDowngrade(config.getWriteVersion());
   }
 
   /**

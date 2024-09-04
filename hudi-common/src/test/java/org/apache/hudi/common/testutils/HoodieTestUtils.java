@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -129,6 +130,12 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(String basePath, HoodieFileFormat baseFileFormat) throws IOException {
     return init(getDefaultStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
+  }
+
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, HoodieTableVersion version) throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
+    return init(getDefaultStorageConf(), basePath, tableType, properties);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath) throws IOException {

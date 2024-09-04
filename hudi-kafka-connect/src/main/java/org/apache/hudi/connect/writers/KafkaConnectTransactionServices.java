@@ -100,6 +100,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
           .setPayloadClassName(HoodieAvroPayload.class.getName())
           .setRecordKeyFields(recordKeyFields)
           .setPartitionFields(partitionColumns)
+          .setTableVersion(writeConfig.getWriteVersion())
           .setKeyGeneratorClassProp(writeConfig.getKeyGeneratorClass())
           .fromProperties(connectConfigs.getProps())
           .initTable(storageConf.newInstance(), tableBasePath));

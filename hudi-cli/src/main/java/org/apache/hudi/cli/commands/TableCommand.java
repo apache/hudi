@@ -27,6 +27,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -112,6 +113,16 @@ public class TableCommand {
     return "Metadata for table " + HoodieCLI.getTableMetaClient().getTableConfig().getTableName() + " loaded";
   }
 
+  public String createTable(
+      final String path,
+      final String name,
+      final String tableTypeStr,
+      String archiveFolder,
+      Integer layoutVersion,
+      final String payloadClass) throws IOException {
+    return createTable(path, name, tableTypeStr, archiveFolder, layoutVersion, HoodieTableVersion.current().versionCode(), payloadClass);
+  }
+
   /**
    * Create a Hoodie Table if it does not exist.
    *
@@ -130,6 +141,8 @@ public class TableCommand {
           defaultValue = ShellOption.NULL) String archiveFolder,
       @ShellOption(value = {"--layoutVersion"}, help = "Specific Layout Version to use",
           defaultValue = ShellOption.NULL) Integer layoutVersion,
+      @ShellOption(value = {"--tableVersion"}, help = "Specific table Version to create table as",
+          defaultValue = ShellOption.NULL) Integer tableVersion,
       @ShellOption(value = {"--payloadClass"}, defaultValue = "org.apache.hudi.common.model.HoodieAvroPayload",
           help = "Payload Class") final String payloadClass) throws IOException {
 
@@ -155,6 +168,7 @@ public class TableCommand {
         .setArchiveLogFolder(archiveFolder)
         .setPayloadClassName(payloadClass)
         .setTimelineLayoutVersion(layoutVersion)
+        .setTableVersion(tableVersion == null ? HoodieTableVersion.current().versionCode() : tableVersion)
         .initTable(HoodieCLI.conf.newInstance(), path);
     // Now connect to ensure loading works
     return connect(path, layoutVersion, false, 0, 0, 0,

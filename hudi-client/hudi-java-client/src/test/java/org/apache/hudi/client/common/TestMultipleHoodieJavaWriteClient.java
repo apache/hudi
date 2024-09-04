@@ -78,7 +78,7 @@ public class TestMultipleHoodieJavaWriteClient {
     final String tableName = "hudiTestTable";
     final String basePath = tablePath.toAbsolutePath().toString() + "/" + tableTypeName;
 
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableTypeName)
         .setTableName(tableName)
         .setPayloadClassName(HoodieAvroPayload.class.getName())

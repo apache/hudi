@@ -24,6 +24,10 @@ public class HoodieUpgradeDowngradeException extends HoodieException {
     super(msg, t);
   }
 
+  public HoodieUpgradeDowngradeException(String msg) {
+    super(msg);
+  }
+
   public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {
     this(fromVersion, toVersion, upgrade, null);
   }
