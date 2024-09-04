@@ -219,4 +219,18 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertArrayEquals(new String[] {"p1", "p2"}, config.getPartitionFields().get());
     assertEquals("p1,p2", config.getPartitionFieldProp());
   }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"p1:simple,p2:timestamp", "p1,p2"})
+  public void testPartitionFieldAPIs(String partitionFields) {
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFields);
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
+    assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).get());
+    assertEquals("p1,p2", HoodieTableConfig.getPartitionFieldProp(config).get());
+    assertArrayEquals(new String[] {"p1", "p2"}, HoodieTableConfig.getPartitionFields(config).get());
+    assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
+  }
 }

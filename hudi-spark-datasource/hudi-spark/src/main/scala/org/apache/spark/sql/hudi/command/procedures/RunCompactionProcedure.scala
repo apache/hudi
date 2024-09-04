@@ -85,13 +85,6 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     val basePath = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    if (metaClient.getTableConfig.isMetadataTableAvailable) {
-      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
-        logInfo("Auto config filesystem lock provider for metadata table")
-      }
-    }
-
     val pendingCompactionInstants = metaClient.getActiveTimeline.getWriteTimeline.getInstants.iterator().asScala
       .filter(p => p.getAction == HoodieTimeline.COMPACTION_ACTION)
       .map(_.getTimestamp)
@@ -104,6 +97,12 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
+
+      if (metaClient.getTableConfig.isMetadataTableAvailable) {
+        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
+        }
+      }
 
       if (operation.isSchedule) {
         val instantTime = client.createNewInstantTime()

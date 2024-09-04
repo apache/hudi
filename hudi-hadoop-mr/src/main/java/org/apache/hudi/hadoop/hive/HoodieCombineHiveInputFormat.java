@@ -554,6 +554,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     if (inputFormatClass.getName().equals(getParquetRealtimeInputFormatClassName())) {
       HoodieCombineFileInputFormatShim shims = createInputFormatShim();
       IOContextMap.get(job).setInputPath(((CombineHiveInputSplit) split).getPath(0));
+      job.set("hudi.hive.realtime","true");
       return shims.getRecordReader(job, ((CombineHiveInputSplit) split).getInputSplitShim(),
           reporter, CombineHiveRecordReader.class);
     } else {

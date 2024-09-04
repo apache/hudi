@@ -100,7 +100,7 @@ public class SparkBootstrapCommitActionExecutor<T>
         HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
         WriteOperationType.BOOTSTRAP,
         extraMetadata);
-    bootstrapSourceFileSystem = HadoopFSUtils.getFs(config.getBootstrapSourceBasePath(), hadoopConf);
+    bootstrapSourceFileSystem = HadoopFSUtils.getFs(config.getBootstrapSourceBasePath(), storageConf);
   }
 
   private void validate() {
