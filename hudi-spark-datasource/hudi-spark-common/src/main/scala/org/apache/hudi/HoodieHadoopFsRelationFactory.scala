@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
+import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
 
@@ -79,10 +80,10 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
   private lazy val keygenTypeHasVariablePartitionCols = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
-    (tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedKeyGenerator") ||
-    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator") ||
-    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomKeyGenerator") ||
-    tableConfig.getKeyGeneratorClassName.equals("org.apache.hudi.keygen.CustomAvroKeyGenerator"))
+    (tableConfig.getKeyGeneratorClassName.equals(classOf[TimestampBasedKeyGenerator].getName) ||
+      tableConfig.getKeyGeneratorClassName.equals(classOf[TimestampBasedAvroKeyGenerator].getName) ||
+      tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
+      tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
   protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
     Seq.empty
