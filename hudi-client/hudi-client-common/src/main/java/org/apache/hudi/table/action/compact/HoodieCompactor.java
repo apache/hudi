@@ -199,7 +199,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
-    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime);
+    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime, ((HoodieTable) compactionHandler).isMetadataTable());
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
             new StoragePath(FSUtils.constructAbsolutePath(
@@ -232,16 +232,10 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       long estimatedBaseFileSize = (long) (baseFileSize * config.getMagnificationRatioForBaseFile());
       // set base file related context
       context.setBaseFileContext(oldDataPath.toString(), baseFileSize, estimatedBaseFileSize, baseFileReader.isSorted());
-      if (!context.isBaseFileSorted() && estimatedLogFilesSize + estimatedBaseFileSize > 0) {
-        // calculate max memory can be used for log scanner, because base-file's sorting also need memory
-        maxMemoryForLogScanner = maxMemoryPerCompaction * (estimatedLogFilesSize) / (estimatedLogFilesSize + estimatedBaseFileSize);
-      }
-
-      // set sort merge join compaction context
-      context.setSortMergeJoinCompactionContext(true, maxMemoryForLogScanner);
     }
 
-    if (config.isSortedMergeCompactionEnabled()) {
+    // TODO: disable sort merge join compaction in metadata table now, consider if we need to enable it
+    if (!context.isMetadataTableCompaction() && config.isSortedMergeCompactionEnabled()) {
       // TODO: determine whether to use sort merge join compaction, now always true when sorted merge configuration is enabled
       context.setSortMergeCompaction(true);
     }
@@ -251,14 +245,14 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       if (context.hasBaseFile() && !context.isBaseFileSorted() && context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize() > 0) {
         // calculate max memory can be used for log scanner, because base-file's sorting also need memory
         maxMemoryForLogScanner = maxMemoryPerCompaction * (context.getEstimatedLogFileSize()) / (context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize());
-        context.setMaxMemoryForLogScanner(maxMemoryForLogScanner);
       }
+      context.setMaxMemoryForLogScanner(maxMemoryForLogScanner);
     }
 
     LOG.info("Compaction context: {}", context);
 
     AbstractHoodieLogRecordScanner scanner;
-    if (config.isSortedMergeCompactionEnabled()) {
+    if (context.isSortMergeCompaction()) {
       scanner = HoodieUnMergedSortedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())

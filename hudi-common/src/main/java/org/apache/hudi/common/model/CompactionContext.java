@@ -30,13 +30,14 @@ public class CompactionContext {
   /* ------------ basic compaction context ------------ */
   private String compactionInstantTime;
   private long maxMemoryForCompaction;
+  private boolean metadataTableCompaction;
 
   /* ------------ sort merge join compaction context ------------ */
   private boolean sortMergeCompaction;
   private long maxMemoryForLogScanner;
 
   /* ------------ base file context ------------ */
-  private Option<String> baseFilePath;
+  private Option<String> baseFilePath = Option.empty();
   private long baseFileRealSize;
   private long estimatedBaseFileSize;
   private boolean baseFileSorted;
@@ -59,9 +60,10 @@ public class CompactionContext {
     this.baseFileSorted = baseFileSorted;
   }
 
-  public void setBasicCompactionContext(long maxMemoryForCompaction, String compactionInstantTime) {
+  public void setBasicCompactionContext(long maxMemoryForCompaction, String compactionInstantTime, boolean metadataTableCompaction) {
     this.maxMemoryForCompaction = maxMemoryForCompaction;
     this.compactionInstantTime = compactionInstantTime;
+    this.metadataTableCompaction = metadataTableCompaction;
   }
 
   public void setSortMergeJoinCompactionContext(boolean sortMergeCompaction, long maxMemoryForLogScanner) {
@@ -78,7 +80,7 @@ public class CompactionContext {
   }
 
   public boolean hasBaseFile() {
-    return baseFilePath.isPresent();
+    return baseFilePath != null && baseFilePath.isPresent();
   }
 
   public Option<String> getBaseFilePath() {
@@ -117,6 +119,10 @@ public class CompactionContext {
     return maxMemoryForCompaction;
   }
 
+  public boolean isMetadataTableCompaction() {
+    return metadataTableCompaction;
+  }
+
   public boolean isBaseFileSorted() {
     return baseFileSorted;
   }
@@ -150,6 +156,7 @@ public class CompactionContext {
     return "CompactionContext{"
         + "compactionInstantTime='" + compactionInstantTime + '\''
         + ", maxMemoryForCompaction=" + maxMemoryForCompaction
+        + ", metadataTableCompaction=" + metadataTableCompaction
         + ", sortMergeCompaction=" + sortMergeCompaction
         + ", maxMemoryForLogScanner=" + maxMemoryForLogScanner
         + ", baseFilePath=" + baseFilePath
