@@ -188,30 +188,28 @@ public class TestMetadataPartitionType {
     assertEquals(7, MetadataPartitionType.SECONDARY_INDEX.getRecordType());
   }
 
-  @Test
-  public void testGetFunctionalIndexPath() {
-    MetadataPartitionType partitionType = MetadataPartitionType.FUNCTIONAL_INDEX;
+  @ParameterizedTest
+  @EnumSource(MetadataPartitionType.class)
+  public void testGetNonFunctionalIndexPath(MetadataPartitionType partitionType) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    String indexName = "testIndex";
-
+    String functionalIndexName = "dummyFunctionalIndex";
+    String secondaryIndexName = "dummySecondaryIndex";
     Map<String, HoodieIndexDefinition> indexDefinitions = new HashMap<>();
     indexDefinitions.put(
-        indexName,
-        new HoodieIndexDefinition("func_index_testIndex", "column_stats", "lower", Collections.singletonList("name"), null));
+        functionalIndexName,
+        new HoodieIndexDefinition("func_index_dummyFunctionalIndex", "column_stats", "lower", Collections.singletonList("name"), null));
+    indexDefinitions.put(
+        secondaryIndexName,
+        new HoodieIndexDefinition("secondary_index_dummySecondaryIndex", null, null, Collections.singletonList("name"), null));
     HoodieIndexMetadata indexMetadata = new HoodieIndexMetadata(indexDefinitions);
     when(metaClient.getIndexMetadata()).thenReturn(Option.of(indexMetadata));
-
-    String result = partitionType.getPartitionPath(metaClient, indexName);
-    assertEquals("func_index_testIndex", result);
-  }
-
-  @Test
-  public void testGetNonFunctionalIndexPath() {
-    MetadataPartitionType partitionType = MetadataPartitionType.COLUMN_STATS;
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-
-    String result = partitionType.getPartitionPath(metaClient, null);
-    assertEquals(partitionType.getPartitionPath(), result);
+    if (partitionType == MetadataPartitionType.FUNCTIONAL_INDEX) {
+      assertEquals("func_index_dummyFunctionalIndex", partitionType.getPartitionPath(metaClient, functionalIndexName));
+    } else if (partitionType == MetadataPartitionType.SECONDARY_INDEX) {
+      assertEquals("secondary_index_dummySecondaryIndex", partitionType.getPartitionPath(metaClient, secondaryIndexName));
+    } else {
+      assertEquals(partitionType.getPartitionPath(), partitionType.getPartitionPath(metaClient, null));
+    }
   }
 
   @Test

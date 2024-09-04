@@ -338,7 +338,7 @@ public enum MetadataPartitionType {
    * The actual partition name is contained in the index definition.
    */
   public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
-    return getPartitionPath();
+    return partitionPath;
   }
 
   public String getPartitionPath() {

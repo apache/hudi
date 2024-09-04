@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.{HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
@@ -36,9 +37,10 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.Arguments.arguments
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.scalatest.Assertions.assertResult
 
 import scala.collection.JavaConverters
@@ -69,15 +71,18 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   override def conf: SparkConf = conf(getSparkSqlConf)
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testSecondaryIndexWithFilters(tableType: String): Unit = {
+  @MethodSource(Array("testSecondaryIndexPruningParameters"))
+  def testSecondaryIndexWithFilters(testCase: SecondaryIndexTestCase): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableType = testCase.tableType
+      val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
-      tableName += "test_secondary_index_with_filters" + sqlTableType
+      tableName += "test_secondary_index_with_filters" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
+      val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
 
       spark.sql(
         s"""
@@ -95,9 +100,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true'
            | )
-           | partitioned by(partition_key_col)
+           | $partitionedByClause
            | location '$basePath'
        """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
@@ -143,14 +152,19 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @Test
-  def testSecondaryIndexPruningWithUpdates(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("testSecondaryIndexPruningParameters"))
+  def testSecondaryIndexPruningWithUpdates(testCase: SecondaryIndexTestCase): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableType = testCase.tableType
+      val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
-        DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
-      tableName += "test_secondary_index_pruning_with_updates"
+      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
+      tableName += "test_secondary_index_pruning_with_updates" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
+      val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
 
       spark.sql(
         s"""
@@ -167,9 +181,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true'
            | )
-           | partitioned by(partition_key_col)
+           | $partitionedByClause
            | location '$basePath'
        """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
       spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
@@ -214,15 +232,18 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testSecondaryIndexWithPartitionStatsIndex(tableType: String): Unit = {
+  @MethodSource(Array("testSecondaryIndexPruningParameters"))
+  def testSecondaryIndexWithPartitionStatsIndex(testCase: SecondaryIndexTestCase): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableType = testCase.tableType
+      val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
-      tableName += "test_secondary_index_with_partition_stats_index" + sqlTableType
+      tableName += "test_secondary_index_with_partition_stats_index" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
+      val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
 
       spark.sql(
         s"""
@@ -243,9 +264,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  'hoodie.metadata.index.column.stats.column.list' = 'name',
            |  hoodie.enable.data.skipping = 'true'
            | )
-           | partitioned by(partition_key_col)
+           | $partitionedByClause
            | location '$basePath'
        """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
       spark.sql(s"insert into $tableName values(1, 'gandhi', 'row1', 'abc', 'p1')")
       spark.sql(s"insert into $tableName values(2, 'nehru', 'row2', 'cde', 'p2')")
       spark.sql(s"insert into $tableName values(3, 'patel', 'row3', 'def', 'p2')")
@@ -320,6 +345,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
     assertTrue(filesCountWithNoSkipping == latestDataFilesCount)
+    fileIndex.close()
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
@@ -352,4 +378,18 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_] = SparkHoodieBackedTableMetadataWriter.create(
     storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_]]
+}
+
+object TestSecondaryIndexPruning {
+
+  case class SecondaryIndexTestCase(tableType: String, isPartitioned: Boolean)
+
+  def testSecondaryIndexPruningParameters(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(SecondaryIndexTestCase("COPY_ON_WRITE", isPartitioned = true)),
+      arguments(SecondaryIndexTestCase("COPY_ON_WRITE", isPartitioned = false)),
+      arguments(SecondaryIndexTestCase("MERGE_ON_READ", isPartitioned = true)),
+      arguments(SecondaryIndexTestCase("MERGE_ON_READ", isPartitioned = false))
+    )
+  }
 }
