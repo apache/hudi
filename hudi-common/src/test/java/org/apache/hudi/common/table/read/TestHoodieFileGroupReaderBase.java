@@ -285,6 +285,22 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
+    if (fileSlice.getLogFiles().findAny().isPresent()) {
+      assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
+          getHoodieReaderContext(tablePath, avroSchema, storageConf),
+          metaClient.getStorage(),
+          tablePath,
+          metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+          fileSlice,
+          avroSchema,
+          avroSchema,
+          Option.empty(),
+          metaClient,
+          props,
+          1,
+          fileSlice.getTotalFileSize(),
+          false));
+    }
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
