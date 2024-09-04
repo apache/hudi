@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -69,7 +70,7 @@ import static org.mockito.Mockito.when;
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
 
   @Test
-  public void testMetadataTableValidation() {
+  public void testMetadataTableValidation() throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put("hoodie.table.name", "test_table");
@@ -94,6 +95,15 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .option(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(), "1")
         .mode(SaveMode.Append)
         .save(basePath);
+
+    // inflight instant in the timeline
+    updates = makeUpdateDf("001", 5).cache();
+    updates.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .option(HoodieWriteConfig.AUTO_COMMIT_ENABLE.key(), "false")
+        .mode(SaveMode.Append)
+        .save(basePath);
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath(), metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getFileName())));
 
     // validate MDT
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();

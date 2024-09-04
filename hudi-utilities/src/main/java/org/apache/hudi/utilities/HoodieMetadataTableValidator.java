@@ -531,7 +531,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
             try {
-              validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning);
+              String lastCompletedInstant = metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().get().getTimestamp();
+              validateFilesInPartition(metadataTableBasedContext, fsBasedContext, partitionPath, finalBaseFilesForCleaning, lastCompletedInstant);
               LOG.info("Metadata table validation succeeded for partition {} (partition {})", partitionPath, taskLabels);
               return Pair.<Boolean, Exception>of(true, null);
             } catch (HoodieValidationException e) {
@@ -724,30 +725,31 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system
    * @param partitionPath             Partition path String
-   * @param baseDataFilesForCleaning    Base files for un-complete cleaner action
+   * @param baseDataFilesForCleaning  Base files for un-complete cleaner action
+   * @param lastCompletedInstant      Last completed instant to be used for querying the table views
    */
   private void validateFilesInPartition(
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext, String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
     if (cfg.validateLatestFileSlices) {
-      validateLatestFileSlices(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
+      validateLatestFileSlices(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     }
 
     if (cfg.validateLatestBaseFiles) {
-      validateLatestBaseFiles(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
+      validateLatestBaseFiles(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     }
 
     if (cfg.validateAllFileGroups) {
-      validateAllFileGroups(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
+      validateAllFileGroups(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     }
 
     if (cfg.validateAllColumnStats) {
-      validateAllColumnStats(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
+      validateAllColumnStats(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     }
 
     if (cfg.validateBloomFilters) {
-      validateBloomFilters(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning);
+      validateBloomFilters(metadataTableBasedContext, fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     }
   }
 
@@ -755,18 +757,18 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
 
     List<FileSlice> allFileSlicesFromMeta;
     List<FileSlice> allFileSlicesFromFS;
 
     if (!baseDataFilesForCleaning.isEmpty()) {
       List<FileSlice> fileSlicesFromMeta = metadataTableBasedContext
-          .getSortedAllFileGroupList(partitionPath).stream()
+          .getSortedAllFileGroupList(partitionPath, lastCompletedInstant).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
       List<FileSlice> fileSlicesFromFS = fsBasedContext
-          .getSortedAllFileGroupList(partitionPath).stream()
+          .getSortedAllFileGroupList(partitionPath, lastCompletedInstant).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
 
@@ -774,11 +776,11 @@ public class HoodieMetadataTableValidator implements Serializable {
       allFileSlicesFromFS = filterFileSliceBasedOnInflightCleaning(fileSlicesFromFS, baseDataFilesForCleaning);
     } else {
       allFileSlicesFromMeta = metadataTableBasedContext
-          .getSortedAllFileGroupList(partitionPath).stream()
+          .getSortedAllFileGroupList(partitionPath, lastCompletedInstant).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
       allFileSlicesFromFS = fsBasedContext
-          .getSortedAllFileGroupList(partitionPath).stream()
+          .getSortedAllFileGroupList(partitionPath, lastCompletedInstant).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
     }
@@ -797,17 +799,17 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
 
     List<HoodieBaseFile> latestFilesFromMetadata;
     List<HoodieBaseFile> latestFilesFromFS;
 
     if (!baseDataFilesForCleaning.isEmpty()) {
-      latestFilesFromMetadata = filterBaseFileBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath), baseDataFilesForCleaning);
-      latestFilesFromFS = filterBaseFileBasedOnInflightCleaning(fsBasedContext.getSortedLatestBaseFileList(partitionPath), baseDataFilesForCleaning);
+      latestFilesFromMetadata = filterBaseFileBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant), baseDataFilesForCleaning);
+      latestFilesFromFS = filterBaseFileBasedOnInflightCleaning(fsBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant), baseDataFilesForCleaning);
     } else {
-      latestFilesFromMetadata = metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath);
-      latestFilesFromFS = fsBasedContext.getSortedLatestBaseFileList(partitionPath);
+      latestFilesFromMetadata = metadataTableBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant);
+      latestFilesFromFS = fsBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant);
     }
 
     LOG.debug("Latest base file from metadata: {}. For partitions {}", latestFilesFromMetadata, partitionPath);
@@ -823,16 +825,16 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
     List<FileSlice> latestFileSlicesFromMetadataTable;
     List<FileSlice> latestFileSlicesFromFS;
 
     if (!baseDataFilesForCleaning.isEmpty()) {
-      latestFileSlicesFromMetadataTable = filterFileSliceBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath), baseDataFilesForCleaning);
-      latestFileSlicesFromFS = filterFileSliceBasedOnInflightCleaning(fsBasedContext.getSortedLatestFileSliceList(partitionPath), baseDataFilesForCleaning);
+      latestFileSlicesFromMetadataTable = filterFileSliceBasedOnInflightCleaning(metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath, lastCompletedInstant), baseDataFilesForCleaning);
+      latestFileSlicesFromFS = filterFileSliceBasedOnInflightCleaning(fsBasedContext.getSortedLatestFileSliceList(partitionPath, lastCompletedInstant), baseDataFilesForCleaning);
     } else {
-      latestFileSlicesFromMetadataTable = metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath);
-      latestFileSlicesFromFS = fsBasedContext.getSortedLatestFileSliceList(partitionPath);
+      latestFileSlicesFromMetadataTable = metadataTableBasedContext.getSortedLatestFileSliceList(partitionPath, lastCompletedInstant);
+      latestFileSlicesFromFS = fsBasedContext.getSortedLatestFileSliceList(partitionPath, lastCompletedInstant);
     }
 
     LOG.debug("Latest file list from metadata: {}. For partition {}", latestFileSlicesFromMetadataTable, partitionPath);
@@ -866,9 +868,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
 
-    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
+    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     List<HoodieColumnRangeMetadata<Comparable>> metadataBasedColStats = metadataTableBasedContext
         .getSortedColumnStatsList(partitionPath, latestBaseFilenameList);
     List<HoodieColumnRangeMetadata<Comparable>> fsBasedColStats = fsBasedContext
@@ -881,9 +883,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       HoodieMetadataValidationContext metadataTableBasedContext,
       HoodieMetadataValidationContext fsBasedContext,
       String partitionPath,
-      Set<String> baseDataFilesForCleaning) {
+      Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
 
-    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning);
+    List<String> latestBaseFilenameList = getLatestBaseFileNames(fsBasedContext, partitionPath, baseDataFilesForCleaning, lastCompletedInstant);
     List<BloomFilterData> metadataBasedBloomFilters = metadataTableBasedContext
         .getSortedBloomFilterList(partitionPath, latestBaseFilenameList);
     List<BloomFilterData> fsBasedBloomFilters = fsBasedContext
@@ -1084,14 +1086,14 @@ public class HoodieMetadataTableValidator implements Serializable {
     return sb.toString();
   }
 
-  private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning) {
+  private List<String> getLatestBaseFileNames(HoodieMetadataValidationContext fsBasedContext, String partitionPath, Set<String> baseDataFilesForCleaning, String lastCompletedInstant) {
     List<String> latestBaseFilenameList;
     if (!baseDataFilesForCleaning.isEmpty()) {
-      List<HoodieBaseFile> sortedLatestBaseFileList = fsBasedContext.getSortedLatestBaseFileList(partitionPath);
+      List<HoodieBaseFile> sortedLatestBaseFileList = fsBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant);
       latestBaseFilenameList = filterBaseFileBasedOnInflightCleaning(sortedLatestBaseFileList, baseDataFilesForCleaning)
           .stream().map(BaseFile::getFileName).collect(Collectors.toList());
     } else {
-      latestBaseFilenameList = fsBasedContext.getSortedLatestBaseFileList(partitionPath)
+      latestBaseFilenameList = fsBasedContext.getSortedLatestBaseFileList(partitionPath, lastCompletedInstant)
           .stream().map(BaseFile::getFileName).collect(Collectors.toList());
     }
     return latestBaseFilenameList;
@@ -1402,19 +1404,25 @@ public class HoodieMetadataTableValidator implements Serializable {
       return tableMetadata;
     }
 
-    public List<HoodieBaseFile> getSortedLatestBaseFileList(String partitionPath) {
-      return fileSystemView.getLatestBaseFiles(partitionPath)
+    public List<HoodieBaseFile> getSortedLatestBaseFileList(String partitionPath, String instantTime) {
+      return fileSystemView.getLatestBaseFilesBeforeOrOn(partitionPath, instantTime)
           .sorted(new HoodieBaseFileComparator()).collect(Collectors.toList());
     }
 
-    public List<FileSlice> getSortedLatestFileSliceList(String partitionPath) {
-      return fileSystemView.getLatestFileSlices(partitionPath)
+    public List<FileSlice> getSortedLatestFileSliceList(String partitionPath, String instantTime) {
+      return fileSystemView.getLatestFileSlicesBeforeOrOn(partitionPath, instantTime, true)
           .sorted(new FileSliceComparator()).collect(Collectors.toList());
     }
 
-    public List<HoodieFileGroup> getSortedAllFileGroupList(String partitionPath) {
+    public List<HoodieFileGroup> getSortedAllFileGroupList(String partitionPath, String instantTime) {
       return fileSystemView.getAllFileGroups(partitionPath)
-          .sorted(new HoodieFileGroupComparator()).collect(Collectors.toList());
+          .sorted(new HoodieFileGroupComparator()).map(
+              fg -> {
+                HoodieFileGroup fileGroup = new HoodieFileGroup(fg.getFileGroupId(), fg.getTimeline());
+                fg.getAllFileSlicesBeforeOn(instantTime).forEach(fileGroup::addFileSlice);
+                return fileGroup;
+              }
+          ).collect(Collectors.toList());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
