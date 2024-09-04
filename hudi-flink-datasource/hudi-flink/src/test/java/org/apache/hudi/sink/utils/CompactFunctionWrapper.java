@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
@@ -58,11 +59,11 @@ public class CompactFunctionWrapper {
   /**
    * Output to collect the compaction plan events.
    */
-  private CollectorOutput<CompactionPlanEvent> planEventOutput;
+  private CollectOutputAdapter<CompactionPlanEvent> planEventOutput;
   /**
    * Output to collect the compaction commit events.
    */
-  private CollectorOutput<CompactionCommitEvent> commitEventOutput;
+  private CollectOutputAdapter<CompactionCommitEvent> commitEventOutput;
   /**
    * Function that executes the compaction task.
    */
@@ -87,14 +88,14 @@ public class CompactFunctionWrapper {
 
   public void openFunction() throws Exception {
     compactionPlanOperator = new CompactionPlanOperator(conf);
-    planEventOutput =  new CollectorOutput<>();
+    planEventOutput =  new CollectOutputAdapter<>();
     compactionPlanOperator.setup(streamTask, streamConfig, planEventOutput);
     compactionPlanOperator.open();
 
     compactOperator = new CompactOperator(conf);
     // CAUTION: deprecated API used.
     compactOperator.setProcessingTimeService(new TestProcessingTimeService());
-    commitEventOutput = new CollectorOutput<>();
+    commitEventOutput = new CollectOutputAdapter<>();
     compactOperator.setup(streamTask, streamConfig, commitEventOutput);
     compactOperator.open();
     final NonThrownExecutor syncExecutor = new MockCoordinatorExecutor(

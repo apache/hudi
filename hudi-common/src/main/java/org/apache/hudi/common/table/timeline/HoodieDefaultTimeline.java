@@ -127,9 +127,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
         && (!instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))), details);
   }
 
-  //TODO: Use a better naming convention for this.
   @Override
-  public HoodieTimeline filterPendingExcludingMajorAndMinorCompaction() {
+  public HoodieTimeline filterPendingExcludingCompactionAndLogCompaction() {
     return new HoodieDefaultTimeline(getInstantsAsStream().filter(instant -> (!instant.isCompleted())
         && (!instant.getAction().equals(HoodieTimeline.COMPACTION_ACTION)
         || !instant.getAction().equals(HoodieTimeline.LOG_COMPACTION_ACTION))), details);
