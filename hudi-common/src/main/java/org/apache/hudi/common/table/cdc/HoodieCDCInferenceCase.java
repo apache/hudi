@@ -24,18 +24,19 @@ package org.apache.hudi.common.table.cdc;
  *
  * AS_IS:
  *   For this type, there must be a real cdc log file from which we get the whole/part change data.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE_AFTER}, it keeps all the fields about the
- *   change data, including `op`, `ts_ms`, `before` and `after`. So read it and return directly,
- *   no more other files need to be loaded.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE}, it keeps the `op`, the key and the
- *   `before` of the changing record. When `op` is equal to 'i' or 'u', need to get the current record from the
- *   current base/log file as `after`.
- *   when `hoodie.table.cdc.supplemental.logging.mode` is 'op_key', it just keeps the `op` and the key of
- *   the changing record. When `op` is equal to 'i', `before` is null and get the current record
- *   from the current base/log file as `after`. When `op` is equal to 'u', get the previous
- *   record from the previous file slice as `before`, and get the current record from the
- *   current base/log file as `after`. When `op` is equal to 'd', get the previous record from
- *   the previous file slice as `before`, and `after` is null.
+ *   When `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE_AFTER},
+ *     it keeps all the fields about the change data, including `op`, `ts_ms`, `before` and `after`.
+ *     So read it and return directly, no more other files need to be loaded.
+ *   When `hoodie.table.cdc.supplemental.logging.mode` is {@link HoodieCDCSupplementalLoggingMode#DATA_BEFORE},
+ *     it keeps the `op`, the key and the `before` of the changing record.
+ *     When `op` is equal to 'i' or 'u', need to get the current record from the current base/log file as `after`.
+ *   When `hoodie.table.cdc.supplemental.logging.mode` is '{@link HoodieCDCSupplementalLoggingMode#OP_KEY_ONLY',
+ *     it just keeps the `op` and the key of the changing record.
+ *     When `op` is equal to 'i', `before` is null and get the current record
+ *     from the current base/log file as `after`.
+ *     When `op` is equal to 'u', get the previous record from the previous file slice as `before`,
+ *     and get the current record from the current base/log file as `after`.
+ *     When `op` is equal to 'd', get the previous record from the previous file slice as `before`, and `after` is null.
  *
  * BASE_FILE_INSERT:
  *   For this type, there must be a base file at the current instant. All the records from this
@@ -49,18 +50,16 @@ package org.apache.hudi.common.table.cdc;
  *   the value of `before`. The value of `after` for each record is null.
  *
  * LOG_FILE:
- *   For this type, a normal log file of mor table will be used. First we need to load the previous
- *   file slice(including the base file and other log files in the same file group). Then for each
- *   record from the log file, get the key of this, and execute the following steps:
- *     1) if the record is deleted,
- *       a) if there is a record with the same key in the data loaded, `op` is 'd', 'before' is the
- *          record from the data loaded, `after` is null;
- *       b) if there is not a record with the same key in the data loaded, just skip.
- *     2) the record is not deleted,
- *       a) if there is a record with the same key in the data loaded, `op` is 'u', 'before' is the
- *          record from the data loaded, `after` is the current record;
- *       b) if there is not a record with the same key in the data loaded, `op` is 'i', 'before' is
- *          null, `after` is the current record;
+ *   For this type, a normal log file of MOR table will be used. First we need to load the previous
+ *   file slice (including the base file and other log files in the same file group). Then for each
+ *   record (called `current record` hereafter) from the log file, get its key, and execute the following steps:
+ *     1) if the current record is deleted,
+ *       a) if there is a record with the same key in the data loaded (called `loaded record` hereafter),
+ *          `op` is 'd', 'before' is the loaded record, `after` is null;
+ *       b) if the loaded reocrd does not exist, just skip.
+ *     2) the current record is not deleted,
+ *       a) if there is a loaded record, `op` is 'u', 'before' is the loaded record, `after` is the current record;
+ *       b) if the loaded record does not exist, `op` is 'i', 'before' is null, `after` is the current record;
  *
  * REPLACE_COMMIT:
  *   For this type, it must be a replacecommit, like INSERT_OVERWRITE and DROP_PARTITION. It drops
