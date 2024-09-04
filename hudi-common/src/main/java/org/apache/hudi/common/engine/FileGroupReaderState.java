@@ -19,20 +19,26 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 
-public class HoodieReaderState {
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
+public class FileGroupReaderState {
   private HoodieFileGroupReaderSchemaHandler schemaHandler = null;
-  private String tablePath = null;
   private String latestCommitTime = null;
   private HoodieRecordMerger recordMerger = null;
+  private RecordMergeMode recordMergeMode = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
@@ -42,6 +48,7 @@ public class HoodieReaderState {
   private Option<String> partitionNameOverrideOpt = null;
   private Option<String[]> partitionPathFieldOpt = null;
   private TypedProperties props = null;
+  private Integer bufferSize = null;
 
   // Getter and Setter for schemaHandler
   public HoodieFileGroupReaderSchemaHandler getSchemaHandler() {
@@ -92,19 +99,15 @@ public class HoodieReaderState {
     return props;
   }
 
+  public int getBufferSize() {
+    if (this.bufferSize == null) {
+      this.bufferSize = ConfigUtils.getIntWithAltKeys(getProps(), HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE);
+    }
+    return this.bufferSize;
+  }
+
   public InternalSchema getInternalSchema() {
     return this.schemaHandler.getInternalSchema();
-  }
-
-  public String getTablePath() {
-    if (tablePath == null) {
-      throw new IllegalStateException("Table path not set in reader context.");
-    }
-    return tablePath;
-  }
-
-  public void setTablePath(String tablePath) {
-    this.tablePath = tablePath;
   }
 
   public String getLatestCommitTime() {
@@ -121,6 +124,13 @@ public class HoodieReaderState {
 
   public void setRecordMerger(HoodieRecordMerger recordMerger) {
     this.recordMerger = recordMerger;
+  }
+
+  public RecordMergeMode getRecordMergeMode() {
+    if (this.recordMergeMode == null) {
+      this.recordMergeMode = RecordMergeMode.valueOf(getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase());
+    }
+    return recordMergeMode;
   }
 
   // Getter and Setter for hasLogFiles

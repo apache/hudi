@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -105,9 +105,8 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ? Option.empty() : Option.of(partitionPaths[0]);
 
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
-    HoodieReaderState readerState = new HoodieReaderState();
+    FileGroupReaderState readerState = new FileGroupReaderState();
     ctx.setHoodieReaderState(readerState);
-    readerState.setTablePath(getBasePath());
     readerState.setLatestCommitTime(metaClient.createNewInstantTime());
     readerState.setShouldMergeUseRecordPosition(true);
     readerState.setHasBootstrapBaseFile(false);
@@ -128,8 +127,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         readerState.setRecordMerger(new OverwriteWithLatestSparkMerger());
         break;
     }
-    readerState.setSchemaHandler(new HoodiePositionBasedSchemaHandler(readerState, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig()));
+    readerState.setSchemaHandler(new HoodiePositionBasedSchemaHandler(readerState, avroSchema, avroSchema, Option.empty()));
     TypedProperties props = new TypedProperties();
     props.put(HoodieCommonConfig.RECORD_MERGE_MODE.key(), mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));

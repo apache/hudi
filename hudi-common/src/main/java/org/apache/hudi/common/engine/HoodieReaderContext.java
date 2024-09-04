@@ -53,14 +53,14 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
 
-  private HoodieReaderState readerState = null;
+  private FileGroupReaderState readerState = null;
 
-  public void setHoodieReaderState(HoodieReaderState readerState) {
+  public void setHoodieReaderState(FileGroupReaderState readerState) {
     this.readerState = readerState;
     this.readerState.setSupportsParquetRowIndex(supportsParquetRowIndex());
   }
 
-  protected HoodieReaderState getReaderState() {
+  protected FileGroupReaderState getReaderState() {
     return this.readerState;
   }
 

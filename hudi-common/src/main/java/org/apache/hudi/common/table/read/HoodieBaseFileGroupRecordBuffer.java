@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -62,11 +62,10 @@ import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_ME
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
-import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordMergeMode;
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
-  protected final HoodieReaderState readerState;
+  protected final FileGroupReaderState readerState;
   protected final Schema readerSchema;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
@@ -81,13 +80,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
 
-  public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, HoodieReaderState readerState) {
+  public HoodieBaseFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, FileGroupReaderState readerState) {
     this.readerContext = readerContext;
     this.readerState = readerState;
     this.readerSchema = readerState.getRequiredSchema();
     this.partitionNameOverrideOpt = readerState.getPartitionNameOverrideOpt();
     this.partitionPathFieldOpt = readerState.getPartitionPathFieldOpt();
-    this.recordMergeMode = getRecordMergeMode(readerState.getProps());
+    this.recordMergeMode = readerState.getRecordMergeMode();
     this.recordMerger = readerState.getRecordMerger();
     //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
     if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {

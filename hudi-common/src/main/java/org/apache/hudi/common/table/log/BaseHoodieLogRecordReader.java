@@ -22,7 +22,7 @@ package org.apache.hudi.common.table.log;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -144,23 +145,18 @@ public abstract class BaseHoodieLogRecordReader<T> {
   protected HoodieFileGroupRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
-                                      HoodieReaderState readerState,
-                                      HoodieStorage storage,
+                                      FileGroupReaderState readerState,
                                       List<String> logFilePaths,
-                                      boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                      boolean reverseReader, Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionNameOverride,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieRecordMerger recordMerger,
-                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
     this.readerSchema = readerState.getRequiredSchema();
     this.latestInstantTime = readerState.getLatestCommitTime();
-    this.hoodieTableMetaClient = HoodieTableMetaClient.builder()
-        .setStorage(storage)
-        .setBasePath(readerState.getTablePath()).build();
+    this.hoodieTableMetaClient = readerState.getMetaClient();
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
     this.payloadClassFQN = tableConfig.getPayloadClass();
@@ -171,13 +167,13 @@ public abstract class BaseHoodieLogRecordReader<T> {
       props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, this.preCombineField);
     }
     this.payloadProps = props;
-    this.recordMerger = recordMerger;
-    this.recordMergeMode = recordMergeMode;
+    this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(readerState.getRecordMerger());
+    this.recordMergeMode = readerState.getRecordMergeMode();
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
     this.reverseReader = reverseReader;
-    this.storage = storage;
-    this.bufferSize = bufferSize;
+    this.storage = hoodieTableMetaClient.getStorage();
+    this.bufferSize = readerState.getBufferSize();
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
@@ -206,7 +202,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     }
 
     this.partitionNameOverrideOpt = partitionNameOverride;
-    this.recordType = recordMerger.getRecordType();
+    this.recordType = this.recordMerger.getRecordType();
     this.recordBuffer = recordBuffer;
   }
 
@@ -849,15 +845,11 @@ public abstract class BaseHoodieLogRecordReader<T> {
   public abstract static class Builder<T> {
     public abstract Builder withHoodieReaderContext(HoodieReaderContext<T> readerContext);
 
-    public abstract Builder withHoodieReaderState(HoodieReaderState readerState);
-
-    public abstract Builder withStorage(HoodieStorage storage);
+    public abstract Builder withReaderState(FileGroupReaderState readerState);
 
     public abstract Builder withLogFiles(List<HoodieLogFile> hoodieLogFiles);
 
     public abstract Builder withReverseReader(boolean reverseReader);
-
-    public abstract Builder withBufferSize(int bufferSize);
 
     public Builder withPartition(String partitionName) {
       throw new UnsupportedOperationException();
@@ -870,12 +862,6 @@ public abstract class BaseHoodieLogRecordReader<T> {
     public Builder withOperationField(boolean withOperationField) {
       throw new UnsupportedOperationException();
     }
-
-    public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      throw new UnsupportedOperationException();
-    }
-
-    public abstract Builder withRecordMergeMode(RecordMergeMode recordMergeMode);
 
     public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
       throw new UnsupportedOperationException();

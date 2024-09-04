@@ -124,7 +124,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     });
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
+    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(),
         latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
         fileSplit.getLength(), false);

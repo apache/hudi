@@ -19,21 +19,16 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -70,18 +65,15 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
   @SuppressWarnings("unchecked")
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext,
-                                      HoodieReaderState readerState,
-                                      HoodieStorage storage, List<String> logFilePaths, boolean reverseReader,
-                                      int bufferSize, Option<InstantRange> instantRange,
+                                      FileGroupReaderState readerState, List<String> logFilePaths, boolean reverseReader,
+                                      Option<InstantRange> instantRange,
                                       boolean withOperationField, boolean forceFullScan,
                                       Option<String> partitionName,
                                       Option<String> keyFieldOverride,
                                       boolean enableOptimizedLogBlocksScan,
-                                      HoodieRecordMerger recordMerger,
-                                      RecordMergeMode recordMergeMode,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer) {
-    super(readerContext, readerState, storage, logFilePaths, reverseReader, bufferSize, instantRange, withOperationField,
-        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, recordMergeMode, recordBuffer);
+    super(readerContext, readerState, logFilePaths, reverseReader, instantRange, withOperationField,
+        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer);
     this.scannedPrefixes = new HashSet<>();
 
     if (forceFullScan) {
@@ -216,13 +208,9 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
    */
   public static class Builder<T> extends BaseHoodieLogRecordReader.Builder<T> {
     private HoodieReaderContext<T> readerContext;
-    private HoodieReaderState readerState;
-    private HoodieStorage storage;
+    private FileGroupReaderState readerState;
     private List<String> logFilePaths;
     private boolean reverseReader;
-    private int bufferSize;
-    // specific configurations
-    private Long maxMemorySizeInBytes;
     // incremental filtering
     private Option<InstantRange> instantRange = Option.empty();
     private String partitionName;
@@ -232,9 +220,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
     private boolean enableOptimizedLogBlocksScan = false;
-    private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
-    private RecordMergeMode recordMergeMode;
-
     private HoodieFileGroupRecordBuffer<T> recordBuffer;
 
     @Override
@@ -244,14 +229,8 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     }
 
     @Override
-    public Builder<T> withHoodieReaderState(HoodieReaderState readerState) {
+    public Builder<T> withReaderState(FileGroupReaderState readerState) {
       this.readerState = readerState;
-      return this;
-    }
-
-    @Override
-    public Builder<T> withStorage(HoodieStorage storage) {
-      this.storage = storage;
       return this;
     }
 
@@ -267,12 +246,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
     @Override
     public Builder<T> withReverseReader(boolean reverseReader) {
       this.reverseReader = reverseReader;
-      return this;
-    }
-
-    @Override
-    public Builder<T> withBufferSize(int bufferSize) {
-      this.bufferSize = bufferSize;
       return this;
     }
 
@@ -299,18 +272,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    @Override
-    public Builder<T> withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
-      return this;
-    }
-
-    @Override
-    public Builder<T> withRecordMergeMode(RecordMergeMode recordMergeMode) {
-      this.recordMergeMode = recordMergeMode;
-      return this;
-    }
-
     public Builder<T> withKeyFiledOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
@@ -328,22 +289,20 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
 
     @Override
     public HoodieMergedLogRecordReader<T> build() {
-      ValidationUtils.checkArgument(recordMerger != null, "Record Merger is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(recordBuffer != null, "Record Buffer is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(readerContext != null, "Reader Context is null in Merged Log Record Reader");
       ValidationUtils.checkArgument(readerState != null, "Reader State is null in Merged Log Record Reader");
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
-        this.partitionName = getRelativePartitionPath(
-            new StoragePath(readerState.getTablePath()), new StoragePath(this.logFilePaths.get(0)).getParent());
+        this.partitionName = getRelativePartitionPath(readerState.getMetaClient().getBasePath(), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
 
       return new HoodieMergedLogRecordReader<>(
-          readerContext,readerState, storage, logFilePaths,
-          reverseReader, bufferSize, instantRange,
+          readerContext, readerState, logFilePaths,
+          reverseReader, instantRange,
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),
           Option.ofNullable(keyFieldOverride),
-          enableOptimizedLogBlocksScan, recordMerger, recordMergeMode,
+          enableOptimizedLogBlocksScan,
           recordBuffer);
     }
   }

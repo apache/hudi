@@ -19,8 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.engine.HoodieReaderState;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -40,12 +39,11 @@ import static org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupReco
  * This class is responsible for handling the schema for the file group reader that supports positional merge.
  */
 public class HoodiePositionBasedSchemaHandler extends HoodieFileGroupReaderSchemaHandler {
-  public HoodiePositionBasedSchemaHandler(HoodieReaderState readerState,
+  public HoodiePositionBasedSchemaHandler(FileGroupReaderState readerState,
                                           Schema dataSchema,
                                           Schema requestedSchema,
-                                          Option<InternalSchema> internalSchemaOpt,
-                                          HoodieTableConfig hoodieTableConfig) {
-    super(readerState, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
+                                          Option<InternalSchema> internalSchemaOpt) {
+    super(readerState, dataSchema, requestedSchema, internalSchemaOpt);
   }
 
   @Override

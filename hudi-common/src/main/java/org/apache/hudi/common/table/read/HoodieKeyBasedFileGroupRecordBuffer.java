@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -46,7 +46,7 @@ import java.util.Map;
  */
 public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupRecordBuffer<T> {
 
-  public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, HoodieReaderState readerState) {
+  public HoodieKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext, FileGroupReaderState readerState) {
     super(readerContext, readerState);
   }
 

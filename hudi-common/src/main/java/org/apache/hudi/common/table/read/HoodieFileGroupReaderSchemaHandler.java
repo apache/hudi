@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.engine.HoodieReaderState;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -61,7 +61,7 @@ public class HoodieFileGroupReaderSchemaHandler {
 
   protected final HoodieTableConfig hoodieTableConfig;
 
-  protected final HoodieReaderState readerState;
+  protected final FileGroupReaderState readerState;
 
   protected final HoodieRecordMerger recordMerger;
 
@@ -70,18 +70,17 @@ public class HoodieFileGroupReaderSchemaHandler {
 
   protected final boolean needsMORMerge;
 
-  public HoodieFileGroupReaderSchemaHandler(HoodieReaderState readerState,
+  public HoodieFileGroupReaderSchemaHandler(FileGroupReaderState readerState,
                                             Schema dataSchema,
                                             Schema requestedSchema,
-                                            Option<InternalSchema> internalSchemaOpt,
-                                            HoodieTableConfig hoodieTableConfig) {
+                                            Option<InternalSchema> internalSchemaOpt) {
     this.readerState = readerState;
     this.hasBootstrapBaseFile = readerState.getHasBootstrapBaseFile();
     this.needsMORMerge = readerState.getHasLogFiles();
     this.recordMerger = readerState.getRecordMerger();
     this.dataSchema = dataSchema;
     this.requestedSchema = requestedSchema;
-    this.hoodieTableConfig = hoodieTableConfig;
+    this.hoodieTableConfig = readerState.getMetaClient().getTableConfig();
     this.requiredSchema = prepareRequiredSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
