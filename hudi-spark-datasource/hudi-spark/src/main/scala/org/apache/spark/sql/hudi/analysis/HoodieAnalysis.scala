@@ -196,9 +196,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
      * Timestamp or custom key generator.
      */
     private def transformReaderFSRelation(logicalPlan: Option[LogicalPlan]): Option[LogicalPlan] = {
-      def getAttributesFromTableSchema(catalogTableOpt: Option[CatalogTable], lr: LogicalRelation, attributesSet: Set[AttributeReference]) = {
-        var finalAttrs: List[AttributeReference] = List.empty
+      def getAttributesFromTableSchema(catalogTableOpt: Option[CatalogTable], lr: LogicalRelation, attributes: Seq[AttributeReference]) = {
+        val attributesSet = attributes.toSet
         if (catalogTableOpt.isDefined) {
+          var finalAttributes: List[AttributeReference] = List.empty
           for (attr <- lr.output) {
             val origAttr: AttributeReference = attributesSet.collectFirst({ case a if a.name.equals(attr.name) => a }).get
             val catalogAttr = catalogTableOpt.get.partitionSchema.fields.collectFirst({ case a if a.name.equals(attr.name) => a })
@@ -207,10 +208,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
             } else {
               origAttr
             }
-            finalAttrs = finalAttrs :+ newAttr
+            finalAttributes = finalAttributes :+ newAttr
           }
+          finalAttributes
+        } else {
+          attributes
         }
-        finalAttrs
       }
 
       def getHadoopFsRelation(plan: LogicalPlan): Option[HadoopFsRelation] = {
@@ -231,7 +234,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
           case fsRelation: HadoopFsRelation if fsRelation.location.isInstanceOf[HoodieReaderFileIndex] =>
             relation transformUp {
               case lr: LogicalRelation =>
-                val finalAttrs: List[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output.toSet)
+                val finalAttrs: Seq[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output)
                 val newFsRelation: BaseRelation = lr.relation match {
                   case fsRelation: HadoopFsRelation =>
                     if (catalogTableOpt.isDefined) {
