@@ -36,6 +36,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.hudi.util.JavaScalaConverters.convertJavaListToScalaSeq
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
@@ -47,6 +48,7 @@ import org.junit.jupiter.params.provider.CsvSource
 
 import java.util
 import java.util.Collections
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -384,10 +386,12 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val fsview = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
       metaClient, HoodieMetadataConfig.newBuilder.enable(false).build())
     fsview.loadAllPartitions()
-    fsview.getAllFileGroups.forEach(fg => {
-      fg.getAllFileSlices.forEach(fileSlice => {
-        fileSlice.getBaseFile.ifPresent(baseFile => files.add(baseFile.getFileName))
-        fileSlice.getLogFiles.forEach(logFile => files.add(logFile.getFileName))
+    convertJavaListToScalaSeq(fsview.getAllFileGroups.collect(Collectors.toList())).foreach(fg => {
+      convertJavaListToScalaSeq(fg.getAllFileSlices.collect(Collectors.toList())).foreach(fileSlice => {
+        if (fileSlice.getBaseFile.isPresent) {
+          files.add(fileSlice.getBaseFile.get().getFileName)
+        }
+        convertJavaListToScalaSeq(fileSlice.getLogFiles.collect(Collectors.toList())).foreach(logFile => files.add(logFile.getFileName))
       })
     })
     files.toArray.toSet
