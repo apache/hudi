@@ -2765,11 +2765,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public boolean isSortedMergeCompactionEnabled() {
-    return commonConfig.getBoolean(HoodieCompactionConfig.SORTED_MERGE_COMPACTION);
+    return commonConfig.getBoolean(HoodieCompactionConfig.SORT_MERGE_COMPACTION);
   }
 
   public ExternalSorterType getExternalSorterType() {
     return ExternalSorterType.fromValue(commonConfig.getString(HoodieCompactionConfig.EXTERNAL_SORTER_TYPE));
+  }
+
+  public int getCompactionProgressLogIntervalNum() {
+    return commonConfig.getInt(HoodieCompactionConfig.COMPACTION_PROGRESS_LOG_INTERNAL_NUM);
   }
 
   public static class Builder {

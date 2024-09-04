@@ -60,8 +60,6 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
   private int currentMemoryEntryCount;
 
-  private int totalEntryCount;
-
   // TODO: better sorter
   private CollectionSorter<List<R>> collectionSorter;
 
@@ -133,7 +131,6 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   private void addRecord(R record) {
     memoryEntries.add(record);
     currentMemoryEntryCount++;
-    totalEntryCount++;
     long sizeEstimated = sizeEstimate(record);
     currentMemorySize += sizeEstimated;
     totalMemorySize += sizeEstimated;

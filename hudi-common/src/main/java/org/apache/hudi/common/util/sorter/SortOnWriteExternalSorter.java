@@ -58,7 +58,6 @@ public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalS
   private final List<R> memoryRecords;
   private int currentSortedFileIndex = 0;
   private long currentMemoryUsage = 0;
-  private long totalEntryCount = 0;
   private long totalMemoryUsage = 0;
   private long totalFileSize = 0;
   private long totalTimeTakenToSortRecords;
@@ -74,10 +73,6 @@ public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalS
   public SortOnWriteExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> recordSizeEstimator, SampleEstimator sampleEstimator) throws IOException {
     super(baseFilePath, maxMemoryInBytes, comparator, recordSizeEstimator, sampleEstimator);
     this.memoryRecords = new LinkedList<>();
-  }
-
-  public long getTotalEntryCount() {
-    return totalEntryCount;
   }
 
   public long getTotalTimeTakenToSortRecords() {
@@ -304,7 +299,6 @@ public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalS
   @Override
   protected void addInner(R record) {
     memoryRecords.add(record);
-    totalEntryCount++;
     long sizeEstimated = sizeEstimate(record);
     currentMemoryUsage += sizeEstimated;
     totalMemoryUsage += sizeEstimated;

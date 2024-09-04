@@ -199,7 +199,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Log compaction can be scheduled if the no. of log blocks crosses this threshold value. "
           + "This is effective only when log compaction is enabled via " + INLINE_LOG_COMPACT.key());
 
-  public static final ConfigProperty<String> SORTED_MERGE_COMPACTION = ConfigProperty
+  public static final ConfigProperty<String> SORT_MERGE_COMPACTION = ConfigProperty
       .key("hoodie.compaction.sort.merge")
       .defaultValue("false")
       .markAdvanced()
@@ -213,6 +213,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("When we enable sort merge compaction, we use the external-sorter with type from this property.");
+
+  public static final ConfigProperty<Integer> COMPACTION_PROGRESS_LOG_INTERNAL_NUM = ConfigProperty
+      .key("hoodie.compaction.progress.log.internal.num")
+      .defaultValue(10000)
+      .withDocumentation("The number of compaction progress logs to be printed internally.");
 
   /**
    * @deprecated Use {@link #INLINE_COMPACT} and its methods instead
@@ -492,7 +497,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
     }
 
     public Builder withSortedMergeCompaction(boolean sortedMergeCompaction) {
-      compactionConfig.setValue(SORTED_MERGE_COMPACTION, String.valueOf(sortedMergeCompaction));
+      compactionConfig.setValue(SORT_MERGE_COMPACTION, String.valueOf(sortedMergeCompaction));
       return this;
     }
 
@@ -503,6 +508,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withSortedMergeCompactionExternalSorterType(ExternalSorterType type) {
       compactionConfig.setValue(EXTERNAL_SORTER_TYPE, type.getValue());
+      return this;
+    }
+
+    public Builder withCompactionProgressLogInternalNum(int compactionProgressLogInternalNum) {
+      compactionConfig.setValue(COMPACTION_PROGRESS_LOG_INTERNAL_NUM, String.valueOf(compactionProgressLogInternalNum));
       return this;
     }
 

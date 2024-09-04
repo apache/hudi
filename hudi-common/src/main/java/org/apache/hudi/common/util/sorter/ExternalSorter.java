@@ -26,6 +26,9 @@ import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -34,8 +37,9 @@ import java.util.Iterator;
 import java.util.UUID;
 
 public abstract class ExternalSorter<R extends Serializable> implements AutoCloseable {
+  public static final Logger LOG = LoggerFactory.getLogger(ExternalSorter.class);
   private static final String SUBFOLDER_PREFIX = "hudi/external-sorter";
-
+  protected static final int DEFAULT_PROGRESS_LOG_INTERVAL_NUM = 10_000;
   protected final String basePath;
   protected final long maxMemoryInBytes;
   protected final Comparator<R> comparator;
@@ -44,6 +48,7 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
   protected State state = State.INIT;
   private HoodieTimer insertTimer = HoodieTimer.create();
   protected long timeTakenToInsertAndWriteRecord; // ms
+  protected int totalEntryCount;
 
   enum State {
     INIT,
@@ -91,6 +96,10 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
       startAdd();
     }
     addInner(record);
+    if (++totalEntryCount % DEFAULT_PROGRESS_LOG_INTERVAL_NUM == 0) {
+      // Log every 10k records
+      LOG.info("ExternalSorter adding progress: ------------ add {} entries ------------", totalEntryCount);
+    }
   }
 
   public void addAll(Iterator<R> records) {

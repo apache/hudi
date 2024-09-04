@@ -62,6 +62,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   private Map<String, HoodieRecord<T>> recordMap;
   protected boolean useWriterSchema = false;
   protected final boolean preserveMetadata;
+  protected int progressLogIntervalNum;
+  protected boolean isCompaction = false;
 
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
@@ -118,6 +120,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
                             String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
                             TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
+    this.isCompaction = true;
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
     this.recordMap = recordMap;
     this.useWriterSchema = true;
   }
@@ -157,6 +161,9 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
         recordsWritten++;
         insertRecordsWritten++;
+        if (isCompaction && recordsWritten % progressLogIntervalNum == 0) {
+          LOG.info("Merge processing: ------------ write {} records ------------", recordsWritten);
+        }
       } else {
         recordsDeleted++;
       }

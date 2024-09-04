@@ -101,6 +101,8 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandle.class);
 
+  protected final int progressLogIntervalNum;
+
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter fileWriter;
@@ -131,6 +133,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
                            TaskContextSupplier taskContextSupplier, HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
     init(fileId, recordItr);
     init(fileId, partitionPath, baseFile);
     validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
@@ -150,6 +153,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
                            HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt,
                            boolean isCompaction) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier);
+    this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
     this.isCompaction = isCompaction;
     this.keyToNewRecords = keyToNewRecords;
     this.preserveMetadata = true;
@@ -408,6 +412,9 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, Schema schema, Properties prop, boolean shouldPreserveRecordMetadata) throws IOException {
     // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
     //       file holding this record even in cases when overall metadata is preserved
+    if (recordsWritten % progressLogIntervalNum == 0) {
+      LOG.info("Merge processing: new file: {} ------------ write {} records ------------", newFilePath, recordsWritten);
+    }
     MetadataValues metadataValues = new MetadataValues().setFileName(newFilePath.getName());
     HoodieRecord populatedRecord = record.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, prop);
 

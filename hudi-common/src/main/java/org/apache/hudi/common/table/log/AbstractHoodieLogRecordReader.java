@@ -261,6 +261,7 @@ public abstract class AbstractHoodieLogRecordReader {
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
+            LOG.info("Skipping log block with instant time {} as it is not in the range {}", instantTime, instantRange.get());
             continue;
           }
         }
