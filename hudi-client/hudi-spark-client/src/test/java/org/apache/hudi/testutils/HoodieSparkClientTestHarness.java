@@ -41,7 +41,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV3MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -688,7 +688,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   public HoodieInstant createCleanMetadata(String instantTime, boolean inflightOnly, boolean isEmptyForAll, boolean isEmptyCompleted) throws IOException {
     HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""), "", "",
-            new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
+            new HashMap<>(), CleanPlanV3MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.EMPTY_MAP);
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {

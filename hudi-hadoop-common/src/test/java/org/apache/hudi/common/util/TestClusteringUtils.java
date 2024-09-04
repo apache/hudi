@@ -33,7 +33,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
-import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV3MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -178,7 +178,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
             .setState(completedInstant3.getState().name()))
         .setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
         .setFilesToBeDeletedPerPartition(new HashMap<>())
-        .setVersion(CleanPlanV2MigrationHandler.VERSION)
+        .setVersion(CleanPlanV3MigrationHandler.VERSION)
         .build();
     metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant4, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
     HoodieInstant inflightInstant4 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant4, Option.empty());
@@ -207,7 +207,7 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieInstant requestedInstant2 = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime1);
     HoodieCleanerPlan cleanerPlan1 = new HoodieCleanerPlan(null, clusterTime1,
         HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.name(), Collections.emptyMap(),
-        CleanPlanV2MigrationHandler.VERSION, Collections.emptyMap(), Collections.emptyList(), Collections.EMPTY_MAP);
+        CleanPlanV3MigrationHandler.VERSION, Collections.emptyMap(), Collections.emptyList(), Collections.EMPTY_MAP);
     metaClient.getActiveTimeline().saveToCleanRequested(requestedInstant2, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan1));
     HoodieInstant inflightInstant2 = metaClient.getActiveTimeline().transitionCleanRequestedToInflight(requestedInstant2, Option.empty());
     HoodieCleanMetadata cleanMetadata = new HoodieCleanMetadata(cleanTime1, 1L, 1,

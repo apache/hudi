@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV3MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -77,7 +78,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
   public static final Integer CLEAN_PLAN_VERSION_1 = CleanPlanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
-  public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_2;
+  public static final Integer CLEAN_PLAN_VERSION_3 = CleanPlanV3MigrationHandler.VERSION;
+  public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_3;
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;

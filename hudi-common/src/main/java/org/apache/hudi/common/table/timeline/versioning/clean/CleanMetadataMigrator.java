@@ -33,6 +33,7 @@ public class CleanMetadataMigrator extends MetadataMigrator<HoodieCleanMetadata>
     super(metaClient,
         Arrays
             .asList(new CleanMetadataV1MigrationHandler(metaClient),
-                new CleanMetadataV2MigrationHandler(metaClient)));
+                new CleanMetadataV2MigrationHandler(metaClient),
+                new CleanMetadataV3MigrationHandler(metaClient)));
   }
 }

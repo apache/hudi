@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,7 +51,10 @@ public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<Hoodie
   public HoodieCleanMetadata upgradeFrom(HoodieCleanMetadata input) {
     ValidationUtils.checkArgument(input.getVersion() == 1,
         "Input version is " + input.getVersion() + ". Must be 1");
+      return upgradeFromV2(input, metaClient, VERSION);
+  }
 
+  static HoodieCleanMetadata upgradeFromV2(HoodieCleanMetadata input, HoodieTableMetaClient metaClient, Integer version) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = input.getPartitionMetadata()
         .entrySet()
         .stream().map(entry -> {
@@ -80,16 +84,25 @@ public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<Hoodie
         .setStartCleanTime(input.getStartCleanTime())
         .setTimeTakenInMillis(input.getTimeTakenInMillis())
         .setTotalFilesDeleted(input.getTotalFilesDeleted())
-        .setPartitionMetadata(partitionMetadataMap).setVersion(getManagedVersion()).build();
+        .setPartitionMetadata(partitionMetadataMap)
+        .setExtraMetadata(Collections.emptyMap())
+        .setVersion(version).build();
   }
 
   @Override
   public HoodieCleanMetadata downgradeFrom(HoodieCleanMetadata input) {
-    throw new IllegalArgumentException(
-        "This is the current highest version. Input cannot be any higher version");
+    return HoodieCleanMetadata.newBuilder()
+        .setEarliestCommitToRetain(input.getEarliestCommitToRetain())
+        .setLastCompletedCommitTimestamp(input.getLastCompletedCommitTimestamp())
+        .setStartCleanTime(input.getStartCleanTime())
+        .setTimeTakenInMillis(input.getTimeTakenInMillis())
+        .setTotalFilesDeleted(input.getTotalFilesDeleted())
+        .setPartitionMetadata(input.getPartitionMetadata())
+        .setExtraMetadata(input.getExtraMetadata())
+        .setVersion(VERSION).build();
   }
 
-  private List<String> convertToV2Path(List<String> paths) {
+  private static List<String> convertToV2Path(List<String> paths) {
     return paths.stream().map(path -> new StoragePath(path).getName())
         .collect(Collectors.toList());
   }

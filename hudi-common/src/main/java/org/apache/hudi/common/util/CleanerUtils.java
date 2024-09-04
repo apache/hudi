@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV3MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
 import org.slf4j.Logger;
@@ -60,7 +61,8 @@ public class CleanerUtils {
   public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
-  public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
+  public static final Integer CLEAN_METADATA_VERSION_3 = CleanMetadataV3MigrationHandler.VERSION;
+  public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_3;
 
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
                                                          Option<Long> durationInMs,

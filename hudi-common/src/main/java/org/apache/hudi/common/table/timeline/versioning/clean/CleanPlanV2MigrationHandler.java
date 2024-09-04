@@ -51,18 +51,23 @@ public class CleanPlanV2MigrationHandler extends AbstractMigratorBase<HoodieClea
 
   @Override
   public HoodieCleanerPlan upgradeFrom(HoodieCleanerPlan plan) {
+    return upgradeFromV2(plan, metaClient, VERSION);
+  }
+
+  static HoodieCleanerPlan upgradeFromV2(HoodieCleanerPlan plan, HoodieTableMetaClient metaClient, Integer version) {
     Map<String, List<HoodieCleanFileInfo>> filePathsPerPartition =
         plan.getFilesToBeDeletedPerPartition().entrySet().stream().map(e -> Pair.of(e.getKey(), e.getValue().stream()
             .map(v -> new HoodieCleanFileInfo(
                 new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), e.getKey()), v).toString(), false))
             .collect(Collectors.toList()))).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
     return new HoodieCleanerPlan(plan.getEarliestInstantToRetain(), plan.getLastCompletedCommitTimestamp(),
-        plan.getPolicy(), new HashMap<>(), VERSION, filePathsPerPartition, new ArrayList<>(), Collections.emptyMap());
+        plan.getPolicy(), new HashMap<>(), version, filePathsPerPartition, new ArrayList<>(), Collections.emptyMap());
   }
 
   @Override
   public HoodieCleanerPlan downgradeFrom(HoodieCleanerPlan input) {
-    throw new IllegalArgumentException(
-        "This is the current highest version. Plan cannot be any higher version");
+    return new HoodieCleanerPlan(input.getEarliestInstantToRetain(), input.getLastCompletedCommitTimestamp(),
+        input.getPolicy(), input.getFilesToBeDeletedPerPartition(), VERSION,
+        input.getFilePathsToBeDeletedPerPartition(), input.getPartitionsToBeDeleted(), input.getExtraMetadata());
   }
 }

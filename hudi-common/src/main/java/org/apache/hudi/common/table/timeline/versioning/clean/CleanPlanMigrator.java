@@ -31,6 +31,8 @@ public class CleanPlanMigrator extends MetadataMigrator<HoodieCleanerPlan> {
 
   public CleanPlanMigrator(HoodieTableMetaClient metaClient) {
     super(metaClient,
-        Arrays.asList(new CleanPlanV1MigrationHandler(metaClient), new CleanPlanV2MigrationHandler(metaClient)));
+        Arrays.asList(new CleanPlanV1MigrationHandler(metaClient),
+            new CleanPlanV2MigrationHandler(metaClient),
+            new CleanPlanV3MigrationHandler(metaClient)));
   }
 }

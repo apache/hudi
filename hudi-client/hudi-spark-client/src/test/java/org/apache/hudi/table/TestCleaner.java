@@ -59,6 +59,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataMigra
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
+import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV3MigrationHandler;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -79,7 +80,6 @@ import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
 import org.apache.hadoop.fs.Path;
@@ -849,10 +849,10 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     // Upgrade and Verify version 2 plan
     HoodieCleanerPlan version2Plan =
-        new CleanPlanMigrator(metaClient).upgradeToLatest(version1Plan, version1Plan.getVersion());
+        new CleanPlanMigrator(metaClient).migrateToVersion(version1Plan, version1Plan.getVersion(), CleanPlanV2MigrationHandler.VERSION);
     assertEquals(version1Plan.getEarliestInstantToRetain(), version2Plan.getEarliestInstantToRetain());
     assertEquals(version1Plan.getPolicy(), version2Plan.getPolicy());
-    assertEquals(CleanPlanner.LATEST_CLEAN_PLAN_VERSION, version2Plan.getVersion());
+    assertEquals(CleanPlanV2MigrationHandler.VERSION, version2Plan.getVersion());
     // Deprecated Field is not used.
     assertEquals(0, version2Plan.getFilesToBeDeletedPerPartition().size());
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().size(),
@@ -866,11 +866,28 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertEquals(new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition2), fileName2).toString(),
         version2Plan.getFilePathsToBeDeletedPerPartition().get(partition2).get(0).getFilePath());
 
+    // Upgrade and Verify version 2 plan with set extra metadata
+    version2Plan.setExtraMetadata(new HashMap<String, String>() {
+      {
+        put("testMetaStays", "testMetaValueStays");
+      }
+    });
+    HoodieCleanerPlan version3Plan = new CleanPlanMigrator(metaClient).upgradeToLatest(version2Plan, version2Plan.getVersion());
+    assertEquals(CleanPlanV3MigrationHandler.VERSION, version3Plan.getVersion());
+    assertNotNull(version3Plan.getExtraMetadata());
+    assertEquals("testMetaValueStays", version3Plan.getExtraMetadata().get("testMetaStays"));
+
+    // Upgrade and Verify version 2 plan with null extra metadata
+    version2Plan.setExtraMetadata(null);
+    version3Plan = new CleanPlanMigrator(metaClient).upgradeToLatest(version2Plan, version2Plan.getVersion());
+    assertEquals(CleanPlanV3MigrationHandler.VERSION, version3Plan.getVersion());
+    assertNotNull(version3Plan.getExtraMetadata());
+
     // Downgrade and verify version 1 plan
-    HoodieCleanerPlan gotVersion1Plan = new CleanPlanMigrator(metaClient).migrateToVersion(version2Plan,
-        version2Plan.getVersion(), version1Plan.getVersion());
+    HoodieCleanerPlan gotVersion1Plan = new CleanPlanMigrator(metaClient).migrateToVersion(version3Plan,
+        version3Plan.getVersion(), version1Plan.getVersion());
     assertEquals(version1Plan.getEarliestInstantToRetain(), gotVersion1Plan.getEarliestInstantToRetain());
-    assertEquals(version1Plan.getPolicy(), version2Plan.getPolicy());
+    assertEquals(version1Plan.getPolicy(), gotVersion1Plan.getPolicy());
     assertEquals(version1Plan.getVersion(), gotVersion1Plan.getVersion());
     assertEquals(version1Plan.getFilesToBeDeletedPerPartition().size(),
         gotVersion1Plan.getFilesToBeDeletedPerPartition().size());
@@ -1138,9 +1155,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       // add clean instant
       HoodieCleanerPlan cleanerPlan = new HoodieCleanerPlan(new HoodieActionInstant("", "", ""),
-          "", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
+          "", "", new HashMap<>(), CleanPlanV3MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
       HoodieCleanMetadata cleanMeta = new HoodieCleanMetadata("", 0L, 0,
-          "20", "", new HashMap<>(), CleanPlanV2MigrationHandler.VERSION, new HashMap<>(), Collections.emptyMap());
+          "20", "", new HashMap<>(), CleanPlanV3MigrationHandler.VERSION, new HashMap<>(), Collections.emptyMap());
       testTable.addClean("30", cleanerPlan, cleanMeta);
 
       // add file in partition "part_2"
