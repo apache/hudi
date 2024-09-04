@@ -387,9 +387,9 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       metaClient, HoodieMetadataConfig.newBuilder.enable(false).build())
     fsview.loadAllPartitions()
     convertJavaListToScalaSeq(fsview.getAllFileGroups.collect(Collectors.toList())).foreach(fg => {
-      convertJavaListToScalaSeq(fg.getAllFileSlices.collect(Collectors.toList)).foreach(fileSlice => {
+      convertJavaListToScalaSeq(fg.getAllFileSlices.collect(Collectors.toList())).foreach(fileSlice => {
         fileSlice.getBaseFile.ifPresent(baseFile => files.add(baseFile.getFileName))
-        convertJavaListToScalaSeq(fileSlice.getLogFiles.collect(Collectors.toList)).foreach(logFile => files.add(logFile.getFileName))
+        convertJavaListToScalaSeq(fileSlice.getLogFiles.collect(Collectors.toList())).foreach(logFile => files.add(logFile.getFileName))
       })
     })
     files.toArray.toSet
