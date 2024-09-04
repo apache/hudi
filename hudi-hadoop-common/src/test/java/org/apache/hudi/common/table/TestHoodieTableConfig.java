@@ -220,16 +220,17 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("p1,p2", config.getPartitionFieldProp());
   }
 
-  @Test
-  public void testPartitionFieldAPIs() {
+  @ParameterizedTest
+  @ValueSource(strings = {"p1:simple,p2:timestamp", "p1,p2"})
+  public void testPartitionFieldAPIs(String partitionFields) {
     Properties updatedProps = new Properties();
-    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "p1:simple,p2:timestamp");
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFields);
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
-    assertEquals("p1:simple,p2:timestamp", HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).get());
+    assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).get());
     assertEquals("p1,p2", HoodieTableConfig.getPartitionFieldProp(config).get());
     assertArrayEquals(new String[] {"p1", "p2"}, HoodieTableConfig.getPartitionFields(config).get());
-    assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType("p1:simple", config));
+    assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
   }
 }
