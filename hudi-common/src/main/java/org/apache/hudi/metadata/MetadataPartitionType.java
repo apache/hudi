@@ -119,7 +119,7 @@ public enum MetadataPartitionType {
       HoodieMetadataColumnStats previousColStatsRecord = older.getColumnStatMetadata().get();
       HoodieMetadataColumnStats newColumnStatsRecord = newer.getColumnStatMetadata().get();
 
-      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord));
+      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord), getRecordType());
     }
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
@@ -237,6 +237,17 @@ public enum MetadataPartitionType {
     @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       constructColumnStatsMetadataPayload(payload, record);
+    }
+
+    @Override
+    public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+      checkArgument(older.getColumnStatMetadata().isPresent());
+      checkArgument(newer.getColumnStatMetadata().isPresent());
+
+      HoodieMetadataColumnStats previousColStatsRecord = older.getColumnStatMetadata().get();
+      HoodieMetadataColumnStats newColumnStatsRecord = newer.getColumnStatMetadata().get();
+
+      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord), getRecordType());
     }
   },
   // ALL_PARTITIONS is just another record type in FILES partition
@@ -407,7 +418,7 @@ public enum MetadataPartitionType {
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
   public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
-    if (!writeConfig.getBoolean(ENABLE.key(), ENABLE.defaultValue())) {
+    if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
       return Collections.emptyList();
     }
     return Arrays.stream(getValidValues())

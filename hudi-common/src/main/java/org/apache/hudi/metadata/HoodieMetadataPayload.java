@@ -212,8 +212,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     this(key, MetadataPartitionType.BLOOM_FILTERS.getRecordType(), null, metadataBloomFilter, null, null, null);
   }
 
-  protected HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, MetadataPartitionType.COLUMN_STATS.getRecordType(), null, null, columnStats, null, null);
+  protected HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats, int recordType) {
+    this(key, recordType, null, null, columnStats, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
@@ -482,7 +482,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       HoodieKey key = new HoodieKey(getColumnStatsIndexKey(partitionName, columnRangeMetadata),
           MetadataPartitionType.COLUMN_STATS.getPartitionPath());
 
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(
+          key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(new StoragePath(columnRangeMetadata.getFilePath()).getName())
               .setColumnName(columnRangeMetadata.getColumnName())
@@ -493,7 +494,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
-              .build());
+              .build(),
+          MetadataPartitionType.COLUMN_STATS.getRecordType());
 
       return new HoodieAvroRecord<>(key, payload);
     });
@@ -505,7 +507,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
-      HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(),
+      HoodieMetadataPayload payload = new HoodieMetadataPayload(
+          key.getRecordKey(),
           HoodieMetadataColumnStats.newBuilder()
               .setFileName(columnRangeMetadata.getFilePath())
               .setColumnName(columnRangeMetadata.getColumnName())
@@ -516,7 +519,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
-              .build());
+              .build(),
+          MetadataPartitionType.PARTITION_STATS.getRecordType());
 
       return new HoodieAvroRecord<>(key, payload);
     });

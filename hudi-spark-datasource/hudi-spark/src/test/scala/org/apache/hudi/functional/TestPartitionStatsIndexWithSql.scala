@@ -24,12 +24,11 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
 import org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS
+import org.apache.hudi.metadata.{HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex}
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GreaterThan, LessThan, Literal}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -294,13 +293,13 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
         writeAndValidatePartitionStats(tableName, tablePath)
         // validate partition stats index for id column
-        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$tableName') where type=3 and ColumnStatsMetadata.columnName='id'")(
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='id'")(
           Seq(getPartitionStatsIndexKey("ts=10", "id"), 1, 4),
           Seq(getPartitionStatsIndexKey("ts=20", "id"), 2, 5),
           Seq(getPartitionStatsIndexKey("ts=30", "id"), 3, 6)
         )
         // validate partition stats index for name column
-        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=3 and ColumnStatsMetadata.columnName='name'")(
+        checkAnswer(s"select key, ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='name'")(
           Seq(getPartitionStatsIndexKey("ts=10", "name"), "a1", "a4"),
           Seq(getPartitionStatsIndexKey("ts=20", "name"), "a2", "a5"),
           Seq(getPartitionStatsIndexKey("ts=30", "name"), "a3", "a6")
