@@ -31,8 +31,7 @@ import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, spy, when}
 
 /**
  * Tests {@link ProvidesHoodieConfig}
@@ -40,7 +39,7 @@ import org.mockito.Mockito.{mock, when}
 class TestProvidesHoodieConfig {
   @Test
   def testGetPartitionPathFieldWriteConfig(): Unit = {
-    val mockTable = Mockito.mock(classOf[HoodieCatalogTable])
+    val mockTable = mock(classOf[HoodieCatalogTable])
     val partitionFieldNames = "ts,segment"
     val customKeyGenPartitionFieldWriteConfig = "ts:timestamp,segment:simple"
 
@@ -77,7 +76,7 @@ class TestProvidesHoodieConfig {
   def testInferPrecombineFieldFromTableConfig(): Unit = {
     // ProvidesHoodieConfig should be able to infer precombine field from table config
     // mock catalogTable
-    val mockCatalog = Mockito.mock(classOf[HoodieCatalogTable])
+    val mockCatalog = mock(classOf[HoodieCatalogTable])
     // catalogProperties won't be passed in correctly, because they were not synced properly
     when(mockCatalog.catalogProperties).thenReturn(Map.empty[String, String])
     when(mockCatalog.partitionFields).thenReturn(Array("partition"))
@@ -87,16 +86,16 @@ class TestProvidesHoodieConfig {
     when(mockCatalog.tableName).thenReturn("hudi_table")
     val props = new TypedProperties()
     props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "segment")
-    val mockTableConfig = Mockito.spy(classOf[HoodieTableConfig])
+    val mockTableConfig = spy(classOf[HoodieTableConfig])
     when(mockTableConfig.getProps).thenReturn(props)
     when(mockCatalog.tableConfig).thenReturn(mockTableConfig)
 
     // mock spark session and sqlConf
-    val mockSparkSession = Mockito.mock(classOf[SparkSession])
-    val mockSessionState = Mockito.mock(classOf[SessionState])
+    val mockSparkSession = mock(classOf[SparkSession])
+    val mockSessionState = mock(classOf[SessionState])
     val mockRuntimeConf = mock(classOf[RuntimeConfig])
-    val mockSQLConf = Mockito.mock(classOf[SQLConf])
-    val mockSQLContext = Mockito.mock(classOf[SQLContext])
+    val mockSQLConf = mock(classOf[SQLConf])
+    val mockSQLContext = mock(classOf[SQLContext])
     when(mockSparkSession.sqlContext).thenReturn(mockSQLContext)
     when(mockSparkSession.sessionState).thenReturn(mockSessionState)
     when(mockRuntimeConf.getOption(any())).thenReturn(Option.empty)
@@ -106,7 +105,7 @@ class TestProvidesHoodieConfig {
     when(mockSQLConf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)).thenReturn("nothive")
     when(mockSQLConf.getAllConfs).thenReturn(Map.empty[String, String])
 
-    val mockCmd = Mockito.mock(classOf[ProvidesHoodieConfig])
+    val mockCmd = mock(classOf[ProvidesHoodieConfig])
     when(mockCmd.buildHiveSyncConfig(any(), any(), any(), any()))
       .thenReturn(new HiveSyncConfig(new TypedProperties()))
     when(mockCmd.getDropDupsConfig(any(), any())).thenReturn(Map.empty[String, String])
