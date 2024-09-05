@@ -132,9 +132,9 @@ public class ConsistentBucketIndexUtils {
       // max committed metadata file
       final String maxCommitMetaFileTs = commitMetaTss.isEmpty() ? null : commitMetaTss.last();
       // max updated metadata file
-      StoragePathInfo maxMetadataFile = !hashingMetaFiles.isEmpty()
-              ? hashingMetaFiles.get(hashingMetaFiles.size() - 1)
-              : null;
+      StoragePathInfo maxMetadataFile = hashingMetaFiles.isEmpty()
+              ? null
+              : hashingMetaFiles.get(hashingMetaFiles.size() - 1);
       // If single file present in metadata and if its default file return it
       if (maxMetadataFile != null && HoodieConsistentHashingMetadata.getTimestampFromFile(maxMetadataFile.getPath().getName()).equals(HoodieTimeline.INIT_INSTANT_TS)) {
         return loadMetadataFromGivenFile(table, maxMetadataFile);
