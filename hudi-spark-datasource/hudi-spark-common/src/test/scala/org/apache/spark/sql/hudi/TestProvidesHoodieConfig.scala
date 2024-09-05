@@ -19,16 +19,20 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
+import org.apache.spark.sql.{RuntimeConfig, SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.{SQLConf, SessionState, StaticSQLConf}
+import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
-import org.mockito.Mockito.when
+import org.mockito.Mockito.{mock, when}
 
 /**
  * Tests {@link ProvidesHoodieConfig}
@@ -72,26 +76,67 @@ class TestProvidesHoodieConfig {
   @Test
   def testInferPrecombineFieldFromTableConfig(): Unit = {
     // ProvidesHoodieConfig should be able to infer precombine field from table config
+    // mock catalogTable
     val mockCatalog = Mockito.mock(classOf[HoodieCatalogTable])
+    // catalogProperties won't be passed in correctly, because they were not synced properly
     when(mockCatalog.catalogProperties).thenReturn(Map.empty[String, String])
-
+    when(mockCatalog.partitionFields).thenReturn(Array("partition"))
+    when(mockCatalog.preCombineKey).thenCallRealMethod()
+    when(mockCatalog.partitionSchema).thenReturn(StructType(Nil))
+    when(mockCatalog.primaryKeys).thenReturn(Array("key"))
+    when(mockCatalog.tableName).thenReturn("hudi_table")
     val props = new TypedProperties()
     props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "segment")
-    val mockTableConfig = Mockito.mock(classOf[HoodieTableConfig])
+    val mockTableConfig = Mockito.spy(classOf[HoodieTableConfig])
     when(mockTableConfig.getProps).thenReturn(props)
-    val mockSqlConf = Mockito.mock(classOf[SQLConf])
-    when(mockSqlConf.getAllConfs).thenReturn(Map.empty[String, String])
+    when(mockCatalog.tableConfig).thenReturn(mockTableConfig)
+
+    // mock spark session and sqlConf
+    val mockSparkSession = Mockito.mock(classOf[SparkSession])
+    val mockSessionState = Mockito.mock(classOf[SessionState])
+    val mockRuntimeConf = mock(classOf[RuntimeConfig])
+    val mockSQLConf = Mockito.mock(classOf[SQLConf])
+    val mockSQLContext = Mockito.mock(classOf[SQLContext])
+    when(mockSparkSession.sqlContext).thenReturn(mockSQLContext)
+    when(mockSparkSession.sessionState).thenReturn(mockSessionState)
+    when(mockRuntimeConf.getOption(any())).thenReturn(Option.empty)
+    when(mockSparkSession.conf).thenReturn(mockRuntimeConf)
+    when(mockSessionState.conf).thenReturn(mockSQLConf)
+    when(mockSQLContext.conf).thenReturn(mockSQLConf)
+    when(mockSQLConf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION)).thenReturn("nothive")
+    when(mockSQLConf.getAllConfs).thenReturn(Map.empty[String, String])
+
+    val mockCmd = Mockito.mock(classOf[ProvidesHoodieConfig])
+    when(mockCmd.buildHiveSyncConfig(any(), any(), any(), any()))
+      .thenReturn(new HiveSyncConfig(new TypedProperties()))
+    when(mockCmd.getDropDupsConfig(any(), any())).thenReturn(Map.empty[String, String])
+    when(mockCmd.buildHoodieInsertConfig(any(), any(), any(), any(), any(), any(), any()))
+      .thenCallRealMethod()
+    val combinedConfig = mockCmd.buildHoodieInsertConfig(
+      mockCatalog,
+      mockSparkSession,
+      isOverwritePartition = false,
+      isOverwriteTable = false,
+      Map.empty,
+      Map.empty,
+      Option.empty)
 
     assertEquals(
       "segment",
-      ProvidesHoodieConfig.combineOptions(mockCatalog, mockTableConfig, mockSqlConf, Map.empty)
-        .getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, ""))
+      combinedConfig.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key, "")
+    )
+
+    // write config precombine field should be inferred from table config
+    assertEquals(
+      "segment",
+      combinedConfig.getOrElse(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "")
+    )
   }
 
   private def mockPartitionWriteConfigInCatalogProps(mockTable: HoodieCatalogTable,
                                                      value: Option[String]): Unit = {
     val props = if (value.isDefined) {
-      Map(PARTITIONPATH_FIELD.key() -> value.get)
+      Map(DataSourceWriteOptions.PARTITIONPATH_FIELD.key() -> value.get)
     } else {
       Map[String, String]()
     }
