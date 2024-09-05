@@ -426,7 +426,7 @@ class HoodieCDCRDD(
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
             val absLogPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(storage.getPathInfo(absLogPath))))
-            val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
+            val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf, false)
             logRecordIter = logFileIterator.logRecordsPairIterator
           case AS_IS =>
             assert(currentCDCFileSplit.getCdcFiles != null && !currentCDCFileSplit.getCdcFiles.isEmpty)

@@ -27,7 +27,7 @@ import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
-import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
+import org.apache.hudi.common.table.log.ScannerStorage
 import org.apache.hudi.common.util.{FileIOUtils, HoodieRecordUtils}
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -64,7 +64,8 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
                       requiredStructTypeSchema: StructType,
                       requiredAvroSchema: Schema,
                       tableState: HoodieTableState,
-                      config: Configuration)
+                      config: Configuration,
+                      shouldMerge: Boolean)
   extends CachingIterator[InternalRow] with AvroDeserializerSupport {
 
   def this(logFiles: List[HoodieLogFile],
@@ -72,16 +73,18 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
            tableSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema,
            tableState: HoodieTableState,
-           config: Configuration) {
+           config: Configuration,
+           shouldMerge: Boolean) {
     this(logFiles, partitionPath, tableSchema, requiredSchema.structTypeSchema,
-      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config)
+      new Schema.Parser().parse(requiredSchema.avroSchemaStr), tableState, config, shouldMerge)
   }
   def this(split: HoodieMergeOnReadFileSplit,
            tableSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema,
            tableState: HoodieTableState,
-           config: Configuration) {
-    this(split.logFiles, getPartitionPath(split), tableSchema, requiredSchema, tableState, config)
+           config: Configuration,
+           shouldMerge: Boolean) {
+    this(split.logFiles, getPartitionPath(split), tableSchema, requiredSchema, tableState, config, shouldMerge)
   }
   private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
 
@@ -107,7 +110,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
     val internalSchema = tableSchema.internalSchema.getOrElse(InternalSchema.getEmptyInternalSchema)
 
     scanLog(logFiles, partitionPath, logFileReaderAvroSchema, tableState,
-      maxCompactionMemoryInBytes, config, internalSchema)
+      maxCompactionMemoryInBytes, config, internalSchema, shouldMerge)
   }
 
   private val (hasOperationField, operationFieldPos) = {
@@ -134,7 +137,13 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   }
 
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
-    logRecords.iterator
+    if (shouldMerge) {
+      logRecords.iterator
+    } else {
+      //logRecords contains false key to prevent dedup
+      logRecords.iterator.map(KeyRecPair => (KeyRecPair._2.getRecordKey, KeyRecPair._2))
+    }
+
   }
 
   // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
@@ -195,7 +204,7 @@ class SkipMergeIterator(logFiles: List[HoodieLogFile],
                         requiredAvroSchema: Schema,
                         tableState: HoodieTableState,
                         config: Configuration)
-  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config, false) {
 
   def this(split: HoodieMergeOnReadFileSplit, baseFileReader: BaseFileReader, dataSchema: HoodieTableSchema,
            requiredSchema: HoodieTableSchema, tableState: HoodieTableState, config: Configuration) {
@@ -231,7 +240,7 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
                                 requiredAvroSchema: Schema,
                                 tableState: HoodieTableState,
                                 config: Configuration)
-  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config) {
+  extends LogFileIterator(logFiles, partitionPath, dataSchema, requiredStructTypeSchema, requiredAvroSchema, tableState, config, true) {
 
   def this(logFiles: List[HoodieLogFile],
            partitionPath: StoragePath,
@@ -341,7 +350,8 @@ object LogFileIterator extends SparkAdapterSupport {
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
               hadoopConf: Configuration,
-              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
+              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema,
+              shouldMerge: Boolean = true): mutable.Map[String, HoodieRecord[_]] = {
     val tablePath = tableState.tablePath
     val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(hadoopConf))
 
@@ -376,7 +386,8 @@ object LogFileIterator extends SparkAdapterSupport {
 
       mutable.HashMap(recordList.asScala.map(r => (r.getRecordKey, r)).toSeq: _*)
     } else {
-      val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
+      val logRecordScannerBuilder = ScannerStorage.newBuilder()
+        .withShouldMerge(shouldMerge)
         .withStorage(storage)
         .withBasePath(tablePath)
         .withLogFilePaths(logFiles.map(logFile => logFile.getPath.toString).asJava)
@@ -408,7 +419,7 @@ object LogFileIterator extends SparkAdapterSupport {
       logRecordScannerBuilder.withRecordMerger(
         HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy))
 
-      val scanner = logRecordScannerBuilder.build()
+      val scanner = logRecordScannerBuilder.buildStorageForScanners()
 
       closing(scanner) {
         // NOTE: We have to copy record-map (by default immutable copy is exposed)

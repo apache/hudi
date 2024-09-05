@@ -59,7 +59,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
  * This results in two I/O passes over the log file.
  */
 @NotThreadSafe
-public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScanner<String> {
+public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScanner<String> implements StorageForScanners {
 
   @SuppressWarnings("unchecked")
   protected HoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,

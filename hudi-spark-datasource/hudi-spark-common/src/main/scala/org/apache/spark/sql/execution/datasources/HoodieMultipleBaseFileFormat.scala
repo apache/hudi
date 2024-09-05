@@ -140,7 +140,7 @@ class HoodieMultipleBaseFileFormat(tableState: Broadcast[HoodieTableState],
             val logFiles = getLogFilesFromSlice(fileSlice)
             val outputAvroSchema = HoodieBaseRelation.convertToAvroSchema(outputSchema, tableName)
             new LogFileIterator(logFiles, filePath.getParent, tableSchema.value, outputSchema, outputAvroSchema,
-              tableState.value, broadcastedHadoopConf.value.value)
+              tableState.value, broadcastedHadoopConf.value.value, true)
           } else {
             // We do not broadcast the slice if it has no log files
             fileSliceMapping.getSlice(FSUtils.getFileId(filePath.getName)) match {

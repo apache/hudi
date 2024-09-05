@@ -97,7 +97,13 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
         projectedReader(dataFileOnlySplit.dataFile.get)
 
       case logFileOnlySplit if logFileOnlySplit.dataFile.isEmpty =>
-        new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf)
+        mergeType match {
+          case DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL =>
+            new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf, false)
+
+          case DataSourceReadOptions.REALTIME_PAYLOAD_COMBINE_OPT_VAL =>
+            new LogFileIterator(logFileOnlySplit, tableSchema, requiredSchema, tableState, getHadoopConf, true)
+        }
 
       case split =>
         mergeType match {
