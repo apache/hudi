@@ -264,8 +264,7 @@ public class ConsistentBucketIndexUtils {
    * @return true if hashing metadata file is latest else false
    */
   private static boolean recommitMetadataFile(HoodieTable table, StoragePathInfo metaFile, String partition) {
-    StoragePath partitionPath = new StoragePath(
-        FSUtils.constructAbsolutePath(table.getMetaClient().getBasePath(), partition).toUri());
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(table.getMetaClient().getBasePath(), partition);
     String timestamp = getTimestampFromFile(metaFile.getPath().getName());
     if (table.getPendingCommitsTimeline().containsInstant(timestamp)) {
       return false;
