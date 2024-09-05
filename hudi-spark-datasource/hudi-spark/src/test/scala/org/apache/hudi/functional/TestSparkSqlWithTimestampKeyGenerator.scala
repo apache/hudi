@@ -89,7 +89,8 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
               //   After it we could properly process filters like "WHERE ts BETWEEN 1078016000 and 1718953003" and add tests with partition pruning.
               //   COW: Fix for [HUDI-3896] overwrites `shouldExtractPartitionValuesFromPartitionPath` in `BaseFileOnlyRelation`, therefore for COW we extracting from partition paths and get nulls
               //   shouldUseFileGroupReader: [HUDI-7925] Currently there is no logic for `shouldExtractPartitionValuesFromPartitionPath` in `HoodieBaseHadoopFsRelationFactory`
-              if (tableType == "COPY_ON_WRITE" || shouldUseFileGroupReader.toBoolean)
+              //   UPDATE: with [HUDI-5807] we now have fg reader support. However partition pruning is still not fixed.
+              if (tableType == "COPY_ON_WRITE" && !shouldUseFileGroupReader.toBoolean)
                 assertResult(expectedQueryResultWithLossyString)(queryResult)
               else
                 assertResult(expectedQueryResult)(queryResult)
