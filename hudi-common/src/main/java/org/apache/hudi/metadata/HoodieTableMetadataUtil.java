@@ -1284,8 +1284,7 @@ public class HoodieTableMetadataUtil {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
       return Option.of(schemaResolver.getTableAvroSchema());
     } catch (Exception e) {
-      LOG.warn("Failed to get latest columns for {}", dataTableMetaClient.getBasePath());
-      return Option.empty();
+      throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
   }
 

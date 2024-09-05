@@ -342,6 +342,12 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
       GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
       HoodieTableMetaClient.reload(metaClient),
       isDataSkippingExpected = true)
+
+    verifyFilePruning(
+      Map.apply(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false", HoodieMetadataConfig.ENABLE.key -> "true"),
+      GreaterThan(AttributeReference("price", IntegerType)(), Literal(3000)),
+      HoodieTableMetaClient.reload(metaClient),
+      isDataSkippingExpected = false)
   }
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient, isDataSkippingExpected: Boolean, isNoScanExpected: Boolean = false): Unit = {
