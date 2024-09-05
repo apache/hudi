@@ -22,7 +22,7 @@ package org.apache.hudi.common.engine;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.FileSliceReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -42,11 +42,11 @@ import java.util.function.UnaryOperator;
 import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIELD;
 
 /**
- * An abstract reader context class for {@code HoodieFileGroupReader} to use, containing APIs for
+ * An abstract reader context class for {@code FileSliceReader} to use, containing APIs for
  * engine-specific implementation on reading data files, getting field values from a record,
  * transforming a record, etc.
  * <p>
- * For each query engine, this class should be extended and plugged into {@code HoodieFileGroupReader}
+ * For each query engine, this class should be extended and plugged into {@code FileSliceReader}
  * to realize the file group reading.
  *
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
@@ -54,7 +54,7 @@ import static org.apache.hudi.common.model.HoodieRecord.RECORD_KEY_METADATA_FIEL
  */
 public abstract class HoodieReaderContext<T> {
 
-  private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
+  private FileSliceReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
   private HoodieRecordMerger recordMerger = null;
@@ -64,11 +64,11 @@ public abstract class HoodieReaderContext<T> {
   private Boolean shouldMergeUseRecordPosition = null;
 
   // Getter and Setter for schemaHandler
-  public HoodieFileGroupReaderSchemaHandler<T> getSchemaHandler() {
+  public FileSliceReaderSchemaHandler<T> getSchemaHandler() {
     return schemaHandler;
   }
 
-  public void setSchemaHandler(HoodieFileGroupReaderSchemaHandler<T> schemaHandler) {
+  public void setSchemaHandler(FileSliceReaderSchemaHandler<T> schemaHandler) {
     this.schemaHandler = schemaHandler;
   }
 

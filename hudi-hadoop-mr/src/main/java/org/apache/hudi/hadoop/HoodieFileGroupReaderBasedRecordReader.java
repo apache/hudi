@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.FileSliceReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -75,7 +75,7 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getPartitionFi
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableBasePath;
 
 /**
- * {@link HoodieFileGroupReader} based implementation of Hive's {@link RecordReader} for {@link ArrayWritable}.
+ * {@link FileSliceReader} based implementation of Hive's {@link RecordReader} for {@link ArrayWritable}.
  */
 public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
@@ -90,7 +90,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   private final HiveHoodieReaderContext readerContext;
-  private final HoodieFileGroupReader<ArrayWritable> fileGroupReader;
+  private final FileSliceReader<ArrayWritable> fileGroupReader;
   private final ArrayWritable arrayWritable;
   private final NullWritable nullWritable = NullWritable.get();
   private final InputSplit inputSplit;
@@ -124,7 +124,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     });
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
-    this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
+    this.fileGroupReader = new FileSliceReader<>(readerContext, metaClient.getStorage(), tableBasePath,
         latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
         tableSchema, requestedSchema, Option.empty(), metaClient, props, fileSplit.getStart(),
         fileSplit.getLength(), false);

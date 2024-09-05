@@ -32,7 +32,7 @@ import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Map;
 
-public interface HoodieFileGroupRecordBuffer<T> {
+public interface FileSliceRecordBuffer<T> {
   enum BufferType {
     // Merging based on record key.
     KEY_BASED_MERGE,

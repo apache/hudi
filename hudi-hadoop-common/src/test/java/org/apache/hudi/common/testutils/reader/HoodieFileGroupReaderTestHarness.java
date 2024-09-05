@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.FileSliceReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -127,7 +127,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             FILE_ID
         );
 
-    HoodieFileGroupReader<IndexedRecord> fileGroupReader =
+    FileSliceReader<IndexedRecord> fileGroupReader =
         HoodieFileGroupReaderTestUtils.createFileGroupReader(
             fileSliceOpt,
             basePath,

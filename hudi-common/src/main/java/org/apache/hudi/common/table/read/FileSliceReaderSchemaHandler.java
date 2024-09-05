@@ -46,7 +46,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 /**
  * This class is responsible for handling the schema for the file group reader.
  */
-public class HoodieFileGroupReaderSchemaHandler<T> {
+public class FileSliceReaderSchemaHandler<T> {
 
   protected final Schema dataSchema;
 
@@ -71,11 +71,11 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final boolean needsMORMerge;
 
-  public HoodieFileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
-                                            Schema dataSchema,
-                                            Schema requestedSchema,
-                                            Option<InternalSchema> internalSchemaOpt,
-                                            HoodieTableConfig hoodieTableConfig) {
+  public FileSliceReaderSchemaHandler(HoodieReaderContext<T> readerContext,
+                                      Schema dataSchema,
+                                      Schema requestedSchema,
+                                      Option<InternalSchema> internalSchemaOpt,
+                                      HoodieTableConfig hoodieTableConfig) {
     this.readerContext = readerContext;
     this.hasBootstrapBaseFile = readerContext.getHasBootstrapBaseFile();
     this.needsMORMerge = readerContext.getHasLogFiles();

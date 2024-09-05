@@ -37,14 +37,14 @@ import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNest
 import static org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME;
 
 /**
- * This class is responsible for handling the schema for the file group reader that supports positional merge.
+ * This class is responsible for handling the schema for the file slice reader that supports positional merge.
  */
-public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSchemaHandler<T> {
-  public HoodiePositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
-                                          Schema dataSchema,
-                                          Schema requestedSchema,
-                                          Option<InternalSchema> internalSchemaOpt,
-                                          HoodieTableConfig hoodieTableConfig) {
+public class PositionBasedSchemaHandler<T> extends FileSliceReaderSchemaHandler<T> {
+  public PositionBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+                                    Schema dataSchema,
+                                    Schema requestedSchema,
+                                    Option<InternalSchema> internalSchemaOpt,
+                                    HoodieTableConfig hoodieTableConfig) {
     super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableConfig);
   }
 
@@ -58,7 +58,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
 
   @Override
   protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(HoodiePositionBasedSchemaHandler::addPositionalMergeCol);
+    return internalSchemaOpt.map(PositionBasedSchemaHandler::addPositionalMergeCol);
   }
 
   @Override

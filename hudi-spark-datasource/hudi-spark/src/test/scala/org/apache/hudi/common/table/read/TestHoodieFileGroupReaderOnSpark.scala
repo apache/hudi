@@ -43,7 +43,7 @@ import java.util
 import scala.collection.JavaConverters._
 
 /**
- * Tests {@link HoodieFileGroupReader} with {@link SparkFileFormatInternalRowReaderContext}
+ * Tests {@link FileSliceReader} with {@link SparkFileFormatInternalRowReaderContext}
  * on Spark
  */
 class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[InternalRow] with SparkAdapterSupport {

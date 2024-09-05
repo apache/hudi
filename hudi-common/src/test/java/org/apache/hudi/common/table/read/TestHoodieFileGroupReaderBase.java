@@ -73,7 +73,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
- * Tests {@link HoodieFileGroupReader} with different engines
+ * Tests {@link FileSliceReader} with different engines
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
   @TempDir
@@ -285,7 +285,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
-    HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
+    FileSliceReader<T> fileGroupReader = new FileSliceReader<>(
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
         tablePath,

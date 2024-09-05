@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.read.HoodieFileGroupReader;
+import org.apache.hudi.common.table.read.FileSliceReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
@@ -34,7 +34,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 public class HoodieFileGroupReaderTestUtils {
-  public static HoodieFileGroupReader<IndexedRecord> createFileGroupReader(
+  public static FileSliceReader<IndexedRecord> createFileGroupReader(
       Option<FileSlice> fileSliceOpt,
       String basePath,
       String latestCommitTime,
@@ -97,7 +97,7 @@ public class HoodieFileGroupReaderTestUtils {
       return this;
     }
 
-    public HoodieFileGroupReader<IndexedRecord> build(
+    public FileSliceReader<IndexedRecord> build(
         String basePath,
         String latestCommitTime,
         Schema schema,
@@ -108,7 +108,7 @@ public class HoodieFileGroupReaderTestUtils {
       props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(),  basePath + "/" + HoodieTableMetaClient.TEMPFOLDER_NAME);
       props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
       props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-      return new HoodieFileGroupReader<>(
+      return new FileSliceReader<>(
           readerContext,
           storage,
           basePath,

@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler;
+import org.apache.hudi.common.table.read.PositionBasedSchemaHandler;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderOnSpark;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
@@ -122,7 +122,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ctx.setRecordMerger(new OverwriteWithLatestSparkMerger());
         break;
     }
-    ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
+    ctx.setSchemaHandler(new PositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig()));
     TypedProperties props = new TypedProperties();
     props.put(HoodieCommonConfig.RECORD_MERGE_MODE.key(), mergeMode.name());

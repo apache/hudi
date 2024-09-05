@@ -57,7 +57,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
- * A file group reader that iterates through the records in a single file group.
+ * A file slice reader that iterates through the records in a single file slice.
  * <p>
  * This should be used by the every engine integration, by plugging in a
  * {@link HoodieReaderContext<T>} implementation.
@@ -65,7 +65,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow}
  *            in Spark and {@code RowData} in Flink.
  */
-public final class HoodieFileGroupReader<T> implements Closeable {
+public final class FileSliceReader<T> implements Closeable {
   private final HoodieReaderContext<T> readerContext;
   private final Option<HoodieBaseFile> hoodieBaseFileOption;
   private final List<HoodieLogFile> logFiles;
@@ -76,25 +76,25 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   // Length of bytes to read from the base file
   private final long length;
   // Core structure to store and process records.
-  private final HoodieFileGroupRecordBuffer<T> recordBuffer;
+  private final FileSliceRecordBuffer<T> recordBuffer;
   private final RecordMergeMode recordMergeMode;
   private ClosableIterator<T> baseFileIterator;
   private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
 
-  public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
-                               HoodieStorage storage,
-                               String tablePath,
-                               String latestCommitTime,
-                               FileSlice fileSlice,
-                               Schema dataSchema,
-                               Schema requestedSchema,
-                               Option<InternalSchema> internalSchemaOpt,
-                               HoodieTableMetaClient hoodieTableMetaClient,
-                               TypedProperties props,
-                               long start,
-                               long length,
-                               boolean shouldUseRecordPosition) {
+  public FileSliceReader(HoodieReaderContext<T> readerContext,
+                         HoodieStorage storage,
+                         String tablePath,
+                         String latestCommitTime,
+                         FileSlice fileSlice,
+                         Schema dataSchema,
+                         Schema requestedSchema,
+                         Option<InternalSchema> internalSchemaOpt,
+                         HoodieTableMetaClient hoodieTableMetaClient,
+                         TypedProperties props,
+                         long start,
+                         long length,
+                         boolean shouldUseRecordPosition) {
     this.readerContext = readerContext;
     this.storage = storage;
     this.hoodieBaseFileOption = fileSlice.getBaseFile();
@@ -112,8 +112,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
-        ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
-        : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
+        ? new PositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
+        : new FileSliceReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
@@ -255,8 +255,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
   }
 
-  public HoodieFileGroupReaderIterator<T> getClosableIterator() {
-    return new HoodieFileGroupReaderIterator<>(this);
+  public FileSliceReaderIterator<T> getClosableIterator() {
+    return new FileSliceReaderIterator<>(this);
   }
 
   public static RecordMergeMode getRecordMergeMode(Properties props) {
@@ -264,10 +264,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     return RecordMergeMode.valueOf(mergeMode);
   }
 
-  public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {
-    private HoodieFileGroupReader<T> reader;
+  public static class FileSliceReaderIterator<T> implements ClosableIterator<T> {
+    private FileSliceReader<T> reader;
 
-    public HoodieFileGroupReaderIterator(HoodieFileGroupReader<T> reader) {
+    public FileSliceReaderIterator(FileSliceReader<T> reader) {
       this.reader = reader;
     }
 

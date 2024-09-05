@@ -25,11 +25,13 @@ import org.apache.hudi.cdc.{CDCFileGroupIterator, CDCRelation, HoodieCDCFileGrou
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.table.read.FileSliceReader
+import org.apache.hudi.common.table.read.FileSliceReader.FileSliceReaderIterator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.hudi.storage.hadoop.{HadoopStorageConfiguration, HoodieHadoopStorage}
+
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -50,7 +52,7 @@ trait HoodieFormatTrait {
 }
 
 /**
- * This class utilizes {@link HoodieFileGroupReader} and its related classes to support reading
+ * This class utilizes {@link FileSliceReader} and its related classes to support reading
  * from Parquet formatted base files and their log files.
  */
 class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
@@ -136,7 +138,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 .builder().setConf(storageConf).setBasePath(tableState.tablePath).build
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))
-              val reader = new HoodieFileGroupReader[InternalRow](
+              val reader = new FileSliceReader[InternalRow](
                 readerContext,
                 new HoodieHadoopStorage(metaClient.getBasePath, storageConf),
                 tableState.tablePath,
@@ -200,7 +202,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       props)
   }
 
-  private def appendPartitionAndProject(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  private def appendPartitionAndProject(iter: FileSliceReaderIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
                                         to: StructType,
@@ -214,14 +216,14 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     }
   }
 
-  private def projectSchema(iter: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  private def projectSchema(iter: FileSliceReaderIterator[InternalRow],
                             from: StructType,
                             to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
     makeCloseableFileGroupMappingRecordIterator(iter, d => unsafeProjection(d))
   }
 
-  def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: HoodieFileGroupReader.HoodieFileGroupReaderIterator[InternalRow],
+  def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: FileSliceReaderIterator[InternalRow],
                                                   mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext

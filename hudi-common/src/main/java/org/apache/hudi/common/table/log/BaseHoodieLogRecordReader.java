@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.read.HoodieFileGroupRecordBuffer;
+import org.apache.hudi.common.table.read.FileSliceRecordBuffer;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -140,7 +140,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
-  protected HoodieFileGroupRecordBuffer<T> recordBuffer;
+  protected FileSliceRecordBuffer<T> recordBuffer;
 
   protected BaseHoodieLogRecordReader(HoodieReaderContext readerContext,
                                       HoodieStorage storage,
@@ -152,7 +152,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
                                       boolean enableOptimizedLogBlocksScan,
                                       HoodieRecordMerger recordMerger,
                                       RecordMergeMode recordMergeMode,
-                                      HoodieFileGroupRecordBuffer<T> recordBuffer) {
+                                      FileSliceRecordBuffer<T> recordBuffer) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.latestInstantTime = readerContext.getLatestCommitTime();
