@@ -344,8 +344,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     //Validate T3
     val timelineT3 = metaClient.reloadActiveTimeline()
     assertEquals(7, timelineT3.countInstants())
-    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
-    assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
+    assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
 
     val filesT3 = getFiles(basePath)
     assertEquals(12, filesT3.size)
