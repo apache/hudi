@@ -100,6 +100,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerState.setLatestCommitTime(latestCommitTime);
     readerState.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
     readerState.setHasLogFiles(!this.logFiles.isEmpty());
+    if (readerState.getHasLogFiles() && start != 0) {
+      throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
+    }
     readerState.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerState.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler(readerState, dataSchema, requestedSchema, internalSchemaOpt)
@@ -167,6 +170,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else if (!skeletonFileIterator.isPresent()) {
       return dataFileIterator.get().getLeft();
     } else {
+      if (start != 0) {
+        throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
+      }
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
           dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
     }
