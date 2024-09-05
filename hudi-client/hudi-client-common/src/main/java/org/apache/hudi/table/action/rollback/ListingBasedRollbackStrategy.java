@@ -44,14 +44,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.getHoodieCommitMetadata;
 import static org.apache.hudi.table.action.rollback.BaseRollbackHelper.EMPTY_STRING;
@@ -256,9 +254,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                              HoodieStorage storage) {
     StoragePathFilter pathFilter = getPathFilter(baseFileExtension,
         instantToRollback.getTimestamp());
-    StoragePath[] filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath);
-
-    return Arrays.stream(filePaths)
+    List<StoragePath> filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath)
         .filter(entry -> {
           try {
             return storage.exists(entry);
@@ -267,18 +263,14 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           }
           // if any Exception is thrown, do not ignore. let's try to add the file of interest to be deleted. we can't miss any files to be rolled back.
           return true;
-        })
-        .map(entry -> {
-          try {
-            return storage.listDirectEntries(entry, pathFilter);
-          } catch (IOException ioe) {
-            LOG.error("Failed to get StoragePathInfo for " + entry.toString(), ioe);
-          }
-          return null;
-        })
-        .filter(Objects::nonNull)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+        }).collect(Collectors.toList());
+    try {
+      return storage.listDirectEntries(filePaths, pathFilter);
+    } catch (IOException ioe) {
+      LOG.error("Failed to get StoragePathInfo", ioe);
+    }
+
+    return new ArrayList<>();
   }
 
   /**
@@ -297,20 +289,15 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                         String baseFileExtension,
                                                         HoodieStorage storage) {
     StoragePathFilter pathFilter = getPathFilter(baseFileExtension, instantToRollback.getTimestamp());
-    StoragePath[] filePaths = listFilesToBeDeleted(basePath, partitionPath);
+    List<StoragePath> filePaths = listFilesToBeDeleted(basePath, partitionPath);
 
-    return Arrays.stream(filePaths)
-        .map(path -> {
-          try {
-            return storage.listDirectEntries(path, pathFilter);
-          } catch (IOException ioe) {
-            LOG.error("Failed to get StoragePathInfo for " + path.toString(), ioe);
-          }
-          return null;
-        })
-        .filter(Objects::nonNull)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
+    try {
+      return storage.listDirectEntries(filePaths, pathFilter);
+    } catch (IOException ioe) {
+      LOG.error("Failed to get StoragePathInfo", ioe);
+    }
+
+    return new ArrayList<>();
   }
 
   private Boolean checkCommitMetadataCompleted(HoodieInstant instantToRollback,
@@ -319,13 +306,15 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
         && !WriteOperationType.UNKNOWN.equals(commitMetadataOptional.get().getOperationType());
   }
 
-  private static StoragePath[] listFilesToBeDeleted(String basePath, String partitionPath) {
-    return new StoragePath[] {FSUtils.constructAbsolutePath(basePath, partitionPath)};
+  private static List<StoragePath> listFilesToBeDeleted(String basePath, String partitionPath) {
+    return Collections.singletonList(FSUtils.constructAbsolutePath(basePath, partitionPath));
   }
 
-  private static StoragePath[] getFilesFromCommitMetadata(String basePath, HoodieCommitMetadata commitMetadata, String partitionPath) {
+  private static Stream<StoragePath> getFilesFromCommitMetadata(String basePath,
+                                                                HoodieCommitMetadata commitMetadata,
+                                                                String partitionPath) {
     List<String> fullPaths = commitMetadata.getFullPathsByPartitionPath(basePath, partitionPath);
-    return fullPaths.stream().map(StoragePath::new).toArray(StoragePath[]::new);
+    return fullPaths.stream().map(StoragePath::new);
   }
 
   @NotNull
