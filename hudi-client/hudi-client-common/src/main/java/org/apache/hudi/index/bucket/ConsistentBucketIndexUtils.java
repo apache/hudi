@@ -106,12 +106,8 @@ public class ConsistentBucketIndexUtils {
    */
   public static Option<HoodieConsistentHashingMetadata> loadMetadata(HoodieTable table, String partition) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    StoragePath metadataPath = new StoragePath(
-        HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getHashingMetadataPath(), partition)
-            .toUri());
-    StoragePath partitionPath = new StoragePath(
-        HadoopFSUtils.constructAbsolutePathInHadoopPath(metaClient.getBasePath().toString(), partition)
-            .toUri());
+    StoragePath metadataPath = FSUtils.constructAbsolutePath(metaClient.getHashingMetadataPath(), partition);
+    StoragePath partitionPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), partition);
     try {
       Predicate<StoragePathInfo> hashingMetaCommitFilePredicate = pathInfo -> {
         String filename = pathInfo.getPath().getName();

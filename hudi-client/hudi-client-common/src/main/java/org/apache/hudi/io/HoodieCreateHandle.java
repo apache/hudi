@@ -243,7 +243,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     stat.setPath(new StoragePath(config.getBasePath()), path);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());
 
-    long fileSize = storage.getPathInfo(new StoragePath(path.toUri())).getLength();
+    long fileSize = storage.getPathInfo(path).getLength();
     stat.setTotalWriteBytes(fileSize);
     stat.setFileSizeInBytes(fileSize);
 

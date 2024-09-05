@@ -94,7 +94,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void close() {
     synchronized (LOCK_FILE_NAME) {
       try {
-        storage.deleteDirectory(this.lockFile);
+        storage.deleteFile(this.lockFile);
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       }
@@ -108,7 +108,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         // Check whether lock is already expired, if so try to delete lock file
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
-            storage.deleteDirectory(this.lockFile);
+            storage.deleteFile(this.lockFile);
             LOG.warn("Delete expired lock file: " + this.lockFile);
           } else {
             reloadCurrentOwnerLockInfo();
@@ -129,7 +129,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     synchronized (LOCK_FILE_NAME) {
       try {
         if (storage.exists(this.lockFile)) {
-          storage.deleteDirectory(this.lockFile);
+          storage.deleteFile(this.lockFile);
         }
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
