@@ -251,7 +251,7 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                              String basePath,
                                                              HoodieCommitMetadata commitMetadata,
                                                              String baseFileExtension,
-                                                             HoodieStorage storage) {
+                                                             HoodieStorage storage) throws IOException {
     StoragePathFilter pathFilter = getPathFilter(baseFileExtension,
         instantToRollback.getTimestamp());
     List<StoragePath> filePaths = getFilesFromCommitMetadata(basePath, commitMetadata, partitionPath)
@@ -264,13 +264,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
           // if any Exception is thrown, do not ignore. let's try to add the file of interest to be deleted. we can't miss any files to be rolled back.
           return true;
         }).collect(Collectors.toList());
-    try {
-      return storage.listDirectEntries(filePaths, pathFilter);
-    } catch (IOException ioe) {
-      LOG.error("Failed to get StoragePathInfo", ioe);
-    }
 
-    return new ArrayList<>();
+    return storage.listDirectEntries(filePaths, pathFilter);
   }
 
   /**
@@ -287,17 +282,11 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
                                                         String partitionPath,
                                                         String basePath,
                                                         String baseFileExtension,
-                                                        HoodieStorage storage) {
+                                                        HoodieStorage storage) throws IOException {
     StoragePathFilter pathFilter = getPathFilter(baseFileExtension, instantToRollback.getTimestamp());
     List<StoragePath> filePaths = listFilesToBeDeleted(basePath, partitionPath);
 
-    try {
-      return storage.listDirectEntries(filePaths, pathFilter);
-    } catch (IOException ioe) {
-      LOG.error("Failed to get StoragePathInfo", ioe);
-    }
-
-    return new ArrayList<>();
+    return storage.listDirectEntries(filePaths, pathFilter);
   }
 
   private Boolean checkCommitMetadataCompleted(HoodieInstant instantToRollback,

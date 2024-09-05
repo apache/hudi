@@ -166,7 +166,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     try (OutputStream os = storage.create(this.lockFile, false)) {
       if (!storage.exists(this.lockFile)) {
         initLockInfo();
-        os.write(lockInfo.toString().getBytes());
+        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
