@@ -750,16 +750,18 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
   }
 
   protected void revertCompleteToInflight(HoodieInstant completed, HoodieInstant inflight) {
+    ValidationUtils.checkArgument(completed.isCompleted());
+    ValidationUtils.checkArgument(inflight.isInflight());
     ValidationUtils.checkArgument(completed.getTimestamp().equals(inflight.getTimestamp()));
-    StoragePath filePath = getInstantFileNamePath(inflight.getFileName());
-    StoragePath commitFilePath = getInstantFileNamePath(getInstantFileName(completed));
+    StoragePath inflightFilePath = getInstantFileNamePath(inflight.getFileName());
+    StoragePath completedFilePath = getInstantFileNamePath(getInstantFileName(completed));
     try {
       if (metaClient.getTimelineLayoutVersion().isNullVersion()) {
-        if (!metaClient.getStorage().exists(filePath)) {
-          boolean success = metaClient.getStorage().rename(commitFilePath, filePath);
+        if (!metaClient.getStorage().exists(inflightFilePath)) {
+          boolean success = metaClient.getStorage().rename(completedFilePath, inflightFilePath);
           if (!success) {
             throw new HoodieIOException(
-                "Could not rename " + commitFilePath + " to " + filePath);
+                "Could not rename " + completedFilePath + " to " + inflightFilePath);
           }
         }
       } else {
@@ -771,11 +773,11 @@ public class HoodieActiveTimeline extends HoodieDefaultTimeline {
           metaClient.getStorage().create(requestedInstantFilePath, false).close();
         }
 
-        if (!metaClient.getStorage().exists(filePath)) {
-          metaClient.getStorage().create(filePath, false).close();
+        if (!metaClient.getStorage().exists(inflightFilePath)) {
+          metaClient.getStorage().create(inflightFilePath, false).close();
         }
 
-        boolean success = metaClient.getStorage().deleteFile(commitFilePath);
+        boolean success = metaClient.getStorage().deleteFile(completedFilePath);
         ValidationUtils.checkArgument(success, "State Reverting failed");
       }
     } catch (IOException e) {
