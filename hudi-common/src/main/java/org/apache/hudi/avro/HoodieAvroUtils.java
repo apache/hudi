@@ -900,10 +900,10 @@ public class HoodieAvroUtils {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
           if (skipMetadataFields && isMetadataField(fieldName)) {
-            if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+            if (field.defaultVal() instanceof JsonProperties.Null) {
               newRecord.put(i, null);
             } else {
-              newRecord.put(i, fields.get(i).defaultVal());
+              newRecord.put(i, field.defaultVal());
             }
             continue;
           }
@@ -911,7 +911,7 @@ public class HoodieAvroUtils {
           fieldNames.push(fieldName);
           Schema.Field oldField = oldSchema.getField(field.name());
           if (oldField != null && !renameCols.containsKey(field.name())) {
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames, false));
+            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
           } else {
             String fieldFullName = createFullName(fieldNames);
             String fieldNameFromOldSchema = renameCols.get(fieldFullName);
@@ -919,13 +919,16 @@ public class HoodieAvroUtils {
             Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
             if (oldFieldRenamed != null) {
               // find rename
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), fields.get(i).schema(), renameCols, fieldNames, false));
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
             } else {
               // deal with default value
-              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
+              if (field.defaultVal() instanceof JsonProperties.Null) {
                 newRecord.put(i, null);
               } else {
-                newRecord.put(i, fields.get(i).defaultVal());
+                if (!isNullable(field.schema()) && field.defaultVal() == null) {
+                  throw new SchemaCompatibilityException("Field " + field.name() + " has no default value and is null in old record");
+                }
+                newRecord.put(i, field.defaultVal());
               }
             }
           }
