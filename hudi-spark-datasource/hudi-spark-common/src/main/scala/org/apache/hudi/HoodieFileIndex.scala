@@ -610,7 +610,7 @@ object HoodieFileIndex extends Logging {
       values.zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }
     }
   }
-  
+
   /**
    * Returns set of indices with timestamp partition type. For Timestamp based keygen, there is only one
    * partition so index is 0. For custom keygen, it is the partition indices for which partition type is
