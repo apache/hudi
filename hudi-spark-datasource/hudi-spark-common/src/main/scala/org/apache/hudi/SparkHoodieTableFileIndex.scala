@@ -21,7 +21,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
-import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
+import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
@@ -72,7 +72,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 specifiedQueryInstant: Option[String] = None,
                                 @transient fileStatusCache: FileStatusCache = NoopCache,
                                 beginInstantTime: Option[String] = None,
-                                endInstantTime: Option[String] = None)
+                                endInstantTime: Option[String] = None,
+                                useStringTypeForCustomTimestampPartition: Boolean = false)
   extends BaseHoodieTableFileIndex(
     new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
@@ -116,7 +117,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   def getPartitionSchema(): StructType = {
-    sparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, handleCustomKeyGenerator = false)
+    sparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, useStringTypeForCustomTimestampPartition)
   }
 
   /**

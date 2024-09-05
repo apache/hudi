@@ -833,46 +833,46 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     var expectedPartitionSchema = StructType.apply(List(fields(0), fields(1).copy(dataType = DataTypes.StringType)))
     // With custom key generator handling, timestamp partition field f2 would have string schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, handleCustomKeyGenerator = true))
+      schema, useStringTypeForCustomTimestampPartition = true))
 
     expectedPartitionSchema = StructType.apply(List(fields(0), fields(1)))
     // Without custom key generator handling, timestamp partition field f2 would have input schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, handleCustomKeyGenerator = false))
+      schema, useStringTypeForCustomTimestampPartition = false))
 
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1,f2")
     // With other key generators, timestamp partition field f2 would have input schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, handleCustomKeyGenerator = false))
+      schema, useStringTypeForCustomTimestampPartition = false))
 
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f2")
     expectedPartitionSchema = StructType.apply(List(fields(1).copy(dataType = DataTypes.StringType)))
     // With timestamp key generator, timestamp partition field f2 would have string schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, handleCustomKeyGenerator = true))
+      schema, useStringTypeForCustomTimestampPartition = true))
   }
 
   @Test
-  def testReaderFileIndexGetTimestampPartitionIndexAPI(): Unit = {
+  def testGetTimestampPartitionIndexAPI(): Unit = {
     val tableConfig = new HoodieTableConfig()
     tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "f3, f4")
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.CUSTOM.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:SIMPLE,f2:TIMESTAMP")
-    assertEquals(Set(1), HoodieReaderFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(1), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
 
     // Custom key generator with both field partition types as timestamp would return both the indices
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:TIMESTAMP,f2:TIMESTAMP")
-    assertEquals(Set(0, 1), HoodieReaderFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(0, 1), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
 
     // Custom key generator with both field partition types as simple would return empty set
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1:SIMPLE,f2:SIMPLE")
-    assertEquals(Set(), HoodieReaderFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
 
     // Timestamp based key generators have only a single partition field
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name())
-    assertEquals(Set(0), HoodieReaderFileIndex.getTimestampPartitionIndex(tableConfig))
+    assertEquals(Set(0), HoodieFileIndex.getTimestampPartitionIndex(tableConfig))
   }
 }
 

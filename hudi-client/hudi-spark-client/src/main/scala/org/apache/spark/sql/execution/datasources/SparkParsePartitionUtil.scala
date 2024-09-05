@@ -43,7 +43,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
    * type to STRING whereas for HoodieFileIndex it uses the base schema type of such partition columns. This makes sure
    * that with output partition format as DD/MM/YYYY, there are no incompatible schema errors while reading the table.
    */
-  def getPartitionSchema(tableConfig: HoodieTableConfig, schema: StructType, handleCustomKeyGenerator: Boolean): StructType = {
+  def getPartitionSchema(tableConfig: HoodieTableConfig, schema: StructType, useStringTypeForCustomTimestampPartition: Boolean): StructType = {
     val nameFieldMap: Map[String, StructField] = generateFieldMap(schema)
     val partitionColumns = tableConfig.getPartitionFields
 
@@ -66,7 +66,8 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
     }
 
     def getPartitionStructFields(keyGeneratorPartitionFieldsOpt: util.Option[String], keyGeneratorClassName: String) = {
-      val partitionFields: Array[StructField] = if (handleCustomKeyGenerator && keyGeneratorPartitionFieldsOpt.isPresent && (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
+      val partitionFields: Array[StructField] = if (useStringTypeForCustomTimestampPartition && keyGeneratorPartitionFieldsOpt.isPresent
+        && (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))) {
         val keyGeneratorPartitionFields = keyGeneratorPartitionFieldsOpt.get().split(BaseKeyGenerator.FIELD_SEPARATOR)
         keyGeneratorPartitionFields.map(field => CustomAvroKeyGenerator.getPartitionFieldAndKeyType(field))
