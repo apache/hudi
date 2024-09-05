@@ -109,11 +109,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                    | INSERT INTO $tableName
                    | SELECT * from ${tableName}_source
                    | """.stripMargin)
-              val sqlStr = if (extractPartition) {
-                s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-              } else {
-                s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-              }
+              val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
               validateResults(
                 tableName,
                 sqlStr,
@@ -464,11 +460,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
          | INSERT INTO $tableName
          | SELECT * from $sourceTableName
          | """.stripMargin)
-    val sqlStr = if (extractPartition) {
-      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-    } else {
-      s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-    }
+    val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
     validateResults(
       tableName,
       sqlStr,
@@ -497,11 +489,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
          | INSERT INTO $tableName
          | SELECT * from $sourceTableName
          | """.stripMargin)
-    val sqlStr = if (extractPartition) {
-      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-    } else {
-      s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-    }
+    val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
     validateResults(
       tableName,
       sqlStr,
@@ -614,7 +602,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                               droppedPartitions: Seq[String],
                               expects: Seq[Any]*): Unit = {
     checkAnswer(sql)(
-      expects.map(e => Seq(e(0), e(1), e(2), if (extractPartition) tsGenFunc.apply(e(3).asInstanceOf[Integer]) else e(3), e(4))): _*
+      expects.map(e => Seq(e(0), e(1), e(2), if (extractPartition) tsGenFunc.apply(e(3).asInstanceOf[Integer]) else e(3).toString, e(4))): _*
     )
     val expectedPartitions: Seq[String] = expects
       .map(e => partitionGenFunc.apply(e(3).asInstanceOf[Integer], e(4).asInstanceOf[String]))
