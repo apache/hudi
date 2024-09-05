@@ -73,7 +73,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
                                 @transient fileStatusCache: FileStatusCache = NoopCache,
                                 beginInstantTime: Option[String] = None,
                                 endInstantTime: Option[String] = None,
-                                useStringTypeForCustomTimestampPartition: Boolean = false)
+                                shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false)
   extends BaseHoodieTableFileIndex(
     new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext)),
     metaClient,
@@ -117,7 +117,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   def getPartitionSchema(): StructType = {
-    sparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, useStringTypeForCustomTimestampPartition)
+    sparkParsePartitionUtil.getPartitionSchema(metaClient.getTableConfig, schema, shouldUseStringTypeForTimestampPartitionKeyType)
   }
 
   /**

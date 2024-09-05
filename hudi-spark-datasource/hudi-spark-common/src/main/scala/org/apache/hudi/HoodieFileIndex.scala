@@ -71,7 +71,7 @@ import scala.util.{Failure, Success, Try}
  * , we read it as a Non-Partitioned table because we cannot know how to mapping the partition
  * path with the partition columns in this case.
  *
- * When flag `useStringTypeForCustomTimestampPartition` is set to true, the schema type for timestamp partition columns
+ * When flag `shouldUseStringTypeForTimestampPartitionKeyType` is set to true, the schema type for timestamp partition columns
  * in custom key generator is set as STRING instead of the base schema type for that field. This makes sure that with
  * output partition format as DD/MM/YYYY, there are no incompatible schema errors while reading the table.
  * Further the partition values are also updated to string. For example if output partition format is YYYY,
@@ -89,7 +89,7 @@ case class HoodieFileIndex(spark: SparkSession,
                            @transient fileStatusCache: FileStatusCache = NoopCache,
                            includeLogFiles: Boolean = false,
                            shouldEmbedFileSlices: Boolean = false,
-                           useStringTypeForCustomTimestampPartition: Boolean = false)
+                           shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -100,7 +100,7 @@ case class HoodieFileIndex(spark: SparkSession,
     fileStatusCache = fileStatusCache,
     beginInstantTime = options.get(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
     endInstantTime = options.get(DataSourceReadOptions.END_INSTANTTIME.key),
-    useStringTypeForCustomTimestampPartition = useStringTypeForCustomTimestampPartition
+    shouldUseStringTypeForTimestampPartitionKeyType = shouldUseStringTypeForTimestampPartitionKeyType
   )
     with FileIndex {
 
@@ -186,7 +186,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
             || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
             foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
-          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, useStringTypeForCustomTimestampPartition)
+          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(convertedPartitionValues), c), baseFileStatusesAndLogFileOnly)
@@ -209,7 +209,7 @@ case class HoodieFileIndex(spark: SparkSession,
           })
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, useStringTypeForCustomTimestampPartition)
+          val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
             InternalRow.fromSeq(convertedPartitionValues), allCandidateFiles)
         }
@@ -603,8 +603,8 @@ object HoodieFileIndex extends Logging {
     }
   }
 
-  private def convertTimestampPartitionValues(values: Array[Object], timestampPartitionIndexes: Set[Int], useStringTypeForCustomTimestampPartition: Boolean) = {
-    if (!useStringTypeForCustomTimestampPartition || timestampPartitionIndexes.isEmpty) {
+  private def convertTimestampPartitionValues(values: Array[Object], timestampPartitionIndexes: Set[Int], shouldUseStringTypeForTimestampPartitionKeyType: Boolean) = {
+    if (!shouldUseStringTypeForTimestampPartitionKeyType || timestampPartitionIndexes.isEmpty) {
       values
     } else {
       values.zipWithIndex.map { case (elem, index) => convertTimestampPartitionType(timestampPartitionIndexes, index, elem) }

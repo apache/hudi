@@ -223,7 +223,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
     FileStatusCache.getOrCreate(sparkSession),
     includeLogFiles = true,
     shouldEmbedFileSlices = true,
-    useStringTypeForCustomTimestampPartition = true)
+    shouldUseStringTypeForTimestampPartitionKeyType = true)
 
   val configProperties: TypedProperties = getConfigProperties(sparkSession, options, metaClient.getTableConfig)
   val metadataConfig: HoodieMetadataConfig = HoodieMetadataConfig.newBuilder
@@ -322,7 +322,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
     optParams,
     FileStatusCache.getOrCreate(sparkSession),
     shouldEmbedFileSlices = true,
-    useStringTypeForCustomTimestampPartition = true)
+    shouldUseStringTypeForTimestampPartitionKeyType = true)
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {

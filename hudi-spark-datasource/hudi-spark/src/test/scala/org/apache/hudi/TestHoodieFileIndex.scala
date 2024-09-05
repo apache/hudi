@@ -833,25 +833,25 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     var expectedPartitionSchema = StructType.apply(List(fields(0), fields(1).copy(dataType = DataTypes.StringType)))
     // With custom key generator handling, timestamp partition field f2 would have string schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, useStringTypeForCustomTimestampPartition = true))
+      schema, shouldUseStringTypeForTimestampPartitionKeyType = true))
 
     expectedPartitionSchema = StructType.apply(List(fields(0), fields(1)))
     // Without custom key generator handling, timestamp partition field f2 would have input schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, useStringTypeForCustomTimestampPartition = false))
+      schema, shouldUseStringTypeForTimestampPartitionKeyType = false))
 
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1,f2")
     // With other key generators, timestamp partition field f2 would have input schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, useStringTypeForCustomTimestampPartition = false))
+      schema, shouldUseStringTypeForTimestampPartitionKeyType = false))
 
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.TIMESTAMP.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f2")
     expectedPartitionSchema = StructType.apply(List(fields(1).copy(dataType = DataTypes.StringType)))
     // With timestamp key generator, timestamp partition field f2 would have string schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
-      schema, useStringTypeForCustomTimestampPartition = true))
+      schema, shouldUseStringTypeForTimestampPartitionKeyType = true))
   }
 
   @Test

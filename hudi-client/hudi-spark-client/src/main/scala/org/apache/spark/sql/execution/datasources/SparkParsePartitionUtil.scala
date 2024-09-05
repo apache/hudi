@@ -43,7 +43,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
    * type to STRING whereas for HoodieFileIndex it uses the base schema type of such partition columns. This makes sure
    * that with output partition format as DD/MM/YYYY, there are no incompatible schema errors while reading the table.
    */
-  def getPartitionSchema(tableConfig: HoodieTableConfig, schema: StructType, useStringTypeForCustomTimestampPartition: Boolean): StructType = {
+  def getPartitionSchema(tableConfig: HoodieTableConfig, schema: StructType, shouldUseStringTypeForTimestampPartitionKeyType: Boolean): StructType = {
     val nameFieldMap: Map[String, StructField] = generateFieldMap(schema)
     val partitionColumns = tableConfig.getPartitionFields
 
@@ -66,7 +66,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
     }
 
     def getPartitionStructFields(keyGeneratorPartitionFieldsOpt: util.Option[String], keyGeneratorClassName: String) = {
-      val partitionFields: Array[StructField] = if (useStringTypeForCustomTimestampPartition && keyGeneratorPartitionFieldsOpt.isPresent
+      val partitionFields: Array[StructField] = if (keyGeneratorPartitionFieldsOpt.isPresent
         && (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))) {
         val keyGeneratorPartitionFields = keyGeneratorPartitionFieldsOpt.get().split(BaseKeyGenerator.FIELD_SEPARATOR)
@@ -75,12 +75,8 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
             val partitionField = pair.getLeft
             val partitionKeyType = pair.getRight
             partitionKeyType match {
-              case PartitionKeyType.SIMPLE => if (nameFieldMap.contains(partitionField)) {
-                nameFieldMap.apply(partitionField)
-              } else {
-                null
-              }
-              case PartitionKeyType.TIMESTAMP => StructField(partitionField, StringType)
+              case PartitionKeyType.SIMPLE => nameFieldMap.getOrElse(partitionField, null)
+              case PartitionKeyType.TIMESTAMP => if (shouldUseStringTypeForTimestampPartitionKeyType) StructField(partitionField, StringType) else nameFieldMap.getOrElse(partitionField, null)
             }
           })
           .filter(structField => structField != null)

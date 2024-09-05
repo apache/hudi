@@ -183,8 +183,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
    * actually need to ignore these values anyway
    *
    * This function also adds transformations to the logical plan so that the HadoopFSRelation does not use
-   * HoodieFileIndex with useStringTypeForCustomTimestampPartition set to true while performing write operations.
-   * This is required because useStringTypeForCustomTimestampPartition is set to true only for reading
+   * HoodieFileIndex with shouldUseStringTypeForTimestampPartitionKeyType set to true while performing write operations.
+   * This is required because shouldUseStringTypeForTimestampPartitionKeyType is set to true only for reading
    * the hudi tables. The flag changes the reader schema to ensure timestamp partition fields can be
    * read using CustomKeyGenerator.
    * Only InsertIntoStatement, MergeIntoTable, UpdateTable and DeleteFromTable are modified in the funtion.
@@ -193,8 +193,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     /**
      * The function updates the HadoopFSRelation so that it uses HoodieFileIndex with flag
-     * useStringTypeForCustomTimestampPartition set to false. Also the data type for output attributes of the plan are
-     * changed accordingly. useStringTypeForCustomTimestampPartition is set to true by HoodieBaseRelation for reading
+     * shouldUseStringTypeForTimestampPartitionKeyType set to false. Also the data type for output attributes of the plan are
+     * changed accordingly. shouldUseStringTypeForTimestampPartitionKeyType is set to true by HoodieBaseRelation for reading
      * tables with Timestamp or custom key generator.
      */
     private def transformReaderFSRelation(logicalPlan: Option[LogicalPlan]): Option[LogicalPlan] = {
@@ -239,10 +239,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
         val (catalogTableOpt, fsRelationOpt) = resolveHoodieTableAndHadoopFsRelation(relation)
         val needTransformation = fsRelationOpt
           .filter(rel => rel.location.isInstanceOf[HoodieFileIndex])
-          .exists(rel => rel.location.asInstanceOf[HoodieFileIndex].useStringTypeForCustomTimestampPartition)
+          .exists(rel => rel.location.asInstanceOf[HoodieFileIndex].shouldUseStringTypeForTimestampPartitionKeyType)
         if (catalogTableOpt.isEmpty || !needTransformation) {
-          // transformation is required only when HoodieFileIndex has flag useStringTypeForCustomTimestampPartition set to true
-          // This is to ensure that write operations do not change the table schema. useStringTypeForCustomTimestampPartition
+          // transformation is required only when HoodieFileIndex has flag shouldUseStringTypeForTimestampPartitionKeyType set to true
+          // This is to ensure that write operations do not change the table schema. shouldUseStringTypeForTimestampPartitionKeyType
           // is primarily used for reading timestamp based partition columns and sets the schema for such columns to string type.
           relation
         } else {
@@ -251,8 +251,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
               val finalAttrs: Seq[AttributeReference] = getAttributesFromTableSchema(catalogTableOpt, lr, lr.output)
               val newFsRelation: BaseRelation = lr.relation match {
                 case fsRelation: HadoopFsRelation =>
-                  // set flag useStringTypeForCustomTimestampPartition to false
-                  val fileIndex = fsRelation.location.asInstanceOf[HoodieFileIndex].copy(useStringTypeForCustomTimestampPartition = false)
+                  // set flag shouldUseStringTypeForTimestampPartitionKeyType to false
+                  val fileIndex = fsRelation.location.asInstanceOf[HoodieFileIndex].copy(shouldUseStringTypeForTimestampPartitionKeyType = false)
                   fsRelation.copy(location = fileIndex, partitionSchema = fileIndex.partitionSchema)(spark)
                 case _ => lr.relation
               }
