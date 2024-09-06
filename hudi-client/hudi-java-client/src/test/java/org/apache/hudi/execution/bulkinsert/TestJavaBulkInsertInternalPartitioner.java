@@ -60,7 +60,7 @@ public class TestJavaBulkInsertInternalPartitioner extends HoodieJavaClientTestH
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"rider", "rider,driver"})
+  @ValueSource(strings = {"rider", "rider, driver"})
   public void testCustomColumnSortPartitioner(String sortColumnString) throws Exception {
     String[] sortColumns = sortColumnString.split(",");
     Comparator<HoodieRecord> columnComparator =
