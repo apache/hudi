@@ -27,9 +27,9 @@ import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
-
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime
@@ -450,7 +450,6 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
       val dateFormat = "yyyy/MM/dd"
       val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
       val customPartitionFunc = (ts: Integer, _: String) => "ts=" + tsGenFunc.apply(ts)
-      val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
 
       spark.sql(
         s"""
@@ -462,7 +461,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
            |  `segment` STRING
            |) using hudi
            |tblproperties (
-           |  'primaryKey' = 'id',
+           |  'primaryKey' = 'id,name',
            |  'type' = 'mor',
            |  'preCombineField'='name',
            |  'hoodie.datasource.write.keygenerator.class' = '$CUSTOM_KEY_GEN_CLASS_NAME',
@@ -484,7 +483,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
            | """.stripMargin).count())
 
       // Validate ts field is still of type int in the table
-      validateTsFieldSchema(tablePath)
+      validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+
+      val metaClient = createMetaClient(spark, tablePath)
+      assertEquals(KeyGeneratorType.CUSTOM.getClassName, metaClient.getTableConfig.getKeyGeneratorClassName)
     }
     }
   }
@@ -497,8 +499,8 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
   }
 
   private def testInserts(tableName: String,
-                                    tsGenFunc: Integer => String,
-                                    partitionGenFunc: (Integer, String) => String): Unit = {
+                          tsGenFunc: Integer => String,
+                          partitionGenFunc: (Integer, String) => String): Unit = {
     val sourceTableName = tableName + "_source1"
     prepareParquetSource(sourceTableName, Seq(
       "(1, 'a1', 1.6, 1704121827, 'cat1')",
@@ -516,6 +518,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     validateResults(
       tableName,
       s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName",
+      false,
       tsGenFunc,
       partitionGenFunc,
       Seq(),
