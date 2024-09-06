@@ -62,16 +62,20 @@ class TestEightToSevenDowngradeHandler {
         "random_path1",
         "random_path2");
     try (MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
-      List<String> leftPartitionPaths = EightToSevenDowngradeHandler.deleteMetadataPartition(context, mdtMetaClient, metadataPartitionPaths);
+      List<String> leftPartitionPaths =
+          EightToSevenDowngradeHandler.deleteMetadataPartition(context, mdtMetaClient, metadataPartitionPaths);
 
       mockedMetadataUtils.verify(
-          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(mdtMetaClient, context, FUNCTIONAL_INDEX.getPartitionPath(), true),
+          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
+              mdtMetaClient, context, FUNCTIONAL_INDEX.getPartitionPath(), true),
           times(1));
       mockedMetadataUtils.verify(
-          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(mdtMetaClient, context, SECONDARY_INDEX.getPartitionPath(), true),
+          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
+              mdtMetaClient, context, SECONDARY_INDEX.getPartitionPath(), true),
           times(1));
       mockedMetadataUtils.verify(
-          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(mdtMetaClient, context, PARTITION_STATS.getPartitionPath(), true),
+          () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
+              mdtMetaClient, context, PARTITION_STATS.getPartitionPath(), true),
           times(1));
 
       assertArrayEquals(new String[]{"random_path1", "random_path2"}, leftPartitionPaths.toArray());
