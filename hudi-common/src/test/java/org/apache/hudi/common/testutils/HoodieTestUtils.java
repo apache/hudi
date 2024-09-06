@@ -183,8 +183,8 @@ public class HoodieTestUtils {
             .setTableType(tableType)
             .setPayloadClass(HoodieAvroPayload.class);
 
-    if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()) != null) {
-      builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
+    if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()) != null) {
+      builder.setKeyGeneratorClassProp(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
     }
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");

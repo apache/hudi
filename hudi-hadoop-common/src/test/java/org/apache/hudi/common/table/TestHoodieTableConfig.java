@@ -205,11 +205,11 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SEVEN", "EIGHT"})
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX"})
   public void testPartitionFields(HoodieTableVersion version) {
     Properties updatedProps = new Properties();
-    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), version.greaterThan(HoodieTableVersion.SEVEN) ? "p1:simple,p2:timestamp" : "p1,p2");
-    updatedProps.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "p1:simple,p2:timestamp");
+    updatedProps.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
     HoodieTableConfig.update(storage, metaPath, updatedProps);
 
     // Test makes sure that the partition fields returned by table config do not have partition type
