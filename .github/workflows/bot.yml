@@ -35,7 +35,7 @@ jobs:
   delete-all-caches:
     runs-on: ubuntu-latest
     permissions:
-      attestations: write
+      checks: write
     steps:
       - name: Delete Cache
         run: |
