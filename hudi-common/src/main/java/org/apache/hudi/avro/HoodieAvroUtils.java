@@ -926,7 +926,7 @@ public class HoodieAvroUtils {
                 newRecord.put(i, null);
               } else {
                 if (!isNullable(field.schema()) && field.defaultVal() == null) {
-                  throw new SchemaCompatibilityException("Field " + field.name() + " has no default value and is null in old record");
+                  throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
                 }
                 newRecord.put(i, field.defaultVal());
               }

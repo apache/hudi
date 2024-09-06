@@ -492,7 +492,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
-      assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
+      assertTrue(containsErrorMessage(e, "has no default value and is non-nullable",
           "Schema validation failed due to missing field."));
     }
   }
