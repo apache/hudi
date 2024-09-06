@@ -22,10 +22,7 @@ on:
     # Runs every 5 minutes
     - cron: '*/5 * * * *'
 
-permissions:
-  statuses: write
-  pull-requests: write
-  issues: read
+permissions: write-all
 
 jobs:
   delete-all-caches:
