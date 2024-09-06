@@ -302,6 +302,7 @@ public class HoodieWriteConfig extends HoodieConfig {
               + "if the sampled dataset has a low cardinality on the provided sort columns. This can cause an increase in commit durations as we are not leveraging the original parallelism."
               + "Enabling this config suffixes the record key at the end to avoid skew."
               + "This config is used by RowCustomColumnsSortPartitioner, RDDCustomColumnsSortPartitioner and JavaCustomColumnsSortPartitioner");
+
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
       .noDefaultValue()
