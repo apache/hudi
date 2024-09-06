@@ -69,7 +69,7 @@ public class ExternalSorterBenchmark extends ExternalSorterBenchmarkHarness {
   public void benchExternalSorter() throws IOException {
     long maxMemory = (long) (ratio * totalSize);
     ExternalSorter<Record> sorter =
-        ExternalSorterFactory.create(sorterType, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, null, SortEngine.HEAP);
+        ExternalSorterFactory.create(sorterType, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, SortEngine.HEAP);
     sorter.addAll(records.iterator());
     sorter.finish();
     ClosableIterator<Record> sorterIterator = sorter.getIterator();

@@ -244,7 +244,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
       // when decide to use sort merge join compaction
       if (context.hasBaseFile() && !context.isBaseFileSorted() && context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize() > 0) {
         // calculate max memory can be used for log scanner, because base-file's sorting also need memory
-        maxMemoryForLogScanner = maxMemoryPerCompaction * (context.getEstimatedLogFileSize()) / (context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize());
+        double ratio = (double) context.getEstimatedLogFileSize() / (context.getEstimatedLogFileSize() + context.getEstimatedBaseFileSize());
+        maxMemoryForLogScanner = (long) (maxMemoryPerCompaction * ratio);
       }
       context.setMaxMemoryForLogScanner(maxMemoryForLogScanner);
     }

@@ -19,9 +19,7 @@
 
 package org.apache.hudi.common.util;
 
-import java.util.function.Supplier;
-
-public class SampleEstimator {
+public class SampleEstimator<R> implements SizeEstimator<R> {
 
   public static final int DEFAULT_TRIGGER_SAMPLE_THRESHOLD = 100;
 
@@ -31,27 +29,34 @@ public class SampleEstimator {
 
   private final double sampleWeight;
 
+  private final SizeEstimator<R> underlyingEstimator;
+
   private long perEstimatedSize;
 
   private int estimatedCount;
 
   private int sampleCount;
 
-  public SampleEstimator() {
-    this(DEFAULT_TRIGGER_SAMPLE_THRESHOLD, DEFAULT_SAMPLE_WRIGHT);
+  public SampleEstimator(SizeEstimator<R> underlyingEstimator) {
+    this(DEFAULT_TRIGGER_SAMPLE_THRESHOLD, DEFAULT_SAMPLE_WRIGHT, underlyingEstimator);
   }
 
-  public SampleEstimator(int triggerSampleThreshold) {
-    this(triggerSampleThreshold, DEFAULT_SAMPLE_WRIGHT);
+  public SampleEstimator(SizeEstimator<R> underlyingEstimator, int triggerSampleThreshold) {
+    this(triggerSampleThreshold, DEFAULT_SAMPLE_WRIGHT, underlyingEstimator);
   }
 
   // TODO: configure the triggerSampleThreshold and sampleWeight in the write config
-  public SampleEstimator(int triggerSampleThreshold, double sampleWeight) {
+  public SampleEstimator(int triggerSampleThreshold, double sampleWeight, SizeEstimator<R> underlyingEstimator) {
     this.triggerSampleThreshold = triggerSampleThreshold;
     this.sampleWeight = sampleWeight;
+    this.underlyingEstimator = underlyingEstimator;
     this.perEstimatedSize = 0;
     this.estimatedCount = 0;
     this.sampleCount = 0;
+  }
+
+  public SampleEstimator<R> newInstance() {
+    return new SampleEstimator<>(triggerSampleThreshold, sampleWeight, underlyingEstimator);
   }
 
   public long getPerEstimatedSize() {
@@ -63,20 +68,21 @@ public class SampleEstimator {
   }
 
   /**
-   * Sample the estimator's result.
-   * @param estimator the estimator
-   * @return the estimated size
+   * Estimate the size of the record with sampling.
+   * @param r the record
+   * @return the estimated size based on the sampling
    */
-  public long estimate(Supplier<Long> estimator) {
+  @Override
+  public long sizeEstimate(R r) {
     if (estimatedCount == 0) {
       // First sample, directly use the estimator's result
-      perEstimatedSize = estimator.get();
+      perEstimatedSize = underlyingEstimator.sizeEstimate(r);
       estimatedCount++;
       return perEstimatedSize;
     }
     if (estimatedCount++ % triggerSampleThreshold == 0) {
       // Trigger sample
-      long sampleSize = estimator.get();
+      long sampleSize = underlyingEstimator.sizeEstimate(r);
       perEstimatedSize = (long) (perEstimatedSize * (1 - sampleWeight) + sampleSize * sampleWeight);
       sampleCount++;
     }

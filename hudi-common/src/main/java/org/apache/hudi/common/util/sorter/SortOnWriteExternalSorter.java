@@ -23,7 +23,6 @@ import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -38,7 +37,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -70,8 +68,8 @@ public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalS
 
   private Option<File> sortedFile = Option.empty();
 
-  public SortOnWriteExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> recordSizeEstimator, SampleEstimator sampleEstimator) throws IOException {
-    super(baseFilePath, maxMemoryInBytes, comparator, recordSizeEstimator, sampleEstimator);
+  public SortOnWriteExternalSorter(String baseFilePath, long maxMemoryInBytes, Comparator<R> comparator, SizeEstimator<R> recordSizeEstimator) throws IOException {
+    super(baseFilePath, maxMemoryInBytes, comparator, recordSizeEstimator);
     this.memoryRecords = new LinkedList<>();
   }
 
@@ -309,13 +307,6 @@ public class SortOnWriteExternalSorter<R extends Serializable> extends ExternalS
       } catch (IOException e) {
         throw new HoodieIOException("Failed to sort records", e);
       }
-    }
-  }
-
-  @Override
-  protected void addAllInner(Iterator<R> records) {
-    while (records.hasNext()) {
-      addInner(records.next());
     }
   }
 

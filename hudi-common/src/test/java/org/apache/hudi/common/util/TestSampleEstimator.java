@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,17 +30,18 @@ public class TestSampleEstimator {
 
   @Test
   public void testSampleEstimator() {
-    SampleEstimator estimator = new SampleEstimator(100, 0.1);
+    final AtomicLong returnValue = new AtomicLong(100);
+    SampleEstimator estimator = new SampleEstimator(100, 0.1, (r) -> returnValue.get());
     long estimatedSize = 0;
     for (int i = 0; i < 1000; i++) {
-      estimatedSize = estimator.estimate(() -> 100L);
+      estimatedSize = estimator.sizeEstimate(i);
       assertEquals(100, estimatedSize);
       assertEquals(i / 100, estimator.getSampleCount());
     }
-
+    returnValue.set(200);
     for (int i = 1000; i < 2000; i++) {
       long previousEstimatedSize = estimatedSize;
-      estimatedSize = estimator.estimate(() -> 200L);
+      estimatedSize = estimator.sizeEstimate(i);
       assertTrue(estimatedSize > 100 && estimatedSize < 200);
       if (i % 100 == 0) {
         assertEquals(i / 100, estimator.getSampleCount());

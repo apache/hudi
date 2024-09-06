@@ -70,9 +70,9 @@ public class ExternalSorterSampleBenchmark extends ExternalSorterBenchmarkHarnes
   @Benchmark
   public void benchExternalSorter() throws IOException {
     long maxMemory = totalSize * 10;
-    SampleEstimator sampleEstimator = new SampleEstimator(triggerSampleCount);
+    SampleEstimator sampleEstimator = new SampleEstimator(sizeEstimator, triggerSampleCount);
     ExternalSorter<Record> sorter =
-        ExternalSorterFactory.create(ExternalSorterType.SORT_ON_READ, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, sampleEstimator, SortEngine.HEAP);
+        ExternalSorterFactory.create(ExternalSorterType.SORT_ON_READ, tmpDir.getPath(), maxMemory, Record::compareTo, sizeEstimator, SortEngine.HEAP);
     sorter.addAll(records.iterator());
     System.out.println("sample count: " + sampleEstimator.getSampleCount());
     sorter.finish();

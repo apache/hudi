@@ -106,8 +106,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     long maxMemoryForBaseFileSorting = context.getMaxMemoryForCompaction() - context.getMaxMemoryForLogScanner();
     LOG.info("Base file: {} is not sorted. Sort the records before merging, its file-size: {}, max memory for sorting: {}", oldFilePath, fileSize, maxMemoryForBaseFileSorting);
     // sort the base file records
+    // TODO: configure the sample related argument
+    SizeEstimator<HoodieRecord> sizeEstimator = new SampleEstimator<>(new HoodieRecordSizeEstimator<>(readSchema));
     return new SortedIterator(oldFilePath, rawRecordItr, sorterBasePath, maxMemoryForBaseFileSorting, Comparator.comparing(HoodieRecord::getRecordKey),
-        new HoodieRecordSizeEstimator<>(readSchema), sorterType, sortEngine);
+        sizeEstimator, sorterType, sortEngine);
   }
 
   static class SortedIterator implements ClosableIterator<HoodieRecord> {
@@ -124,7 +126,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       this.baseFilePath = filePath;
       this.rawIterator = rawIterator;
       try {
-        this.sorter = ExternalSorterFactory.create(sorterType, sorterBasePath, maxMemoryInBytes, comparator, sizeEstimator, new SampleEstimator(), sortEngine);
+        this.sorter = ExternalSorterFactory.create(sorterType, sorterBasePath, maxMemoryInBytes, comparator, sizeEstimator, sortEngine);
       } catch (IOException e) {
         throw new HoodieException("Failed to initialize sorter", e);
       }

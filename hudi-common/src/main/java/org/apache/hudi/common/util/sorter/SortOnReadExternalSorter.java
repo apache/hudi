@@ -21,6 +21,7 @@ package org.apache.hudi.common.util.sorter;
 import org.apache.hudi.common.fs.SizeAwareDataOutputStream;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -54,11 +55,13 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
   private final SortEngine sortEngine;
 
+  private final HoodieTimer spillTimer;
+
   private long currentMemorySize;
 
   private long totalMemorySize;
 
-  private int currentMemoryEntryCount;
+  private long currentMemoryEntryCount;
 
   // TODO: better sorter
   private CollectionSorter<List<R>> collectionSorter;
@@ -86,9 +89,10 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   private List<R> memoryEntries;
 
   public SortOnReadExternalSorter(String baseFilePath, long maxMemorySize, Comparator<R> comparator,
-                                  SizeEstimator<R> sizeEstimator, SampleEstimator sampleEstimator, SortEngine sortEngine) throws IOException {
-    super(baseFilePath, maxMemorySize, comparator, sizeEstimator, sampleEstimator);
+                                  SizeEstimator<R> sizeEstimator, SortEngine sortEngine) throws IOException {
+    super(baseFilePath, maxMemorySize, comparator, sizeEstimator);
     this.sortEngine = sortEngine;
+    this.spillTimer = HoodieTimer.create();
     this.collectionSorter = (collection) -> {
       collection.sort(comparator);
       return collection;
@@ -110,13 +114,6 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   @Override
   protected void addInner(R record) {
     addRecord(record);
-  }
-
-  @Override
-  protected void addAllInner(Iterator<R> inputRecords) {
-    while (inputRecords.hasNext()) {
-      addRecord(inputRecords.next());
-    }
   }
 
   @Override
@@ -167,8 +164,13 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   }
 
   private void spill(List<R> unsortedEntries) {
+    long spilledEntries = currentMemoryEntryCount;
+    long spilledSize = currentMemorySize;
+    spillTimer.startTimer();
     // spill the entries to disk
     List<R> sortedList = collectionSorter.sort(unsortedEntries);
+    long sortTimeTaken = spillTimer.endTimer();
+    spillTimer.startTimer();
     // write the sorted entries to disk
     CompletedCallback<File> fileToWriteCb;
     boolean success = false;
@@ -192,6 +194,9 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
       throw new HoodieIOException("Failed to write sorted entries to file in ExternalSorter", e);
     } finally {
       fileToWriteCb.done(success);
+      long diskWriteTaken = spillTimer.endTimer();
+      LOG.info("Spilled {} entries, {} bytes to disk in {} ms, sort time: {} ms, write time: {} ms",
+          spilledEntries, spilledSize, diskWriteTaken + sortTimeTaken, sortTimeTaken, diskWriteTaken);
     }
   }
 
@@ -323,6 +328,7 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
   private class SortedEntryFileReader extends SortedEntryReader {
     private final File file;
     private final BufferedRandomAccessFile reader;
+    private final SizeEstimator<R> sizeEstimator;
     private List<R> batchRecords;
     private boolean closed;
     private boolean isEOF;
@@ -330,12 +336,21 @@ public class SortOnReadExternalSorter<R extends Serializable> extends ExternalSo
 
     public SortedEntryFileReader(int readerId, long batchSize, File file) {
       super(readerId, batchSize);
+      if (SortOnReadExternalSorter.this.sizeEstimator instanceof SampleEstimator) {
+        this.sizeEstimator = ((SampleEstimator<R>) SortOnReadExternalSorter.this.sizeEstimator).newInstance();
+      } else {
+        this.sizeEstimator = SortOnReadExternalSorter.this.sizeEstimator;
+      }
       this.file = file;
       try {
         this.reader = new BufferedRandomAccessFile(file, "r", DEFAULT_READ_BUFFER);
       } catch (IOException e) {
         throw new HoodieIOException("Failed to create BufferedRandomAccessFile", e);
       }
+    }
+
+    private long sizeEstimate(R record) {
+      return sizeEstimator.sizeEstimate(record);
     }
 
     @Override

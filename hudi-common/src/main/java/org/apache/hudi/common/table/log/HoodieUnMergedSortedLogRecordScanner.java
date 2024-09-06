@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.SampleEstimator;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.common.util.sorter.ExternalSorter;
 import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
@@ -101,8 +102,9 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     };
     this.maxMemoryUsageForSorting = maxMemoryUsageForSorting;
     try {
+      SizeEstimator sizeEstimator = new SampleEstimator<>(new HoodieRecordSizeEstimator<>(readerSchema));
       this.records = ExternalSorterFactory.create(sorterType, externalSorterBasePath, maxMemoryUsageForSorting,
-          wrapNaturalOrderHoodieRecordComparator, new HoodieRecordSizeEstimator<>(readerSchema), new SampleEstimator(), sortEngine);
+          wrapNaturalOrderHoodieRecordComparator, sizeEstimator, sortEngine);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize external sorter", e);
     }

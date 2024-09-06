@@ -110,7 +110,7 @@ public class HeapSortMergeReader<R> implements SortMergeReader<R> {
       throw new HoodieIOException("Failed to update element", e);
     }
     if (++readCount % ExternalSorter.DEFAULT_PROGRESS_LOG_INTERVAL_NUM == 0) {
-      // Log every 10k records
+      // Log every 1_000_000 records
       LOG.info("HeapSortMergeReader reading progress: ------------ read {} entries ------------", readCount);
     }
     return record;

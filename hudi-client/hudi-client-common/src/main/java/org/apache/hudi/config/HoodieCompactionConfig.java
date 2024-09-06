@@ -218,7 +218,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Integer> COMPACTION_PROGRESS_LOG_INTERNAL_NUM = ConfigProperty
       .key("hoodie.compaction.progress.log.internal.num")
-      .defaultValue(10000)
+      .defaultValue(1000000)
       .withDocumentation("The number of compaction progress logs to be printed internally.");
 
   public static final ConfigProperty<Double> MAGNIFICATION_RATION_FOR_BASE_FILE = ConfigProperty
