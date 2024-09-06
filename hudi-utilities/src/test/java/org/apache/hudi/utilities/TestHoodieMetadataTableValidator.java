@@ -253,7 +253,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
     if (lastNFileSlices != -1) {
-      config.validateLastNFileSlices = String.valueOf(lastNFileSlices);
+      config.validateLastNFileSlices = lastNFileSlices;
     }
     config.ignoreFailed = true;
     validator = new HoodieMetadataTableValidator(jsc, config);

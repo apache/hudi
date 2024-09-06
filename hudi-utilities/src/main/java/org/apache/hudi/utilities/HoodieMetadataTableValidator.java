@@ -54,7 +54,6 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -284,8 +283,8 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
 
-    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups", required = false)
-    public String validateLastNFileSlices = null;
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    public Integer validateLastNFileSlices = null;
 
     @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
     public boolean validateAllColumnStats = false;
@@ -788,8 +787,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
     }
-    if (!StringUtils.isNullOrEmpty(cfg.validateLastNFileSlices)) {
-      int lastNFileSlices = Integer.parseInt(cfg.validateLastNFileSlices);
+    if (cfg.validateLastNFileSlices != null) {
+      int lastNFileSlices = cfg.validateLastNFileSlices;
       int allFileSlicesFromFSCount = allFileSlicesFromFS.size();
       if (allFileSlicesFromFSCount > lastNFileSlices) {
         allFileSlicesFromFS = allFileSlicesFromFS.subList(allFileSlicesFromFSCount - lastNFileSlices, allFileSlicesFromFSCount);
