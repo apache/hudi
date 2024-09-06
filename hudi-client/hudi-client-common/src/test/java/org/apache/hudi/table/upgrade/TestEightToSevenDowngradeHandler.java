@@ -30,7 +30,10 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,26 +47,29 @@ import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class TestEightToSevenDowngradeHandler {
+  private static final List<String> SAMPLE_METADATA_PATHS = Arrays.asList(
+      FUNCTIONAL_INDEX.getPartitionPath(),
+      SECONDARY_INDEX.getPartitionPath(),
+      PARTITION_STATS.getPartitionPath(),
+      "metadata_path1",
+      "metadata_path2");
+
+  @Mock
+  HoodieTableMetaClient mdtMetaClient;
+  @Mock
+  HoodieEngineContext context;
+
   @Test
   void testDeleteMetadataPartition() {
-    HoodieTableMetaClient mdtMetaClient = mock(HoodieTableMetaClient.class);
-    HoodieEngineContext context = mock(HoodieEngineContext.class);
-
-    List<String> metadataPartitionPaths = Arrays.asList(
-        FUNCTIONAL_INDEX.getPartitionPath(),
-        SECONDARY_INDEX.getPartitionPath(),
-        PARTITION_STATS.getPartitionPath(),
-        "random_path1",
-        "random_path2");
     try (MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
       List<String> leftPartitionPaths =
-          EightToSevenDowngradeHandler.deleteMetadataPartition(context, mdtMetaClient, metadataPartitionPaths);
+          EightToSevenDowngradeHandler.deleteMetadataPartition(context, mdtMetaClient, SAMPLE_METADATA_PATHS);
 
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
@@ -78,7 +84,7 @@ class TestEightToSevenDowngradeHandler {
               mdtMetaClient, context, PARTITION_STATS.getPartitionPath(), true),
           times(1));
 
-      assertArrayEquals(new String[]{"random_path1", "random_path2"}, leftPartitionPaths.toArray());
+      assertArrayEquals(new String[]{"metadata_path1", "metadata_path2"}, leftPartitionPaths.toArray());
     }
   }
 
@@ -86,27 +92,19 @@ class TestEightToSevenDowngradeHandler {
   void testDowngradeMetadataPartitions() {
     HoodieStorage hoodieStorage = new HoodieHadoopStorage("any_path", new Configuration(false));
     StoragePath basePath = new StoragePath("file:///base_path/.hoodie/metadata/.hoodie");
-    HoodieTableMetaClient mdtMetaClient = mock(HoodieTableMetaClient.class);
     when(mdtMetaClient.getBasePath()).thenReturn(basePath);
-    HoodieEngineContext context = mock(HoodieEngineContext.class);
 
-    List<String> metadataPartitionPaths = Arrays.asList(
-        FUNCTIONAL_INDEX.getPartitionPath(),
-        SECONDARY_INDEX.getPartitionPath(),
-        PARTITION_STATS.getPartitionPath(),
-        "random_path1",
-        "random_path2");
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
          MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
       mockedFSUtils
           .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, basePath, true))
-          .thenReturn(metadataPartitionPaths);
+          .thenReturn(SAMPLE_METADATA_PATHS);
 
       EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, mdtMetaClient, tablePropsToAdd);
 
       assertTrue(tablePropsToAdd.containsKey(TABLE_METADATA_PARTITIONS));
-      assertEquals("random_path1,random_path2", tablePropsToAdd.get(TABLE_METADATA_PARTITIONS));
+      assertEquals("metadata_path1,metadata_path2", tablePropsToAdd.get(TABLE_METADATA_PARTITIONS));
     }
   }
 }
