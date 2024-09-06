@@ -22,7 +22,11 @@ on:
     # Runs every 5 minutes
     - cron: '*/5 * * * *'
 
-permissions: write-all
+permissions:
+  statuses: write
+  pull-requests: write
+  issues: read
+  actions: write
 
 jobs:
   delete-all-caches:
@@ -41,7 +45,6 @@ jobs:
           echo "Deleting caches..."
           for cacheKey in $cacheKeysForPR
           do
-              echo "the key to delete is: $cacheKey"
               gh actions-cache delete $cacheKey -R $REPO --confirm
           done
           echo "Done"
