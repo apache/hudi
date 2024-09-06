@@ -28,6 +28,15 @@ permissions:
   issues: read
 
 jobs:
+  delete-all-caches:
+    if: github.repository == 'apache/hudi'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Cache
+        run: gh cache delete --all --repo $REPO
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
   process-new-and-updated-prs:
     if: github.repository == 'apache/hudi'
     runs-on: ubuntu-latest
