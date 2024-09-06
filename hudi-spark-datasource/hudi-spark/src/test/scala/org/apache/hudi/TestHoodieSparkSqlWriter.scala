@@ -485,7 +485,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
-    val client = spy(DataSourceUtils.createHoodieClient(
+    val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       fooTableParams.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
@@ -543,7 +543,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
-      val client = spy(DataSourceUtils.createHoodieClient(
+      val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
         null,
         tempBasePath,
