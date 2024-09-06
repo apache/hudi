@@ -101,7 +101,10 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     return tablePropsToAdd;
   }
 
-  private static void downgradePartitionFields(HoodieWriteConfig config, HoodieEngineContext context, SupportsUpgradeDowngrade upgradeDowngradeHelper, Map<ConfigProperty, String> tablePropsToAdd) {
+  private static void downgradePartitionFields(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
+                                               Map<ConfigProperty, String> tablePropsToAdd) {
     HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
     String partitionPathField = config.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key());
