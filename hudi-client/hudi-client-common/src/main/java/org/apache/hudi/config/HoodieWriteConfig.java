@@ -297,6 +297,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.bulkinsert.sort.suffix.record_key")
       .defaultValue(false)
       .markAdvanced()
+      .sinceVersion("1.0.0")
       .withDocumentation(
           "When using user defined sort columns there can be possibility of skew because spark's RangePartitioner used in sort can reduce the number of outputSparkPartitions"
               + "if the sampled dataset has a low cardinality on the provided sort columns. This can cause an increase in commit durations as we are not leveraging the original parallelism."
