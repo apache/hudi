@@ -1034,6 +1034,10 @@ public class StreamSync implements Serializable, Closeable {
         metaProps.put(HIVE_SYNC_BUCKET_SYNC_SPEC.key(), HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key()),
             props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key())));
       }
+      // Pass remote file system view properties to meta sync if present
+      if (writeClient.getConfig().getViewStorageConfig() != null) {
+        metaProps.putAll(writeClient.getConfig().getViewStorageConfig().getProps());
+      }
 
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
