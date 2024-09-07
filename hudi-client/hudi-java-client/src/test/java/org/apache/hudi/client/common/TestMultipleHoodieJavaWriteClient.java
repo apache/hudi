@@ -36,14 +36,17 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +58,11 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+
+/**
+ * Tests concurrent Java client writers.
+ */
 public class TestMultipleHoodieJavaWriteClient {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(TestMultipleHoodieJavaWriteClient.class.getName());
@@ -62,21 +70,22 @@ public class TestMultipleHoodieJavaWriteClient {
   @TempDir
   protected java.nio.file.Path tablePath;
 
-  @Test
-  void testOccWithMultipleWriters() throws IOException {
-
-    Configuration hadoopConf = new Configuration();
-    final String tableType = HoodieTableType.COPY_ON_WRITE.name();
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  void testOccWithMultipleWriters(HoodieTableType tableType) throws IOException {
+    StorageConfiguration<Configuration> storageConf = getDefaultStorageConf();
+    final String tableTypeName = tableType.name();
     final String tableName = "hudiTestTable";
+    final String basePath = tablePath.toAbsolutePath().toString() + "/" + tableTypeName;
 
     HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(tableType)
+        .setTableType(tableTypeName)
         .setTableName(tableName)
         .setPayloadClassName(HoodieAvroPayload.class.getName())
         .setRecordKeyFields("ph")
         .setPartitionFields("id,name")
-        .setKeyGeneratorClassProp(HoodieWriteConfig.KEYGENERATOR_TYPE.key())
-        .initTable(hadoopConf, tablePath.toAbsolutePath().toString());
+        .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
+        .initTable(storageConf, basePath);
 
     final Schema schema =
         SchemaBuilder.record("user")
@@ -150,7 +159,7 @@ public class TestMultipleHoodieJavaWriteClient {
     HoodieWriteConfig cfg =
         HoodieWriteConfig.newBuilder()
             .withEngineType(EngineType.JAVA)
-            .withPath(tablePath.toAbsolutePath().toString())
+            .withPath(basePath)
             .withSchema(schema.toString())
             .forTable(tableName)
             .withIndexConfig(
@@ -160,10 +169,9 @@ public class TestMultipleHoodieJavaWriteClient {
             .withLockConfig(
                 HoodieLockConfig.newBuilder()
                     .withLockProvider(FileSystemBasedLockProvider.class)
-                    .withClientNumRetries(10000)
-                    .withClientRetryWaitTimeInMillis(10000L)
-                    .withNumRetries(10000)
-                    .withClientRetryWaitTimeInMillis(10000L)
+                    .withClientNumRetries(240)
+                    .withNumRetries(240)
+                    .withClientRetryWaitTimeInMillis(1000L)
                     .build())
             .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
             .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -177,7 +185,7 @@ public class TestMultipleHoodieJavaWriteClient {
     int numHudiWriteClients = 3;
     IntStream.range(0, numHudiWriteClients).forEach(i -> {
       HoodieJavaWriteClient writer =
-          new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(hadoopConf), cfg);
+          new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), cfg);
       try {
         writerQueue.put(writer);
       } catch (InterruptedException e) {
@@ -210,7 +218,7 @@ public class TestMultipleHoodieJavaWriteClient {
                 }
               }
             }
-      );
+        );
   }
 
   private String createPartitionPath(final GenericRecord user1) {
