@@ -321,7 +321,7 @@ public class StreamSync implements Serializable, Closeable {
           cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
-    initializeMetaClient(false);
+    initializeMetaClient();
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
@@ -333,16 +333,35 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
-   * Creates a meta client for the table. If the table does not yet exist, it will be initialized.
+   * Creates a meta client for the table, and refresh timeline.
+   *
+   * @throws IOException in case of any IOException
+   */
+  public HoodieTableMetaClient initializeMetaClientAndRefreshTimeline() throws IOException {
+    return initializeMetaClient(true);
+  }
+
+  /**
+   * Creates a meta client for the table without refreshing timeline.
+   *
+   * @throws IOException in case of any IOException
+   */
+  private HoodieTableMetaClient initializeMetaClient() throws IOException {
+    return initializeMetaClient(false);
+  }
+
+  /**
+   * Creates a meta client for the table, and refresh timeline if specified.
+   * If the table does not yet exist, it will be initialized.
    *
    * @param refreshTimeline when set to true, loads the active timeline and updates the {@link #commitsTimelineOpt} and {@link #allCommitsTimelineOpt} values
    * @return a meta client for the table
    * @throws IOException in case of any IOException
    */
-  public HoodieTableMetaClient initializeMetaClient(boolean refreshTimeline) throws IOException {
+  private HoodieTableMetaClient initializeMetaClient(boolean refreshTimeline) throws IOException {
     if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
-        HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
             .setPayloadClassName(cfg.payloadClassName)
@@ -350,18 +369,18 @@ public class StreamSync implements Serializable, Closeable {
             .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
-          switch (meta.getTableType()) {
+          switch (metaClient.getTableType()) {
             case COPY_ON_WRITE:
             case MERGE_ON_READ:
               // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-              this.commitsTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-              this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+              this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+              this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
               break;
             default:
-              throw new HoodieException("Unsupported table type :" + meta.getTableType());
+              throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
           }
         }
-        return meta;
+        return metaClient;
       } catch (HoodieIOException e) {
         LOG.warn("Full exception msg " + e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
@@ -439,7 +458,7 @@ public class StreamSync implements Serializable, Closeable {
     Timer.Context overallTimerContext = metrics.getOverallTimerContext();
 
     // Refresh Timeline
-    HoodieTableMetaClient metaClient = initializeMetaClient(true);
+    HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
     String instantTime = metaClient.createNewInstantTime();
 
     InputBatch inputBatch = readFromSource(instantTime, metaClient);
@@ -477,7 +496,7 @@ public class StreamSync implements Serializable, Closeable {
         if (pendingCompactionInstant.isPresent()) {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
           writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata.getCommitMetadata().get(), Option.empty());
-          initializeMetaClient(true);
+          initializeMetaClientAndRefreshTimeline();
           reInitWriteClient(schemaProvider.getSourceSchema(), schemaProvider.getTargetSchema(), null, metaClient);
         }
       } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
