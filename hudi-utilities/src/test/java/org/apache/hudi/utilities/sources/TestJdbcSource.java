@@ -67,6 +67,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private static final TypedProperties PROPS = new TypedProperties();
   private static final HoodieTestDataGenerator DATA_GENERATOR = new HoodieTestDataGenerator();
+  private static final String SECRETS_PATH = String.format("%s/%s", sharedTempDir.toAbsolutePath(), "hudi/config/secret");
   private static Connection connection;
 
   @BeforeAll
@@ -384,7 +385,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
       // Remove secret string from props
       PROPS.remove("hoodie.streamer.jdbc.password");
       // Set property to read secret from fs file
-      PROPS.setProperty("hoodie.streamer.jdbc.password.file", "file:///tmp/hudi/config/secret");
+      PROPS.setProperty("hoodie.streamer.jdbc.password.file", SECRETS_PATH);
       PROPS.setProperty("hoodie.streamer.jdbc.incr.pull", "false");
       // Add 10 records with commit time 000
       clearAndInsert("000", 10, connection, DATA_GENERATOR, PROPS);
@@ -441,7 +442,7 @@ public class TestJdbcSource extends UtilitiesTestBase {
 
   private void writeSecretToFs() throws IOException {
     FileSystem fs = FileSystem.get(new Configuration());
-    FSDataOutputStream outputStream = fs.create(new Path("file:///tmp/hudi/config/secret"));
+    FSDataOutputStream outputStream = fs.create(new Path(SECRETS_PATH));
     outputStream.writeBytes(JDBC_PASS);
     outputStream.close();
   }
