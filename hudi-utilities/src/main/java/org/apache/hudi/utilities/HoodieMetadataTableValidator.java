@@ -282,6 +282,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
 
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    public Integer validateLastNFileSlices = null;
+
     @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
     public boolean validateAllColumnStats = false;
 
@@ -347,6 +350,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-latest-file-slices " + validateLatestFileSlices + ", \n"
           + "   --validate-latest-base-files " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
+          + "   --validate-last-n-file-slices " + validateLastNFileSlices + ", \n"
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
@@ -787,6 +791,17 @@ public class HoodieMetadataTableValidator implements Serializable {
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
     }
+    if (cfg.validateLastNFileSlices != null) {
+      int lastNFileSlices = cfg.validateLastNFileSlices;
+      int allFileSlicesFromFSCount = allFileSlicesFromFS.size();
+      if (allFileSlicesFromFSCount > lastNFileSlices) {
+        allFileSlicesFromFS = allFileSlicesFromFS.subList(allFileSlicesFromFSCount - lastNFileSlices, allFileSlicesFromFSCount);
+      }
+      int allFileSlicesFromMetaCount = allFileSlicesFromMeta.size();
+      if (allFileSlicesFromMetaCount > lastNFileSlices) {
+        allFileSlicesFromMeta = allFileSlicesFromMeta.subList(allFileSlicesFromMetaCount - lastNFileSlices, allFileSlicesFromMetaCount);
+      }
+    }
 
     LOG.debug("All file slices from metadata: " + allFileSlicesFromMeta + ". For partitions " + partitionPath);
     LOG.debug("All file slices from direct listing: " + allFileSlicesFromFS + ". For partitions " + partitionPath);
@@ -1136,6 +1151,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
             || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())
             || !Objects.equals(fileSlice1.getBaseFile(), fileSlice2.getBaseFile())) {
+          mismatch = true;
+          break;
+        }
+        // test for log files equality
+        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
           mismatch = true;
           break;
         }
