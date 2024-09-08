@@ -106,6 +106,18 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     }
   }
 
+  public static List<String> getTimestampFields(List<String> partitionPathFields) {
+    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
+      return Collections.emptyList(); // Corresponds to no partition case
+    } else {
+      return partitionPathFields.stream()
+          .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
+          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().equals(PartitionKeyType.TIMESTAMP))
+          .map(Pair::getLeft)
+          .collect(Collectors.toList());
+    }
+  }
+
   public static Pair<String, PartitionKeyType> getPartitionFieldAndKeyType(String field) {
     String[] fieldWithType = field.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
     if (fieldWithType.length != 2) {

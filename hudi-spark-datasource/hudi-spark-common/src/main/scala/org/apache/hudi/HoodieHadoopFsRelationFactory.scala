@@ -78,17 +78,23 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   protected lazy val basePath: StoragePath = metaClient.getBasePath
   protected lazy val partitionColumns: Array[String] = tableConfig.getPartitionFields.orElse(Array.empty)
 
-  private lazy val keygenTypeHasVariablePartitionCols = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
+  private lazy val keygenTypeHasVariablePartitionCols = isTimestampKeygen || isCustomKeygen
+
+  private lazy val isTimestampKeygen = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
     (tableConfig.getKeyGeneratorClassName.equals(classOf[TimestampBasedKeyGenerator].getName) ||
-      tableConfig.getKeyGeneratorClassName.equals(classOf[TimestampBasedAvroKeyGenerator].getName) ||
-      tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
-      tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
+    tableConfig.getKeyGeneratorClassName.equals(classOf[TimestampBasedAvroKeyGenerator].getName))
+
+  private lazy val isCustomKeygen = !isNullOrEmpty(tableConfig.getKeyGeneratorClassName) &&
+    (tableConfig.getKeyGeneratorClassName.equals(classOf[CustomKeyGenerator].getName) ||
+    tableConfig.getKeyGeneratorClassName.equals(classOf[CustomAvroKeyGenerator].getName))
 
   protected lazy val partitionColumnsToRead: Seq[String] = if (shouldExtractPartitionValuesFromPartitionPath || !keygenTypeHasVariablePartitionCols) {
     Seq.empty
-  } else {
-    //TODO: [HUDI-8098] filter for timestamp keygen columns when using custom keygen
+  } else if (isTimestampKeygen) {
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
+  } else {
+    //it's custom keygen
+    CustomAvroKeyGenerator.getTimestampFields(HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())).asScala.toSeq
   }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
