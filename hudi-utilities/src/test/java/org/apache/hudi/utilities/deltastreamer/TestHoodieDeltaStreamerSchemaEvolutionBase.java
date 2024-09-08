@@ -199,7 +199,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
       extraProps.setProperty("hoodie.base.path", tableBasePath);
       if (writeErrorTableInParallelWithBaseTable) {
-        extraProps.setProperty(HoodieErrorTableConfig.ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), "true");
+        extraProps.setProperty(HoodieErrorTableConfig.ENABLE_ERROR_TABLE_WRITE_UNIFICATION.key(), "true");
       }
     }
 

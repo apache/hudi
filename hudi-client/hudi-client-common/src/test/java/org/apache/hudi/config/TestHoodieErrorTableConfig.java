@@ -23,7 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_UNION_WITH_DATA_TABLE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ENABLE_ERROR_TABLE_WRITE_UNIFICATION;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -34,15 +34,15 @@ class TestHoodieErrorTableConfig {
   @Test
   void testErrorAndBaseTableUnionConfig() {
     // documentation is not null
-    assertNotNull(ERROR_ENABLE_UNION_WITH_DATA_TABLE.doc());
-    assertNotEquals("", ERROR_ENABLE_UNION_WITH_DATA_TABLE.doc());
+    assertNotNull(ENABLE_ERROR_TABLE_WRITE_UNIFICATION.doc());
+    assertNotEquals("", ENABLE_ERROR_TABLE_WRITE_UNIFICATION.doc());
 
     // disabled by default
-    assertFalse(ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
+    assertFalse(ENABLE_ERROR_TABLE_WRITE_UNIFICATION.defaultValue());
 
     // enabled when set to true
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.errortable.write.union.enable", "true");
-    assertTrue(props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue()));
+    assertTrue(props.getBoolean(ENABLE_ERROR_TABLE_WRITE_UNIFICATION.key(), ENABLE_ERROR_TABLE_WRITE_UNIFICATION.defaultValue()));
   }
 }

@@ -143,7 +143,7 @@ import static org.apache.hudi.common.util.ConfigUtils.removeConfigFromProps;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
 import static org.apache.hudi.config.HoodieClusteringConfig.INLINE_CLUSTERING;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT;
-import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_ENABLE_UNION_WITH_DATA_TABLE;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ENABLE_ERROR_TABLE_WRITE_UNIFICATION;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_ENABLED;
 import static org.apache.hudi.config.HoodieWriteConfig.AUTO_COMMIT_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.COMBINE_BEFORE_INSERT;
@@ -259,7 +259,7 @@ public class StreamSync implements Serializable, Closeable {
   private transient HoodieMetrics hoodieMetrics;
 
   private final boolean autoGenerateRecordKeys;
-  private final boolean isErrorTableUnionWithDataTableEnabled;
+  private final boolean isErrorTableWriteUnificationEnabled;
 
   private final boolean useRowWriter;
 
@@ -282,8 +282,7 @@ public class StreamSync implements Serializable, Closeable {
     this.conf = conf;
 
     this.errorTableWriter = errorTableWriter;
-    this.isErrorTableUnionWithDataTableEnabled =
-        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
+    this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
     this.formatAdapter = formatAdapter;
     this.transformer = transformer;
     this.useRowWriter = useRowWriter;
@@ -325,8 +324,7 @@ public class StreamSync implements Serializable, Closeable {
           cfg, sparkSession, props, hoodieSparkContext, fs);
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
-    this.isErrorTableUnionWithDataTableEnabled =
-        props.getBoolean(ERROR_ENABLE_UNION_WITH_DATA_TABLE.key(), ERROR_ENABLE_UNION_WITH_DATA_TABLE.defaultValue());
+    this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
     refreshTimeline();
     Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
@@ -853,7 +851,7 @@ public class StreamSync implements Serializable, Closeable {
     JavaRDD<WriteStatus> writeStatusRDD = dataTableWriteStatusRDD;
     String errorTableInstantTime = writeClient.createNewInstantTime();
     Option<JavaRDD<WriteStatus>> errorTableWriteStatusRDDOpt = Option.empty();
-    if (errorTableWriter.isPresent() && isErrorTableUnionWithDataTableEnabled) {
+    if (errorTableWriter.isPresent() && isErrorTableWriteUnificationEnabled) {
       errorTableWriteStatusRDDOpt = errorTableWriter.map(w -> w.upsert(errorTableInstantTime, instantTime, commitedInstantTime));
       writeStatusRDD = errorTableWriteStatusRDDOpt.map(errorTableWriteStatus -> errorTableWriteStatus.union(dataTableWriteStatusRDD)).orElse(dataTableWriteStatusRDD);
     }
@@ -890,9 +888,9 @@ public class StreamSync implements Serializable, Closeable {
       if (errorTableWriter.isPresent()) {
         boolean errorTableSuccess = true;
         // Commit the error events triggered so far to the error table
-        if (isErrorTableUnionWithDataTableEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
+        if (isErrorTableWriteUnificationEnabled && errorTableWriteStatusRDDOpt.isPresent()) {
           errorTableSuccess = errorTableWriter.get().commit(errorTableInstantTime, errorTableWriteStatusRDDOpt.get());
-        } else if (!isErrorTableUnionWithDataTableEnabled) {
+        } else if (!isErrorTableWriteUnificationEnabled) {
           errorTableSuccess = errorTableWriter.get().upsertAndCommit(instantTime, commitedInstantTime);
         }
 
