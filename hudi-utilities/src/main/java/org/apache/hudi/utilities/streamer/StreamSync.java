@@ -1037,6 +1037,11 @@ public class StreamSync implements Serializable, Closeable {
 
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
       for (String impl : syncClientToolClasses) {
+        if (impl.trim().isEmpty()) {
+          LOG.warn("Cannot run MetaSync with empty class name");
+          continue;
+        }
+
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         Option<HoodieMetaSyncException> metaSyncException = Option.empty();
         try {
