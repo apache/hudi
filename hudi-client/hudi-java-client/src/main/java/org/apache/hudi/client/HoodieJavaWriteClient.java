@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
@@ -45,6 +46,7 @@ import org.apache.hudi.table.upgrade.JavaUpgradeDowngradeHelper;
 import com.codahale.metrics.Timer;
 import org.apache.hadoop.conf.Configuration;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -91,6 +93,13 @@ public class HoodieJavaWriteClient<T> extends
     List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
     return commitStats(instantTime, HoodieListData.eager(writeStatuses), writeStats, extraMetadata, commitActionType, partitionToReplacedFileIds,
         extraPreCommitFunc);
+  }
+
+  // TODO (HUDI-8181)
+  @Override
+  protected Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconcileCommitMetadataAndWriteStatsForAdditionalLogFiles(HoodieTable table, String commitActionType, String instantTime,
+                                                                                                                        HoodieCommitMetadata originalMetadata) {
+    return Pair.of(originalMetadata, Collections.emptyList());
   }
 
   @Override

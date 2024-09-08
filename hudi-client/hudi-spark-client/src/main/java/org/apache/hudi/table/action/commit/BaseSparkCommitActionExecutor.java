@@ -44,6 +44,7 @@ import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
@@ -52,6 +53,7 @@ import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
@@ -89,6 +91,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
   protected final Option<BaseKeyGenerator> keyGeneratorOpt;
+  protected final transient HoodieMetrics metrics;
 
   public BaseSparkCommitActionExecutor(HoodieEngineContext context,
                                        HoodieWriteConfig config,
@@ -109,6 +112,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       keyGeneratorOpt = config.populateMetaFields()
           ? Option.empty()
           : Option.of((BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(this.config.getProps()));
+      metrics = new HoodieMetrics(config);
     } catch (IOException e) {
       throw new HoodieIOException("Only BaseKeyGenerators are supported when meta columns are disabled ", e);
     }
@@ -322,20 +326,30 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     try {
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
-      metadata = appendMetadataForMissingFiles(metadata);
+      Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconciledMetadataAndAdditionalWriteStats = appendMetadataForMissingFiles(metadata);
+      metadata = reconciledMetadataAndAdditionalWriteStats.getKey();
+      if (!reconciledMetadataAndAdditionalWriteStats.getValue().isEmpty()) {
+        List<HoodieWriteStat> reconciledWriteStatsList = result.getWriteStats().get();
+        reconciledWriteStatsList.addAll(reconciledMetadataAndAdditionalWriteStats.getValue());
+        result.setWriteStats(reconciledWriteStatsList);
+      }
       writeTableMetadata(metadata, result.getWriteStatuses(), actionType);
+      table.doValidateCommitMetadataConsistency(actionType, instantTime, result.getWriteStats().get(), metrics);
       activeTimeline.saveAsComplete(new HoodieInstant(true, getCommitActionType(), instantTime),
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       LOG.info("Committed " + instantTime);
       result.setCommitMetadata(Option.of(metadata));
+    } catch (HoodieInconsistentMetadataException ime) {
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
+          ime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
           e);
     }
   }
 
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
-    return commitMetadata;
+  protected Pair<HoodieCommitMetadata, List<HoodieWriteStat>> appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
+    return Pair.of(commitMetadata, Collections.emptyList());
   }
 
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeStatuses) {

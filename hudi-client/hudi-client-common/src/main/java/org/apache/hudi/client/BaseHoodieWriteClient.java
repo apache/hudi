@@ -60,6 +60,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
@@ -227,7 +228,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraMetadata, operationType, config.getWriteSchema(), commitActionType);
     HoodieInstant inflightInstant = new HoodieInstant(State.INFLIGHT, commitActionType, instantTime);
     HeartbeatUtils.abortIfHeartbeatExpired(instantTime, table, heartbeatClient, config);
-    HoodieCommitMetadata metadata = reconcileCommitMetadata(table, commitActionType, instantTime, originalMetadata);
+    Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconcileCommitMetadataAndAdditionalWriteStats =
+        reconcileCommitMetadataAndWriteStatsForAdditionalLogFiles(table, commitActionType, instantTime, originalMetadata);
+    HoodieCommitMetadata metadata = reconcileCommitMetadataAndAdditionalWriteStats.getKey();
+    stats.addAll(reconcileCommitMetadataAndAdditionalWriteStats.getValue()); // add any additional write stats
+
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
@@ -273,26 +278,54 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
-  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
-    return originalMetadata;
-  }
+  /**
+   * Incase of MOR table, there could be spurious log files added which may not be tracked in commit metadata. So, lets reconcile based on marker
+   * information available to account for spurious log files if any.
+   * @param table instance of {@link HoodieTable}
+   * @param commitActionType commit action type of interest.
+   * @param instantTime instant time of interest.
+   * @param originalMetadata original {@link HoodieCommitMetadata} that needs to reconciling.
+   * @return Pair of reconciled HoodieCommitMetadata and newly added List of {@link HoodieWriteStat}.
+   */
+  protected abstract Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconcileCommitMetadataAndWriteStatsForAdditionalLogFiles(HoodieTable table, String commitActionType,
+                                                                                                                                 String instantTime, HoodieCommitMetadata originalMetadata);
 
-  protected void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
+  /**
+   * Completes the commit of interest. Sequence of things happening in this method are:
+   * - Finalize write (reconciling markers)
+   * - writing to metadata table
+   * - commit metadata consistency check
+   * - switch timeline state to completion for the commit of interest.
+   * @param table instance of {@link HoodieTable}.
+   * @param commitActionType commit action type of interest.
+   * @param instantTime instant time of interest.
+   * @param metadata {@link HoodieCommitMetadata} of interest.
+   * @param stats {@link List} of {@link HoodieWriteStat} of interest.
+   * @param writeStatuses {@link HoodieData} of {@link WriteStatus} of interest.
+   * @throws IOException
+   */
+  private void commit(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata metadata,
                         List<HoodieWriteStat> stats, HoodieData<WriteStatus> writeStatuses) throws IOException {
     LOG.info("Committing " + instantTime + " action " + commitActionType);
     HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
-    HoodieCommitMetadata reconciledCommitMetadata = reconcileCommitMetadata(table, commitActionType, instantTime, metadata);
-    // Finalize write
-    finalizeWrite(table, instantTime, stats);
-    // do save internal schema to support Implicitly add columns in write process
-    if (!reconciledCommitMetadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
-        && reconciledCommitMetadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
-      saveInternalSchema(table, instantTime, reconciledCommitMetadata);
+    try {
+      // Finalize write
+      finalizeWrite(table, instantTime, stats);
+      // do save internal schema to support Implicitly add columns in write process
+      if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
+          && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
+        saveInternalSchema(table, instantTime, metadata);
+      }
+      // update Metadata table
+      writeTableMetadata(table, instantTime, metadata, writeStatuses);
+      // validate that commit metadata is intact and there are no inconsistencies.
+      table.doValidateCommitMetadataConsistency(commitActionType, instantTime, stats, metrics);
+      activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
+          Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (HoodieInconsistentMetadataException e) {
+      throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime,
+          e);
     }
-    // update Metadata table
-    writeTableMetadata(table, instantTime, reconciledCommitMetadata, writeStatuses);
-    activeTimeline.saveAsComplete(new HoodieInstant(true, commitActionType, instantTime),
-        Option.of(reconciledCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
   }
 
   // Save internal schema

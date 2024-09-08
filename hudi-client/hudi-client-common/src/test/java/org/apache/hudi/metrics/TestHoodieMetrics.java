@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -152,6 +153,14 @@ public class TestHoodieMetrics {
     assertTrue(msec > 0);
     metricName = hoodieMetrics.getMetricsName("finalize", "numFilesFinalized");
     assertEquals((long)metrics.getRegistry().getGauges().get(metricName).getValue(), numFilesFinalized);
+
+    // commit metadata consistency validation timer
+    timer = hoodieMetrics.getCommitMetadataConsistencyValidationTimerCtx();
+    Thread.sleep(5); // Ensure timer duration is > 0
+    hoodieMetrics.updateCommitMetadataConsistencyValidationTimerMetrics(HoodieActiveTimeline.DELTA_COMMIT_ACTION, hoodieMetrics.getDurationInMs(timer.stop()));
+    metricName = hoodieMetrics.getMetricsName("commit_metadata_consistency_validation", HoodieActiveTimeline.DELTA_COMMIT_ACTION + ".duration");
+    msec = (Long)metrics.getRegistry().getGauges().get(metricName).getValue();
+    assertTrue(msec > 0);
 
     // Commit / deltacommit / compaction metrics
     Stream.of("commit", "deltacommit", "compaction").forEach(action -> {

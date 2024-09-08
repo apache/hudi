@@ -391,9 +391,18 @@ public class FileCreateUtils {
 
   public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String fileId, IOType ioType, int logVersion)
       throws IOException {
+    return createLogFileMarker(basePath, partitionPath, instantTime, logFileMarkerFileName(instantTime, fileId, ioType, logVersion));
+  }
+
+  public static String createLogFileMarker(String basePath, String partitionPath, String instantTime, String logFileName)
+      throws IOException {
     Path parentPath = Paths.get(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME, instantTime, partitionPath);
     Files.createDirectories(parentPath);
-    Path markerFilePath = parentPath.resolve(logFileMarkerFileName(instantTime, fileId, ioType, logVersion));
+    Path markerFilePath = parentPath.resolve(markerFileName(logFileName, IOType.APPEND));
+    return createLogFileMarker(markerFilePath);
+  }
+
+  private static String createLogFileMarker(Path markerFilePath) throws IOException {
     if (Files.notExists(markerFilePath)) {
       Files.createFile(markerFilePath);
     }

@@ -54,6 +54,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -330,7 +331,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       writeTableMetadata(table, compactionCommitTime, metadata, context.emptyHoodieData());
       LOG.info("Committing Compaction {}", compactionCommitTime);
       LOG.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
+      table.doValidateCommitMetadataConsistency(COMPACTION_ACTION, compactionCommitTime, writeStats, metrics);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+    } catch (HoodieInconsistentMetadataException ime) {
+      throw new HoodieCompactionException("Compaction failed due to inconsistent commit metadata : " + compactionCommitTime, ime);
+    } catch (IOException e) {
+      throw new HoodieCompactionException("Unable to transition compaction inflight to complete: " + compactionCommitTime, e);
     } finally {
       this.txnManager.endTransaction(Option.of(compactionInstant));
       releaseResources(compactionCommitTime);
@@ -520,11 +526,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       LOG.debug("Clustering {} finished with result {}", clusteringCommitTime, metadata);
 
       // before transitioning to complete, lets do post commit validation
-      table.doValidateCommitMetadataConsistency(clusteringCommitTime, writeStats);
+      table.doValidateCommitMetadataConsistency(HoodieActiveTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime, writeStats, metrics);
 
       table.getActiveTimeline().transitionReplaceInflightToComplete(
           clusteringInstant,
           Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+    } catch (HoodieInconsistentMetadataException ime) {
+      throw new HoodieClusteringException("Clustering failed due to inconsistent commit metadata : " + clusteringCommitTime, ime);
     } catch (Exception e) {
       throw new HoodieClusteringException("unable to transition clustering inflight to complete: " + clusteringCommitTime, e);
     } finally {

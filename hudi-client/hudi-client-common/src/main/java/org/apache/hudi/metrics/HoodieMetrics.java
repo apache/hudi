@@ -68,10 +68,12 @@ public class HoodieMetrics {
   public String indexTimerName = null;
   public String preWriteTimerName = null;
   private String conflictResolutionTimerName = null;
+  public String commitMetadataConsistencyValidationTimerName = null;
   private String conflictResolutionSuccessCounterName = null;
   private String conflictResolutionFailureCounterName = null;
   private String compactionRequestedCounterName = null;
   private String compactionCompletedCounterName = null;
+  private String commitMetadataConsistencyFailureCounterName = null;
   private HoodieWriteConfig config;
   private String tableName;
   private Timer rollbackTimer = null;
@@ -85,10 +87,12 @@ public class HoodieMetrics {
   private Timer indexTimer = null;
   private Timer preWriteTimer = null;
   private Timer conflictResolutionTimer = null;
+  private Timer commitMetadataConsistencyValidationTimer = null;
   private Counter conflictResolutionSuccessCounter = null;
   private Counter conflictResolutionFailureCounter = null;
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
+  private Counter commitMetadataConsistencyFailureCounter = null;
 
   public HoodieMetrics(HoodieWriteConfig config) {
     this.config = config;
@@ -106,10 +110,13 @@ public class HoodieMetrics {
       this.indexTimerName = getMetricsName("timer", "index");
       this.preWriteTimerName = getMetricsName("timer", "pre_write");
       this.conflictResolutionTimerName = getMetricsName("timer", "conflict_resolution");
+      this.commitMetadataConsistencyValidationTimerName = getMetricsName("timer", "commit_metadata_consistency_validation");
       this.conflictResolutionSuccessCounterName = getMetricsName("counter", "conflict_resolution.success");
       this.conflictResolutionFailureCounterName = getMetricsName("counter", "conflict_resolution.failure");
       this.compactionRequestedCounterName = getMetricsName("counter", "compaction.requested");
       this.compactionCompletedCounterName = getMetricsName("counter", "compaction.completed");
+      this.commitMetadataConsistencyFailureCounterName = getMetricsName("counter",
+          "commit_metadata_consistency_validation.failure");
     }
   }
 
@@ -196,6 +203,13 @@ public class HoodieMetrics {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
+  }
+
+  public Timer.Context getCommitMetadataConsistencyValidationTimerCtx() {
+    if (config.isMetricsOn() && commitMetadataConsistencyValidationTimer == null) {
+      commitMetadataConsistencyValidationTimer = createTimer(commitMetadataConsistencyValidationTimerName);
+    }
+    return commitMetadataConsistencyValidationTimer == null ? null : commitMetadataConsistencyValidationTimer.time();
   }
 
   public void updateMetricsForEmptyData(String actionType) {
@@ -318,6 +332,13 @@ public class HoodieMetrics {
     }
   }
 
+  public void updateCommitMetadataConsistencyValidationTimerMetrics(final String action, final long durationInMs) {
+    if (config.isMetricsOn()) {
+      LOG.info("Sending CommitMetadataConsistencyValidationTimer metrics duration={}ms, and action={}", durationInMs, action);
+      metrics.registerGauge(getMetricsName("commit_metadata_consistency_validation", String.format("%s.duration", action)), durationInMs);
+    }
+  }
+
   @VisibleForTesting
   public String getMetricsName(String action, String metric) {
     if (config == null) {
@@ -375,6 +396,14 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       compactionCompletedCounter = getCounter(compactionCompletedCounter, compactionCompletedCounterName);
       compactionCompletedCounter.inc();
+    }
+  }
+
+  public void emitCommitValidationFailures(String actionType) {
+    if (config.isMetricsOn()) {
+      LOG.warn("Updating failure of commit consistency validation for actionType=" + actionType);
+      commitMetadataConsistencyFailureCounter = getCounter(commitMetadataConsistencyFailureCounter, commitMetadataConsistencyFailureCounterName);
+      commitMetadataConsistencyFailureCounter.inc();
     }
   }
 

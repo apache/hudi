@@ -69,6 +69,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -77,6 +78,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.bootstrap.HoodieBootstrapWriteMetadata;
 import org.apache.hudi.table.marker.WriteMarkers;
@@ -84,6 +86,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
+import com.codahale.metrics.Timer;
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -706,10 +709,17 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Returns the all data file name based on markers.
+   * Returns the all base file names based on markers.
    */
-  protected Set<String> getDataPathsBasedOnMarkers(WriteMarkers markers) throws IOException {
+  protected Set<String> getBaseFilePathsBasedOnMarkers(WriteMarkers markers) throws IOException {
     return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+  }
+
+  /**
+   * Returns the all log file names based on markers.
+   */
+  protected Set<String> getLogFilePathsBasedOnMarkers(WriteMarkers markers) throws IOException {
+    return markers.getAppendedLogPaths(context, config.getFinalizeWriteParallelism());
   }
 
   /**
@@ -731,7 +741,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
       String basePath = getMetaClient().getBasePath();
-      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats);
+      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats, false);
 
       if (!invalidDataPaths.isEmpty()) {
         if (shouldFailOnDuplicateDataFileDetection) {
@@ -765,46 +775,78 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     }
   }
 
-  public void doValidateCommitMetadataConsistency(String instantTs, List<HoodieWriteStat> stats) throws IOException {
+  /**
+   * Validates that no additional files were created while updating the RLI index stats etc that use the RDD<WriteStatuses>
+   * after the commit metadata is collected in the driver. If the RDD cache is invalidated during the DAG execution for
+   * updating RLI stats etc, it could cause a re-trigger of the writer DAG, leading to additional files that
+   * are not cleaned up by the marker reconcilation. Moreover, the RLI metadata will index these additional FileIds
+   * not present in the commit metadata. This validation detects this case, and fails the transaction if additional
+   * fileIds were created due to DAG retriggers.
+   * @param actionType Commit Action Type
+   * @param commitTime Commit Instant
+   * @param stats {link HoodieWriteStat} that is already collected
+   * @param metrics an instance of {@link HoodieMetrics} to emit metrics when validation fails the transaction
+   * @throws IOException throws an IOException if the additional files were detected in storage, and intend to fail the transaction.
+   */
+  public void doValidateCommitMetadataConsistency(String actionType, String commitTime, List<HoodieWriteStat> stats, HoodieMetrics metrics) throws IOException, HoodieInconsistentMetadataException {
     if (config.doPostCommitValidateCommitMetadataConsistency()) {
-      String basePath = getMetaClient().getBasePath();
-      Set<String> invalidDataPaths = getInvalidDataFilePaths(instantTs, stats);
+      final Timer.Context commitMetadataConsistencyValidationTimerCtx = metrics.getCommitMetadataConsistencyValidationTimerCtx();
+      try {
+        String basePath = getMetaClient().getBasePath();
+        Set<String> invalidDataFilePaths = getInvalidDataFilePaths(commitTime, stats, true);
 
-      if (invalidDataPaths.isEmpty()) {
-        return;
+        if (invalidDataFilePaths.isEmpty()) {
+          return;
+        }
+
+        // if there were spurious/duplicate data files found, pre commit marker based reconciliation should have deleted the files.
+        // if we find any data files present, we should fail the write as RLI updates could have been out of sync w/ FILES partition updates.
+        List<String> nonDeletedInvalidFiles = context.map(new ArrayList<>(invalidDataFilePaths), (SerializableFunction<String, String>) v1 -> {
+          Path filePath = new Path(basePath, v1);
+          final FileSystem fileSystem = metaClient.getFs();
+          return fileSystem.exists(filePath) ? v1 : null;
+        }, invalidDataFilePaths.size()).stream().filter(fileName -> !StringUtils.isNullOrEmpty(fileName)).collect(Collectors.toList());
+
+        if (!nonDeletedInvalidFiles.isEmpty()) {
+          metrics.emitCommitValidationFailures(actionType);
+          throw new HoodieInconsistentMetadataException(String.format("Failing commit %s due to presence of spurious data files inspite of marker based reconciliation = %s ",
+              commitTime, Arrays.toString(nonDeletedInvalidFiles.toArray())));
+        }
+      } finally {
+        if (commitMetadataConsistencyValidationTimerCtx != null) {
+          Option<Long> durationInMs = Option.of(metrics.getDurationInMs(commitMetadataConsistencyValidationTimerCtx.stop()));
+          durationInMs.ifPresent(duration -> {
+            LOG.info("CommitMetadataConsistencyValidationTimerCtx write elapsed time: {} (ms) for action {}", duration, actionType);
+            metrics.updateCommitMetadataConsistencyValidationTimerMetrics(actionType, duration);
+          });
+        }
       }
-      // if there were spurious/duplicate data files found, pre commit marker based reconciliation should have deleted the files.
-      checkForInvalidFileExistence(context, instantTs, basePath, invalidDataPaths);
-    }
-  }
-
-  private void checkForInvalidFileExistence(HoodieEngineContext context, String commitTime, String basePath, Set<String> invalidDataFilePaths) {
-    List<String> nonDeletedInvalidFiles = context.map(new ArrayList<>(invalidDataFilePaths), (SerializableFunction<String, String>) v1 -> {
-      Path filePath = new Path(basePath, v1);
-      final FileSystem fileSystem = metaClient.getFs();
-      return fileSystem.exists(filePath) ? v1 : null;
-    }, invalidDataFilePaths.size()).stream().filter(fileName -> !StringUtils.isNullOrEmpty(fileName)).collect(Collectors.toList());
-
-    if (!nonDeletedInvalidFiles.isEmpty()) {
-      throw new HoodieException(String.format("Failing commit %s due to presence of spurious data files in addition to markers = %s ",
-          commitTime, Arrays.toString(nonDeletedInvalidFiles.toArray())));
     }
   }
 
   @VisibleForTesting
-  public Set<String> getInvalidDataFilePaths(String instantTs, List<HoodieWriteStat> stats) throws IOException {
+  public Set<String> getInvalidDataFilePaths(String instantTs, List<HoodieWriteStat> stats, boolean includeLogFiles) throws IOException {
     WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
     if (!markers.doesMarkerDirExist()) {
       // can happen if it was an empty write say.
       return Collections.emptySet();
     }
-    Set<String> invalidDataPaths = getDataPathsBasedOnMarkers(markers);
+    Set<String> invalidDataPaths = getBaseFilePathsBasedOnMarkers(markers);
+    if (includeLogFiles) {
+      invalidDataPaths.addAll(getLogFilePathsBasedOnMarkers(markers));
+    }
     Set<String> validDataPaths = stats.stream()
         .map(HoodieWriteStat::getPath)
-        .filter(p -> p.endsWith(this.getBaseFileExtension()))
+        .filter(p -> {
+          if (includeLogFiles) {
+            return true;
+          } else {
+            return p.endsWith(this.getBaseFileExtension());
+          }
+        })
         .collect(Collectors.toSet());
 
-    // Contains list of partially created files. These needs to be cleaned up.
+    // Contains list of partially created files.
     invalidDataPaths.removeAll(validDataPaths);
     return invalidDataPaths;
   }

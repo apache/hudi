@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
@@ -108,9 +109,9 @@ public class SparkRDDWriteClient<T> extends
   }
 
   @Override
-  protected HoodieCommitMetadata reconcileCommitMetadata(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
+  protected Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconcileCommitMetadataAndWriteStatsForAdditionalLogFiles(HoodieTable table, String commitActionType, String instantTime, HoodieCommitMetadata originalMetadata) {
     try {
-      return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, commitActionType,
+      return CommitMetadataUtils.reconcileMetadataForAdditionalLogFilesOnStorage(table, commitActionType,
           instantTime, originalMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to fix commit metadata for spurious log files "

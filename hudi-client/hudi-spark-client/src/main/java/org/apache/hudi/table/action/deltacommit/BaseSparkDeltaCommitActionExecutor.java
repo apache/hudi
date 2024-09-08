@@ -23,8 +23,10 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
@@ -63,8 +65,8 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
   }
 
   @Override
-  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
-    return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, getCommitActionType(), instantTime, commitMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
+  protected Pair<HoodieCommitMetadata, List<HoodieWriteStat>> appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
+    return CommitMetadataUtils.reconcileMetadataForAdditionalLogFilesOnStorage(table, getCommitActionType(), instantTime, commitMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
   }
 
   @Override

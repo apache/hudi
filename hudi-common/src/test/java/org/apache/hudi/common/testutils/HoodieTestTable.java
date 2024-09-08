@@ -604,6 +604,11 @@ public class HoodieTestTable implements AutoCloseable {
     return this;
   }
 
+  public HoodieTestTable withLogMarkerFile(String partitionPath, String fileName) throws IOException {
+    createLogFileMarker(basePath, partitionPath, currentInstantTime, fileName);
+    return this;
+  }
+
   /**
    * Insert one base file to each of the given distinct partitions.
    *
