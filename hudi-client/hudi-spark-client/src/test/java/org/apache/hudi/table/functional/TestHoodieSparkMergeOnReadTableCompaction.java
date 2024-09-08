@@ -182,7 +182,7 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
     client = getHoodieWriteClient(config);
 
     // write data and commit
-    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true);
+    writeData(HoodieActiveTimeline.createNewInstantTime(), 100, true, false);
 
     // 2nd batch
     String commit2 = HoodieActiveTimeline.createNewInstantTime();
