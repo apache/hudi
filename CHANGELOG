@@ -314,3 +314,11 @@ cf41c616d31 [AUDIT-920]: Changelog for release-v1.29.0
 645d1d3213 [AUDIT-925]: Changelog for release-v1.29.1 (#894)
 1b0b0bec12 [ENG-13432][MINOR] Update handling of non-string inputs for string fields in MercifulJsonConverter (#893)
 750444a035 [AUDIT-920]: Changelog for release-v1.29.0 (#885)
+
+---[2024-09-07 22:00:17] [release-v1.31.0] ---
+5c604e49d [ENG-13527][INTERNAL] Adding commit metadata validation (#896)
+c31fcc897 [ENG-13527][HUDI-8111] Adding support to validate last N file slices with HoodieMetadataValidator (#913)
+075d53b9f [ENG-13174][HUDI-8083] Read precombine value from both table write config (#911)
+bf2d4cba9 [ENG-13536][HUDI-8137] Support time travel query on MDT in Spark Datasource (#901)
+12c1549a8 [ENG-10726][HUDI-5829] Optimize conversion from json to row format when sanitizing field names (#897)
+3c80adf0a [ENG-11375][HUDI-8116] Coalesce Row Source Aliases with Schema Fields in S3/GCS (#887)
