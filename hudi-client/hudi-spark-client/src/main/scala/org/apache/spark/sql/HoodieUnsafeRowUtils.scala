@@ -71,7 +71,7 @@ object HoodieUnsafeRowUtils {
         if (f.nullable) return null
         else throw new IllegalArgumentException(s"Found null value for the field that is declared as non-nullable: $f")
         // scalastyle:on return
-      } else if (idx == nestedFieldPath.parts.length - 1) {
+      } else if (idx == nestedFieldPath.parts.length - 1 && !f.dataType.isInstanceOf[StructType]) {
         // scalastyle:off return
         return curRow.get(ord, f.dataType)
         // scalastyle:on return
@@ -94,6 +94,9 @@ object HoodieUnsafeRowUtils {
    * This method produces nested-field path, that is subsequently used by [[getNestedInternalRowValue]], [[getNestedRowValue]]
    */
   def composeNestedFieldPath(schema: StructType, nestedFieldRef: String): Option[NestedFieldPath]= {
+    // TODO: need to pass nestedFieldRef correctly from HoodieInternalRowUtils.getCachedPosList and HoodieSparkRecord.getValue
+    // e.g. for >>> Field: fare Schema: {"type":"record","name":"fare","namespace":"hoodie.hoodie_test.hoodie_test_record","fields":[{"name":"amount","type":"double"},{"name":"currency","type":"string"}]}
+    // nestedFieldRef  should be "fare.amount" and then called again for "fare.currency", but currently it is called as "fare" just once.
     val fieldRefParts = nestedFieldRef.split('.')
     val ordSeq = ArrayBuffer[(Int, StructField)]()
     var curSchema = schema

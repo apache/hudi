@@ -18,21 +18,29 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -158,5 +166,26 @@ public class HoodieCommonTestHarness {
    */
   protected HoodieTableType getTableType() {
     return HoodieTableType.COPY_ON_WRITE;
+  }
+
+  public static GenericRecord toGenericRecord(HoodieRecord hoodieRecord, Schema schema) {
+    try {
+      Option<IndexedRecord> recordOpt = ((HoodieAvroRecord) hoodieRecord).getData().getInsertValue(schema);
+      return (GenericRecord) recordOpt.get();
+    } catch (IOException e) {
+      return null;
+    }
+  }
+
+  public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords) {
+    return toGenericRecords(hoodieRecords, HoodieTestDataGenerator.AVRO_SCHEMA);
+  }
+
+  public static List<GenericRecord> toGenericRecords(List<HoodieRecord> hoodieRecords, Schema schema) {
+    List<GenericRecord> records = new ArrayList<>();
+    for (HoodieRecord hoodieRecord : hoodieRecords) {
+      records.add(toGenericRecord(hoodieRecord, schema));
+    }
+    return records;
   }
 }

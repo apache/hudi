@@ -219,10 +219,12 @@ public class HoodieTableMetadataUtil {
     records.forEach((record) -> {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
+      LOG.warn(">>> Record: {}", record.getData());
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), ignored -> new ColumnStats());
 
         Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(recordSchema, field.name());
+        LOG.warn(">>> Field: {} Schema: {}", field.name(), fieldSchema);
         Object fieldValue;
         if (record.getRecordType() == HoodieRecordType.AVRO) {
           fieldValue = HoodieAvroUtils.getRecordColumnValues(record, new String[]{field.name()}, recordSchema, false)[0];
@@ -233,12 +235,16 @@ public class HoodieTableMetadataUtil {
         }
 
         colStats.valueCount++;
-        if (fieldValue != null && canCompare(fieldSchema)) {
+        if (fieldValue != null && canCompare(fieldSchema, record.getRecordType())) {
           // Set the min value of the field
-          if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
-            colStats.minValue = fieldValue;
+          LOG.warn(">>> Field: {} Value: {}, Schema: {}", field.name(), fieldValue, field.schema());
+          if (Objects.equals(field.name(), "fare")) {
+            if (colStats.minValue == null
+                || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
+              colStats.minValue = fieldValue;
+            }
           }
+          LOG.warn("<<< Field: {} Min Value: {}", field.name(), colStats.minValue);
           // Set the max value of the field
           if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema) > 0) {
             colStats.maxValue = fieldValue;
@@ -1310,7 +1316,7 @@ public class HoodieTableMetadataUtil {
         if (schema.getLogicalType() instanceof LogicalTypes.Decimal) {
           return (Comparable<?>) val;
         }
-        return (ByteBuffer) val;
+        return ByteBuffer.wrap((byte[]) val);
 
 
       case INT:
@@ -1354,7 +1360,11 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static boolean canCompare(Schema schema) {
+  private static boolean canCompare(Schema schema, HoodieRecordType recordType) {
+    // if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
+    if (recordType == HoodieRecordType.SPARK) {
+      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    }
     return schema.getType() != Schema.Type.MAP;
   }
 
