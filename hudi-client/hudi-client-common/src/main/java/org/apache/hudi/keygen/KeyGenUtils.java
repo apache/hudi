@@ -66,21 +66,12 @@ public class KeyGenUtils {
   public static KeyGeneratorType inferKeyGeneratorType(
       Option<String> recordsKeyFields, String partitionFields) {
     boolean autoGenerateRecordKeys = !recordsKeyFields.isPresent();
-    if (autoGenerateRecordKeys) {
-      return inferKeyGeneratorTypeFromPartitionFields(partitionFields);
-    } else {
-      if (!StringUtils.isNullOrEmpty(partitionFields)) {
-        int numRecordKeyFields = recordsKeyFields.get().split(",").length;
-        KeyGeneratorType recordKeyGeneratorType = numRecordKeyFields == 1 ? KeyGeneratorType.SIMPLE : KeyGeneratorType.COMPLEX;
-        KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
-        if (partitionKeyGeneratorType == KeyGeneratorType.SIMPLE && recordKeyGeneratorType == KeyGeneratorType.COMPLEX) {
-          return recordKeyGeneratorType;
-        } else {
-          return partitionKeyGeneratorType;
-        }
-      }
-      return KeyGeneratorType.NON_PARTITION;
+    KeyGeneratorType partitionKeyGeneratorType = inferKeyGeneratorTypeFromPartitionFields(partitionFields);
+    if (autoGenerateRecordKeys || partitionKeyGeneratorType != KeyGeneratorType.SIMPLE) {
+      return partitionKeyGeneratorType;
     }
+    int numRecordKeyFields = recordsKeyFields.get().split(",").length;
+    return numRecordKeyFields == 1 ? KeyGeneratorType.SIMPLE : KeyGeneratorType.COMPLEX;
   }
 
   // When auto record key gen is enabled, our inference will be based on partition path only.

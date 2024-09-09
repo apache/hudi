@@ -101,7 +101,7 @@ public class TestKeyGenUtils {
         KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:timestamp"));
     assertEquals(
         KeyGeneratorType.CUSTOM,
-        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple,partition1:timestamp"));
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple,partition2:timestamp"));
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(""));

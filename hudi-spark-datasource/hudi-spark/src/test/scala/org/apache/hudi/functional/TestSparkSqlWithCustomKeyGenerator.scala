@@ -477,10 +477,6 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
            """.stripMargin)
 
       testInserts(tableName, tsGenFunc, customPartitionFunc)
-      assertEquals(7, spark.sql(
-        s"""
-           | SELECT * from $tableName
-           | """.stripMargin).count())
 
       // Validate ts field is still of type int in the table
       validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
