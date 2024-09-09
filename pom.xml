@@ -699,6 +699,7 @@
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
+              <exclude>**/main/resources/version.txt</exclude>
               <exclude>**/*NOTICE*</exclude>
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
