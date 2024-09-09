@@ -271,6 +271,41 @@ public abstract class TestHoodieStorageBase {
   }
 
   @Test
+  public void testListingWithFilter() throws IOException {
+    HoodieStorage storage = getStorage();
+    // Full list:
+    // w/1.file
+    // w/2.file
+    // x/1.file
+    // x/2.file
+    // x/y/1.file
+    // x/y/2.file
+    // x/z/1.file
+    // x/z/2.file
+    prepareFilesOnStorage(storage);
+
+    validatePathInfoList(
+        Arrays.stream(new StoragePathInfo[] {
+            getStoragePathInfo("x/y/2.file", false)
+        }).collect(Collectors.toList()),
+        storage.listDirectEntries(
+            new StoragePath(getTempDir(), "x/y"),
+            path -> path.getName().contains("2")));
+
+    validatePathInfoList(
+        Arrays.stream(new StoragePathInfo[] {
+            getStoragePathInfo("w/2.file", false),
+            getStoragePathInfo("x/y/2.file", false),
+            getStoragePathInfo("x/z/2.file", false)
+        }).collect(Collectors.toList()),
+        storage.listDirectEntries(Arrays.stream(new StoragePath[] {
+            new StoragePath(getTempDir(), "w"),
+            new StoragePath(getTempDir(), "x/y"),
+            new StoragePath(getTempDir(), "x/z")
+        }).collect(Collectors.toList()), path -> path.getName().equals("2.file")));
+  }
+
+  @Test
   public void testFileNotFound() throws IOException {
     HoodieStorage storage = getStorage();
 

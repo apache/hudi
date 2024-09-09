@@ -212,6 +212,18 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
+  public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList,
+                                                 StoragePathFilter filter) throws IOException {
+    return Arrays.stream(fs.listStatus(
+            pathList.stream()
+                .map(HadoopFSUtils::convertToHadoopPath)
+                .toArray(Path[]::new),
+            e -> filter.accept(convertToStoragePath(e))))
+        .map(HadoopFSUtils::convertToStoragePathInfo)
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public List<StoragePathInfo> globEntries(StoragePath pathPattern)
       throws IOException {
     return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern)))

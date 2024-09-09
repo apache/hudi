@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -133,7 +132,7 @@ public class TestRepairUtils {
     Set<String> expectedPaths = partitionToFileIdAndNameMap.entrySet().stream()
         .flatMap(entry ->
             entry.getValue().stream()
-                .map(fileInfo -> new Path(entry.getKey(), fileInfo.getValue()).toString())
+                .map(fileInfo -> new StoragePath(entry.getKey(), fileInfo.getValue()).toString())
                 .collect(Collectors.toList())
                 .stream()
         ).collect(Collectors.toSet());
