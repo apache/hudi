@@ -905,34 +905,33 @@ public class HoodieAvroUtils {
             } else {
               newRecord.put(i, field.defaultVal());
             }
-            continue;
-          }
-
-          fieldNames.push(fieldName);
-          Schema.Field oldField = oldSchema.getField(field.name());
-          if (oldField != null && !renameCols.containsKey(field.name())) {
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
           } else {
-            String fieldFullName = createFullName(fieldNames);
-            String fieldNameFromOldSchema = renameCols.get(fieldFullName);
-            // deal with rename
-            Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-            if (oldFieldRenamed != null) {
-              // find rename
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
+            fieldNames.push(fieldName);
+            Schema.Field oldField = oldSchema.getField(field.name());
+            if (oldField != null && !renameCols.containsKey(field.name())) {
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
             } else {
-              // deal with default value
-              if (field.defaultVal() instanceof JsonProperties.Null) {
-                newRecord.put(i, null);
+              String fieldFullName = createFullName(fieldNames);
+              String fieldNameFromOldSchema = renameCols.get(fieldFullName);
+              // deal with rename
+              Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
+              if (oldFieldRenamed != null) {
+                // find rename
+                newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
               } else {
-                if (!isNullable(field.schema()) && field.defaultVal() == null) {
-                  throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
+                // deal with default value
+                if (field.defaultVal() instanceof JsonProperties.Null) {
+                  newRecord.put(i, null);
+                } else {
+                  if (!isNullable(field.schema()) && field.defaultVal() == null) {
+                    throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
+                  }
+                  newRecord.put(i, field.defaultVal());
                 }
-                newRecord.put(i, field.defaultVal());
               }
             }
+            fieldNames.pop();
           }
-          fieldNames.pop();
         }
         return newRecord;
       case ENUM:
