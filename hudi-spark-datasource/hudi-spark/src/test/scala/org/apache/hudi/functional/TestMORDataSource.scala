@@ -69,7 +69,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
-    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
+    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
   )
 
   val verificationCol: String = "driver"
