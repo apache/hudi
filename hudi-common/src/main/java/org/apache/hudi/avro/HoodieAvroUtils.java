@@ -899,13 +899,7 @@ public class HoodieAvroUtils {
         for (int i = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
-          if (skipMetadataFields && isMetadataField(fieldName)) {
-            if (field.defaultVal() instanceof JsonProperties.Null) {
-              newRecord.put(i, null);
-            } else {
-              newRecord.put(i, field.defaultVal());
-            }
-          } else {
+          if (!skipMetadataFields || !isMetadataField(fieldName)) {
             fieldNames.push(fieldName);
             Schema.Field oldField = oldSchema.getField(field.name());
             if (oldField != null && !renameCols.containsKey(field.name())) {
