@@ -87,7 +87,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
   private ClosableIterator<HoodieRecord> getBaseFileRecordIteratorInSortMergeCompaction(CompactionContext context, HoodieWriteConfig writeConfig, HoodieFileReader baseFileReader, Schema readSchema,
                                                                                         HoodieMergeHandle mergeHandle, String sorterBasePath,
-                                                                                        ExternalSorterType sorterType, SortEngine sortEngine) throws IOException {
+                                                                                        ExternalSorterType sorterType, SortEngine sortEngine, boolean bootstrap) throws IOException {
     ClosableIterator<HoodieRecord> rawRecordItr = new CloseableMappingIterator<HoodieRecord, HoodieRecord>(baseFileReader.getRecordIterator(readSchema), record -> {
       HoodieTableConfig tableConfig = mergeHandle.getHoodieTableMetaClient().getTableConfig();
       try {
@@ -98,7 +98,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       }
     });
     StoragePath oldFilePath = mergeHandle.getOldFilePath();
-    if (context.isBaseFileSorted()) {
+    if (!bootstrap && context.isBaseFileSorted()) {
       LOG.info("Base file: {} is sorted. No need to sort the records before merging", oldFilePath);
       return rawRecordItr;
     }
@@ -210,7 +210,15 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
         recordSchema = mergeHandle.getWriterSchemaWithMetaFields();
-        recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
+        // Only open sorted merge compaction when merge-handle is for compaction and sorted merge is enabled
+        if (compactionContextOptionOpt.isPresent() && compactionContextOptionOpt.get().isSortMergeCompaction()) {
+          String externalSorterBasePath = writeConfig.getExternalSorterBasePath();
+          ExternalSorterType sorterType = writeConfig.getExternalSorterType();
+          recordIterator = getBaseFileRecordIteratorInSortMergeCompaction(compactionContextOptionOpt.get(), writeConfig,
+              bootstrapFileReader, recordSchema, mergeHandle, externalSorterBasePath, sorterType, SortEngine.HEAP, true);
+        } else {
+          recordIterator = (ClosableIterator<HoodieRecord>) bootstrapFileReader.getRecordIterator(recordSchema);
+        }
       } else {
         // In case writer's schema is simply a projection of the reader's one we can read
         // the records in the projected schema directly
@@ -220,7 +228,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           String externalSorterBasePath = writeConfig.getExternalSorterBasePath();
           ExternalSorterType sorterType = writeConfig.getExternalSorterType();
           recordIterator = getBaseFileRecordIteratorInSortMergeCompaction(compactionContextOptionOpt.get(), writeConfig,
-              baseFileReader, recordSchema, mergeHandle, externalSorterBasePath, sorterType, SortEngine.HEAP);
+              baseFileReader, recordSchema, mergeHandle, externalSorterBasePath, sorterType, SortEngine.HEAP, false);
         } else {
           recordIterator = (ClosableIterator<HoodieRecord>) baseFileReader.getRecordIterator(recordSchema);
         }
