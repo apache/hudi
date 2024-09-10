@@ -194,13 +194,21 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     while (keyIterator.hasNext()) {
       final String key = keyIterator.next();
       HoodieRecord<T> record = recordMap.get(key);
-      write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
+      writeRecord(record);
     }
+  }
+
+  protected void writeRecord(HoodieRecord<T> record) {
+    write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
   }
 
   @Override
   public IOType getIOType() {
     return IOType.CREATE;
+  }
+
+  protected void closeInner() {
+    // no-op
   }
 
   /**
@@ -218,6 +226,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       markClosed();
 
       if (fileWriter != null) {
+        closeInner();
         fileWriter.close();
         fileWriter = null;
       }

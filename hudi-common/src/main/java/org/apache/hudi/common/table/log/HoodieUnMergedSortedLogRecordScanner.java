@@ -26,9 +26,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.SampleEstimator;
 import org.apache.hudi.common.util.SizeEstimator;
-import org.apache.hudi.common.util.collection.MappingIterator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.sorter.ExternalSorter;
 import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
 import org.apache.hudi.common.util.sorter.ExternalSorterType;
@@ -75,6 +78,8 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     return order1.compareTo(order2);
   };
 
+  private final Comparator<HoodieRecord> keyCompactor = (o1, o2) -> DEFAULT_KEY_COMPARATOR.compare(o1.getKey(), o2.getKey());
+
   private final ExternalSorter<WrapNaturalOrderHoodieRecord> records;
 
   private final Comparator<HoodieRecord> hoodieRecordComparator;
@@ -92,7 +97,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
                                                  SortEngine sortEngine) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange, withOperationField, forceFullScan, partitionNameOverride, internalSchema,
         keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, hoodieTableMetaClientOption);
-    this.hoodieRecordComparator = comparator.orElse(defaultComparator);
+    this.hoodieRecordComparator = comparator.orElse(keyCompactor);
     this.wrapNaturalOrderHoodieRecordComparator = (o1, o2) -> {
       int compare = hoodieRecordComparator.compare(o1.getRecord(), o2.getRecord());
       if (compare != 0) {
@@ -155,18 +160,135 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    HoodieRecord record;
-    if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
-      record = SpillableMapUtils.generateEmptyPayload(deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN());
-    } else {
-      record = new HoodieEmptyRecord(new HoodieKey(deleteRecord.getRecordKey(), deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
-    }
+    HoodieRecord record = new HoodieEmptyRecord(new HoodieKey(deleteRecord.getRecordKey(), deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
     records.add(WrapNaturalOrderHoodieRecord.of(totalLogRecords++, record));
   }
 
   @Override
   public Iterator<HoodieRecord> iterator() {
-    return MappingIterator.wrap(records.getIterator(), wrapRecord -> ((WrapNaturalOrderHoodieRecord) wrapRecord).getRecord());
+    // TODO: push down pre-combine logic to external sorter
+    CloseableMappingIterator<WrapNaturalOrderHoodieRecord, HoodieRecord> iterator =
+        new CloseableMappingIterator<>(records.getIterator(), WrapNaturalOrderHoodieRecord::getRecord);
+    return new PreCombinedRecordIterator(iterator);
+  }
+
+  class PreCombinedRecordIterator implements ClosableIterator<HoodieRecord> {
+
+    private final ClosableIterator<HoodieRecord> rawIterator;
+
+    private Option<HoodieRecord> currentRecord = Option.empty();
+
+    PreCombinedRecordIterator(ClosableIterator<HoodieRecord> rawIterator) {
+      this.rawIterator = rawIterator;
+      init();
+    }
+
+    private void init() {
+      if (rawIterator.hasNext()) {
+        processRecord(rawIterator.next());
+      }
+    }
+
+    private HoodieRecord processRecord(HoodieRecord next) {
+      // run pre combine
+      if (next instanceof HoodieEmptyRecord) {
+        return processNextDeleteRecord((HoodieEmptyRecord) next);
+      } else {
+        try {
+          return processNextRecord(next);
+        } catch (IOException e) {
+          LOG.error("Failed to merge income record: {} with existing record: {}", next, currentRecord.get(), e);
+          throw new HoodieIOException("Failed to merge records", e);
+        }
+      }
+    }
+
+    // TODO: extract this method and same logic in HoodieMergedLogRecordScanner to a common method when this process is well validated
+    private HoodieRecord processNextDeleteRecord(HoodieEmptyRecord deleteRecord) {
+      String key = deleteRecord.getRecordKey();
+      if (currentRecord.isPresent() && currentRecord.get().getRecordKey().equals(key)) {
+        HoodieRecord oldRecord = currentRecord.get();
+        // Merge and store the merged record. The ordering val is taken to decide whether the same key record
+        // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
+        // For same ordering values, uses the natural order(arrival time semantics).
+
+        Comparable curOrderingVal = oldRecord.getOrderingValue(readerSchema, hoodieTableMetaClient.getTableConfig().getProps());
+        Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+        // Checks the ordering value does not equal to 0
+        // because we use 0 as the default value which means natural order
+        boolean choosePrev = !deleteOrderingVal.equals(0)
+            && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
+            && curOrderingVal.compareTo(deleteOrderingVal) > 0;
+        if (choosePrev) {
+          // The DELETE message is obsolete if the old message has greater orderingVal.
+          return null;
+        }
+      }
+      HoodieRecord outputRecord = currentRecord.isPresent() && !currentRecord.get().getRecordKey().equals(key) ? currentRecord.get() : null;
+      // Put the DELETE record
+      if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
+        currentRecord = Option.of(SpillableMapUtils.generateEmptyPayload(key,
+            deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+      } else {
+        HoodieEmptyRecord record = new HoodieEmptyRecord<>(
+            new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+        currentRecord = Option.of(record);
+      }
+      return outputRecord;
+    }
+
+    private HoodieRecord processNextRecord(HoodieRecord newRecord) throws IOException {
+      String key = newRecord.getRecordKey();
+      if (currentRecord.isPresent() && currentRecord.get().getRecordKey().equals(key)) {
+        HoodieRecord prevRecord = currentRecord.get();
+        // Merge and store the combined record
+        HoodieRecord combinedRecord = recordMerger.merge(prevRecord, readerSchema,
+            newRecord, readerSchema, getPayloadProps()).get().getLeft();
+        // If pre-combine returns existing record, no need to update it
+        if (combinedRecord.getData() != prevRecord.getData()) {
+          HoodieRecord latestHoodieRecord = getLatestHoodieRecord(newRecord, combinedRecord, key);
+
+          // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+          //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+          //       it since these records will be put into records(Map).
+          currentRecord = Option.of(latestHoodieRecord.copy());
+        }
+        return null;
+      }
+      // Put the record as is
+      // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
+      //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
+      //       it since these records will be put into records(Map).
+      HoodieRecord outputRecord = currentRecord.orElse(null);
+      currentRecord = Option.of(newRecord.copy());
+      return outputRecord;
+    }
+
+    @Override
+    public void close() {
+      rawIterator.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return currentRecord.isPresent();
+    }
+
+    @Override
+    public HoodieRecord next() {
+      if (!hasNext()) {
+        return null;
+      }
+      HoodieRecord outputRecord = null;
+      while (rawIterator.hasNext() && outputRecord == null) {
+        outputRecord = processRecord(rawIterator.next());
+      }
+      if (outputRecord == null && currentRecord.isPresent()) {
+        outputRecord = currentRecord.get();
+        currentRecord = Option.empty();
+      }
+      return outputRecord;
+    }
   }
 
   @Override
@@ -287,7 +409,7 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
 
     @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
-      this.recordMerger = recordMerger;
+      this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
     }
 

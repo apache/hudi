@@ -368,10 +368,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
     boolean copyOldRecord = true;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
-    if (keyToNewRecords.containsKey(key)) {
+    if (containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
       // writing the first record. So make a copy of the record to be merged
-      HoodieRecord<T> newRecord = keyToNewRecords.get(key).newInstance();
+      HoodieRecord<T> newRecord = getRecordByKey(key).newInstance();
       try {
         Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(oldRecord, oldSchema, newRecord, newSchema, props);
         Schema combineRecordSchema = mergeResult.map(Pair::getRight).orElse(null);
@@ -388,10 +388,10 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
            */
           copyOldRecord = false;
         }
-        writtenRecordKeys.add(key);
+        markRecordWritten(key);
       } catch (Exception e) {
         throw new HoodieUpsertException("Failed to combine/merge new record with old value in storage, for new record {"
-            + keyToNewRecords.get(key) + "}, old value {" + oldRecord + "}", e);
+            + getRecordByKey(key) + "}, old value {" + oldRecord + "}", e);
       }
     }
 
@@ -406,6 +406,24 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
         throw new HoodieUpsertException(errMsg, e);
       }
       recordsWritten++;
+    }
+  }
+
+  protected boolean containsKey(String key) {
+    return keyToNewRecords.containsKey(key);
+  }
+
+  protected HoodieRecord getRecordByKey(String key) {
+    return keyToNewRecords.get(key);
+  }
+
+  protected void markRecordWritten(String key) {
+    writtenRecordKeys.add(key);
+  }
+
+  protected void closeInner() throws IOException {
+    if (keyToNewRecords instanceof Closeable) {
+      ((Closeable) keyToNewRecords).close();
     }
   }
 
@@ -448,9 +466,7 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
       markClosed();
       writeIncomingRecords();
 
-      if (keyToNewRecords instanceof Closeable) {
-        ((Closeable) keyToNewRecords).close();
-      }
+      closeInner();
 
       keyToNewRecords = null;
       writtenRecordKeys = null;
@@ -474,14 +490,17 @@ public class HoodieMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O>
 
       performMergeDataValidationCheck(writeStatus);
 
-      LOG.info(String.format("MergeHandle for partitionPath %s fileID %s, took %d ms.", stat.getPartitionPath(),
-          stat.getFileId(), runtimeStats.getTotalUpsertTime()));
+      LOG.info("MergeHandle Stats: TotalWrites=" + recordsWritten + ", " + "TotalDeletes=" + recordsDeleted + ", "
+          + "TotalUpdateWrites=" + updatedRecordsWritten + ", " + "TotalInserts=" + insertRecordsWritten + ", "
+          + "TotalErrors=" + writeStatus.getTotalErrorRecords() + ", " + "TotalBytesWritten=" + fileSizeInBytes + ", "
+          + "TotalRecordsSize=" + fileSizeInBytes + ", " + "TotalUpsertTime=" + runtimeStats.getTotalUpsertTime() + " ("
+          + runtimeStats.getTotalUpsertTime() + "ms)");
 
-      LOG.info("MergeHandle successfully merge: {} to a new file: {}", oldFilePath, newFilePath);
+      LOG.info("MergeHandle successfully merge: {} to a new file: {} with cost taken: {}", oldFilePath, newFilePath, runtimeStats.getTotalUpsertTime());
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
-      throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+      throw new HoodieUpsertException("Failed to close MergeHandle", e);
     }
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -58,5 +59,15 @@ public abstract class AbstractHoodieLogRecordScanner extends AbstractHoodieLogRe
 
   protected void scanEnd() {
     this.totalTimeTakenToScanRecords = timer.endTimer();
+  }
+
+  protected static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
+    HoodieRecord latestHoodieRecord =
+        combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
+
+    latestHoodieRecord.unseal();
+    latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
+    latestHoodieRecord.seal();
+    return latestHoodieRecord;
   }
 }

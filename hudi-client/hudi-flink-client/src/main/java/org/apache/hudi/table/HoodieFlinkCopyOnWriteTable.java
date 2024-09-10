@@ -45,7 +45,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.HoodieUnmergedCreateHandle;
+import org.apache.hudi.io.HoodieSortedCreateHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
@@ -456,7 +456,7 @@ public class HoodieFlinkCopyOnWriteTable<T>
   public Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
                                                                       CompactionContext context) throws IOException {
     HoodieCreateHandle<?, ?, ?, ?> createHandle =
-        new HoodieUnmergedCreateHandle<>(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
+        new HoodieSortedCreateHandle<>(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }

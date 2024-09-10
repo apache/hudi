@@ -46,6 +46,7 @@ public class HeapSortMergeReader<R> implements SortMergeReader<R> {
 
   private boolean init = false;
   private boolean closed = false;
+  private boolean isEOF = false;
 
   private int readCount = 0;
 
@@ -85,9 +86,13 @@ public class HeapSortMergeReader<R> implements SortMergeReader<R> {
     if (!init) {
       init();
     }
+    if (isEOF) {
+      return false;
+    }
     boolean hasNext = !minHeap.isEmpty();
     if (!hasNext) {
       // reach end
+      isEOF = true;
       timeTakenToReadAllRecords = readTimer.endTimer();
       LOG.info("HeapSortMergeReader read all {} records in {} ms", readCount, timeTakenToReadAllRecords);
     }

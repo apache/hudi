@@ -231,16 +231,6 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     return numMergedRecordsInLog;
   }
 
-  protected static <T> HoodieRecord getLatestHoodieRecord(HoodieRecord<T> newRecord, HoodieRecord<T> combinedRecord, String key) {
-    HoodieRecord latestHoodieRecord =
-        combinedRecord.newInstance(new HoodieKey(key, newRecord.getPartitionPath()), newRecord.getOperation());
-
-    latestHoodieRecord.unseal();
-    latestHoodieRecord.setCurrentLocation(newRecord.getCurrentLocation());
-    latestHoodieRecord.seal();
-    return latestHoodieRecord;
-  }
-
   @Override
   public void close() {
     if (records != null) {
