@@ -67,7 +67,7 @@ jobs:
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-utilities" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -76,7 +76,7 @@ jobs:
               -Dsonar.pullrequest.base=${{ github.BASE_REF }} \
               -Dsonar.pullrequest.github.repository=https://github.com/onehouseinc/hudi-internal
           else
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-utilities" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -116,7 +116,7 @@ jobs:
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-utilities-bundle-misc" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities-bundle-misc \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities-bundle-misc" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities-bundle-misc \
               -Dsonar.exclusions="hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-flink-datasource/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-tests-common/**/*,hudi-utilities/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -125,7 +125,7 @@ jobs:
               -Dsonar.pullrequest.base=${{ github.BASE_REF }} \
               -Dsonar.pullrequest.github.repository=https://github.com/onehouseinc/hudi-internal
           else
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-utilities-bundle-misc" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities-bundle-misc \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-utilities-bundle-misc" -Dsonar.projectKey=onehouseinc_hudi-internal_utilities-bundle-misc \
               -Dsonar.exclusions="hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-flink-datasource/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-tests-common/**/*,hudi-utilities/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -165,7 +165,7 @@ jobs:
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-hudi-client-and-common" -Dsonar.projectKey=onehouseinc_hudi-internal_hudi-client-and-common \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-hudi-client-and-common" -Dsonar.projectKey=onehouseinc_hudi-internal_hudi-client-and-common \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -174,7 +174,7 @@ jobs:
               -Dsonar.pullrequest.base=${{ github.BASE_REF }} \
               -Dsonar.pullrequest.github.repository=https://github.com/onehouseinc/hudi-internal
           else
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-hudi-client-and-common" -Dsonar.projectKey=onehouseinc_hudi-internal_hudi-client-and-common \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-hudi-client-and-common" -Dsonar.projectKey=onehouseinc_hudi-internal_hudi-client-and-common \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-spark-datasource/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -214,7 +214,7 @@ jobs:
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
@@ -223,7 +223,7 @@ jobs:
               -Dsonar.pullrequest.base=${{ github.BASE_REF }} \
               -Dsonar.pullrequest.github.repository=https://github.com/onehouseinc/hudi-internal
           else
-            mvn sonar:sonar -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
+            mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
               -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
