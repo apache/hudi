@@ -170,7 +170,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       // update data
       spark.sql(s"update $tableName set price = 12 where id = 2")
       // schedule compaction
-      spark.sql(s"schedule compaction  on $tableName")
+      spark.sql(s"schedule compaction on $tableName")
       // show compaction
       var compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
       var timestamps = compactionRows.map(_.getString(0))
@@ -190,7 +190,7 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       // Delete record identified by some field other than the primary-key
       spark.sql(s"DELETE FROM $tableName WHERE name = 'a2'")
       // schedule compaction
-      spark.sql(s"schedule compaction  on $tableName")
+      spark.sql(s"schedule compaction on $tableName")
       // show compaction
       compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
       timestamps = compactionRows.map(_.getString(0)).sorted

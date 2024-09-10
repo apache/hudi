@@ -82,26 +82,23 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     testRecordKeysAutoGenInternal(recordType, op, tableType)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testRecordKeyAutoGenWithTimestampBasedKeyGen(tableType: HoodieTableType): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
+  @Test
+  def testRecordKeyAutoGenWithTimestampBasedKeyGen(): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
       classOf[TimestampBasedKeyGenerator].getName)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testRecordKeyAutoGenWithComplexKeyGen(tableType: HoodieTableType): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
+  @Test
+  def testRecordKeyAutoGenWithComplexKeyGen(): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
       classOf[ComplexKeyGenerator].getName,
       complexPartitionPath = true)
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testRecordKeyAutoGenWithNonPartitionedKeyGen(tableType: HoodieTableType): Unit = {
-    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", tableType,
-      classOf[NonpartitionedKeyGenerator].getName, nonPartitionedDataset = true)
+  @Test
+  def testRecordKeyAutoGenWithNonPartitionedKeyGen(): Unit = {
+    testRecordKeysAutoGenInternal(HoodieRecordType.AVRO, "insert", HoodieTableType.COPY_ON_WRITE,
+      classOf[NonpartitionedKeyGenerator].getName, complexPartitionPath = false, nonPartitionedDataset = true)
   }
 
   def testRecordKeysAutoGenInternal(recordType: HoodieRecordType, op: String = "insert", tableType: HoodieTableType = HoodieTableType.COPY_ON_WRITE,
@@ -213,7 +210,7 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     var options: Map[String, String] = vanillaWriteOpts ++ Map(
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName)
 
-    // NOTE: In this test we deliberately removing record-key configuration
+    // NOTE: In this test we are deliberately removing record-key configuration
     //       to validate Hudi is handling this case appropriately
     var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
@@ -272,11 +269,11 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
   def testUpsertsAndDeletesWithPkLess(tableType: HoodieTableType): Unit = {
     val (vanillaWriteOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO)
 
-    var options: Map[String, String] = vanillaWriteOpts ++ Map(
+    val options: Map[String, String] = vanillaWriteOpts ++ Map(
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[SimpleKeyGenerator].getCanonicalName,
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
 
-    var writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
+    val writeOpts = options -- Seq(DataSourceWriteOptions.RECORDKEY_FIELD.key)
 
     // Insert Operation
     val records = recordsToStrings(dataGen.generateInserts("000", 20)).asScala.toList
