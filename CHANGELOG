@@ -323,5 +323,11 @@ bf2d4cba9 [ENG-13536][HUDI-8137] Support time travel query on MDT in Spark Datas
 12c1549a8 [ENG-10726][HUDI-5829] Optimize conversion from json to row format when sanitizing field names (#897)
 3c80adf0a [ENG-11375][HUDI-8116] Coalesce Row Source Aliases with Schema Fields in S3/GCS (#887)
 
+---[2024-09-10 14:09:02] [changelog-release-v1.32.0] ---
+f0ef3848c3 [ENG-13288][HUDI-8126] Persist sourceRdd to optimise writeStatus DAG (#892)
+22a7d4cfa3 [ENG-13552][INTERNAL] Update coverage reports to generate less logs (#891)
+1d5a09415c [ENG-13555][MINOR] Add remote file system props to meta sync properties (#916)
+f8f31946ee [ENG-12604][HUDI-8126] Use union to parallelize data and error table writes (#879)
+
 ---[2024-09-10 10:06:21] [release-v1.32.1] ---
 0fee04a70a1 [ENG-12228][HUDI-8124] Allow reuse of meta client in Meta Sync path (#890)
