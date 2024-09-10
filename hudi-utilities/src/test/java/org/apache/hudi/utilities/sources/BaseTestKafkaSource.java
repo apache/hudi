@@ -50,6 +50,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,6 +87,18 @@ public abstract class BaseTestKafkaSource extends SparkClientFunctionalTestHarne
   protected abstract SourceFormatAdapter createSource(TypedProperties props);
 
   protected abstract void sendMessagesToKafka(String topic, int count, int numPartitions);
+
+  protected void verifyRddsArePersistedAndReleased(Source source, String sparkPlan, boolean persistSourceRdd) {
+    if (persistSourceRdd) {
+      assertTrue(sparkPlan.contains("CachedPartitions"));
+      assertEquals(1, jsc().getPersistentRDDs().size());
+    } else {
+      assertFalse(sparkPlan.contains("CachedPartitions"));
+      assertEquals(0, jsc().getPersistentRDDs().size());
+    }
+    source.releaseResources();
+    assertEquals(0, jsc().getPersistentRDDs().size());
+  }
 
   @Test
   public void testKafkaSource() {

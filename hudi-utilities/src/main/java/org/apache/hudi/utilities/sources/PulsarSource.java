@@ -229,6 +229,7 @@ public class PulsarSource extends RowSource implements Closeable {
 
   @Override
   public void close() throws IOException {
+    super.close();
     shutdownPulsarClient(pulsarClient.get());
   }
 

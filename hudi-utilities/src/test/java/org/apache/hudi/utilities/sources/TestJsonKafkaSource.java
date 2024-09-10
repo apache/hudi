@@ -73,9 +73,12 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import scala.Tuple2;
 
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_BASE_PATH;
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TARGET_TABLE;
 import static org.apache.hudi.utilities.config.KafkaSourceConfig.ENABLE_KAFKA_COMMIT_OFFSET;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
@@ -328,10 +331,11 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     }
   }
 
-  @Test
-  public void testErrorEventsForDataInRowFormat() throws IOException {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testErrorEventsForDataInRowFormat(boolean persistSourceRdd) {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormat";
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormat_" + persistSourceRdd;
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -349,12 +353,16 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put(ERROR_TARGET_TABLE.key(),"json_kafka_row_events");
     props.put("hoodie.errortable.validate.targetschema.enable", "true");
     props.put("hoodie.base.path","/tmp/json_kafka_row_events");
+    props.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
+
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));
     SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
-    assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
+    InputBatch<Dataset<Row>> fetch1 = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(1000, fetch1.getBatch().get().count());
     assertEquals(2,((JavaRDD)errorTableWriter.get().getErrorEvents(
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+    verifyRddsArePersistedAndReleased(kafkaSource.getSource(), fetch1.getBatch().get().rdd().toDebugString(), persistSourceRdd);
   }
 
   @Test
@@ -387,11 +395,11 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
   }
 
-  @Test
-  public void testErrorEventsForDataInAvroFormat() throws IOException {
-
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testErrorEventsForDataInAvroFormat(boolean persistSourceRdd) throws IOException {
     // topic setup.
-    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat";
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInAvroFormat_" + persistSourceRdd;
 
     testUtils.createTopic(topic, 2);
     List<TopicPartition> topicPartitions = new ArrayList<>();
@@ -409,6 +417,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_events");
     props.put(ERROR_TARGET_TABLE.key(),"json_kafka_events");
     props.put("hoodie.base.path","/tmp/json_kafka_events");
+    props.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
 
     Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
     Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));
@@ -417,6 +426,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     assertEquals(1000,fetch1.getBatch().get().count());
     assertEquals(2, ((JavaRDD)errorTableWriter.get().getErrorEvents(
         HoodieActiveTimeline.createNewInstantTime(), Option.empty()).get()).count());
+    verifyRddsArePersistedAndReleased(kafkaSource.getSource(), fetch1.getBatch().get().rdd().toDebugString(), persistSourceRdd);
   }
 
   private BaseErrorTableWriter getAnonymousErrorTableWriter(TypedProperties props) {
