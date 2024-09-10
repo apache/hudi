@@ -40,7 +40,8 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
+import org.apache.hudi.testutils.ArrayWritableTestUtil;
+import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -99,6 +100,9 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   private static FileSystem fs;
   private static StorageConfiguration<Configuration> storageConf;
 
+  //currently always true. If we ever have a test with a nonpartitioned table, the usages of this should be tied together
+  private static final boolean USE_FAKE_PARTITION = true;
+
   @BeforeAll
   public static void setUpClass() throws IOException, InterruptedException {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
@@ -134,13 +138,11 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   public HoodieReaderContext<ArrayWritable> getHoodieReaderContext(String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf) {
     HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator = (inputSplit, jobConf) -> new MapredParquetInputFormat().getRecordReader(inputSplit, jobConf, null);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build();
-    String tableName = metaClient.getTableConfig().getTableName();
     JobConf jobConf = new JobConf(storageConf.unwrapAs(Configuration.class));
     setupJobconf(jobConf);
-    HoodieArrayWritableAvroUtils.initCacheForTable(tableName, avroSchema, jobConf);
-    return new HiveHoodieReaderContext(readerCreator, tableName, getRecordKeyField(metaClient),
-        getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema));
-
+    return new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+        getStoredPartitionFieldNames(new JobConf(storageConf.unwrapAs(Configuration.class)), avroSchema),
+        new ObjectInspectorCache(avroSchema, jobConf));
   }
 
   @Override
@@ -232,7 +234,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
           //hive to do this?
           ArrayWritable compVal = recordMap.remove(readerContext.getRecordKey(value, schema));
           assertNotNull(compVal);
-          assertArrayWritableEqual(schema, value, compVal);
+          ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
         }
         key = reader.createKey();
         value = reader.createValue();
@@ -287,28 +289,10 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     return  combineHiveInputFormat.getRecordReader(splits[0], jobConf, Reporter.NULL);
   }
 
-  public void assertArrayWritableEqual(Schema schema, ArrayWritable expected, ArrayWritable actual) {
-    for (Schema.Field field : schema.getFields()) {
-      switch (HoodieAvroUtils.getActualSchemaFromUnion(field.schema(), null).getType()) {
-        case UNION:
-          throw new IllegalStateException("we resolve unions so we should never be here");
-        case RECORD:
-        case MAP:
-        case ENUM:
-        case ARRAY:
-          //TODO: validate complex types
-          continue;
-        default:
-          assertEquals(expected.get()[field.pos()], actual.get()[field.pos()]);
-
-      }
-    }
-  }
-
   private void setupJobconf(JobConf jobConf) {
     Schema schema = HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA);
     List<Schema.Field> fields = schema.getFields();
-    setHiveColumnNameProps(fields, jobConf, true);
+    setHiveColumnNameProps(fields, jobConf, USE_FAKE_PARTITION);
     jobConf.set("columns.types","string,string,string,string,string," + HoodieTestDataGenerator.TRIP_HIVE_COLUMN_TYPES + ",string");
   }
 

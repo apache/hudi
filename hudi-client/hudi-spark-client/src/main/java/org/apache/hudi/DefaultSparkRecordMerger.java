@@ -33,6 +33,9 @@ import org.apache.avro.Schema;
 
 import java.io.IOException;
 
+/**
+ * Record merger for spark that implements the default merger strategy
+ */
 public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
   @Override

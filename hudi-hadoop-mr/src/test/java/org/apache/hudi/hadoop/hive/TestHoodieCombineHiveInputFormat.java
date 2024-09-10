@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -103,7 +102,6 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws IOException, InterruptedException {
     assertTrue(fs.mkdirs(new Path(tempDir.toAbsolutePath().toString())));
-    HoodieArrayWritableAvroUtils.resetCache();
   }
 
   @AfterEach

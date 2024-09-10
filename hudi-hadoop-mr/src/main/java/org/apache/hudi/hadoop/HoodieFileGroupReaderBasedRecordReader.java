@@ -35,9 +35,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
-import org.apache.hudi.hadoop.utils.HoodieArrayWritableAvroUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -117,10 +117,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     String latestCommitTime = getLatestCommitTime(split, metaClient);
     Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
-    String tableName = metaClient.getTableConfig().getTableName();
-    HoodieArrayWritableAvroUtils.initCacheForTable(tableName, tableSchema, jobConfCopy);
-    this.readerContext = new HiveHoodieReaderContext(readerCreator, tableName,
-        getRecordKeyField(metaClient), getStoredPartitionFieldNames(jobConfCopy, tableSchema));
+    this.readerContext = new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+        getStoredPartitionFieldNames(jobConfCopy, tableSchema),
+        new ObjectInspectorCache(tableSchema, jobConfCopy));
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {

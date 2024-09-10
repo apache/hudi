@@ -79,14 +79,14 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   private final String recordKeyField;
 
   protected HiveHoodieReaderContext(HoodieFileGroupReaderBasedRecordReader.HiveReaderCreator readerCreator,
-                                    String tableName,
                                     String recordKeyField,
-                                    List<String> partitionCols) {
+                                    List<String> partitionCols,
+                                    ObjectInspectorCache objectInspectorCache) {
     this.readerCreator = readerCreator;
     this.partitionCols = partitionCols;
     this.partitionColSet = new HashSet<>(this.partitionCols);
     this.recordKeyField = recordKeyField;
-    this.objectInspectorCache = HoodieArrayWritableAvroUtils.getCacheForTable(tableName);
+    this.objectInspectorCache = objectInspectorCache;
     this.columnTypeMap = objectInspectorCache.getColumnTypeMap();
   }
 

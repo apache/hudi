@@ -35,7 +35,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -1236,8 +1235,7 @@ public class HoodieAvroUtils {
     return julianDays;
   }
 
-  @VisibleForTesting
-  public static Schema getActualSchemaFromUnion(Schema schema, Object data) {
+  private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
     Schema actualSchema;
     if (schema.getType() != UNION) {
       return schema;
