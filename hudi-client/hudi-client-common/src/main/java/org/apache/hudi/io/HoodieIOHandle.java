@@ -39,8 +39,4 @@ public abstract class HoodieIOHandle<T, I, K, O> {
   }
 
   public abstract HoodieStorage getStorage();
-
-  public FileSystem getFileSystem() {
-    return fs;
-  }
 }
