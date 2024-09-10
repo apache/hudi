@@ -203,7 +203,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SORT_MERGE_COMPACTION = ConfigProperty
       .key("hoodie.compaction.sort.merge")
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
