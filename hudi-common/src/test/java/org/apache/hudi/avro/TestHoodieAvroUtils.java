@@ -581,6 +581,50 @@ public class TestHoodieAvroUtils {
     }
   }
 
+  @Test
+  public void testConvertingGenericDataCompare() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    // create two records with same values
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("booleanField", true);
+    record1.put("intField", 698);
+    record1.put("longField", 192485030493L);
+    record1.put("floatField", 18.125f);
+    record1.put("doubleField", 94385932.342104);
+    record1.put("bytesField", new byte[] {1, 20, 0, 60, 2, 108});
+    record1.put("stringField", "abcdefghijk");
+    record1.put("decimalField", getUTF8Bytes("9213032.4966"));
+    record1.put("timeMillisField", 57996136);
+    record1.put("timeMicrosField", 57996136930L);
+    record1.put("timestampMillisField", 1690828731156L);
+    record1.put("timestampMicrosField", 1690828731156982L);
+    record1.put("localTimestampMillisField", 1690828731156L);
+    record1.put("localTimestampMicrosField", 1690828731156982L);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("booleanField", true);
+    record2.put("intField", 698);
+    record2.put("longField", 192485030493L);
+    record2.put("floatField", 18.125f);
+    record2.put("doubleField", 94385932.342104);
+    record2.put("bytesField", new byte[] {1, 20, 0, 60, 2, 108});
+    record2.put("stringField", "abcdefghijk");
+    record2.put("decimalField", getUTF8Bytes("9213032.4966"));
+    record2.put("timeMillisField", 57996136);
+    record2.put("timeMicrosField", 57996136930L);
+    record2.put("timestampMillisField", 1690828731156L);
+    record2.put("timestampMicrosField", 1690828731156982L);
+    record2.put("localTimestampMillisField", 1690828731156L);
+    record2.put("localTimestampMicrosField", 1690828731156982L);
+
+    // get schema of each field in SCHEMA_WITH_AVRO_TYPES
+    List<Schema> fieldSchemas = schema.getFields().stream().map(Schema.Field::schema).collect(Collectors.toList());
+    // compare each field in SCHEMA_WITH_AVRO_TYPES
+    for (int i = 0; i < fieldSchemas.size(); i++) {
+      assertEquals(0, ConvertingGenericData.INSTANCE.compare(record1.get(i), record2.get(i), fieldSchemas.get(i)));
+    }
+  }
+
   public static Stream<Arguments> javaValueParams() {
     Object[][] data =
         new Object[][] {
