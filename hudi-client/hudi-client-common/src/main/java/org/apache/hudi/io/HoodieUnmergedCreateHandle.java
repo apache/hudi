@@ -51,27 +51,11 @@ public class HoodieUnmergedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T
 
   private boolean currentMergedRecordMerged = false;
 
-  public HoodieUnmergedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable, String partitionPath, String fileId,
-                                    TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier);
-  }
-
-  public HoodieUnmergedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                    boolean preserveMetadata) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, preserveMetadata);
-  }
-
-  public HoodieUnmergedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable, String partitionPath, String fileId,
-                                    Option<Schema> overriddenSchema, TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, overriddenSchema, taskContextSupplier);
-  }
-
   public HoodieUnmergedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                     String partitionPath, String fileId, Iterator<HoodieRecord> recordItr,
                                     TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
+    super(config, instantTime, hoodieTable, partitionPath, fileId, Collections.EMPTY_MAP, taskContextSupplier);
     unmergedRecordsIter = recordItr;
-    useWriterSchema = true;
   }
 
   @Override

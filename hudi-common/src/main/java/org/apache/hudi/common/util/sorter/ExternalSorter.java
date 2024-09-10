@@ -105,8 +105,10 @@ public abstract class ExternalSorter<R extends Serializable> implements AutoClos
     if (state == State.FINISHED) {
       return;
     }
-    finishAdd();
-    finishInner();
+    if (state == State.ADDING) {
+      finishAdd();
+      finishInner();
+    }
     state = State.FINISHED;
   }
 
