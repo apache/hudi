@@ -427,6 +427,26 @@ public abstract class HoodieStorage implements Closeable {
   }
 
   /**
+   * Lists the file info of the direct files/directories in the given list of paths
+   * and filters the results, if the paths are directory.
+   *
+   * @param pathList given path list.
+   * @param filter filter to apply.
+   * @return the list of path info of the files/directories in the given paths.
+   * @throws FileNotFoundException when the path does not exist.
+   * @throws IOException           IO error.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList,
+                                                 StoragePathFilter filter) throws IOException {
+    List<StoragePathInfo> result = new ArrayList<>();
+    for (StoragePath path : pathList) {
+      result.addAll(listDirectEntries(path, filter));
+    }
+    return result;
+  }
+
+  /**
    * Returns all the files that match the pathPattern and are not checksum files.
    *
    * @param pathPattern given pattern.

@@ -190,6 +190,7 @@ public class GcsEventsSource extends RowSource {
    */
   private MessageBatch processMessages(List<ReceivedMessage> receivedMessages) {
     List<String> messages = new ArrayList<>();
+    long skippedMsgCount = 0;
 
     for (ReceivedMessage received : receivedMessages) {
       MetadataMessage message = new MetadataMessage(received.getMessage());
@@ -201,13 +202,14 @@ public class GcsEventsSource extends RowSource {
 
       MessageValidity messageValidity = message.shouldBeProcessed();
       if (messageValidity.getDecision() == DO_SKIP) {
-        LOG.info("Skipping message: " + messageValidity.getDescription());
+        LOG.debug("Skipping message: {}", messageValidity.getDescription());
+        skippedMsgCount++;
         continue;
       }
 
       messages.add(msgStr);
     }
-
+    LOG.info("Messages received: {}, toBeProcessed: {}, skipped: {}", receivedMessages.size(), messages.size(), skippedMsgCount);
     return new MessageBatch(messages);
   }
 
@@ -225,9 +227,8 @@ public class GcsEventsSource extends RowSource {
   }
 
   private void logDetails(MetadataMessage message, String msgStr) {
-    LOG.info("eventType: " + message.getEventType() + ", objectId: " + message.getObjectId());
-
     if (LOG.isDebugEnabled()) {
+      LOG.debug("eventType: {}, objectId: {}", message.getEventType(), message.getObjectId());
       LOG.debug("msg: " + msgStr);
     }
   }

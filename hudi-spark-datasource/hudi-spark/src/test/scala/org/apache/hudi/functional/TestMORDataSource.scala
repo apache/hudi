@@ -1192,14 +1192,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(pathForROQuery)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)
-      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/02'").count, 60)
-    } else {
-      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
-    }
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")

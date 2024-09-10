@@ -22,21 +22,24 @@ package org.apache.hudi
 import org.apache.hudi.avro.model.HoodieClusteringGroup
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider
+import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
+import org.apache.hudi.storage.StorageSchemes
 import org.apache.spark.SparkException
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.filterHoodieConfigs
 
+import java.util.ArrayList
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter, propertiesAsScalaMapConverter}
 
-object HoodieCLIUtils {
+object HoodieCLIUtils extends Logging {
 
   def createHoodieWriteClient(sparkSession: SparkSession,
                               basePath: String,
@@ -109,10 +112,16 @@ object HoodieCLIUtils {
       .toMap
   }
 
-  def getLockOptions(tablePath: String): Map[String, String] = {
-    val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
-    props.stringPropertyNames.asScala
-      .map(key => key -> props.getString(key))
-      .toMap
+  def getLockOptions(tablePath: String, schema: String, lockConfig: TypedProperties): Map[String, String] = {
+    val customSupportedFSs = lockConfig.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key, ",", new ArrayList[String])
+    if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
+      logInfo("Auto config filesystem lock provider for metadata table")
+      val props = FileSystemBasedLockProvider.getLockConfig(tablePath)
+      props.stringPropertyNames.asScala
+        .map(key => key -> props.getString(key))
+        .toMap
+    } else {
+      Map.empty
+    }
   }
 }

@@ -139,18 +139,19 @@
     <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink1.19.version>1.19.1</flink1.19.version>
     <flink1.18.version>1.18.1</flink1.18.version>
     <flink1.17.version>1.17.1</flink1.17.version>
     <flink1.16.version>1.16.2</flink1.16.version>
     <flink1.15.version>1.15.1</flink1.15.version>
     <flink1.14.version>1.14.5</flink1.14.version>
-    <flink.version>${flink1.18.version}</flink.version>
-    <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
-    <flink.bundle.version>1.18</flink.bundle.version>
+    <flink.version>${flink1.19.version}</flink.version>
+    <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
+    <flink.bundle.version>1.19</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
     <flink.avro.version>1.11.1</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
-    <flink.connector.kafka.version>3.0.0-1.17</flink.connector.kafka.version>
+    <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
     <flink.runtime.artifactId>flink-runtime</flink.runtime.artifactId>
     <flink.table.runtime.artifactId>flink-table-runtime</flink.table.runtime.artifactId>
     <flink.table.planner.artifactId>flink-table-planner_2.12</flink.table.planner.artifactId>
@@ -699,6 +700,7 @@
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
+              <exclude>**/main/resources/version.txt</exclude>
               <exclude>**/*NOTICE*</exclude>
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
@@ -2365,6 +2367,9 @@
           <family>mac</family>
           <arch>aarch64</arch>
         </os>
+        <property>
+          <name>spark2.4</name>
+        </property>
       </activation>
     </profile>
 
@@ -2581,11 +2586,28 @@
     </profile>
 
     <profile>
-      <id>flink1.18</id>
+      <id>flink1.19</id>
       <properties>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+      </properties>
+      <activation>
+        <property>
+          <name>flink1.19</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>flink1.18</id>
+      <properties>
+        <flink.version>${flink1.18.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.18.x</hudi.flink.module>
+        <flink.bundle.version>1.18</flink.bundle.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.1</flink.avro.version>
+        <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.connector.kafka.version>3.2.0-1.18</flink.connector.kafka.version>
       </properties>
       <activation>
         <property>

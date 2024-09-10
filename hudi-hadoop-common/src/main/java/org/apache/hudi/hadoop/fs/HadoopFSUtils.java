@@ -86,12 +86,20 @@ public class HadoopFSUtils {
     return getStorageConf(conf, false);
   }
 
+  public static StorageConfiguration<Configuration> getStorageConf() {
+    return getStorageConf(prepareHadoopConf(new Configuration()), false);
+  }
+
   public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
     return getStorageConf(conf, true);
   }
 
   public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
     return getFs(new Path(pathStr), storageConf);
+  }
+
+  public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf, boolean newCopy) {
+    return getFs(new Path(pathStr), storageConf, newCopy);
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf) {

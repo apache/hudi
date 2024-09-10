@@ -560,14 +560,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
-    } else {
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    }
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -1494,15 +1488,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assert(firstDF.count() == 2)
 
-    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    val expectedValues = if (useGlobbing || !enableFileIndex) {
-      Seq("2018-09-23", "2018-09-24")
-    } else {
-      Seq("2018/09/23", "2018/09/24")
-    }
+    assertEquals(
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+    )
 
-    assertEquals(expectedValues, firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq)
     assertEquals(
       Seq("2018/09/23", "2018/09/24"),
       firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq

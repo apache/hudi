@@ -135,7 +135,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         val targetTable = generateTableName
         spark.sql(
           s"""
-             |create table ${targetTable} (
+             |create table $targetTable (
              |  id int,
              |  name string,
              |  data int,
@@ -152,7 +152,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |""".stripMargin)
         spark.sql(
           s"""
-             |merge into ${targetTable} as target
+             |merge into $targetTable as target
              |using (
              |select 1 as id, 'lb' as name, 6 as data, 'shu' as country, 1646643193 as ts
              |) source
@@ -164,7 +164,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              |""".stripMargin)
         spark.sql(
           s"""
-             |merge into ${targetTable} as target
+             |merge into $targetTable as target
              |using (
              |select 1 as id, 'lb' as name, 5 as data, 'shu' as country, 1646643196 as ts
              |) source

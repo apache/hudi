@@ -20,6 +20,7 @@
 package org.apache.hudi.hadoop.fs;
 
 import org.apache.hudi.common.util.RetryHelper;
+import org.apache.hudi.exception.HoodieIOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
@@ -185,12 +186,20 @@ public class HoodieRetryWrapperFileSystem extends FileSystem {
   @Override
   public boolean delete(Path f, boolean recursive) throws IOException {
     return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList)
-        .tryWith(() -> fileSystem.delete(f, recursive)).start().booleanValue();
+        .tryWith(() -> {
+          boolean success = fileSystem.delete(f, recursive);
+          if (!success) {
+            if (fileSystem.exists(f)) {
+              throw new HoodieIOException("Failed to delete file: " + f);
+            }
+          }
+          return success;
+        }).start().booleanValue();
   }
 
   @Override
   public boolean delete(Path f) throws IOException {
-    return new RetryHelper<Boolean, IOException>(maxRetryIntervalMs, maxRetryNumbers, initialRetryIntervalMs, retryExceptionsList).tryWith(() -> fileSystem.delete(f, true)).start().booleanValue();
+    return delete(f, true);
   }
 
   @Override

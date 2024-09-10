@@ -43,7 +43,6 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -80,12 +79,11 @@ public class TimelineServerPerf implements Serializable {
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
-        new HoodieLocalEngineContext(
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))),
-        new Configuration(), timelineServiceConf, HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(new Configuration())),
-        TimelineService.buildFileSystemViewManager(timelineServiceConf,
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))));
+        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf()),
+        HadoopFSUtils.getStorageConf(),
+        timelineServiceConf,
+        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf()),
+        TimelineService.buildFileSystemViewManager(timelineServiceConf, HadoopFSUtils.getStorageConf()));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
@@ -117,7 +115,8 @@ public class TimelineServerPerf implements Serializable {
 
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
-            .setConf(timelineServer.getConf().newInstance()).setBasePath(cfg.basePath)
+            .setConf(timelineServer.getStorageConf().newInstance())
+            .setBasePath(cfg.basePath)
             .setLoadActiveTimelineOnLoad(true).build();
     SyncableFileSystemView fsView =
         new RemoteHoodieTableFileSystemView(this.hostAddr, cfg.serverPort, metaClient);

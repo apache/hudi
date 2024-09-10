@@ -33,12 +33,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -190,12 +187,12 @@ public class BaseRollbackHelper implements Serializable {
     return filesToBeDeleted.stream().map(fileToDelete -> {
       String basePath = metaClient.getBasePath().toString();
       try {
-        Path fullDeletePath = new Path(fileToDelete);
-        String partitionPath = HadoopFSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
+        StoragePath fullDeletePath = new StoragePath(fileToDelete);
+        String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), fullDeletePath.getParent());
         boolean isDeleted = true;
         if (doDelete) {
           try {
-            isDeleted = ((FileSystem) metaClient.getStorage().getFileSystem()).delete(fullDeletePath);
+            isDeleted = metaClient.getStorage().deleteFile(fullDeletePath);
           } catch (FileNotFoundException e) {
             // if first rollback attempt failed and retried again, chances that some files are already deleted.
             isDeleted = true;
