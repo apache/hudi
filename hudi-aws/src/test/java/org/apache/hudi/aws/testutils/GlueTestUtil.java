@@ -62,6 +62,7 @@ public class GlueTestUtil {
   private static Configuration configuration;
   private static HiveSyncConfig hiveSyncConfig;
   private static Configuration hadoopConf;
+  private static HoodieTableMetaClient metaClient;
 
   public static void setUp() throws IOException {
     configuration = new Configuration();
@@ -106,7 +107,7 @@ public class GlueTestUtil {
     if (fileSystem.exists(path)) {
       fileSystem.delete(path, true);
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -128,5 +129,9 @@ public class GlueTestUtil {
     FSDataOutputStream fsout = fileSystem.create(fullPath, true);
     fsout.write(bytes);
     fsout.close();
+  }
+
+  public static HoodieTableMetaClient getMetaClient() {
+    return metaClient;
   }
 }

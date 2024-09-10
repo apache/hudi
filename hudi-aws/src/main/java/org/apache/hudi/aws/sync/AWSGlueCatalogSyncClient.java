@@ -19,6 +19,7 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -106,16 +107,12 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final Boolean skipTableArchive;
   private final String enableMetadataTable;
 
-  public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
-    super(config);
-    this.awsGlue = GlueAsyncClient.builder().build();
-    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
-    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
+  public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    this(GlueAsyncClient.builder().build(), config, metaClient);
   }
 
-  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config) {
-    super(config);
+  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.awsGlue = awsGlue;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);

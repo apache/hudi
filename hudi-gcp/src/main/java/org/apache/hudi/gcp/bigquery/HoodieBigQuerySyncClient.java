@@ -19,6 +19,7 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -70,19 +71,13 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
   private final boolean requirePartitionFilter;
   private transient BigQuery bigquery;
 
-  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config) {
-    super(config);
-    this.config = config;
-    this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
-    this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
-    this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
-    this.requirePartitionFilter = config.getBoolean(BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER);
-    this.createBigQueryConnection();
+  public HoodieBigQuerySyncClient(final BigQuerySyncConfig config, HoodieTableMetaClient metaClient) {
+    this(config, createBigQueryConnection(config), metaClient);
   }
 
   @VisibleForTesting
-  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery) {
-    super(config);
+  HoodieBigQuerySyncClient(final BigQuerySyncConfig config, final BigQuery bigquery, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.projectId = config.getString(BIGQUERY_SYNC_PROJECT_ID);
     this.datasetName = config.getString(BIGQUERY_SYNC_DATASET_NAME);
@@ -91,16 +86,13 @@ public class HoodieBigQuerySyncClient extends HoodieSyncClient {
     this.bigLakeConnectionId = config.getString(BIGQUERY_SYNC_BIG_LAKE_CONNECTION_ID);
   }
 
-  private void createBigQueryConnection() {
-    if (bigquery == null) {
-      try {
-        // Initialize client that will be used to send requests. This client only needs to be created
-        // once, and can be reused for multiple requests.
-        bigquery = BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
-        LOG.info("Successfully established BigQuery connection.");
-      } catch (BigQueryException e) {
-        throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
-      }
+  private static BigQuery createBigQueryConnection(BigQuerySyncConfig config) {
+    try {
+      // Initialize client that will be used to send requests. This client only needs to be created
+      // once, and can be reused for multiple requests.
+      return BigQueryOptions.newBuilder().setLocation(config.getString(BIGQUERY_SYNC_DATASET_LOCATION)).build().getService();
+    } catch (BigQueryException e) {
+      throw new HoodieBigQuerySyncException("Cannot create bigQuery connection ", e);
     }
   }
 

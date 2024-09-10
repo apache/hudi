@@ -43,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_ASSUME_DATE_PARTITION;
@@ -59,14 +60,10 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
   protected final HoodieTableMetaClient metaClient;
   private static final String TEMP_SUFFIX = "_temp";
 
-  public HoodieSyncClient(HoodieSyncConfig config) {
+  protected HoodieSyncClient(HoodieSyncConfig config, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.partitionValueExtractor = ReflectionUtils.loadClass(config.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS));
-    this.metaClient = HoodieTableMetaClient.builder()
-        .setConf(config.getHadoopConf())
-        .setBasePath(config.getString(META_SYNC_BASE_PATH))
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
+    this.metaClient = Objects.requireNonNull(metaClient, "metaClient is null");
   }
 
   public HoodieTimeline getActiveTimeline() {

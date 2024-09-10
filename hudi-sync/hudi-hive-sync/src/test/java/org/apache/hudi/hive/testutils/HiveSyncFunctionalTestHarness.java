@@ -104,12 +104,12 @@ public class HiveSyncFunctionalTestHarness {
   }
 
   public HoodieHiveSyncClient hiveClient(HiveSyncConfig hiveSyncConfig) throws IOException {
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(hiveSyncConfig.getString(META_SYNC_TABLE_NAME))
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(hadoopConf, hiveSyncConfig.getString(META_SYNC_BASE_PATH));
-    return new HoodieHiveSyncClient(hiveSyncConfig);
+    return new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
   }
 
   public void dropTables(String database, String... tables) throws IOException, HiveException, MetaException {
