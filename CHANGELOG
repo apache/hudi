@@ -322,3 +322,6 @@ c31fcc897 [ENG-13527][HUDI-8111] Adding support to validate last N file slices w
 bf2d4cba9 [ENG-13536][HUDI-8137] Support time travel query on MDT in Spark Datasource (#901)
 12c1549a8 [ENG-10726][HUDI-5829] Optimize conversion from json to row format when sanitizing field names (#897)
 3c80adf0a [ENG-11375][HUDI-8116] Coalesce Row Source Aliases with Schema Fields in S3/GCS (#887)
+
+---[2024-09-10 10:06:21] [release-v1.32.1] ---
+0fee04a70a1 [ENG-12228][HUDI-8124] Allow reuse of meta client in Meta Sync path (#890)
