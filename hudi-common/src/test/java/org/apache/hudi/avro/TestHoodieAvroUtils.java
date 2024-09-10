@@ -198,7 +198,7 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testDefaultValue() {
-    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EVOLVED_SCHEMA));
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");

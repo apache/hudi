@@ -103,7 +103,6 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWith
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -491,32 +490,9 @@ public class HoodieAvroUtils {
    * TODO: See if we can always pass GenericRecord instead of SpecificBaseRecord in some cases.
    */
   public static GenericRecord rewriteRecord(GenericRecord oldRecord, Schema newSchema) {
-    GenericRecord newRecord = new GenericData.Record(newSchema);
     boolean isSpecificRecord = oldRecord instanceof SpecificRecordBase;
-    for (Schema.Field f : newSchema.getFields()) {
-      if (!(isSpecificRecord && isMetadataField(f.name()))) {
-        copyOldValueOrSetDefault(oldRecord, newRecord, f);
-      }
-    }
-    return newRecord;
-  }
-
-  public static GenericRecord rewriteRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
-    GenericRecord newRecord = new GenericData.Record(newSchema);
-    for (Schema.Field f : newSchema.getFields()) {
-      copyOldValueOrSetDefault(genericRecord, newRecord, f);
-    }
-    // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
-    return newRecord;
-  }
-
-  // TODO Unify the logical of rewriteRecordWithMetadata and rewriteEvolutionRecordWithMetadata, and delete this function.
-  public static GenericRecord rewriteEvolutionRecordWithMetadata(GenericRecord genericRecord, Schema newSchema, String fileName) {
-    GenericRecord newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(genericRecord, newSchema, new HashMap<>());
-    // do not preserve FILENAME_METADATA_FIELD
-    newRecord.put(HoodieRecord.FILENAME_META_FIELD_ORD, fileName);
-    return newRecord;
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldRecord.getSchema(), newSchema, Collections.emptyMap(), new LinkedList<>(), isSpecificRecord);
+    return (GenericData.Record) newRecord;
   }
 
   /**
@@ -538,34 +514,6 @@ public class HoodieAvroUtils {
   public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
-  }
-
-  private static void copyOldValueOrSetDefault(GenericRecord oldRecord, GenericRecord newRecord, Schema.Field field) {
-    Schema oldSchema = oldRecord.getSchema();
-    Field oldSchemaField = oldSchema.getField(field.name());
-    Object fieldValue = oldSchemaField == null ? null : oldRecord.get(oldSchemaField.pos());
-
-    if (fieldValue != null) {
-      // In case field's value is a nested record, we have to rewrite it as well
-      Object newFieldValue;
-      if (fieldValue instanceof GenericRecord) {
-        GenericRecord record = (GenericRecord) fieldValue;
-        // May return null when use rewrite
-        String recordFullName = record.getSchema().getFullName();
-        String fullName = recordFullName != null ? recordFullName : oldSchemaField.name();
-        newFieldValue = rewriteRecord(record, resolveUnionSchema(field.schema(), fullName));
-      } else {
-        newFieldValue = fieldValue;
-      }
-      newRecord.put(field.pos(), newFieldValue);
-    } else if (field.defaultVal() instanceof JsonProperties.Null) {
-      newRecord.put(field.pos(), null);
-    } else {
-      if (!isNullable(field.schema()) && field.defaultVal() == null) {
-        throw new SchemaCompatibilityException("Field " + field.name() + " has no default value and is null in old record");
-      }
-      newRecord.put(field.pos(), field.defaultVal());
-    }
   }
 
   /**
@@ -961,7 +909,7 @@ public class HoodieAvroUtils {
     }
     // try to get real schema for union type
     Schema oldSchema = getActualSchemaFromUnion(oldAvroSchema, oldRecord);
-    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldSchema, newSchema, renameCols, fieldNames);
+    Object newRecord = rewriteRecordWithNewSchemaInternal(oldRecord, oldSchema, newSchema, renameCols, fieldNames, false);
     // validation is recursive so it only needs to be called on the original input
     if (validate && !ConvertingGenericData.INSTANCE.validate(newSchema, newRecord)) {
       throw new SchemaCompatibilityException(
@@ -970,7 +918,7 @@ public class HoodieAvroUtils {
     return newRecord;
   }
 
-  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
+  private static Object rewriteRecordWithNewSchemaInternal(Object oldRecord, Schema oldSchema, Schema newSchema, Map<String, String> renameCols, Deque<String> fieldNames, boolean skipMetadataFields) {
     switch (newSchema.getType()) {
       case RECORD:
         if (!(oldRecord instanceof IndexedRecord)) {
@@ -982,28 +930,33 @@ public class HoodieAvroUtils {
         for (int i = 0; i < fields.size(); i++) {
           Schema.Field field = fields.get(i);
           String fieldName = field.name();
-          fieldNames.push(fieldName);
-          Schema.Field oldField = oldSchema.getField(field.name());
-          if (oldField != null && !renameCols.containsKey(field.name())) {
-            newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), fields.get(i).schema(), renameCols, fieldNames, false));
-          } else {
-            String fieldFullName = createFullName(fieldNames);
-            String fieldNameFromOldSchema = renameCols.get(fieldFullName);
-            // deal with rename
-            Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
-            if (oldFieldRenamed != null) {
-              // find rename
-              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), fields.get(i).schema(), renameCols, fieldNames, false));
+          if (!skipMetadataFields || !isMetadataField(fieldName)) {
+            fieldNames.push(fieldName);
+            Schema.Field oldField = oldSchema.getField(field.name());
+            if (oldField != null && !renameCols.containsKey(field.name())) {
+              newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldField.pos()), oldField.schema(), field.schema(), renameCols, fieldNames, false));
             } else {
-              // deal with default value
-              if (fields.get(i).defaultVal() instanceof JsonProperties.Null) {
-                newRecord.put(i, null);
+              String fieldFullName = createFullName(fieldNames);
+              String fieldNameFromOldSchema = renameCols.get(fieldFullName);
+              // deal with rename
+              Schema.Field oldFieldRenamed = fieldNameFromOldSchema == null ? null : oldSchema.getField(fieldNameFromOldSchema);
+              if (oldFieldRenamed != null) {
+                // find rename
+                newRecord.put(i, rewriteRecordWithNewSchema(indexedRecord.get(oldFieldRenamed.pos()), oldFieldRenamed.schema(), field.schema(), renameCols, fieldNames, false));
               } else {
-                newRecord.put(i, fields.get(i).defaultVal());
+                // deal with default value
+                if (field.defaultVal() instanceof JsonProperties.Null) {
+                  newRecord.put(i, null);
+                } else {
+                  if (!isNullable(field.schema()) && field.defaultVal() == null) {
+                    throw new SchemaCompatibilityException("Field " + fieldFullName + " has no default value and is non-nullable");
+                  }
+                  newRecord.put(i, field.defaultVal());
+                }
               }
             }
+            fieldNames.pop();
           }
-          fieldNames.pop();
         }
         return newRecord;
       case ENUM:
