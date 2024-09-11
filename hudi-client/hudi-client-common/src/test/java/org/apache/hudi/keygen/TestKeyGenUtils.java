@@ -92,7 +92,7 @@ public class TestKeyGenUtils {
         KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1"));
     assertEquals(
         KeyGeneratorType.COMPLEX,
-        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1,partition1"));
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1,partition2"));
     assertEquals(
         KeyGeneratorType.CUSTOM,
         KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple"));
