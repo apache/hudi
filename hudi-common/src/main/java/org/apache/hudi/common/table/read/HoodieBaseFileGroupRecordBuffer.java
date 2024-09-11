@@ -173,23 +173,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     try {
       return o1.compareTo(o2);
     } catch (ClassCastException e) {
-      boolean isO1LongOrInteger = (o1 instanceof Long || o1 instanceof Integer);
-      boolean isO2LongOrInteger = (o2 instanceof Long || o2 instanceof Integer);
-      boolean isO1DoubleOrFloat = (o1 instanceof Double || o1 instanceof Float);
-      boolean isO2DoubleOrFloat = (o2 instanceof Double || o2 instanceof Float);
-      if (isO1LongOrInteger && isO2LongOrInteger) {
-        Long o1LongValue = ((Number) o1).longValue();
-        Long o2LongValue = ((Number) o2).longValue();
-        return o1LongValue.compareTo(o2LongValue);
-      } else if ((isO1LongOrInteger && isO2DoubleOrFloat)
-          || (isO1DoubleOrFloat && isO2LongOrInteger)) {
-        Double o1DoubleValue = ((Number) o1).doubleValue();
-        Double o2DoubleValue = ((Number) o2).doubleValue();
-        return o1DoubleValue.compareTo(o2DoubleValue);
-      } else {
-        return readerContext.compareTo(o1, o2);
-      }
-    } catch (Throwable e) {
       throw new HoodieException("Cannot compare values: "
           + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
     }
