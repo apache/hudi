@@ -92,11 +92,13 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
 
     // Prepare parameters.
-    metaClient.reloadActiveTimeline();
-    StoragePath basePath = metaClient.getBasePath();
-    HoodieTableMetaClient mdtMetaClient = createMetadataTableMetaClient(context, basePath);
-    // Delete unused metadata partitions.
-    downgradeMetadataPartitions(context, metaClient.getStorage(), mdtMetaClient, tablePropsToAdd);
+    if (metaClient.getTableConfig().isMetadataTableAvailable()) {
+      metaClient.reloadActiveTimeline();
+      StoragePath basePath = metaClient.getBasePath();
+      HoodieTableMetaClient mdtMetaClient = createMetadataTableMetaClient(context, basePath);
+      // Delete unused metadata partitions.
+      downgradeMetadataPartitions(context, metaClient.getStorage(), mdtMetaClient, tablePropsToAdd);
+    }
 
     return tablePropsToAdd;
   }
