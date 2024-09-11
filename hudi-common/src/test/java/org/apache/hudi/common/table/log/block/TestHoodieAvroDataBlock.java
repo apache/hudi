@@ -254,11 +254,7 @@ public class TestHoodieAvroDataBlock {
     HoodieAvroDataBlock avroDataBlock = new HoodieAvroDataBlock(() -> null, Option.empty(), true,
         NULL_BLOCK_CONTENT_LOCATION, Option.of(SCHEMA), header, new HashMap<>(), RECORD_KEY_FIELD);
 
-    if (bufferSize <= 0) {
-      assertThrows(NullPointerException.class, () -> avroDataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO, bufferSize));
-    } else {
-      assertThrows(IllegalArgumentException.class, () -> avroDataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO, bufferSize));
-    }
+    assertThrows(NullPointerException.class, () -> avroDataBlock.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO, bufferSize));
   }
 
   /**

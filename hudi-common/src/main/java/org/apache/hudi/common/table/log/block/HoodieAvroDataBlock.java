@@ -270,10 +270,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
     private StreamingRecordIterator(Schema readerSchema, Schema writerSchema, SeekableDataInputStream inputStream,
         HoodieLogBlockContentLocation contentLocation, int bufferSize) throws IOException {
-      checkArgument(readerSchema != null, "Reader schema must not be null");
-      checkArgument(writerSchema != null, "Writer schema must not be null");
-      checkArgument(inputStream != null, "Input stream must not be null");
-      checkArgument(contentLocation != null, "Content location must not be null");
       // Negative values should not be used because they are generally considered to indicate the operation of closing stream reading,
       // in order to avoid confusing users into thinking that stream reading can be closed.
       checkArgument(bufferSize > 0, "Buffer size must be greater than zero");
