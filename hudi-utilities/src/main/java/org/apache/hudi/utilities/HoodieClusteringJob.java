@@ -70,7 +70,7 @@ public class HoodieClusteringJob {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(), this.props);
     }
   }
 

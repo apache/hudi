@@ -65,7 +65,7 @@ public interface HoodieTimeline extends Serializable {
   String SCHEMA_COMMIT_ACTION = "schemacommit";
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, INDEXING_ACTION};
+      COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, INDEXING_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -143,11 +143,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingExcludingLogCompaction();
 
   /**
-   * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
+   * Filter this timeline to just include the in-flights excluding compaction and log compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction and log compaction instants
    */
-  HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
+  HoodieTimeline filterPendingExcludingCompactionAndLogCompaction();
 
   /**
    * Filter this timeline to just include the completed instants.

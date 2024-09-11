@@ -28,8 +28,7 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
-
+import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.HoodieSpark3CatalogUtils.MatchBucketTransform
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -135,8 +134,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
 
-        val schemaEvolutionEnabled: Boolean = spark.sessionState.conf.getConfString(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key,
-          DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.defaultValue.toString).toBoolean
+        val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
         // NOTE: PLEASE READ CAREFULLY
         //

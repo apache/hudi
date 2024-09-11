@@ -16,11 +16,15 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.rollback;
+package org.apache.hudi.exception;
 
-import org.apache.hadoop.fs.PathFilter;
+public class HoodieJsonConversionException extends HoodieException {
 
-import java.io.Serializable;
+  public HoodieJsonConversionException(String msg) {
+    super(msg);
+  }
 
-public interface SerializablePathFilter extends PathFilter, Serializable {
+  public HoodieJsonConversionException(String msg, Throwable t) {
+    super(msg, t);
+  }
 }

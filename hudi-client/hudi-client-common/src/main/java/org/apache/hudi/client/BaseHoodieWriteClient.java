@@ -64,7 +64,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -697,7 +696,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // or before the oldest compaction on MDT.
         // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+            .setConf(storageConf.newInstance())
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
         Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
         boolean deleteMDT = false;

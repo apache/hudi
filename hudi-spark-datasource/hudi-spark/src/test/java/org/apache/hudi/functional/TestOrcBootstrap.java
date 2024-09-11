@@ -60,7 +60,6 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.orc.OrcFile;
@@ -157,7 +156,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     }
     String filePath = HadoopFSUtils.toPath(BootstrapUtils.getAllLeafFoldersWithFiles(
             metaClient.getTableConfig().getBaseFileFormat(),
-            (FileSystem) metaClient.getStorage().getFileSystem(),
+            metaClient.getStorage(),
             srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
         .orElse(null).get().getPath()).toString();
     Reader orcReader =
@@ -271,7 +270,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L,
         BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getTableConfig().getBaseFileFormat(),
-                (FileSystem) metaClient.getStorage().getFileSystem(), basePath, context)
+                metaClient.getStorage(), basePath, context)
             .stream().flatMap(f -> f.getValue().stream()).count());
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
@@ -300,7 +299,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     JavaRDD<HoodieRecord> updateBatch =
         generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(
                 metaClient.getTableConfig().getBaseFileFormat(),
-                (FileSystem) metaClient.getStorage().getFileSystem(), updateSPath, context),
+                metaClient.getStorage(), updateSPath, context),
             schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
@@ -374,8 +373,8 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
     if (checkNumRawFiles) {
       List<HoodieFileStatus> files =
           BootstrapUtils.getAllLeafFoldersWithFiles(metaClient.getTableConfig().getBaseFileFormat(),
-                  (FileSystem) metaClient.getStorage().getFileSystem(),
-                  bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream())
+                  metaClient.getStorage(), bootstrapBasePath, context)
+              .stream().flatMap(x -> x.getValue().stream())
               .collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
           sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());

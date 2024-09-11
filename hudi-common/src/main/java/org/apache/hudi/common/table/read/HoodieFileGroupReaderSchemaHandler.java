@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -178,7 +179,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return getDataAndMetaCols(dataSchema);
   }
 
-  private static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
+  @VisibleForTesting
+  static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
     Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
         //if there are no data fields, then we don't want to think the temp col is a data col
         .filter(f -> !Objects.equals(f.name(), HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))

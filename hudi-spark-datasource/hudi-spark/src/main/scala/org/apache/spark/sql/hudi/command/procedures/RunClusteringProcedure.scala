@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.{ClusteringUtils, HoodieTimer, Option => HOpt
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieLockConfig}
 import org.apache.hudi.exception.HoodieClusteringException
 import org.apache.hudi.{AvroConversionUtils, HoodieCLIUtils, HoodieFileIndex}
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{resolveExpr, splitPartitionAndDataPredicates}
 import org.apache.spark.sql.Row
@@ -35,7 +34,6 @@ import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 class RunClusteringProcedure extends BaseProcedure
@@ -142,13 +140,6 @@ class RunClusteringProcedure extends BaseProcedure
         logInfo("No options")
     }
 
-    if (metaClient.getTableConfig.isMetadataTableAvailable) {
-      if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-        confs = confs ++ HoodieCLIUtils.getLockOptions(basePath)
-        logInfo("Auto config filesystem lock provider for metadata table")
-      }
-    }
-
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
       .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
 
@@ -159,7 +150,11 @@ class RunClusteringProcedure extends BaseProcedure
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-
+      if (metaClient.getTableConfig.isMetadataTableAvailable) {
+        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
+        }
+      }
       if (operation.isSchedule) {
         val instantTime = client.createNewInstantTime()
         if (client.scheduleClusteringAtInstant(instantTime, HOption.empty())) {
