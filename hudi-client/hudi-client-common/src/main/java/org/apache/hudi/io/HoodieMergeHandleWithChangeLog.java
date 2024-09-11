@@ -60,7 +60,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        fs,
+        storage,
         getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -78,7 +78,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        fs,
+        storage,
         getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -99,7 +99,7 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieMergeHandl
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);

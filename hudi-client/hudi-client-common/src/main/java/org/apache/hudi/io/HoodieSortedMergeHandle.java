@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -28,6 +27,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
+
+import org.apache.avro.Schema;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -74,7 +75,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
   @Override
   public void write(HoodieRecord oldRecord) {
     Schema oldSchema = config.populateMetaFields() ? writeSchemaWithMetaFields : writeSchema;
-    Schema newSchema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    Schema newSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
 
     // To maintain overall sorted order across updates and inserts, write any new inserts whose keys are less than
@@ -111,7 +112,7 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I,
         String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          if (useWriterSchemaForCompaction) {
+          if (preserveMetadata) {
             writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchemaWithMetaFields, config.getProps());
           } else {
             writeRecord(hoodieRecord, Option.of(hoodieRecord), writeSchema, config.getProps());

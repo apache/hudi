@@ -275,6 +275,21 @@ public class CompactionUtils {
   }
 
   /**
+   * Returns a pair of (timeline containing the completed delta commits after the latest completed
+   * compaction commit, the completed compaction commit instant), if the latest completed
+   * compaction commit is present; a pair of (timeline containing all the completed delta commits,
+   * the first delta commit instant), if there is no completed compaction commit.
+   *
+   * @param activeTimeline Active timeline of a table.
+   * @return Pair of timeline containing delta commits and an instant.
+   */
+  public static Option<Pair<HoodieTimeline, HoodieInstant>> getCompletedDeltaCommitsSinceLatestCompaction(
+      HoodieActiveTimeline activeTimeline) {
+    return getDeltaCommitsSinceLatestCompaction(activeTimeline)
+        .map(pair -> Pair.of(pair.getLeft().filterCompletedInstants(), pair.getRight()));
+  }
+
+  /**
    * Returns a pair of (timeline containing the delta commits after the latest completed
    * compaction commit, the completed compaction commit instant), if the latest completed
    * compaction commit is present; a pair of (timeline containing all the delta commits,
@@ -285,8 +300,7 @@ public class CompactionUtils {
    */
   public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompaction(
       HoodieActiveTimeline activeTimeline) {
-    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline()
-        .filterCompletedInstants().lastInstant();
+    Option<HoodieInstant> lastCompaction = activeTimeline.getCommitTimeline().filterCompletedInstants().lastInstant();
     HoodieTimeline deltaCommits = activeTimeline.getDeltaCommitTimeline();
 
     final HoodieInstant latestInstant;

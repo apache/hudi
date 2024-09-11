@@ -25,10 +25,10 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategy;
+import org.apache.hudi.storage.StoragePath;
 
 import com.beust.jcommander.Parameter;
 import org.apache.flink.configuration.Configuration;
-import org.apache.hadoop.fs.Path;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -162,10 +162,10 @@ public class FlinkCompactionConfig extends Configuration {
   public String propsFilePath = "";
 
   public static TypedProperties getProps(FlinkCompactionConfig cfg) {
-    return cfg.propsFilePath.isEmpty()
-        ? buildProperties(cfg.configs)
-        : readConfig(HadoopConfigurations.getHadoopConf(cfg),
-        new Path(cfg.propsFilePath), cfg.configs).getProps();
+    return cfg.propsFilePath.isEmpty() ? buildProperties(cfg.configs) : readConfig(
+        HadoopConfigurations.getHadoopConf(cfg),
+        new StoragePath(cfg.propsFilePath),
+        cfg.configs).getProps();
   }
 
   /**

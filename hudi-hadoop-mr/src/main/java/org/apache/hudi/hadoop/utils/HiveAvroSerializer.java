@@ -42,14 +42,12 @@ import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.UnionObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableDateObjectInspector;
-import org.apache.hadoop.hive.serde2.objectinspector.primitive.WritableTimestampObjectInspector;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -99,7 +97,7 @@ public class HiveAvroSerializer {
     List<? extends StructField> allStructFieldRefs = soi.getAllStructFieldRefs();
     List<Object> structFieldsDataAsList = soi.getStructFieldsDataAsList(o);
 
-    for (int i  = 0; i < size; i++) {
+    for (int i = 0; i < size; i++) {
       Schema.Field field = schema.getFields().get(i);
       if (i >= columnTypes.size()) {
         break;
@@ -134,7 +132,7 @@ public class HiveAvroSerializer {
    * Determine if an Avro schema is of type Union[T, NULL].  Avro supports nullable
    * types via a union of type T and null.  This is a very common use case.
    * As such, we want to silently convert it to just T and allow the value to be null.
-   *
+   * <p>
    * When a Hive union type is used with AVRO, the schema type becomes
    * Union[NULL, T1, T2, ...]. The NULL in the union should be silently removed
    *
@@ -266,7 +264,7 @@ public class HiveAvroSerializer {
     GenericData.Record record = new GenericData.Record(schema);
     ArrayList<TypeInfo> allStructFieldTypeInfos = typeInfo.getAllStructFieldTypeInfos();
 
-    for (int i  = 0; i < size; i++) {
+    for (int i = 0; i < size; i++) {
       Schema.Field field = schema.getFields().get(i);
       setUpRecordFieldFromWritable(allStructFieldTypeInfos.get(i), structFieldsDataAsList.get(i),
           allStructFieldRefs.get(i).getFieldObjectInspector(), record, field);
@@ -278,32 +276,35 @@ public class HiveAvroSerializer {
     switch (fieldOI.getPrimitiveCategory()) {
       case BINARY:
         if (schema.getType() == Schema.Type.BYTES) {
-          return AvroSerdeUtils.getBufferFromBytes((byte[])fieldOI.getPrimitiveJavaObject(structFieldData));
+          return AvroSerdeUtils.getBufferFromBytes((byte[]) fieldOI.getPrimitiveJavaObject(structFieldData));
         } else if (schema.getType() == Schema.Type.FIXED) {
-          GenericData.Fixed fixed = new GenericData.Fixed(schema, (byte[])fieldOI.getPrimitiveJavaObject(structFieldData));
+          GenericData.Fixed fixed = new GenericData.Fixed(schema, (byte[]) fieldOI.getPrimitiveJavaObject(structFieldData));
           return fixed;
         } else {
           throw new HoodieException("Unexpected Avro schema for Binary TypeInfo: " + schema.getType());
         }
       case DECIMAL:
-        HiveDecimal dec = (HiveDecimal)fieldOI.getPrimitiveJavaObject(structFieldData);
-        LogicalTypes.Decimal decimal = (LogicalTypes.Decimal)schema.getLogicalType();
+        HiveDecimal dec = (HiveDecimal) fieldOI.getPrimitiveJavaObject(structFieldData);
+        LogicalTypes.Decimal decimal = (LogicalTypes.Decimal) schema.getLogicalType();
         BigDecimal bd = new BigDecimal(dec.toString()).setScale(decimal.getScale());
-        return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema, decimal);
+        if (schema.getType() == Schema.Type.BYTES) {
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toBytes(bd, schema, decimal);
+        } else {
+          return HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(bd, schema, decimal);
+        }
       case CHAR:
-        HiveChar ch = (HiveChar)fieldOI.getPrimitiveJavaObject(structFieldData);
+        HiveChar ch = (HiveChar) fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(ch.getStrippedValue());
       case VARCHAR:
-        HiveVarchar vc = (HiveVarchar)fieldOI.getPrimitiveJavaObject(structFieldData);
+        HiveVarchar vc = (HiveVarchar) fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(vc.getValue());
       case STRING:
-        String string = (String)fieldOI.getPrimitiveJavaObject(structFieldData);
+        String string = (String) fieldOI.getPrimitiveJavaObject(structFieldData);
         return new Utf8(string);
       case DATE:
         return HoodieHiveUtils.getDays(structFieldData);
       case TIMESTAMP:
-        Object timestamp = ((WritableTimestampObjectInspector) fieldOI).getPrimitiveJavaObject(structFieldData);
-        return HoodieHiveUtils.getMills(timestamp);
+        return HoodieHiveUtils.getMills(structFieldData);
       case INT:
         if (schema.getLogicalType() != null && schema.getLogicalType().getName().equals("date")) {
           return new WritableDateObjectInspector().getPrimitiveWritableObject(structFieldData).getDays();
@@ -364,7 +365,7 @@ public class HiveAvroSerializer {
     ObjectInspector mapValueObjectInspector = fieldOI.getMapValueObjectInspector();
     TypeInfo mapKeyTypeInfo = typeInfo.getMapKeyTypeInfo();
     TypeInfo mapValueTypeInfo = typeInfo.getMapValueTypeInfo();
-    Map<?,?> map = fieldOI.getMap(structFieldData);
+    Map<?, ?> map = fieldOI.getMap(structFieldData);
     Schema valueType = schema.getValueType();
 
     Map<Object, Object> deserialized = new LinkedHashMap<Object, Object>(fieldOI.getMapSize(structFieldData));

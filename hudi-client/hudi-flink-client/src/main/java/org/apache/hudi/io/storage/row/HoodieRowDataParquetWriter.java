@@ -18,10 +18,11 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.flink.table.data.RowData;
-import org.apache.hadoop.fs.Path;
-import org.apache.hudi.io.storage.HoodieBaseParquetWriter;
+import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieParquetConfig;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.flink.table.data.RowData;
 
 import java.io.IOException;
 
@@ -33,7 +34,7 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
 
   private final HoodieRowDataParquetWriteSupport writeSupport;
 
-  public HoodieRowDataParquetWriter(Path file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
+  public HoodieRowDataParquetWriter(StoragePath file, HoodieParquetConfig<HoodieRowDataParquetWriteSupport> parquetConfig)
       throws IOException {
     super(file, parquetConfig);
 

@@ -49,6 +49,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,9 +65,7 @@ public class TestSourceFormatAdapter {
   public static void start() {
     spark = SparkSession
         .builder()
-        .master("local[*]")
-        .appName(TestSourceFormatAdapter.class.getName())
-        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+        .config(getSparkConfForTest(TestSourceFormatAdapter.class.getName()))
         .getOrCreate();
     jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
   }
@@ -130,7 +129,7 @@ public class TestSourceFormatAdapter {
   @MethodSource("provideDataFiles")
   public void testRowSanitization(String unsanitizedDataFile, String sanitizedDataFile, StructType unsanitizedSchema, StructType sanitizedSchema) {
     JavaRDD<String> unsanitizedRDD = jsc.textFile(unsanitizedDataFile);
-    SchemaProvider schemaProvider = new InputBatch.NullSchemaProvider();
+    SchemaProvider schemaProvider = InputBatch.NullSchemaProvider.getInstance();
     verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, schemaProvider), sanitizedDataFile, sanitizedSchema);
     verifySanitization(fetchRowData(unsanitizedRDD, unsanitizedSchema, null), sanitizedDataFile, sanitizedSchema);
 

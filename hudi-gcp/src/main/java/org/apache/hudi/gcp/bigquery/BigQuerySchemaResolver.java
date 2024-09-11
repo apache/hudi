@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 /**
  * Extracts the BigQuery schema from a Hudi table.
  */
-class BigQuerySchemaResolver {
+public class BigQuerySchemaResolver {
   private static final BigQuerySchemaResolver INSTANCE = new BigQuerySchemaResolver(TableSchemaResolver::new);
 
   private final Function<HoodieTableMetaClient, TableSchemaResolver> tableSchemaResolverSupplier;
@@ -48,7 +48,7 @@ class BigQuerySchemaResolver {
     this.tableSchemaResolverSupplier = tableSchemaResolverSupplier;
   }
 
-  static BigQuerySchemaResolver getInstance() {
+  public static BigQuerySchemaResolver getInstance() {
     return INSTANCE;
   }
 

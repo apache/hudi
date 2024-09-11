@@ -1,4 +1,3 @@
-package org.apache.hudi.client.embedded;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,6 +16,8 @@ package org.apache.hudi.client.embedded;
  * limitations under the License.
  */
 
+package org.apache.hudi.client.embedded;
+
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -24,10 +25,10 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,7 +44,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
 
   @Test
   public void embeddedTimelineServiceReused() throws Exception {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig1 = HoodieWriteConfig.newBuilder()
         .withPath(tempDir.resolve("table1").toString())
         .withEmbeddedTimelineServerEnabled(true)
@@ -77,7 +78,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
 
   @Test
   public void embeddedTimelineServiceCreatedForDifferentMetadataConfig() throws Exception {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig1 = HoodieWriteConfig.newBuilder()
         .withPath(tempDir.resolve("table1").toString())
         .withEmbeddedTimelineServerEnabled(true)
@@ -114,7 +115,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
 
   @Test
   public void embeddedTimelineServerNotReusedIfReuseDisabled() throws Exception {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig1 = HoodieWriteConfig.newBuilder()
         .withPath(tempDir.resolve("table1").toString())
         .withEmbeddedTimelineServerEnabled(true)
@@ -150,7 +151,7 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
 
   @Test
   public void embeddedTimelineServerIsNotReusedAfterStopped() throws Exception {
-    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig1 = HoodieWriteConfig.newBuilder()
         .withPath(tempDir.resolve("table1").toString())
         .withEmbeddedTimelineServerEnabled(true)

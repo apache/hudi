@@ -78,7 +78,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
   @ValueSource(booleans = {true, false})
   void testLockAndUnlock(boolean multiWriter) {
     HoodieWriteConfig writeConfig = multiWriter ? getMultiWriterWriteConfig() : getSingleWriterWriteConfig();
-    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getFs());
+    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
     LockManager mockLockManager = Mockito.spy(lockManager);
 
     assertDoesNotThrow(() -> {

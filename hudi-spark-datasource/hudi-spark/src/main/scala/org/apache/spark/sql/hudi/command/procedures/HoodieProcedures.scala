@@ -53,6 +53,7 @@ object HoodieProcedures {
       ,(DeleteMarkerProcedure.NAME, DeleteMarkerProcedure.builder)
       ,(ShowRollbacksProcedure.NAME, ShowRollbacksProcedure.builder)
       ,(ShowRollbackDetailProcedure.NAME, ShowRollbackDetailProcedure.builder)
+      ,(RunRollbackInflightTableServiceProcedure.NAME, RunRollbackInflightTableServiceProcedure.builder)
       ,(ExportInstantsProcedure.NAME, ExportInstantsProcedure.builder)
       ,(ShowAllFileSystemViewProcedure.NAME, ShowAllFileSystemViewProcedure.builder)
       ,(ShowLatestFileSystemViewProcedure.NAME, ShowLatestFileSystemViewProcedure.builder)
@@ -76,6 +77,7 @@ object HoodieProcedures {
       ,(ShowMetadataTableStatsProcedure.NAME, ShowMetadataTableStatsProcedure.builder)
       ,(ValidateMetadataTableFilesProcedure.NAME, ValidateMetadataTableFilesProcedure.builder)
       ,(ShowFsPathDetailProcedure.NAME, ShowFsPathDetailProcedure.builder)
+      ,(ShowFileStatusProcedure.NAME, ShowFileStatusProcedure.builder)
       ,(CopyToTableProcedure.NAME, CopyToTableProcedure.builder)
       ,(RepairAddpartitionmetaProcedure.NAME, RepairAddpartitionmetaProcedure.builder)
       ,(RepairCorruptedCleanFilesProcedure.NAME, RepairCorruptedCleanFilesProcedure.builder)
@@ -91,6 +93,7 @@ object HoodieProcedures {
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
       ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
+      ,(RunTTLProcedure.NAME, RunTTLProcedure.builder)
     )
   }
 }

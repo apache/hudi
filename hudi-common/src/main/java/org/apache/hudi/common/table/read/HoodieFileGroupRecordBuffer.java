@@ -28,13 +28,18 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Map;
 
 public interface HoodieFileGroupRecordBuffer<T> {
   enum BufferType {
-    KEY_BASED,
-    POSITION_BASED
+    // Merging based on record key.
+    KEY_BASED_MERGE,
+    // Merging based on record position.
+    POSITION_BASED_MERGE,
+    // No Merging at all.
+    UNMERGED
   }
 
   /**
@@ -58,7 +63,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @param metadata
    * @throws Exception
    */
-  void processNextDataRecord(T record, Map<String, Object> metadata, Object index) throws IOException;
+  void processNextDataRecord(T record, Map<String, Object> metadata, Serializable index) throws IOException;
 
   /**
    * Process a log delete block, and store the resulting records into the buffer.
@@ -73,7 +78,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
    *
    * @param deleteRecord
    */
-  void processNextDeletedRecord(DeleteRecord deleteRecord, Object index);
+  void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index);
 
   /**
    * Check if a record exists in the buffered records.
@@ -93,7 +98,7 @@ public interface HoodieFileGroupRecordBuffer<T> {
   /**
    * @return The underlying data stored in the buffer.
    */
-  Map<Object, Pair<Option<T>, Map<String, Object>>> getLogRecords();
+  Map<Serializable, Pair<Option<T>, Map<String, Object>>> getLogRecords();
 
   /**
    * Link the base file iterator for consequential merge.

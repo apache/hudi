@@ -32,10 +32,11 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.CustomAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.google.protobuf.ByteString;
 import org.apache.hadoop.conf.Configuration;
@@ -134,11 +135,9 @@ public class KafkaConnectUtils {
   }
 
   /**
-   * Returns the default Hadoop Configuration.
-   *
-   * @return
+   * @return the default storage configuration.
    */
-  public static Configuration getDefaultHadoopConf(KafkaConnectConfigs connectConfigs) {
+  public static StorageConfiguration<Configuration> getDefaultStorageConf(KafkaConnectConfigs connectConfigs) {
     Configuration hadoopConf = new Configuration();
 
     // add hadoop config files
@@ -164,7 +163,7 @@ public class KafkaConnectUtils {
     }).forEach(prop -> {
       hadoopConf.set(prop.toString(), connectConfigs.getProps().get(prop.toString()).toString());
     });
-    return hadoopConf;
+    return HadoopFSUtils.getStorageConf(hadoopConf);
   }
 
   /**
@@ -185,14 +184,7 @@ public class KafkaConnectUtils {
    * @param typedProperties properties from the config.
    * @return partition columns Returns the partition columns separated by comma.
    */
-  public static String getPartitionColumns(KeyGenerator keyGenerator, TypedProperties typedProperties) {
-    if (keyGenerator instanceof CustomAvroKeyGenerator) {
-      return ((BaseKeyGenerator) keyGenerator).getPartitionPathFields().stream().map(
-          pathField -> Arrays.stream(pathField.split(CustomAvroKeyGenerator.SPLIT_REGEX))
-              .findFirst().orElseGet(() -> "Illegal partition path field format: '$pathField' for ${c.getClass.getSimpleName}"))
-          .collect(Collectors.joining(","));
-    }
-
+  public static String getPartitionColumnsForKeyGenerator(KeyGenerator keyGenerator, TypedProperties typedProperties) {
     if (keyGenerator instanceof BaseKeyGenerator) {
       return String.join(",", ((BaseKeyGenerator) keyGenerator).getPartitionPathFields());
     }

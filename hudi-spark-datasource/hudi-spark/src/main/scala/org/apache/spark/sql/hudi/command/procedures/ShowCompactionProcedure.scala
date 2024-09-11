@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.CompactionUtils
 
@@ -60,7 +59,7 @@ class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with S
     val limit = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Int]
 
     val basePath: String = getBasePath(tableName, tablePath)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     assert(metaClient.getTableType == HoodieTableType.MERGE_ON_READ,
       s"Cannot show compaction on a Non Merge On Read table.")

@@ -21,3 +21,7 @@ spring:
     history:
       enabled: true
       name: hoodie-cmd.log
+    command:
+      version:
+        template: "classpath:version.txt"
+

@@ -17,17 +17,18 @@
 
 package org.apache.hudi.functional
 
-import org.apache.avro.Schema
-import org.apache.calcite.runtime.SqlFunctions.abs
 import org.apache.hudi.HoodieBaseRelation.projectSchema
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
+
+import org.apache.avro.Schema
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -35,9 +36,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{Disabled, Tag, Test}
+import org.junit.jupiter.api.{Tag, Test}
 
 import scala.collection.JavaConverters._
+import scala.math.abs
 
 @Tag("functional")
 class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging {
@@ -58,7 +60,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
   def testBaseFileOnlyViewRelation(): Unit = {
     val tablePath = s"$basePath/cow"
@@ -311,7 +312,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
      * | updated data |      001     |      002     |      003     |                    |      004     |      005     |      006     |
      * +--------------+--------------+--------------+--------------+--------------------+--------------+--------------+--------------+
      */
-    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build()
+    val hoodieMetaClient = createMetaClient(spark, tablePath)
     val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
     val startUnarchivedCommitTs = completedCommits.nthInstant(1).get().getTimestamp //deltacommit2
     val endUnarchivedCommitTs = completedCommits.nthInstant(5).get().getTimestamp //deltacommit6
@@ -337,7 +338,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
     bootstrapMORTableWithDeltaLog(tablePath, targetRecordsCount, defaultWriteOpts, populateMetaFields = true, inlineCompact = true)
 
-    val hoodieMetaClient = HoodieTableMetaClient.builder().setConf(spark.sparkContext.hadoopConfiguration).setBasePath(tablePath).setLoadActiveTimelineOnLoad(true).build()
+    val hoodieMetaClient = createMetaClient(spark, tablePath)
     val completedCommits = hoodieMetaClient.getCommitsAndCompactionTimeline.filterCompletedInstants()
     val startUnarchivedCommitTs = (completedCommits.nthInstant(1).get().getTimestamp.toLong - 1L).toString
     val endUnarchivedCommitTs = completedCommits.nthInstant(3).get().getTimestamp //commit

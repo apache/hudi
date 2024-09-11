@@ -48,6 +48,7 @@ import java.util.stream.IntStream;
  */
 public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
+  private static final long serialVersionUID = 3015229555587559252L;
   public static final String COMMIT_TIME_METADATA_FIELD = HoodieMetadataField.COMMIT_TIME_METADATA_FIELD.getFieldName();
   public static final String COMMIT_SEQNO_METADATA_FIELD = HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD.getFieldName();
   public static final String RECORD_KEY_METADATA_FIELD = HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName();
@@ -190,7 +191,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
-  public HoodieRecord() {}
+  public HoodieRecord() {
+  }
 
   public abstract HoodieRecord<T> newInstance();
 
@@ -450,10 +452,12 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
    */
   private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {}
+    private EmptyRecord() {
+    }
 
     @Override
-    public void put(int i, Object v) {}
+    public void put(int i, Object v) {
+    }
 
     @Override
     public Object get(int i) {
@@ -466,7 +470,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     }
 
     @Override
-    public void put(String key, Object v) {}
+    public void put(String key, Object v) {
+    }
 
     @Override
     public Object get(String key) {
@@ -475,6 +480,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   }
 
   public enum HoodieRecordType {
-    AVRO, SPARK
+    AVRO, SPARK, HIVE
   }
 }

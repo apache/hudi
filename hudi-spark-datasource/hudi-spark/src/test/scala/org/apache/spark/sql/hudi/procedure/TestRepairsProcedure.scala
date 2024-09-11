@@ -17,26 +17,28 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable
-import org.apache.spark.api.java.JavaSparkContext
+
+import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.io.IOException
 import java.net.URL
 import java.nio.file.{Files, Paths}
 import java.util.Properties
-import scala.collection.JavaConverters.asScalaIteratorConverter
-import scala.jdk.CollectionConverters.asScalaSetConverter
+
+import scala.collection.JavaConverters._
 
 class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
@@ -62,18 +64,21 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       // create commit instant
       Files.createFile(Paths.get(tablePath, ".hoodie", "100.commit"))
 
-      val metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      val metaClient = createMetaClient(spark, tablePath)
 
       // create partition path
       val partition1 = Paths.get(tablePath, "2016/03/15").toString
       val partition2 = Paths.get(tablePath, "2015/03/16").toString
       val partition3 = Paths.get(tablePath, "2015/03/17").toString
-      assertResult(metaClient.getFs.mkdirs(new Path(partition1))) {true}
-      assertResult(metaClient.getFs.mkdirs(new Path(partition2))) {true}
-      assertResult(metaClient.getFs.mkdirs(new Path(partition3))) {true}
+      assertResult(metaClient.getStorage.createDirectory(new StoragePath(partition1))) {
+        true
+      }
+      assertResult(metaClient.getStorage.createDirectory(new StoragePath(partition2))) {
+        true
+      }
+      assertResult(metaClient.getStorage.createDirectory(new StoragePath(partition3))) {
+        true
+      }
 
       // default is dry run
       val dryResult = spark.sql(s"""call repair_add_partition_meta(table => '$tableName')""").collect()
@@ -110,7 +115,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
        """.stripMargin)
 
       val filePath = s"""$tablePath/.hoodie/hoodie.properties"""
-      val fs = FSUtils.getFs(filePath, new Configuration())
+      val fs = HadoopFSUtils.getFs(filePath, new Configuration())
       val fis = fs.open(new Path(filePath))
       val prevProps = new Properties
       prevProps.load(fis)
@@ -137,6 +142,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
+          |[hoodie.table.initial.version,8,8]
           |[hoodie.table.keygenerator.type,NON_PARTITION,null]
           |[hoodie.table.name,,]
           |[hoodie.table.precombine.field,ts,null]
@@ -161,7 +167,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       assertEquals(expectedOutput, actual)
 
       spark.sql(s"""call repair_overwrite_hoodie_props(table => '$tableName', new_props_file_path => '${curPropPath}')""")
-      val config = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(new Configuration()).build().getTableConfig
+      val config = createMetaClient(spark, tablePath).getTableConfig
       val props = config.getProps
       assertEquals(prevProps.size(), props.size())
       props.entrySet().asScala.foreach((entry) => {
@@ -190,16 +196,13 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  preCombineField = 'ts'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       // Create four requested files
       for (i <- 100 until 104) {
         val timestamp = String.valueOf(i)
         // Write corrupted requested Clean File
-        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getHadoopConf)
+        createEmptyCleanRequestedFile(tablePath, timestamp, metaClient.getStorageConf.unwrapAs(classOf[Configuration]))
       }
 
       // reload meta client
@@ -245,10 +248,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -256,8 +256,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
 
       // get fs and check number of latest files
-      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPath)))
+      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
+        metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPath)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
       assertResult(3) {
@@ -279,8 +279,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       }
 
       // after deduplicate, there are 200 records
-      val fileStatus = metaClient.getFs.listStatus(new Path(repairedOutputPath))
-      files = fileStatus.map((status: FileStatus) => status.getPath.toString)
+      val fileStatus = metaClient.getStorage.listDirectEntries(new StoragePath(repairedOutputPath))
+      files = fileStatus.asScala.map((pathInfo: StoragePathInfo) => pathInfo.getPath.toString).toArray
       recordCount = getRecordCount(files)
       assertResult(200){recordCount}
     }
@@ -305,10 +305,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -316,8 +313,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
 
       // get fs and check number of latest files
-      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpdates)))
+      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
+        metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPathWithUpdates)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 2 files
       assertResult(2) {
@@ -340,8 +337,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       }
 
       // after deduplicate, there are 100 records
-      val fileStatus = metaClient.getFs.listStatus(new Path(repairedOutputPath))
-      files = fileStatus.map((status: FileStatus) => status.getPath.toString)
+      val fileStatus = metaClient.getStorage.listDirectEntries(new StoragePath(repairedOutputPath))
+      files = fileStatus.asScala.map((pathInfo: StoragePathInfo) => pathInfo.getPath.toString).toArray
       recordCount = getRecordCount(files)
       assertResult(100){recordCount}
     }
@@ -366,10 +363,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -377,8 +371,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
 
       // get fs and check number of latest files
-      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPathWithUpserts)))
+      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
+        metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPathWithUpserts)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
       assertResult(3) {
@@ -401,8 +395,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       }
 
       // after deduplicate, there are 100 records
-      val fileStatus = metaClient.getFs.listStatus(new Path(repairedOutputPath))
-      files = fileStatus.map((status: FileStatus) => status.getPath.toString)
+      val fileStatus = metaClient.getStorage.listDirectEntries(new StoragePath(repairedOutputPath))
+      files = fileStatus.asScala.map((pathInfo: StoragePathInfo) => pathInfo.getPath.toString).toArray
       recordCount = getRecordCount(files)
       assertResult(100){recordCount}
     }
@@ -427,10 +421,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
            |  type = 'cow'
            | )
        """.stripMargin)
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       generateRecords(tablePath, bashPath, metaClient)
 
@@ -438,8 +429,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient)
 
       // get fs and check number of latest files
-      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants,
-        metaClient.getFs.listStatus(new Path(duplicatedPartitionPath)))
+      val fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants,
+        metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPath)))
       val filteredStatuses = fsView.getLatestBaseFiles.iterator().asScala.map(value => value.getPath).toList
       // there should be 3 files
       assertResult(3) {
@@ -462,8 +453,8 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
       }
 
       // after deduplicate, there are 200 records
-      val fileStatus = metaClient.getFs.listStatus(new Path(duplicatedPartitionPath))
-      files = fileStatus.map((status: FileStatus) => status.getPath.toString).filter(p => p.endsWith(".parquet"))
+      val fileStatus = metaClient.getStorage.listDirectEntries(new StoragePath(duplicatedPartitionPath))
+      files = fileStatus.asScala.map((pathInfo: StoragePathInfo) => pathInfo.getPath.toString).filter(p => p.endsWith(".parquet")).toArray
       recordCount = getRecordCount(files)
       assertResult(200){recordCount}
     }
@@ -555,7 +546,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
   @throws[IOException]
   def createEmptyCleanRequestedFile(basePath: String, instantTime: String, configuration: Configuration): Unit = {
     val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeRequestedCleanerFileName(instantTime))
-    val fs = FSUtils.getFs(basePath, configuration)
+    val fs = HadoopFSUtils.getFs(basePath, configuration)
     val os = fs.create(commitFilePath, true)
     os.close()
   }

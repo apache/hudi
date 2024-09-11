@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.bucket;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -28,6 +28,7 @@ import org.apache.hudi.configuration.OptionsInference;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.JsonDeserializationFunction;
 import org.apache.hudi.util.StreamerUtil;
@@ -51,7 +52,6 @@ import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.TestLogger;
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -202,7 +202,7 @@ public class ITTestConsistentBucketStreamWrite extends TestLogger {
         // ignored
       }
     }
-    FileSystem fs = FSUtils.getFs(tempFile.getAbsolutePath(), new org.apache.hadoop.conf.Configuration());
-    TestData.checkWrittenDataMOR(fs, tempFile, expected, 4);
+    HoodieStorage storage = HoodieTestUtils.getStorage(tempFile.getAbsolutePath());
+    TestData.checkWrittenDataMOR(storage, tempFile, expected, 4);
   }
 }

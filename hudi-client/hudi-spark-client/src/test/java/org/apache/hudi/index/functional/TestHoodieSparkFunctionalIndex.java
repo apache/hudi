@@ -19,6 +19,7 @@
 
 package org.apache.hudi.index.functional;
 
+import org.apache.hudi.HoodieSparkFunctionalIndex;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
 import org.apache.spark.sql.Column;

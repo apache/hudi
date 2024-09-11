@@ -17,16 +17,15 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieTimeGeneratorConfig}
+import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieIncrementalPathNotFoundException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -35,7 +34,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
-import scala.collection.JavaConversions.asScalaBuffer
+import scala.collection.JavaConverters._
 
 class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
@@ -51,7 +50,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     initSparkContexts()
     spark = sqlContext.sparkSession
     initTestDataGenerator()
-    initFileSystem()
+    initHoodieStorage()
   }
 
   @AfterEach override def tearDown() = {
@@ -73,12 +72,12 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     )
     // Create 10 commits
     for (i <- 1 to 10) {
-      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.write.format("org.apache.hudi")
         .options(commonOpts)
         .option(DataSourceWriteOptions.TABLE_TYPE.key, tableType.name())
-        .option("hoodie.cleaner.commits.retained", "3")
+        .option("hoodie.clean.commits.retained", "3")
         .option("hoodie.keep.min.commits", "4")
         .option("hoodie.keep.max.commits", "7")
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -86,11 +85,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         .save(basePath)
     }
 
-    val hoodieMetaClient = HoodieTableMetaClient.builder()
-      .setConf(spark.sparkContext.hadoopConfiguration)
-      .setBasePath(basePath)
-      .setLoadActiveTimelineOnLoad(true)
-      .build()
+    val hoodieMetaClient = createMetaClient(spark, basePath)
     /**
      * State of timeline after 10 commits
      * +------------------+--------------------------------------+

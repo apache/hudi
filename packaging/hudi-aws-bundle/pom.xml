@@ -138,9 +138,6 @@
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
-            <resource>
-                <directory>src/test/resources</directory>
-            </resource>
         </resources>
     </build>
 
@@ -156,6 +153,10 @@
                 <exclusion>
                     <groupId>org.apache.hadoop</groupId>
                     <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.module</groupId>
+                    <artifactId>jackson-module-afterburner</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>

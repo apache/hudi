@@ -20,9 +20,12 @@ package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.index.bucket.HoodieSparkConsistentBucketIndex;
@@ -34,16 +37,20 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
+
+import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 
 /**
  * Bulk_insert partitioner of Spark row using consistent hashing bucket index.
@@ -55,7 +62,10 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private final String indexKeyFields;
 
+  private final String[] sortColumnNames;
+
   private final List<String> fileIdPfxList = new ArrayList<>();
+
   private final Map<String, List<ConsistentHashingNode>> hashingChildrenNodes;
 
   private Map<String, ConsistentBucketIdentifier> partitionToIdentifier;
@@ -66,14 +76,25 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private final RowRecordKeyExtractor extractor;
 
-  public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table, boolean populateMetaFields) {
+  private final boolean populateMetaFields;
+
+  public ConsistentBucketIndexBulkInsertPartitionerWithRows(HoodieTable table,
+                                                            Map<String, String> strategyParams,
+                                                            boolean populateMetaFields) {
     this.indexKeyFields = table.getConfig().getBucketIndexHashField();
     this.table = table;
     this.hashingChildrenNodes = new HashMap<>();
+    this.populateMetaFields = populateMetaFields;
     if (!populateMetaFields) {
       this.keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(table.getConfig().getProps());
     } else {
       this.keyGeneratorOpt = Option.empty();
+    }
+    String sortString = strategyParams.getOrDefault(PLAN_STRATEGY_SORT_COLUMNS.key(), "");
+    if (!StringUtils.isNullOrEmpty(sortString)) {
+      this.sortColumnNames = sortString.split(",");
+    } else {
+      this.sortColumnNames = null;
     }
     this.extractor = RowRecordKeyExtractor.getRowRecordKeyExtractor(populateMetaFields, keyGeneratorOpt);
     ValidationUtils.checkArgument(table.getMetaClient().getTableType().equals(HoodieTableType.MERGE_ON_READ),
@@ -82,7 +103,8 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
     HoodieSparkConsistentBucketIndex index = (HoodieSparkConsistentBucketIndex) table.getIndex();
-    HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
+    HoodieConsistentHashingMetadata metadata =
+        ConsistentBucketIndexUtils.loadOrCreateMetadata(this.table, partition, index.getNumBuckets());
     if (hashingChildrenNodes.containsKey(partition)) {
       metadata.setChildrenNodes(hashingChildrenNodes.get(partition));
     }
@@ -93,22 +115,34 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
   public Dataset<Row> repartitionRecords(Dataset<Row> rows, int outputPartitions) {
     JavaRDD<Row> rowJavaRDD = rows.toJavaRDD();
     prepareRepartition(rowJavaRDD);
-    Partitioner partitioner = new Partitioner() {
-      @Override
-      public int getPartition(Object key) {
-        return (int) key;
-      }
 
-      @Override
-      public int numPartitions() {
-        return fileIdPfxList.size();
-      }
-    };
-
-    return rows.sparkSession().createDataFrame(rowJavaRDD
+    Dataset<Row> partitionedRows = rows.sparkSession().createDataFrame(rowJavaRDD
         .mapToPair(row -> new Tuple2<>(getBucketId(row), row))
-        .partitionBy(partitioner)
+        .partitionBy(new Partitioner() {
+          @Override
+          public int getPartition(Object key) {
+            return (int) key;
+          }
+
+          @Override
+          public int numPartitions() {
+            return fileIdPfxList.size();
+          }
+        })
         .values(), rows.schema());
+
+    if (sortColumnNames != null && sortColumnNames.length > 0) {
+      partitionedRows = partitionedRows
+          .sortWithinPartitions(Arrays.stream(sortColumnNames).map(Column::new).toArray(Column[]::new));
+    } else if (table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE) {
+      if (populateMetaFields) {
+        partitionedRows = partitionedRows.sortWithinPartitions(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+      } else {
+        throw new HoodieException("Sorting by record key for consistent hashing bucket index requires meta-fields to be enabled");
+      }
+    }
+
+    return partitionedRows;
   }
 
   /**
@@ -142,7 +176,8 @@ public class ConsistentBucketIndexBulkInsertPartitionerWithRows
 
   @Override
   public boolean arePartitionRecordsSorted() {
-    return false;
+    return (sortColumnNames != null && sortColumnNames.length > 0)
+        || table.requireSortedRecords() || table.getConfig().getBulkInsertSortMode() != BulkInsertSortMode.NONE;
   }
 
   private int getBucketId(Row row) {

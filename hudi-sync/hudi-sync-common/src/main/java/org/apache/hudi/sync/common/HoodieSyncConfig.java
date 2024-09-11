@@ -24,11 +24,12 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
@@ -44,6 +45,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
@@ -107,7 +109,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_fields")
       .defaultValue("")
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+      .withInferFunction(cfg -> HoodieTableConfig.getPartitionFieldProp(cfg)
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
@@ -120,7 +122,7 @@ public class HoodieSyncConfig extends HoodieConfig {
         if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
           partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
         } else {
-          partitionFieldsOpt = Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
               .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
         }
         if (!partitionFieldsOpt.isPresent()) {
@@ -174,7 +176,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .withDocumentation("The spark version used when syncing with a metastore.");
   public static final ConfigProperty<String> META_SYNC_SNAPSHOT_WITH_TABLE_NAME = ConfigProperty
           .key("hoodie.meta.sync.sync_snapshot_with_table_name")
-          .defaultValue("false")
+          .defaultValue("true")
           .markAdvanced()
           .sinceVersion("0.14.0")
           .withDocumentation("sync meta info to origin table if enable");
@@ -199,9 +201,10 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
   private Configuration hadoopConf;
+  private HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
-    this(props, ConfigUtils.createHadoopConf(props));
+    this(props, HadoopConfigUtils.createHadoopConf(props));
   }
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
@@ -213,6 +216,11 @@ public class HoodieSyncConfig extends HoodieConfig {
         .collect(Collectors.joining("\n")));
     setDefaults(HoodieSyncConfig.class.getName());
     this.hadoopConf = hadoopConf;
+    this.metricsConfig = HoodieMetricsConfig.newBuilder().fromProperties(props).build();
+  }
+
+  public String getBasePath() {
+    return getString(BASE_PATH);
   }
 
   public void setHadoopConf(Configuration hadoopConf) {
@@ -223,8 +231,12 @@ public class HoodieSyncConfig extends HoodieConfig {
     return hadoopConf;
   }
 
+  public HoodieMetricsConfig getMetricsConfig() {
+    return metricsConfig;
+  }
+
   public FileSystem getHadoopFileSystem() {
-    return FSUtils.getFs(getString(META_SYNC_BASE_PATH), getHadoopConf());
+    return HadoopFSUtils.getFs(getString(META_SYNC_BASE_PATH), getHadoopConf());
   }
 
   public String getAbsoluteBasePath() {

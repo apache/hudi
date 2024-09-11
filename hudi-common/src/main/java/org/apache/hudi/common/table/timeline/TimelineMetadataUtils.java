@@ -37,6 +37,7 @@ import org.apache.hudi.avro.model.HoodieSavepointPartitionMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.DataFileWriter;
@@ -47,7 +48,6 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.apache.hadoop.fs.FileStatus;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -80,7 +80,7 @@ public class TimelineMetadataUtils {
     int totalDeleted = 0;
     for (HoodieRollbackStat stat : rollbackStats) {
       Map<String, Long> rollbackLogFiles = stat.getCommandBlocksCount().keySet().stream()
-          .collect(Collectors.toMap(f -> f.getPath().toString(), FileStatus::getLen));
+          .collect(Collectors.toMap(f -> f.getPath().toString(), StoragePathInfo::getLength));
       HoodieRollbackPartitionMetadata metadata = new HoodieRollbackPartitionMetadata(stat.getPartitionPath(),
           stat.getSuccessDeleteFiles(), stat.getFailedDeleteFiles(), rollbackLogFiles, stat.getLogFilesFromFailedCommit());
       partitionMetadataBuilder.put(stat.getPartitionPath(), metadata);

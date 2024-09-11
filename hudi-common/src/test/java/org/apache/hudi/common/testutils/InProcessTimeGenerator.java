@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
@@ -32,8 +31,8 @@ import org.apache.hudi.common.table.timeline.TimeGenerators;
  */
 public class InProcessTimeGenerator {
 
-  private static final TimeGenerator TIME_GENERATOR = TimeGenerators
-      .getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(""), new Configuration());
+  private static final TimeGenerator TIME_GENERATOR = TimeGenerators.getTimeGenerator(
+      HoodieTimeGeneratorConfig.defaultConfig(""), HoodieTestUtils.getDefaultStorageConfWithDefaults());
 
   public static String createNewInstantTime() {
     return createNewInstantTime(0L);

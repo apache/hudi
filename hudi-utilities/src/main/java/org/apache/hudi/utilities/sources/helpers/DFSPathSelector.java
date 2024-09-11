@@ -19,13 +19,13 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -72,7 +72,7 @@ public class DFSPathSelector implements Serializable {
     checkRequiredConfigProperties(
         props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.fs = FSUtils.getFs(
+    this.fs = HadoopFSUtils.getFs(
         getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), hadoopConf);
   }
 
@@ -165,9 +165,9 @@ public class DFSPathSelector implements Serializable {
   protected List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     FileStatus[] statuses = fs.listStatus(path, file ->
-      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+        IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
     List<FileStatus> res = new ArrayList<>();
-    for (FileStatus status: statuses) {
+    for (FileStatus status : statuses) {
       if (status.isDirectory()) {
         // avoid infinite loop
         if (!status.isSymlink()) {

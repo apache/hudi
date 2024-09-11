@@ -32,8 +32,9 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.common.fs.FSUtils;
+
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.reader.SparkBasedReader;
 import org.apache.hudi.integ.testsuite.writer.AvroFileDeltaInputWriter;
 import org.apache.hudi.integ.testsuite.writer.DeltaInputWriter;
@@ -62,7 +63,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
   }
 
   @AfterAll
-  public static void cleanupClass() {
+  public static void cleanupClass() throws IOException {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -96,7 +97,7 @@ public class TestFileDeltaInputWriter extends UtilitiesTestBase {
     });
     fileSinkWriter.close();
     DeltaWriteStats deltaWriteStats = fileSinkWriter.getDeltaWriteStats();
-    FileSystem fs = FSUtils.getFs(basePath, jsc.hadoopConfiguration());
+    FileSystem fs = HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration());
     FileStatus[] fileStatuses = fs.listStatus(new Path(deltaWriteStats.getFilePath()));
     // Atleast 1 file was written
     assertEquals(1, fileStatuses.length);

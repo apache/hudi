@@ -19,7 +19,6 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -30,17 +29,20 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.data.HoodieSparkLongAccumulator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function2;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
 import org.apache.spark.sql.SQLContext;
 
@@ -73,7 +75,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   public HoodieSparkEngineContext(JavaSparkContext jsc, SQLContext sqlContext) {
-    super(new SerializableConfiguration(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
+    super(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), new SparkTaskContextSupplier());
     this.javaSparkContext = jsc;
     this.sqlContext = sqlContext;
   }
@@ -227,6 +229,13 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public void cancelAllJobs() {
     javaSparkContext.cancelAllJobs();
+  }
+
+  @Override
+  public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
+    Function2<O, I, O> seqOpFunc = seqOp::apply;
+    Function2<O, O, O> combOpFunc = combOp::apply;
+    return HoodieJavaRDD.getJavaRDD(data).aggregate(zeroValue, seqOpFunc, combOpFunc);
   }
 
   public SparkConf getConf() {

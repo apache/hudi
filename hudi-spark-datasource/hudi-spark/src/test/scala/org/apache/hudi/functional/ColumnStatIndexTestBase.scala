@@ -18,15 +18,16 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hadoop.fs.{LocatedFileStatus, Path}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.typedLit
 import org.apache.spark.sql.types._
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.Arguments
 
 import java.math.BigInteger
 import java.sql.{Date, Timestamp}
+
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -58,8 +60,9 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
   @BeforeEach
   override def setUp() {
     initPath()
+    initQueryIndexConf()
     initSparkContexts()
-    initFileSystem()
+    initHoodieStorage()
 
     setTableName("hoodie_test")
     initMetaClient()
@@ -117,12 +120,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                             indexedCols: Seq[String],
                                             indexSchema: StructType): DataFrame = {
     val files = {
-      val it = fs.listFiles(new Path(tablePath), true)
-      var seq = Seq[LocatedFileStatus]()
-      while (it.hasNext) {
-        seq = seq :+ it.next()
-      }
-      seq.filter(fs => fs.getPath.getName.endsWith(".parquet"))
+      val pathInfoList = storage.listFiles(new StoragePath(tablePath))
+      pathInfoList.asScala.filter(fs => fs.getPath.getName.endsWith(".parquet"))
     }
 
     spark.createDataFrame(

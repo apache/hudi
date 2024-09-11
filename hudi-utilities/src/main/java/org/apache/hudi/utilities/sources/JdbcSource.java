@@ -29,7 +29,6 @@ import org.apache.hudi.utilities.config.JdbcSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
@@ -45,6 +44,7 @@ import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
@@ -84,7 +84,7 @@ public class JdbcSource extends RowSource {
                                                                     final TypedProperties properties)
       throws HoodieException {
     DataFrameReader dataFrameReader;
-    FSDataInputStream passwordFileStream = null;
+    InputStream passwordFileStream = null;
     try {
       dataFrameReader = session.read().format("jdbc");
       dataFrameReader = dataFrameReader.option(

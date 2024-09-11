@@ -19,8 +19,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.AnalysisErrorAt
-import org.apache.spark.sql.catalyst.analysis.ResolvedTable
+import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Expression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -108,6 +107,24 @@ object HoodieSpark33CatalystPlanUtils extends HoodieSpark3CatalystPlanUtils {
     plan match {
       case ci @ RefreshIndex(table, indexName) =>
         Some((table, indexName))
+      case _ =>
+        None
+    }
+  }
+
+  override def unapplyInsertIntoStatement(plan: LogicalPlan): Option[(LogicalPlan, Seq[String], Map[String, Option[String]], LogicalPlan, Boolean, Boolean)] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some((insert.table, insert.userSpecifiedCols, insert.partitionSpec, insert.query, insert.overwrite, insert.ifPartitionNotExists))
+      case _ =>
+        None
+    }
+  }
+
+  override def createProjectForByNameQuery(lr: LogicalRelation, plan: LogicalPlan): Option[LogicalPlan] = {
+    plan match {
+      case insert: InsertIntoStatement =>
+        Some(ResolveInsertionBase.createProjectForByNameQuery(lr.catalogTable.get.qualifiedName, insert))
       case _ =>
         None
     }

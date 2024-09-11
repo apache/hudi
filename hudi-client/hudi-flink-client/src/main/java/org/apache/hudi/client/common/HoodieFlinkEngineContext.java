@@ -19,7 +19,6 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
@@ -33,9 +32,12 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.FlinkClientUtil;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
@@ -65,19 +67,19 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   private final RuntimeContext runtimeContext;
 
   private HoodieFlinkEngineContext() {
-    this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
+    this(HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), new DefaultTaskContextSupplier());
   }
 
   public HoodieFlinkEngineContext(org.apache.hadoop.conf.Configuration hadoopConf) {
-    this(new SerializableConfiguration(hadoopConf), new DefaultTaskContextSupplier());
+    this(HadoopFSUtils.getStorageConf(hadoopConf), new DefaultTaskContextSupplier());
   }
 
   public HoodieFlinkEngineContext(TaskContextSupplier taskContextSupplier) {
-    this(new SerializableConfiguration(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
+    this(HadoopFSUtils.getStorageConf(FlinkClientUtil.getHadoopConf()), taskContextSupplier);
   }
 
-  public HoodieFlinkEngineContext(SerializableConfiguration hadoopConf, TaskContextSupplier taskContextSupplier) {
-    super(hadoopConf, taskContextSupplier);
+  public HoodieFlinkEngineContext(StorageConfiguration<?> storageConf, TaskContextSupplier taskContextSupplier) {
+    super(storageConf, taskContextSupplier);
     this.runtimeContext = ((FlinkTaskContextSupplier) taskContextSupplier).getFlinkRuntimeContext();
   }
 
@@ -189,6 +191,11 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public void cancelAllJobs() {
     // no operation for now
+  }
+
+  @Override
+  public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
+    return data.collectAsList().stream().parallel().reduce(zeroValue, seqOp::apply, combOp::apply);
   }
 
   /**

@@ -30,12 +30,12 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.UtilHelpers;
+
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.util.Utils;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -44,6 +44,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import scala.collection.JavaConverters;
 
 /**
  * CLI command to perform bootstrap action & display bootstrap index.
@@ -60,7 +62,7 @@ public class BootstrapCommand {
       @ShellOption(value = {"--rowKeyField"}, help = "Record key columns for bootstrap data") final String rowKeyField,
       @ShellOption(value = {"--partitionPathField"}, defaultValue = "",
           help = "Partition fields for bootstrap source data") final String partitionPathField,
-      @ShellOption(value = {"--bootstrapIndexClass"}, defaultValue = "org.apache.hudi.common.bootstrap.index.HFileBootstrapIndex",
+      @ShellOption(value = {"--bootstrapIndexClass"}, defaultValue = "org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex",
           help = "Bootstrap Index Class") final String bootstrapIndexClass,
       @ShellOption(value = {"--selectorClass"}, defaultValue = "org.apache.hudi.client.bootstrap.selector.MetadataOnlyBootstrapModeSelector",
           help = "Selector class for bootstrap") final String selectorClass,

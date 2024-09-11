@@ -18,8 +18,10 @@
 
 package org.apache.hudi.metrics.prometheus;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.metrics.MetricUtils;
 import org.apache.hudi.metrics.Metrics;
@@ -33,15 +35,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.UUID;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +58,9 @@ public class TestPushGateWayReporter {
   static final URL PROP_FILE_DATADOG_URL = TestPushGateWayReporter.class.getClassLoader().getResource("datadog.properties");
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
 
   HoodieMetrics hoodieMetrics;
   Metrics metrics;
@@ -70,10 +74,12 @@ public class TestPushGateWayReporter {
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    configureDefaultReporter();
 
     assertDoesNotThrow(() -> {
-      hoodieMetrics = new HoodieMetrics(config);
+      hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
       metrics = hoodieMetrics.getMetrics();
     });
 
@@ -85,21 +91,20 @@ public class TestPushGateWayReporter {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiReporter(boolean addDefaultReporter) throws IOException, InterruptedException, URISyntaxException {
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
 
     String propPrometheusPath = Objects.requireNonNull(PROP_FILE_PROMETHEUS_URL).toURI().getPath();
     String propDatadogPath = Objects.requireNonNull(PROP_FILE_DATADOG_URL).toURI().getPath();
     if (addDefaultReporter) {
-      when(config.isMetricsOn()).thenReturn(true);
-      when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
-      when(config.getPushGatewayReportPeriodSeconds()).thenReturn(30);
+      configureDefaultReporter();
     } else {
-      when(config.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
-      when(config.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
-      when(config.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
-      when(config.isMetricsOn()).thenReturn(true);
+      when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+      when(metricsConfig.getMetricReporterMetricsNamePrefix()).thenReturn(TestPushGateWayReporter.class.getSimpleName());
+      when(metricsConfig.getMetricReporterFileBasedConfigs()).thenReturn(propPrometheusPath + "," + propDatadogPath);
     }
 
-    hoodieMetrics = new HoodieMetrics(config);
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
     metrics = hoodieMetrics.getMetrics();
 
     Map<String, Long> metricsMap = new HashMap<>();
@@ -123,29 +128,29 @@ public class TestPushGateWayReporter {
     PushGatewayMetricsReporter reporter;
     Map<String, String> labels;
 
-    when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    when(metricsConfig.getPushGatewayLabels()).thenReturn("hudi:prometheus");
+    reporter = new PushGatewayMetricsReporter(metricsConfig, null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudi"));
     assertTrue(labels.containsValue("prometheus"));
 
-    when(config.getPushGatewayLabels()).thenReturn("hudi:prome:theus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    when(metricsConfig.getPushGatewayLabels()).thenReturn("hudi:prome:theus");
+    reporter = new PushGatewayMetricsReporter(metricsConfig, null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudi"));
     assertTrue(labels.containsValue("prome:theus"));
 
-    when(config.getPushGatewayLabels()).thenReturn("hudiprometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    when(metricsConfig.getPushGatewayLabels()).thenReturn("hudiprometheus");
+    reporter = new PushGatewayMetricsReporter(metricsConfig, null);
     labels = reporter.getLabels();
     assertEquals(1, labels.size());
     assertTrue(labels.containsKey("hudiprometheus"));
     assertTrue(labels.containsValue(""));
 
-    when(config.getPushGatewayLabels()).thenReturn("hudi1:prometheus,hudi2:prometheus");
-    reporter = new PushGatewayMetricsReporter(config, null);
+    when(metricsConfig.getPushGatewayLabels()).thenReturn("hudi1:prometheus,hudi2:prometheus");
+    reporter = new PushGatewayMetricsReporter(metricsConfig, null);
     labels = reporter.getLabels();
     assertEquals(2, labels.size());
     assertTrue(labels.containsKey("hudi1"));
@@ -153,11 +158,17 @@ public class TestPushGateWayReporter {
     assertTrue(labels.containsValue("prometheus"));
 
     try {
-      when(config.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prom");
-      reporter = new PushGatewayMetricsReporter(config, null);
+      when(metricsConfig.getPushGatewayLabels()).thenReturn("hudi:prometheus,hudi:prom");
+      reporter = new PushGatewayMetricsReporter(metricsConfig, null);
       fail("Should fail");
     } catch (IllegalStateException e) {
       assertTrue(e.getMessage().contains("Multiple values {prometheus, prom} for same key"));
     }
+  }
+
+  private void configureDefaultReporter() {
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.PROMETHEUS_PUSHGATEWAY);
+    when(metricsConfig.getPushGatewayReportPeriodSeconds()).thenReturn(30);
   }
 }

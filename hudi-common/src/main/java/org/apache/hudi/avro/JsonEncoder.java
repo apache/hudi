@@ -19,6 +19,10 @@
 
 package org.apache.hudi.avro;
 
+import com.fasterxml.jackson.core.JsonEncoding;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.util.MinimalPrettyPrinter;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Encoder;
@@ -27,10 +31,6 @@ import org.apache.avro.io.parsing.JsonGrammarGenerator;
 import org.apache.avro.io.parsing.Parser;
 import org.apache.avro.io.parsing.Symbol;
 import org.apache.avro.util.Utf8;
-import org.codehaus.jackson.JsonEncoding;
-import org.codehaus.jackson.JsonFactory;
-import org.codehaus.jackson.JsonGenerator;
-import org.codehaus.jackson.util.MinimalPrettyPrinter;
 
 import java.io.IOException;
 import java.io.OutputStream;

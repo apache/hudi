@@ -21,7 +21,6 @@ package org.apache.hudi.utilities;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -30,6 +29,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionStrategy;
 
@@ -73,7 +73,7 @@ public class HoodieCompactor {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(),  this.props);
     }
   }
 
@@ -94,6 +94,8 @@ public class HoodieCompactor {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
+    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
+    public Boolean skipClean = true;
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule compaction", required = false)
     public Boolean runSchedule = false;
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
@@ -124,6 +126,7 @@ public class HoodieCompactor {
           + "   --schema-file " + schemaFile + ", \n"
           + "   --spark-master " + sparkMaster + ", \n"
           + "   --spark-memory " + sparkMemory + ", \n"
+          + "   --skipClean " + skipClean + ", \n"
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --mode " + runningMode + ", \n"
@@ -150,6 +153,7 @@ public class HoodieCompactor {
           && Objects.equals(sparkMaster, config.sparkMaster)
           && Objects.equals(sparkMemory, config.sparkMemory)
           && Objects.equals(retry, config.retry)
+          && Objects.equals(skipClean, config.skipClean)
           && Objects.equals(runSchedule, config.runSchedule)
           && Objects.equals(runningMode, config.runningMode)
           && Objects.equals(strategyClassName, config.strategyClassName)
@@ -160,7 +164,7 @@ public class HoodieCompactor {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, tableName, compactionInstantTime, schemaFile,
-          sparkMaster, parallelism, sparkMemory, retry, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
+          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
     }
   }
 
@@ -181,7 +185,7 @@ public class HoodieCompactor {
   }
 
   public int compact(int retry) {
-    this.fs = FSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
+    this.fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
     LOG.info(cfg.toString());
@@ -292,7 +296,7 @@ public class HoodieCompactor {
   }
 
   private void clean(SparkRDDWriteClient<?> client) {
-    if (client.getConfig().isAutoClean()) {
+    if (!cfg.skipClean && client.getConfig().isAutoClean()) {
       client.clean();
     }
   }

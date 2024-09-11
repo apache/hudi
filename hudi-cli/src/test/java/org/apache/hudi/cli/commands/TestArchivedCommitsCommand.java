@@ -65,7 +65,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void init() throws Exception {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
     // Create table and connect
     String tableName = tableName();
@@ -91,17 +91,16 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
       String timestamp = String.valueOf(i);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
+          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), storageConf());
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), hadoopConf());
-      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, hadoopConf());
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), storageConf());
+      HoodieTestCommitMetadataGenerator.createCommitFileWithMetadata(tablePath, timestamp, storageConf());
     }
 
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
-    HoodieTestUtils.createCompactionCommitInMetadataTable(
-        hadoopConf(), metaClient.getFs(), tablePath, "105");
+    HoodieTestUtils.createCompactionCommitInMetadataTable(storageConf(), tablePath, "105");
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     // reload the timeline and get all the commits before archive

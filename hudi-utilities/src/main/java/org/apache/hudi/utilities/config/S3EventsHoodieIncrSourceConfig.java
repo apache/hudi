@@ -47,11 +47,14 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Control whether we do existence check for files before consuming them");
 
+  @Deprecated
+  // Use {@link CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX}
   public static final ConfigProperty<String> S3_KEY_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.s3incr.key.prefix")
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.key.prefix")
       .markAdvanced()
+      .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to filter the s3 objects starting with this prefix");
 
   public static final ConfigProperty<String> S3_FS_PREFIX = ConfigProperty
@@ -61,18 +64,24 @@ public class S3EventsHoodieIncrSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The file system prefix.");
 
+  @Deprecated
+  // Use {@link CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX}
   public static final ConfigProperty<String> S3_IGNORE_KEY_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.prefix")
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.prefix")
       .markAdvanced()
+      .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to ignore the s3 objects starting with this prefix");
 
+  @Deprecated
+  // Use {@link CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR}
   public static final ConfigProperty<String> S3_IGNORE_KEY_SUBSTRING = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.substring")
       .noDefaultValue()
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.s3incr.ignore.key.substring")
       .markAdvanced()
+      .deprecatedAfter("0.15.0")
       .withDocumentation("Control whether to ignore the s3 objects with this substring");
 
   public static final ConfigProperty<String> SPARK_DATASOURCE_OPTIONS = ConfigProperty

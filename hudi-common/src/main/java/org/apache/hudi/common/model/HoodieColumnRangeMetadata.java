@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
@@ -153,13 +155,15 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
   /**
    * Merges the given two column range metadata.
    */
-  public static HoodieColumnRangeMetadata<Comparable> merge(
-      HoodieColumnRangeMetadata<Comparable> left,
-      HoodieColumnRangeMetadata<Comparable> right) {
+  public static <T extends Comparable<T>> HoodieColumnRangeMetadata<T> merge(
+      HoodieColumnRangeMetadata<T> left,
+      HoodieColumnRangeMetadata<T> right) {
+    ValidationUtils.checkArgument(left.getColumnName().equals(right.getColumnName()),
+        "Column names should be the same for merging column ranges");
     String filePath = left.getFilePath();
     String columnName = left.getColumnName();
-    Comparable min = minVal(left.getMinValue(), right.getMinValue());
-    Comparable max = maxVal(left.getMaxValue(), right.getMaxValue());
+    T min = minVal(left.getMinValue(), right.getMinValue());
+    T max = maxVal(left.getMaxValue(), right.getMaxValue());
     long nullCount = left.getNullCount() + right.getNullCount();
     long valueCount = left.getValueCount() + right.getValueCount();
     long totalSize = left.getTotalSize() + right.getTotalSize();
@@ -167,7 +171,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return create(filePath, columnName, min, max, nullCount, valueCount, totalSize, totalUncompressedSize);
   }
 
-  private static Comparable minVal(Comparable val1, Comparable val2) {
+  private static <T extends Comparable<T>> T minVal(T val1, T val2) {
     if (val1 == null) {
       return val2;
     }
@@ -177,7 +181,7 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
     return val1.compareTo(val2) < 0 ? val1 : val2;
   }
 
-  private static Comparable maxVal(Comparable val1, Comparable val2) {
+  private static <T extends Comparable<T>> T maxVal(T val1, T val2) {
     if (val1 == null) {
       return val2;
     }

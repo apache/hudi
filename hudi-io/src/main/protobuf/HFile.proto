@@ -1,0 +1,53 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+syntax = "proto2";
+
+package org.apache.hudi.io.hfile;
+
+option java_package = "org.apache.hudi.io.hfile.protobuf.generated";
+option java_outer_classname = "HFileProtos";
+option java_generic_services = true;
+option java_generate_equals_and_hash = true;
+option optimize_for = SPEED;
+
+message BytesBytesPair {
+  required bytes first = 1;
+  required bytes second = 2;
+}
+
+message InfoProto {
+  repeated BytesBytesPair map_entry = 1;
+}
+
+message TrailerProto {
+  optional uint64 file_info_offset = 1;
+  optional uint64 load_on_open_data_offset = 2;
+  optional uint64 uncompressed_data_index_size = 3;
+  optional uint64 total_uncompressed_bytes = 4;
+  optional uint32 data_index_count = 5;
+  optional uint32 meta_index_count = 6;
+  optional uint64 entry_count = 7;
+  optional uint32 num_data_index_levels = 8;
+  optional uint64 first_data_block_offset = 9;
+  optional uint64 last_data_block_offset = 10;
+  optional string comparator_class_name = 11;
+  optional uint32 compression_codec = 12;
+  optional bytes encryption_key = 13;
+}

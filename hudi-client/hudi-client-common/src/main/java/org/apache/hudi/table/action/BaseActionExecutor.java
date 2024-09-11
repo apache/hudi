@@ -18,9 +18,6 @@
 
 package org.apache.hudi.table.action;
 
-import java.io.Serializable;
-
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -32,12 +29,16 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+
+import java.io.Serializable;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   protected final transient HoodieEngineContext context;
-  protected final transient Configuration hadoopConf;
+  protected final transient StorageConfiguration<?> storageConf;
 
   protected final HoodieWriteConfig config;
 
@@ -47,7 +48,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     this.context = context;
-    this.hadoopConf = context.getHadoopConf().get();
+    this.storageConf = context.getStorageConf();
     this.config = config;
     this.table = table;
     this.instantTime = instantTime;

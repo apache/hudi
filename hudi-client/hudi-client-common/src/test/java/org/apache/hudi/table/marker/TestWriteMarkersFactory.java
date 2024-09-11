@@ -19,17 +19,18 @@
 
 package org.apache.hudi.table.marker;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,6 +41,7 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 
@@ -48,6 +50,7 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
   private static final String HDFS_BASE_PATH = "hdfs://localhost/dir";
   private final HoodieWriteConfig writeConfig = Mockito.mock(HoodieWriteConfig.class);
   private final HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
+  private final HoodieStorage storage = Mockito.mock(HoodieStorage.class);
   private final HoodieWrapperFileSystem fileSystem = Mockito.mock(HoodieWrapperFileSystem.class);
   private final HoodieEngineContext context = Mockito.mock(HoodieEngineContext.class);
   private final HoodieTable table = Mockito.mock(HoodieTable.class);
@@ -103,11 +106,13 @@ public class TestWriteMarkersFactory extends HoodieCommonTestHarness {
     Mockito.when(writeConfig.isEmbeddedTimelineServerEnabled())
         .thenReturn(isTimelineServerEnabled);
     Mockito.when(table.getMetaClient()).thenReturn(metaClient);
-    Mockito.when(metaClient.getFs()).thenReturn(fileSystem);
-    Mockito.when(metaClient.getBasePath()).thenReturn(basePath);
+    Mockito.when(metaClient.getStorage()).thenReturn(storage);
+    Mockito.when(storage.getFileSystem()).thenReturn(fileSystem);
+    Mockito.when(metaClient.getBasePath()).thenReturn(new StoragePath(basePath));
     Mockito.when(metaClient.getMarkerFolderPath(any())).thenReturn(basePath + ".hoodie/.temp");
     Mockito.when(table.getContext()).thenReturn(context);
-    Mockito.when(context.getHadoopConf()).thenReturn(new SerializableConfiguration(new Configuration()));
+    StorageConfiguration storageConfToReturn = getDefaultStorageConf();
+    Mockito.when(context.getStorageConf()).thenReturn(storageConfToReturn);
     Mockito.when(writeConfig.getViewStorageConfig())
         .thenReturn(FileSystemViewStorageConfig.newBuilder().build());
     assertEquals(expectedWriteMarkersClass,

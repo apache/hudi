@@ -43,6 +43,7 @@ import org.joda.time.DateTimeFieldType;
 import java.io.Serializable;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -72,12 +73,15 @@ public class AvroToRowDataConverters {
   // -------------------------------------------------------------------------------------
   // Runtime Converters
   // -------------------------------------------------------------------------------------
-
   public static AvroToRowDataConverter createRowConverter(RowType rowType) {
+    return createRowConverter(rowType, true);
+  }
+
+  public static AvroToRowDataConverter createRowConverter(RowType rowType, boolean utcTimezone) {
     final AvroToRowDataConverter[] fieldConverters =
         rowType.getFields().stream()
             .map(RowType.RowField::getType)
-            .map(AvroToRowDataConverters::createNullableConverter)
+            .map(type -> AvroToRowDataConverters.createNullableConverter(type, utcTimezone))
             .toArray(AvroToRowDataConverter[]::new);
     final int arity = rowType.getFieldCount();
 
@@ -94,8 +98,8 @@ public class AvroToRowDataConverters {
   /**
    * Creates a runtime converter which is null safe.
    */
-  private static AvroToRowDataConverter createNullableConverter(LogicalType type) {
-    final AvroToRowDataConverter converter = createConverter(type);
+  private static AvroToRowDataConverter createNullableConverter(LogicalType type, boolean utcTimezone) {
+    final AvroToRowDataConverter converter = createConverter(type, utcTimezone);
     return avroObject -> {
       if (avroObject == null) {
         return null;
@@ -107,7 +111,7 @@ public class AvroToRowDataConverters {
   /**
    * Creates a runtime converter which assuming input object is not null.
    */
-  public static AvroToRowDataConverter createConverter(LogicalType type) {
+  public static AvroToRowDataConverter createConverter(LogicalType type, boolean utcTimezone) {
     switch (type.getTypeRoot()) {
       case NULL:
         return avroObject -> null;
@@ -129,9 +133,9 @@ public class AvroToRowDataConverters {
       case TIME_WITHOUT_TIME_ZONE:
         return AvroToRowDataConverters::convertToTime;
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-        return createTimestampConverter(((LocalZonedTimestampType) type).getPrecision());
+        return createTimestampConverter(((LocalZonedTimestampType) type).getPrecision(), true);
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        return createTimestampConverter(((TimestampType) type).getPrecision());
+        return createTimestampConverter(((TimestampType) type).getPrecision(), utcTimezone);
       case CHAR:
       case VARCHAR:
         return avroObject -> StringData.fromString(avroObject.toString());
@@ -141,12 +145,12 @@ public class AvroToRowDataConverters {
       case DECIMAL:
         return createDecimalConverter((DecimalType) type);
       case ARRAY:
-        return createArrayConverter((ArrayType) type);
+        return createArrayConverter((ArrayType) type, utcTimezone);
       case ROW:
-        return createRowConverter((RowType) type);
+        return createRowConverter((RowType) type, utcTimezone);
       case MAP:
       case MULTISET:
-        return createMapConverter(type);
+        return createMapConverter(type, utcTimezone);
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
@@ -170,9 +174,9 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createArrayConverter(ArrayType arrayType) {
+  private static AvroToRowDataConverter createArrayConverter(ArrayType arrayType, boolean utcTimezone) {
     final AvroToRowDataConverter elementConverter =
-        createNullableConverter(arrayType.getElementType());
+        createNullableConverter(arrayType.getElementType(), utcTimezone);
     final Class<?> elementClass =
         LogicalTypeUtils.toInternalConversionClass(arrayType.getElementType());
 
@@ -187,11 +191,11 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createMapConverter(LogicalType type) {
+  private static AvroToRowDataConverter createMapConverter(LogicalType type, boolean utcTimezone) {
     final AvroToRowDataConverter keyConverter =
-        createConverter(DataTypes.STRING().getLogicalType());
+        createConverter(DataTypes.STRING().getLogicalType(), utcTimezone);
     final AvroToRowDataConverter valueConverter =
-        createNullableConverter(AvroSchemaConverter.extractValueTypeToAvroMap(type));
+        createNullableConverter(AvroSchemaConverter.extractValueTypeToAvroMap(type), utcTimezone);
 
     return avroObject -> {
       final Map<?, ?> map = (Map<?, ?>) avroObject;
@@ -205,7 +209,7 @@ public class AvroToRowDataConverters {
     };
   }
 
-  private static AvroToRowDataConverter createTimestampConverter(int precision) {
+  private static AvroToRowDataConverter createTimestampConverter(int precision, boolean utcTimezone) {
     final ChronoUnit chronoUnit;
     if (precision <= 3) {
       chronoUnit = ChronoUnit.MILLIS;
@@ -233,7 +237,11 @@ public class AvroToRowDataConverters {
               "Unexpected object type for TIMESTAMP logical type. Received: " + avroObject);
         }
       }
-      return TimestampData.fromInstant(instant);
+      if (utcTimezone) {
+        return TimestampData.fromInstant(instant);
+      } else {
+        return TimestampData.fromTimestamp(Timestamp.from(instant)); // this applies the local timezone
+      }
     };
   }
 

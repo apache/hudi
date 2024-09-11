@@ -30,8 +30,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.io.util.IOUtils.getDataInputStream;
 
 /**
  * A Simple Bloom filter implementation built on top of {@link InternalBloomFilter}.
@@ -65,12 +67,24 @@ public class SimpleBloomFilter implements BloomFilter {
   public SimpleBloomFilter(String serString) {
     this.filter = new InternalBloomFilter();
     byte[] bytes = Base64CodecUtil.decode(serString);
-    DataInputStream dis = new DataInputStream(new ByteArrayInputStream(bytes));
-    try {
-      this.filter.readFields(dis);
-      dis.close();
+    try (DataInputStream stream = new DataInputStream(new ByteArrayInputStream(bytes))) {
+      extractAndSetInternalBloomFilter(stream);
     } catch (IOException e) {
-      throw new HoodieIndexException("Could not deserialize BloomFilter instance", e);
+      throw new HoodieIndexException("Could not deserialize BloomFilter from string", e);
+    }
+  }
+
+  /**
+   * Creates {@link SimpleBloomFilter} from the given {@link ByteBuffer}.
+   *
+   * @param byteBuffer {@link ByteBuffer} containing the serialized bloom filter.
+   */
+  public SimpleBloomFilter(ByteBuffer byteBuffer) {
+    this.filter = new InternalBloomFilter();
+    try (DataInputStream stream = getDataInputStream(Base64CodecUtil.decode(byteBuffer))) {
+      extractAndSetInternalBloomFilter(stream);
+    } catch (IOException e) {
+      throw new HoodieIndexException("Could not deserialize BloomFilter from byte buffer", e);
     }
   }
 
@@ -138,4 +152,7 @@ public class SimpleBloomFilter implements BloomFilter {
     return BloomFilterTypeCode.SIMPLE;
   }
 
+  private void extractAndSetInternalBloomFilter(DataInputStream dis) throws IOException {
+    this.filter.readFields(dis);
+  }
 }

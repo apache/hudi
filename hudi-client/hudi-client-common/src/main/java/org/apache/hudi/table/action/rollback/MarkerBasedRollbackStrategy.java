@@ -25,11 +25,11 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.MarkerBasedRollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkers;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +56,7 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
   public MarkerBasedRollbackStrategy(HoodieTable<?, ?, ?, ?> table, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     this.table = table;
     this.context = context;
-    this.basePath = table.getMetaClient().getBasePath();
+    this.basePath = table.getMetaClient().getBasePath().toString();
     this.config = config;
     this.instantTime = instantTime;
   }
@@ -71,8 +71,8 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
         String typeStr = markerFilePath.substring(markerFilePath.lastIndexOf(".") + 1);
         IOType type = IOType.valueOf(typeStr);
         String filePathStr = WriteMarkers.stripMarkerSuffix(markerFilePath);
-        Path filePath = new Path(basePath, filePathStr);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), filePath.getParent());
+        StoragePath filePath = new StoragePath(basePath, filePathStr);
+        String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), filePath.getParent());
         String fileId = FSUtils.getFileIdFromFilePath(filePath);
         switch (type) {
           case MERGE:

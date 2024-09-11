@@ -192,7 +192,7 @@ abstract class InternalFilter {
    * <p>For efficiency, implementations should attempt to re-use storage in the
    * existing object where possible.</p>
    *
-   * @param in <code>DataInput</code> to deseriablize this object from.
+   * @param in <code>DataInput</code> to deserialize this object from.
    * @throws IOException
    */
   public void readFields(DataInput in) throws IOException {

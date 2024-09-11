@@ -18,18 +18,18 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
+import org.apache.hudi.storage.StoragePath;
 
 import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
@@ -46,24 +46,24 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
 
   private final int retryMaxCount;
   private final int retryWaitTimeMs;
-  private transient FileSystem fs;
-  private transient Path lockFile;
+  private transient HoodieStorage storage;
+  private transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
 
-  public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final Configuration configuration) {
+  public FileSystemBasedLockProviderTestClass(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration) {
     this.lockConfiguration = lockConfiguration;
     final String lockDirectory = lockConfiguration.getConfig().getString(FILESYSTEM_LOCK_PATH_PROP_KEY);
     this.retryWaitTimeMs = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY);
     this.retryMaxCount = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY);
-    this.lockFile = new Path(lockDirectory + "/" + LOCK);
-    this.fs = FSUtils.getFs(this.lockFile.toString(), configuration);
+    this.lockFile = new StoragePath(lockDirectory + "/" + LOCK);
+    this.storage = HoodieStorageUtils.getStorage(this.lockFile.toString(), configuration);
   }
 
   @Override
   public void close() {
     synchronized (LOCK) {
       try {
-        fs.delete(this.lockFile, true);
+        storage.deleteDirectory(this.lockFile);
       } catch (IOException e) {
         throw new HoodieLockException("Unable to release lock: " + getLock(), e);
       }
@@ -75,7 +75,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
     try {
       int numRetries = 0;
       synchronized (LOCK) {
-        while (fs.exists(this.lockFile)) {
+        while (storage.exists(this.lockFile)) {
           LOCK.wait(retryWaitTimeMs);
           numRetries++;
           if (numRetries > retryMaxCount) {
@@ -83,7 +83,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
           }
         }
         acquireLock();
-        return fs.exists(this.lockFile);
+        return storage.exists(this.lockFile);
       }
     } catch (IOException | InterruptedException e) {
       throw new HoodieLockException("Failed to acquire lock: " + getLock(), e);
@@ -94,8 +94,8 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
   public void unlock() {
     synchronized (LOCK) {
       try {
-        if (fs.exists(this.lockFile)) {
-          fs.delete(this.lockFile, true);
+        if (storage.exists(this.lockFile)) {
+          storage.deleteDirectory(this.lockFile);
         }
       } catch (IOException io) {
         throw new HoodieIOException("Unable to delete lock " + getLock() + "on disk", io);
@@ -110,7 +110,7 @@ public class FileSystemBasedLockProviderTestClass implements LockProvider<String
 
   private void acquireLock() {
     try {
-      fs.create(this.lockFile, false).close();
+      storage.create(this.lockFile, false).close();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to acquire lock: " + getLock(), e);
     }

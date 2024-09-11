@@ -78,6 +78,14 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether the table operation is 'upsert'.
+   */
+  public static boolean isUpsertOperation(Configuration conf) {
+    WriteOperationType operationType = WriteOperationType.fromValue(conf.getString(FlinkOptions.OPERATION));
+    return operationType == WriteOperationType.UPSERT;
+  }
+
+  /**
    * Returns whether the table operation is 'bulk_insert'.
    */
   public static boolean isBulkInsertOperation(Configuration conf) {
@@ -142,8 +150,18 @@ public class OptionsResolver {
     return FilePathUtils.extractPartitionKeys(conf).length > 0;
   }
 
+  /**
+   * Returns whether the table index is bucket index.
+   */
   public static boolean isBucketIndexType(Configuration conf) {
     return conf.getString(FlinkOptions.INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.name());
+  }
+
+  /**
+   * Returns whether it is a MERGE_ON_READ table, and updates by bucket index.
+   */
+  public static boolean isMorWithBucketIndexUpsert(Configuration conf) {
+    return isMorTable(conf) && isUpsertOperation(conf) && isBucketIndexType(conf);
   }
 
   public static HoodieIndex.BucketIndexEngineType getBucketEngineType(Configuration conf) {
@@ -176,12 +194,21 @@ public class OptionsResolver {
   /**
    * Returns whether the source should emit changelog.
    *
-   * @return true if the source is read as streaming with changelog mode enabled
+   * @return true if the source should emit changes.
    */
   public static boolean emitChangelog(Configuration conf) {
     return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED)
         || conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CDC_ENABLED)
         || isIncrementalQuery(conf) && conf.getBoolean(FlinkOptions.CDC_ENABLED);
+  }
+
+  /**
+   * Returns whether the source should emit deletes.
+   *
+   * @return true if the source is read as streaming with changelog mode enabled.
+   */
+  public static boolean emitDeletes(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_AS_STREAMING) && conf.getBoolean(FlinkOptions.CHANGELOG_ENABLED);
   }
 
   /**
@@ -273,10 +300,10 @@ public class OptionsResolver {
   }
 
   /**
-   * Returns whether the read commits limit is specified.
+   * Returns the read commits limit or -1 if not specified.
    */
-  public static boolean hasReadCommitsLimit(Configuration conf) {
-    return conf.contains(FlinkOptions.READ_COMMITS_LIMIT);
+  public static int getReadCommitsLimit(Configuration conf) {
+    return conf.getInteger(FlinkOptions.READ_COMMITS_LIMIT, -1);
   }
 
   /**
@@ -337,10 +364,22 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether to read the data changes only from changelog files. When CDC is enabled,
+   * i) for COW table, the changelog is generated on each file update;
+   * ii) for MOR table, the changelog is generated on compaction.
+   *
+   * <p>By default, always read from the changelog file,
+   * once it is disabled, the reader would infer the changes based on the file slice dependencies.
+   */
+  public static boolean readCDCFromChangelog(Configuration conf) {
+    return conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG);
+  }
+
+  /**
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
-    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE));
+    return HoodieIndex.IndexType.valueOf(conf.getString(FlinkOptions.INDEX_TYPE).toUpperCase());
   }
 
   /**
@@ -370,7 +409,7 @@ public class OptionsResolver {
    * Returns whether to commit even when current batch has no data, for flink defaults false
    */
   public static boolean allowCommitOnEmptyBatch(Configuration conf) {
-    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
+    return conf.getBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), HoodieWriteConfig.ALLOW_EMPTY_COMMIT.defaultValue());
   }
 
   /**
@@ -380,9 +419,21 @@ public class OptionsResolver {
     return WriteConcurrencyMode.isNonBlockingConcurrencyControl(config.getString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue()));
   }
 
+  /**
+   * Returns whether Cleaner's failed writes policy is set to lazy
+   */
   public static boolean isLazyFailedWritesCleanPolicy(Configuration conf) {
-    return conf.getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue())
-        .equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
+    // get all keys with alternatives as strings from Hudi's ConfigProperty
+    List<String> allKeys = new ArrayList<>();
+    allKeys.add(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key());
+    allKeys.addAll(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.getAlternatives());
+    // and check them in Flink's Configuration for all key variations support
+    for (String key : allKeys) {
+      if (conf.containsKey(key)) {
+        return conf.getString(key, "").equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
+      }
+    }
+    return HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue().equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
   // -------------------------------------------------------------------------
@@ -406,5 +457,13 @@ public class OptionsResolver {
       }
     }
     return options;
+  }
+
+  /**
+   * Whether the reader only consumes new commit instants.
+   */
+  public static boolean isOnlyConsumingNewCommits(Configuration conf) {
+    return isMorTable(conf) && conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
+        || isAppendMode(conf) && conf.getBoolean(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
   }
 }

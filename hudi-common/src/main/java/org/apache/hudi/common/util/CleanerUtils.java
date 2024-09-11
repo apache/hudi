@@ -57,14 +57,15 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 public class CleanerUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
-
+  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_METADATA_VERSION = CLEAN_METADATA_VERSION_2;
 
   public static HoodieCleanMetadata convertCleanMetadata(String startCleanTime,
                                                          Option<Long> durationInMs,
-                                                         List<HoodieCleanStat> cleanStats) {
+                                                         List<HoodieCleanStat> cleanStats,
+                                                         Map<String, String> extraMetadatafromCleanPlan) {
     Map<String, HoodieCleanPartitionMetadata> partitionMetadataMap = new HashMap<>();
     Map<String, HoodieCleanPartitionMetadata> partitionBootstrapMetadataMap = new HashMap<>();
 
@@ -92,7 +93,7 @@ public class CleanerUtils {
     }
 
     return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
-        lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap);
+        lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap, extraMetadatafromCleanPlan);
   }
 
   /**

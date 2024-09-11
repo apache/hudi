@@ -36,7 +36,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -93,7 +92,8 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     this.extraMetadata = extraMetadata;
     this.taskContextSupplier = context.getTaskContextSupplier();
     // TODO : Remove this once we refactor and move out autoCommit method from here, since the TxnManager is held in {@link BaseHoodieWriteClient}.
-    this.txnManagerOption = config.shouldAutoCommit() ? Option.of(new TransactionManager(config, table.getMetaClient().getFs())) : Option.empty();
+    this.txnManagerOption = config.shouldAutoCommit()
+        ? Option.of(new TransactionManager(config, table.getStorage())) : Option.empty();
     if (this.txnManagerOption.isPresent() && this.txnManagerOption.get().isLockRequired()) {
       // these txn metadata are only needed for auto commit when optimistic concurrent control is also enabled
       this.lastCompletedTxn = TransactionUtils.getLastCompletedTxnInstantAndMetadata(table.getMetaClient());
@@ -263,9 +263,10 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
                                                               Iterator<HoodieRecord<T>> recordItr) throws IOException;
 
   protected HoodieWriteMetadata<HoodieData<WriteStatus>> executeClustering(HoodieClusteringPlan clusteringPlan) {
-    HoodieInstant instant = HoodieTimeline.getReplaceCommitRequestedInstant(instantTime);
+    context.setJobStatus(this.getClass().getSimpleName(), "Clustering records for " + config.getTableName());
+    HoodieInstant instant = ClusteringUtils.getRequestedClusteringInstant(instantTime, table.getActiveTimeline()).get();
     // Mark instant as clustering inflight
-    table.getActiveTimeline().transitionReplaceRequestedToInflight(instant, Option.empty());
+    ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(instant, Option.empty(), table.getActiveTimeline());
     table.getMetaClient().reloadActiveTimeline();
 
     // Disable auto commit. Strategy is only expected to write data in new files.
@@ -285,6 +286,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     writeMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(clusteringPlan, writeMetadata));
     commitOnAutoCommit(writeMetadata);
     if (!writeMetadata.getCommitMetadata().isPresent()) {
+      LOG.info("Found empty commit metadata for clustering with instant time " + instantTime);
       HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(writeMetadata.getWriteStats().get(), writeMetadata.getPartitionToReplaceFileIds(),
           extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType());
       writeMetadata.setCommitMetadata(Option.of(commitMetadata));

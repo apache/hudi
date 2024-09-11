@@ -30,9 +30,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for PostgresDB.
@@ -141,7 +142,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
         || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES)))
         // Check length first as an optimization
         && ((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
-        && DEBEZIUM_TOASTED_VALUE.equals(new String(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array(), StandardCharsets.UTF_8)));
+        && DEBEZIUM_TOASTED_VALUE.equals(fromUTF8Bytes(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array())));
   }
 }
 

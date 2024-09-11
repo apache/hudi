@@ -19,19 +19,19 @@
 package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.FilebasedSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaProviderException;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
@@ -61,7 +61,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
     this.targetFile = getStringWithAltKeys(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE, sourceFile);
     this.shouldSanitize = SanitizationUtils.shouldSanitize(props);
     this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props);
-    this.fs = FSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
+    this.fs = HadoopFSUtils.getFs(sourceFile, jssc.hadoopConfiguration(), true);
     this.sourceSchema = parseSchema(this.sourceFile);
     if (containsConfigProperty(props, FilebasedSchemaProviderConfig.TARGET_SCHEMA_FILE)) {
       this.targetSchema = parseSchema(this.targetFile);
@@ -88,7 +88,7 @@ public class FilebasedSchemaProvider extends SchemaProvider {
 
   private static Schema readAvroSchemaFromFile(String schemaPath, FileSystem fs, boolean sanitizeSchema, String invalidCharMask) {
     String schemaStr;
-    try (FSDataInputStream in = fs.open(new Path(schemaPath))) {
+    try (InputStream in = fs.open(new Path(schemaPath))) {
       schemaStr = FileIOUtils.readAsUTFString(in);
     } catch (IOException ioe) {
       throw new HoodieSchemaProviderException(String.format("Error reading schema from file %s", schemaPath), ioe);

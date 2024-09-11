@@ -22,20 +22,20 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
-import org.apache.hudi.common.config.SerializableConfiguration;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.fs.ConsistencyGuard;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
-import org.apache.hudi.common.fs.HoodieRetryWrapperFileSystem;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.HoodieFunctionalIndexDefinition;
-import org.apache.hudi.common.model.HoodieFunctionalIndexMetadata;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -50,28 +50,24 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.hadoop.SerializablePath;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -82,8 +78,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+import static org.apache.hudi.common.util.ValidationUtils.checkState;
+import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
 
 /**
  * <code>HoodieTableMetaClient</code> allows to access meta-data about a hoodie table It returns meta-data about
@@ -101,17 +105,18 @@ public class HoodieTableMetaClient implements Serializable {
   private static final long serialVersionUID = 1L;
   private static final Logger LOG = LoggerFactory.getLogger(HoodieTableMetaClient.class);
   public static final String METAFOLDER_NAME = ".hoodie";
-  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".temp";
-  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".aux";
-  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".bootstrap";
-  public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + Path.SEPARATOR + ".sample_writes";
-  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + Path.SEPARATOR + ".heartbeat";
-  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + Path.SEPARATOR + "metadata";
-  public static final String HASHING_METADATA_FOLDER_NAME = ".bucket_index" + Path.SEPARATOR + "consistent_hashing_metadata";
+  public static final String TEMPFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".temp";
+  public static final String AUXILIARYFOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".aux";
+  public static final String BOOTSTRAP_INDEX_ROOT_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".bootstrap";
+  public static final String SAMPLE_WRITES_FOLDER_PATH = AUXILIARYFOLDER_NAME + StoragePath.SEPARATOR + ".sample_writes";
+  public static final String HEARTBEAT_FOLDER_NAME = METAFOLDER_NAME + StoragePath.SEPARATOR + ".heartbeat";
+  public static final String METADATA_TABLE_FOLDER_PATH = METAFOLDER_NAME + StoragePath.SEPARATOR + "metadata";
+  public static final String HASHING_METADATA_FOLDER_NAME =
+      ".bucket_index" + StoragePath.SEPARATOR + "consistent_hashing_metadata";
   public static final String BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH
-      + Path.SEPARATOR + ".partitions";
-  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH = BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + Path.SEPARATOR
-      + ".fileids";
+      + StoragePath.SEPARATOR + ".partitions";
+  public static final String BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH =
+      BOOTSTRAP_INDEX_ROOT_FOLDER_PATH + StoragePath.SEPARATOR + ".fileids";
 
   public static final String SCHEMA_FOLDER_NAME = ".schema";
 
@@ -124,14 +129,12 @@ public class HoodieTableMetaClient implements Serializable {
   // Only one entry should be present in this map
   private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
 
-  // NOTE: Since those two parameters lay on the hot-path of a lot of computations, we
-  //       use tailored extension of the {@code Path} class allowing to avoid repetitive
-  //       computations secured by its immutability
-  protected SerializablePath basePath;
-  protected SerializablePath metaPath;
-  private transient HoodieWrapperFileSystem fs;
+  protected StoragePath basePath;
+  protected StoragePath metaPath;
+
+  private transient HoodieStorage storage;
   private boolean loadActiveTimelineOnLoad;
-  protected SerializableConfiguration hadoopConf;
+  protected StorageConfiguration<?> storageConf;
   private HoodieTableType tableType;
   private TimelineLayoutVersion timelineLayoutVersion;
   protected HoodieTableConfig tableConfig;
@@ -140,14 +143,13 @@ public class HoodieTableMetaClient implements Serializable {
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private Option<HoodieFunctionalIndexMetadata> functionalIndexMetadata = Option.empty();
-
+  private Option<HoodieIndexMetadata> indexMetadataOpt = Option.empty();
 
   /**
    * Instantiate HoodieTableMetaClient.
    * Can only be called if table already exists
    */
-  protected HoodieTableMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+  protected HoodieTableMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                   ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                   String payloadClassName, String recordMergerStrategy, HoodieTimeGeneratorConfig timeGeneratorConfig,
                                   FileSystemRetryConfig fileSystemRetryConfig) {
@@ -155,18 +157,18 @@ public class HoodieTableMetaClient implements Serializable {
     this.timeGeneratorConfig = timeGeneratorConfig;
     this.consistencyGuardConfig = consistencyGuardConfig;
     this.fileSystemRetryConfig = fileSystemRetryConfig;
-    this.hadoopConf = new SerializableConfiguration(conf);
-    this.basePath = new SerializablePath(new CachingPath(basePath));
-    this.metaPath = new SerializablePath(new CachingPath(basePath, METAFOLDER_NAME));
-    this.fs = getFs();
-    TableNotFoundException.checkTableValidity(fs, this.basePath.get(), metaPath.get());
-    this.tableConfig = new HoodieTableConfig(fs, metaPath.toString(), payloadClassName, recordMergerStrategy);
-    this.functionalIndexMetadata = getFunctionalIndexMetadata();
+    this.storageConf = storage.getConf();
+    this.storage = storage;
+    this.basePath = new StoragePath(basePath);
+    this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
+    TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
+    this.tableConfig = new HoodieTableConfig(this.storage, metaPath, payloadClassName, recordMergerStrategy);
+    this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();
     Option<TimelineLayoutVersion> tableConfigVersion = tableConfig.getTimelineLayoutVersion();
     if (layoutVersion.isPresent() && tableConfigVersion.isPresent()) {
       // Ensure layout version passed in config is not lower than the one seen in hoodie.properties
-      ValidationUtils.checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
+      checkArgument(layoutVersion.get().compareTo(tableConfigVersion.get()) >= 0,
           "Layout Version defined in hoodie properties has higher version (" + tableConfigVersion.get()
               + ") than the one passed in config (" + layoutVersion.get() + ")");
     }
@@ -196,40 +198,41 @@ public class HoodieTableMetaClient implements Serializable {
    * @param columns       Columns on which index is built
    * @param options       Options for the index
    */
-  public void buildFunctionalIndexDefinition(String indexMetaPath,
-                                             String indexName,
-                                             String indexType,
-                                             Map<String, Map<String, String>> columns,
-                                             Map<String, String> options) {
-    ValidationUtils.checkState(
-        !functionalIndexMetadata.isPresent() || !functionalIndexMetadata.get().getIndexDefinitions().containsKey(indexName),
-        "Functional index metadata is already present");
+  public void buildIndexDefinition(String indexMetaPath,
+                                   String indexName,
+                                   String indexType,
+                                   Map<String, Map<String, String>> columns,
+                                   Map<String, String> options) {
+    checkState(
+        !indexMetadataOpt.isPresent() || !indexMetadataOpt.get().getIndexDefinitions().containsKey(indexName),
+        "Index metadata is already present");
     List<String> columnNames = new ArrayList<>(columns.keySet());
-    HoodieFunctionalIndexDefinition functionalIndexDefinition = new HoodieFunctionalIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
-    if (functionalIndexMetadata.isPresent()) {
-      functionalIndexMetadata.get().getIndexDefinitions().put(indexName, functionalIndexDefinition);
+    HoodieIndexDefinition indexDefinition = new HoodieIndexDefinition(indexName, indexType, options.get("func"), columnNames, options);
+    if (indexMetadataOpt.isPresent()) {
+      indexMetadataOpt.get().getIndexDefinitions().put(indexName, indexDefinition);
     } else {
-      functionalIndexMetadata = Option.of(new HoodieFunctionalIndexMetadata(Collections.singletonMap(indexName, functionalIndexDefinition)));
+      indexMetadataOpt = Option.of(new HoodieIndexMetadata(Collections.singletonMap(indexName, indexDefinition)));
     }
     try {
-      //fs.mkdirs(new Path(indexMetaPath).getParent());
-      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }
   }
 
   /**
-   * Returns Option of {@link HoodieFunctionalIndexMetadata} from index definition file if present, else returns empty Option.
+   * Returns Option of {@link HoodieIndexMetadata} from index definition file if present, else returns empty Option.
    */
-  public Option<HoodieFunctionalIndexMetadata> getFunctionalIndexMetadata() {
-    if (functionalIndexMetadata.isPresent()) {
-      return functionalIndexMetadata;
+  public Option<HoodieIndexMetadata> getIndexMetadata() {
+    if (indexMetadataOpt.isPresent() && !indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
+      return indexMetadataOpt;
     }
     if (tableConfig.getIndexDefinitionPath().isPresent() && StringUtils.nonEmpty(tableConfig.getIndexDefinitionPath().get())) {
-      Path indexDefinitionPath = new Path(tableConfig.getIndexDefinitionPath().get());
+      StoragePath indexDefinitionPath =
+          new StoragePath(tableConfig.getIndexDefinitionPath().get());
       try {
-        return Option.of(HoodieFunctionalIndexMetadata.fromJson(new String(FileIOUtils.readDataFromPath(fs, indexDefinitionPath).get())));
+        return Option.of(HoodieIndexMetadata.fromJson(
+            new String(FileIOUtils.readDataFromPath(storage, indexDefinitionPath).get())));
       } catch (IOException e) {
         throw new HoodieIOException("Could not load functional index metadata at path: " + tableConfig.getIndexDefinitionPath().get(), e);
       }
@@ -237,11 +240,11 @@ public class HoodieTableMetaClient implements Serializable {
     return Option.empty();
   }
 
-  public void updateFunctionalIndexMetadata(HoodieFunctionalIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
-    this.functionalIndexMetadata = Option.of(newFunctionalIndexMetadata);
+  public void updateIndexMetadata(HoodieIndexMetadata newFunctionalIndexMetadata, String indexMetaPath) {
+    this.indexMetadataOpt = Option.of(newFunctionalIndexMetadata);
     try {
       // update the index metadata file as well
-      FileIOUtils.createFileInPath(fs, new Path(indexMetaPath), Option.of(functionalIndexMetadata.get().toJson().getBytes(StandardCharsets.UTF_8)));
+      FileIOUtils.createFileInPath(storage, new StoragePath(indexMetaPath), Option.of(getUTF8Bytes(indexMetadataOpt.get().toJson())));
     } catch (IOException e) {
       throw new HoodieIOException("Could not write functional index metadata at path: " + indexMetaPath, e);
     }
@@ -249,7 +252,7 @@ public class HoodieTableMetaClient implements Serializable {
 
   public static HoodieTableMetaClient reload(HoodieTableMetaClient oldMetaClient) {
     return HoodieTableMetaClient.builder()
-        .setConf(oldMetaClient.hadoopConf.get())
+        .setStorage(oldMetaClient.getStorage())
         .setBasePath(oldMetaClient.basePath.toString())
         .setLoadActiveTimelineOnLoad(oldMetaClient.loadActiveTimelineOnLoad)
         .setConsistencyGuardConfig(oldMetaClient.consistencyGuardConfig)
@@ -268,7 +271,7 @@ public class HoodieTableMetaClient implements Serializable {
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
 
-    fs = null; // will be lazily initialized
+    storage = null; // will be lazily initialized
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
@@ -278,17 +281,8 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * Returns base path of the table
    */
-  public Path getBasePathV2() {
-    return basePath.get();
-  }
-
-  /**
-   * @return Base path
-   * @deprecated please use {@link #getBasePathV2()}
-   */
-  @Deprecated
-  public String getBasePath() {
-    return basePath.get().toString(); // this invocation is cached
+  public StoragePath getBasePath() {
+    return basePath; // this invocation is cached
   }
 
   /**
@@ -301,29 +295,29 @@ public class HoodieTableMetaClient implements Serializable {
   /**
    * @return Meta path
    */
-  public String getMetaPath() {
-    return metaPath.get().toString();  // this invocation is cached
+  public StoragePath getMetaPath() {
+    return metaPath;
   }
 
   /**
    * @return schema folder path
    */
   public String getSchemaFolderName() {
-    return new Path(metaPath.get(), SCHEMA_FOLDER_NAME).toString();
+    return new StoragePath(metaPath, SCHEMA_FOLDER_NAME).toString();
   }
 
   /**
    * @return Hashing metadata base path
    */
   public String getHashingMetadataPath() {
-    return new Path(metaPath.get(), HASHING_METADATA_FOLDER_NAME).toString();
+    return new StoragePath(metaPath, HASHING_METADATA_FOLDER_NAME).toString();
   }
 
   /**
    * @return Temp Folder path
    */
   public String getTempFolderPath() {
-    return basePath + Path.SEPARATOR + TEMPFOLDER_NAME;
+    return basePath + StoragePath.SEPARATOR + TEMPFOLDER_NAME;
   }
 
   /**
@@ -333,35 +327,35 @@ public class HoodieTableMetaClient implements Serializable {
    * @return
    */
   public String getMarkerFolderPath(String instantTs) {
-    return String.format("%s%s%s", getTempFolderPath(), Path.SEPARATOR, instantTs);
+    return String.format("%s%s%s", getTempFolderPath(), StoragePath.SEPARATOR, instantTs);
   }
 
   /**
    * @return Auxiliary Meta path
    */
   public String getMetaAuxiliaryPath() {
-    return basePath + Path.SEPARATOR + AUXILIARYFOLDER_NAME;
+    return basePath + StoragePath.SEPARATOR + AUXILIARYFOLDER_NAME;
   }
 
   /**
    * @return Heartbeat folder path.
    */
   public static String getHeartbeatFolderPath(String basePath) {
-    return String.format("%s%s%s", basePath, Path.SEPARATOR, HEARTBEAT_FOLDER_NAME);
+    return String.format("%s%s%s", basePath, StoragePath.SEPARATOR, HEARTBEAT_FOLDER_NAME);
   }
 
   /**
    * @return Bootstrap Index By Partition Folder
    */
   public String getBootstrapIndexByPartitionFolderPath() {
-    return basePath + Path.SEPARATOR + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
+    return basePath + StoragePath.SEPARATOR + BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH;
   }
 
   /**
    * @return Bootstrap Index By Hudi File Id Folder
    */
   public String getBootstrapIndexByFileIdFolderNameFolderPath() {
-    return basePath + Path.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
+    return basePath + StoragePath.SEPARATOR + BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH;
   }
 
   /**
@@ -369,7 +363,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String getArchivePath() {
     String archiveFolder = tableConfig.getArchivelogFolder();
-    return getMetaPath() + Path.SEPARATOR + archiveFolder;
+    return getMetaPath() + StoragePath.SEPARATOR + archiveFolder;
   }
 
   /**
@@ -384,52 +378,44 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public Boolean isMetadataTable() {
-    return HoodieTableMetadata.isMetadataTable(getBasePathV2().toString());
+    return HoodieTableMetadata.isMetadataTable(getBasePath());
   }
 
-  /**
-   * Get the FS implementation for this table.
-   */
-  public HoodieWrapperFileSystem getFs() {
-    if (fs == null) {
-      FileSystem fileSystem = FSUtils.getFs(metaPath.get(), hadoopConf.newCopy());
-
-      if (fileSystemRetryConfig.isFileSystemActionRetryEnable()) {
-        fileSystem = new HoodieRetryWrapperFileSystem(fileSystem,
-            fileSystemRetryConfig.getMaxRetryIntervalMs(),
-            fileSystemRetryConfig.getMaxRetryNumbers(),
-            fileSystemRetryConfig.getInitialRetryIntervalMs(),
-            fileSystemRetryConfig.getRetryExceptions());
-      }
-      ValidationUtils.checkArgument(!(fileSystem instanceof HoodieWrapperFileSystem),
-          "File System not expected to be that of HoodieWrapperFileSystem");
-      fs = new HoodieWrapperFileSystem(fileSystem,
-          consistencyGuardConfig.isConsistencyCheckEnabled()
-              ? new FailSafeConsistencyGuard(fileSystem, consistencyGuardConfig)
-              : new NoOpConsistencyGuard());
+  public HoodieStorage getStorage() {
+    if (storage == null) {
+      storage = getStorage(metaPath, getStorageConf(), consistencyGuardConfig, fileSystemRetryConfig);
     }
-    return fs;
+    return storage;
   }
 
-  public void setFs(HoodieWrapperFileSystem fs) {
-    this.fs = fs;
+  private static HoodieStorage getStorage(StoragePath path,
+                                          StorageConfiguration<?> storageConf,
+                                          ConsistencyGuardConfig consistencyGuardConfig,
+                                          FileSystemRetryConfig fileSystemRetryConfig) {
+    HoodieStorage newStorage = HoodieStorageUtils.getStorage(path, storageConf);
+    ConsistencyGuard consistencyGuard = consistencyGuardConfig.isConsistencyCheckEnabled()
+        ? new FailSafeConsistencyGuard(newStorage, consistencyGuardConfig)
+        : new NoOpConsistencyGuard();
+
+    return getIOFactory(newStorage).getStorage(path,
+        fileSystemRetryConfig.isFileSystemActionRetryEnable(),
+        fileSystemRetryConfig.getMaxRetryIntervalMs(),
+        fileSystemRetryConfig.getMaxRetryNumbers(),
+        fileSystemRetryConfig.getInitialRetryIntervalMs(),
+        fileSystemRetryConfig.getRetryExceptions(),
+        consistencyGuard);
   }
 
-  /**
-   * Return raw file-system.
-   *
-   * @return fs
-   */
-  public FileSystem getRawFs() {
-    return getFs().getFileSystem();
+  public void setHoodieStorage(HoodieStorage storage) {
+    this.storage = storage;
   }
 
-  public Configuration getHadoopConf() {
-    return hadoopConf.get();
+  public HoodieStorage getRawHoodieStorage() {
+    return getStorage().getRawStorage();
   }
 
-  public SerializableConfiguration getSerializableHadoopConf() {
-    return hadoopConf;
+  public StorageConfiguration<?> getStorageConf() {
+    return storageConf;
   }
 
   /**
@@ -468,7 +454,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public String createNewInstantTime(boolean shouldLock) {
     TimeGenerator timeGenerator = TimeGenerators
-        .getTimeGenerator(timeGeneratorConfig, hadoopConf.get());
+        .getTimeGenerator(timeGeneratorConfig, storageConf);
     return HoodieActiveTimeline.createNewInstantTime(shouldLock, timeGenerator);
   }
 
@@ -584,90 +570,97 @@ public class HoodieTableMetaClient implements Serializable {
    *
    * @return Instance of HoodieTableMetaClient
    */
-  public static HoodieTableMetaClient initTableAndGetMetaClient(Configuration hadoopConf, String basePath,
+  public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, String basePath,
                                                                 Properties props) throws IOException {
-    initTableMetaClient(hadoopConf, basePath, props);
+    return initTableAndGetMetaClient(storageConf, new StoragePath(basePath), props);
+  }
+
+  public static HoodieTableMetaClient initTableAndGetMetaClient(StorageConfiguration<?> storageConf, StoragePath basePath,
+                                                                Properties props) throws IOException {
+    initTableMetaClient(storageConf, basePath, props);
     // We should not use fs.getConf as this might be different from the original configuration
     // used to create the fs in unit tests
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(hadoopConf).setBasePath(basePath)
-        .setMetaserverConfig(props)
-        .build();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(basePath)
+            .setMetaserverConfig(props)
+            .build();
     LOG.info("Finished initializing Table of type " + metaClient.getTableConfig().getTableType() + " from " + basePath);
     return metaClient;
   }
 
-  private static void initTableMetaClient(Configuration hadoopConf, String basePath,
+  private static void initTableMetaClient(StorageConfiguration<?> storageConf, StoragePath basePath,
                                           Properties props) throws IOException {
     LOG.info("Initializing " + basePath + " as hoodie table " + basePath);
-    Path basePathDir = new Path(basePath);
-    final FileSystem fs = FSUtils.getFs(basePath, hadoopConf);
-    if (!fs.exists(basePathDir)) {
-      fs.mkdirs(basePathDir);
+    final HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, storageConf);
+    if (!storage.exists(basePath)) {
+      storage.createDirectory(basePath);
     }
-    Path metaPathDir = new Path(basePath, METAFOLDER_NAME);
-    if (!fs.exists(metaPathDir)) {
-      fs.mkdirs(metaPathDir);
+    StoragePath metaPathDir = new StoragePath(basePath, METAFOLDER_NAME);
+    if (!storage.exists(metaPathDir)) {
+      storage.createDirectory(metaPathDir);
     }
     // create schema folder
-    Path schemaPathDir = new Path(metaPathDir, SCHEMA_FOLDER_NAME);
-    if (!fs.exists(schemaPathDir)) {
-      fs.mkdirs(schemaPathDir);
+    StoragePath schemaPathDir = new StoragePath(metaPathDir, SCHEMA_FOLDER_NAME);
+    if (!storage.exists(schemaPathDir)) {
+      storage.createDirectory(schemaPathDir);
     }
 
     // if anything other than default archive log folder is specified, create that too
     String archiveLogPropVal = new HoodieConfig(props).getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER);
     if (!StringUtils.isNullOrEmpty(archiveLogPropVal)) {
-      Path archiveLogDir = new Path(metaPathDir, archiveLogPropVal);
-      if (!fs.exists(archiveLogDir)) {
-        fs.mkdirs(archiveLogDir);
+      StoragePath archiveLogDir = new StoragePath(metaPathDir, archiveLogPropVal);
+      if (!storage.exists(archiveLogDir)) {
+        storage.createDirectory(archiveLogDir);
       }
     }
 
     // Always create temporaryFolder which is needed for finalizeWrite for Hoodie tables
-    final Path temporaryFolder = new Path(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
-    if (!fs.exists(temporaryFolder)) {
-      fs.mkdirs(temporaryFolder);
+    final StoragePath temporaryFolder = new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME);
+    if (!storage.exists(temporaryFolder)) {
+      storage.createDirectory(temporaryFolder);
     }
 
     // Always create auxiliary folder which is needed to track compaction workloads (stats and any metadata in future)
-    final Path auxiliaryFolder = new Path(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
-    if (!fs.exists(auxiliaryFolder)) {
-      fs.mkdirs(auxiliaryFolder);
+    final StoragePath auxiliaryFolder = new StoragePath(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME);
+    if (!storage.exists(auxiliaryFolder)) {
+      storage.createDirectory(auxiliaryFolder);
     }
 
-    initializeBootstrapDirsIfNotExists(hadoopConf, basePath, fs);
-    HoodieTableConfig.create(fs, metaPathDir, props);
+    initializeBootstrapDirsIfNotExists(basePath, storage);
+    // When the table is initialized, set the initial version to be the current version.
+    props.put(INITIAL_VERSION.key(), String.valueOf(HoodieTableVersion.current().versionCode()));
+    HoodieTableConfig.create(storage, metaPathDir, props);
   }
 
-  public static void initializeBootstrapDirsIfNotExists(Configuration hadoopConf, String basePath, FileSystem fs) throws IOException {
+  public static void initializeBootstrapDirsIfNotExists(StoragePath basePath, HoodieStorage storage) throws IOException {
 
     // Create bootstrap index by partition folder if it does not exist
-    final Path bootstrap_index_folder_by_partition =
-        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH);
-    if (!fs.exists(bootstrap_index_folder_by_partition)) {
-      fs.mkdirs(bootstrap_index_folder_by_partition);
+    final StoragePath bootstrap_index_folder_by_partition =
+        new StoragePath(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_PARTITION_FOLDER_PATH);
+    if (!storage.exists(bootstrap_index_folder_by_partition)) {
+      storage.createDirectory(bootstrap_index_folder_by_partition);
     }
 
 
-    // Create bootstrap index by partition folder if it does not exist
-    final Path bootstrap_index_folder_by_fileids =
-        new Path(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH);
-    if (!fs.exists(bootstrap_index_folder_by_fileids)) {
-      fs.mkdirs(bootstrap_index_folder_by_fileids);
+    // Create bootstrap index by file-id folder if it does not exist
+    final StoragePath bootstrap_index_folder_by_fileids =
+        new StoragePath(basePath, HoodieTableMetaClient.BOOTSTRAP_INDEX_BY_FILE_ID_FOLDER_PATH);
+    if (!storage.exists(bootstrap_index_folder_by_fileids)) {
+      storage.createDirectory(bootstrap_index_folder_by_fileids);
     }
   }
 
   /**
    * Helper method to scan all hoodie-instant metafiles.
    *
-   * @param fs         The file system implementation for this table
+   * @param storage    The file system implementation for this table
    * @param metaPath   The meta path where meta files are stored
    * @param nameFilter The name filter to filter meta files
    * @return An array of meta FileStatus
    * @throws IOException In case of failure
    */
-  public static FileStatus[] scanFiles(FileSystem fs, Path metaPath, PathFilter nameFilter) throws IOException {
-    return fs.listStatus(metaPath, nameFilter);
+  public static List<StoragePathInfo> scanFiles(HoodieStorage storage, StoragePath metaPath,
+                                                StoragePathFilter nameFilter) throws IOException {
+    return storage.listDirectEntries(metaPath, nameFilter);
   }
 
   /**
@@ -683,7 +676,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTimeline getCommitsTimeline() {
     switch (this.getTableType()) {
       case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits
         // Include commit action to be able to start doing a MOR over a COW table - no
@@ -703,7 +696,7 @@ public class HoodieTableMetaClient implements Serializable {
   public HoodieTimeline getCommitsAndCompactionTimeline() {
     switch (this.getTableType()) {
       case COPY_ON_WRITE:
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       case MERGE_ON_READ:
         return getActiveTimeline().getWriteTimeline();
       default:
@@ -719,7 +712,7 @@ public class HoodieTableMetaClient implements Serializable {
       case COPY_ON_WRITE:
       case MERGE_ON_READ:
         // We need to include the parquet files written out in delta commits in tagging
-        return getActiveTimeline().getCommitTimeline();
+        return getActiveTimeline().getCommitAndReplaceTimeline();
       default:
         throw new HoodieException("Unsupported table type :" + this.getTableType());
     }
@@ -743,7 +736,7 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) throws IOException {
-    return scanHoodieInstantsFromFileSystem(metaPath.get(), includedExtensions, applyLayoutVersionFilters);
+    return scanHoodieInstantsFromFileSystem(metaPath, includedExtensions, applyLayoutVersionFilters);
   }
 
   /**
@@ -756,15 +749,15 @@ public class HoodieTableMetaClient implements Serializable {
    * @return List of Hoodie Instants generated
    * @throws IOException in case of failure
    */
-  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(Path timelinePath, Set<String> includedExtensions,
+  public List<HoodieInstant> scanHoodieInstantsFromFileSystem(StoragePath timelinePath, Set<String> includedExtensions,
                                                               boolean applyLayoutVersionFilters) throws IOException {
-    Stream<HoodieInstant> instantStream = Arrays.stream(
+    Stream<HoodieInstant> instantStream =
         HoodieTableMetaClient
-            .scanFiles(getFs(), timelinePath, path -> {
+            .scanFiles(getStorage(), timelinePath, path -> {
               // Include only the meta files with extensions that needs to be included
               String extension = HoodieInstant.getTimelineFileExtension(path.getName());
               return includedExtensions.contains(extension);
-            })).map(HoodieInstant::new);
+            }).stream().map(HoodieInstant::new);
 
     if (applyLayoutVersionFilters) {
       instantStream = TimelineLayout.getLayout(getTimelineLayoutVersion()).filterHoodieInstants(instantStream);
@@ -800,21 +793,21 @@ public class HoodieTableMetaClient implements Serializable {
   }
 
   public void initializeBootstrapDirsIfNotExists() throws IOException {
-    initializeBootstrapDirsIfNotExists(getHadoopConf(), basePath.toString(), getFs());
+    initializeBootstrapDirsIfNotExists(basePath, getStorage());
   }
 
-  private static HoodieTableMetaClient newMetaClient(Configuration conf, String basePath, boolean loadActiveTimelineOnLoad,
+  private static HoodieTableMetaClient newMetaClient(HoodieStorage storage, String basePath, boolean loadActiveTimelineOnLoad,
                                                      ConsistencyGuardConfig consistencyGuardConfig, Option<TimelineLayoutVersion> layoutVersion,
                                                      String payloadClassName, String recordMergerStrategy,
                                                      HoodieTimeGeneratorConfig timeGeneratorConfig, FileSystemRetryConfig fileSystemRetryConfig,
                                                      HoodieMetaserverConfig metaserverConfig) {
-    return metaserverConfig.isMetaserverEnabled()
-        ? (HoodieTableMetaClient) ReflectionUtils.loadClass("org.apache.hudi.common.table.HoodieTableMetaserverClient",
-        new Class<?>[] {Configuration.class, String.class, ConsistencyGuardConfig.class, String.class, HoodieTimeGeneratorConfig.class,
+    return metaserverConfig.isMetaserverEnabled() ? (HoodieTableMetaClient) ReflectionUtils.loadClass(
+        "org.apache.hudi.common.table.HoodieTableMetaserverClient",
+        new Class<?>[] {HoodieStorage.class, String.class, ConsistencyGuardConfig.class, String.class, HoodieTimeGeneratorConfig.class,
             FileSystemRetryConfig.class, Option.class, Option.class, HoodieMetaserverConfig.class},
-        conf, basePath, consistencyGuardConfig, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
+        storage, basePath, consistencyGuardConfig, recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig,
         Option.ofNullable(metaserverConfig.getDatabaseName()), Option.ofNullable(metaserverConfig.getTableName()), metaserverConfig)
-        : new HoodieTableMetaClient(conf, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy,
+        : new HoodieTableMetaClient(storage, basePath, loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName, recordMergerStrategy,
         timeGeneratorConfig, fileSystemRetryConfig);
   }
 
@@ -827,7 +820,8 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public static class Builder {
 
-    private Configuration conf;
+    private StorageConfiguration<?> conf;
+    private HoodieStorage storage;
     private String basePath;
     private boolean loadActiveTimelineOnLoad = false;
     private String payloadClassName = null;
@@ -838,13 +832,23 @@ public class HoodieTableMetaClient implements Serializable {
     private HoodieMetaserverConfig metaserverConfig = HoodieMetaserverConfig.newBuilder().build();
     private Option<TimelineLayoutVersion> layoutVersion = Option.of(TimelineLayoutVersion.CURR_LAYOUT_VERSION);
 
-    public Builder setConf(Configuration conf) {
+    public Builder setConf(StorageConfiguration<?> conf) {
       this.conf = conf;
+      return this;
+    }
+
+    public Builder setStorage(HoodieStorage storage) {
+      this.storage = storage;
       return this;
     }
 
     public Builder setBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    public Builder setBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 
@@ -895,12 +899,16 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public HoodieTableMetaClient build() {
-      ValidationUtils.checkArgument(conf != null, "Configuration needs to be set to init HoodieTableMetaClient");
-      ValidationUtils.checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
+      checkArgument(conf != null || storage != null,
+          "Storage configuration or HoodieStorage needs to be set to init HoodieTableMetaClient");
+      checkArgument(basePath != null, "basePath needs to be set to init HoodieTableMetaClient");
       if (timeGeneratorConfig == null) {
         timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().withPath(basePath).build();
       }
-      return newMetaClient(conf, basePath,
+      if (storage == null) {
+        storage = getStorage(new StoragePath(basePath), conf, consistencyGuardConfig, fileSystemRetryConfig);
+      }
+      return newMetaClient(storage, basePath,
           loadActiveTimelineOnLoad, consistencyGuardConfig, layoutVersion, payloadClassName,
           recordMergerStrategy, timeGeneratorConfig, fileSystemRetryConfig, metaserverConfig);
     }
@@ -920,7 +928,9 @@ public class HoodieTableMetaClient implements Serializable {
     private String tableName;
     private String tableCreateSchema;
     private String recordKeyFields;
+    private String secondaryKeyFields;
     private String archiveLogFolder;
+    private RecordMergeMode recordMergeMode;
     private String payloadClassName;
     private String payloadType;
     private String recordMergerStrategy;
@@ -987,8 +997,18 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setSecondaryKeyFields(String secondaryKeyFields) {
+      this.secondaryKeyFields = secondaryKeyFields;
+      return this;
+    }
+
     public PropertyBuilder setArchiveLogFolder(String archiveLogFolder) {
       this.archiveLogFolder = archiveLogFolder;
+      return this;
+    }
+
+    public PropertyBuilder setRecordMergeMode(RecordMergeMode recordMergeMode) {
+      this.recordMergeMode = recordMergeMode;
       return this;
     }
 
@@ -1137,6 +1157,7 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())
           .setArchiveLogFolder(metaClient.getTableConfig().getArchivelogFolder())
+          .setRecordMergeMode(metaClient.getTableConfig().getRecordMergeMode())
           .setPayloadClassName(metaClient.getTableConfig().getPayloadClass())
           .setRecordMergerStrategy(metaClient.getTableConfig().getRecordMergerStrategy());
     }
@@ -1165,6 +1186,10 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.ARCHIVELOG_FOLDER)) {
         setArchiveLogFolder(
             hoodieConfig.getString(HoodieTableConfig.ARCHIVELOG_FOLDER));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE)) {
+        setRecordMergeMode(
+            RecordMergeMode.valueOf(hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_MODE).toUpperCase()));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
@@ -1255,8 +1280,8 @@ public class HoodieTableMetaClient implements Serializable {
     }
 
     public Properties build() {
-      ValidationUtils.checkArgument(tableType != null, "tableType is null");
-      ValidationUtils.checkArgument(tableName != null, "tableName is null");
+      checkArgument(tableType != null, "tableType is null");
+      checkArgument(tableName != null, "tableName is null");
 
       HoodieTableConfig tableConfig = new HoodieTableConfig();
 
@@ -1276,6 +1301,14 @@ public class HoodieTableMetaClient implements Serializable {
       }
 
       if (tableType == HoodieTableType.MERGE_ON_READ) {
+        if (recordMergerStrategy != null) {
+          tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
+        }
+        inferRecordMergeMode();
+        validateMergeConfigs();
+        if (recordMergeMode != null) {
+          tableConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+        }
         if (recordMergerStrategy != null) {
           tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
         }
@@ -1372,11 +1405,101 @@ public class HoodieTableMetaClient implements Serializable {
     /**
      * Init Table with the properties build by this builder.
      *
-     * @param configuration The hadoop config.
+     * @param configuration The storage configuration.
      * @param basePath      The base path for hoodie table.
      */
-    public HoodieTableMetaClient initTable(Configuration configuration, String basePath)
+    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
         throws IOException {
+      return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
+    }
+
+    private void inferRecordMergeMode() {
+      if (null == recordMergeMode) {
+        boolean payloadClassNameSet = null != payloadClassName;
+        boolean payloadTypeSet = null != payloadType;
+        boolean recordMergerStrategySet = null != recordMergerStrategy;
+
+        if (!recordMergerStrategySet
+            || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)
+            || recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
+          if (payloadClassNameSet) {
+            if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+              recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+              recordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
+            } else if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+              recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+              recordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
+            } else {
+              recordMergeMode = RecordMergeMode.CUSTOM;
+            }
+          } else if (payloadTypeSet) {
+            if (payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())) {
+              recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+              recordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
+            } else if (payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())) {
+              recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+              recordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
+            } else {
+              recordMergeMode = RecordMergeMode.CUSTOM;
+            }
+          } else {
+            LOG.warn("One of the payload class name or payload type must be set for the MERGE_ON_READ table");
+            recordMergeMode = RecordMergeMode.valueOf(RECORD_MERGE_MODE.defaultValue());
+            LOG.warn("Setting the record merge mode to the default: {}", recordMergeMode);
+          }
+        } else {
+          // Custom merger strategy is set
+          recordMergeMode = RecordMergeMode.CUSTOM;
+        }
+      }
+    }
+
+    private void validateMergeConfigs() {
+      boolean payloadClassNameSet = null != payloadClassName;
+      boolean payloadTypeSet = null != payloadType;
+      boolean recordMergerStrategySet = null != recordMergerStrategy;
+      boolean recordMergeModeSet = null != recordMergeMode;
+
+      checkArgument(recordMergeModeSet,
+          "Record merge mode " + HoodieTableConfig.RECORD_MERGE_MODE.key() + " should be set");
+      switch (recordMergeMode) {
+        case OVERWRITE_WITH_LATEST:
+          checkArgument((!payloadClassNameSet && !payloadTypeSet)
+                  || (payloadClassNameSet && payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName()))
+                  || (payloadTypeSet && payloadType.equals(RecordPayloadType.OVERWRITE_LATEST_AVRO.name())),
+              constructMergeConfigErrorMessage());
+          checkArgument(recordMergerStrategySet && recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID),
+              "Record merger strategy (" + (recordMergerStrategySet ? recordMergerStrategy : "null")
+                  + ") should be consistent with the record merging mode OVERWRITE_WITH_LATEST");
+          break;
+        case EVENT_TIME_ORDERING:
+          checkArgument((!payloadClassNameSet && !payloadTypeSet)
+                  || (payloadClassNameSet && payloadClassName.equals(DefaultHoodieRecordPayload.class.getName()))
+                  || (payloadTypeSet && payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())),
+              constructMergeConfigErrorMessage());
+          checkArgument(!recordMergerStrategySet
+                  || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID),
+              "Record merger strategy (" + (recordMergerStrategySet ? recordMergerStrategy : "null")
+                  + ") should be consistent with the record merging mode EVENT_TIME_ORDERING");
+          break;
+        case CUSTOM:
+        default:
+          // No op
+      }
+    }
+
+    private String constructMergeConfigErrorMessage() {
+      StringBuilder stringBuilder = new StringBuilder();
+      stringBuilder.append("Payload class name (");
+      stringBuilder.append(payloadClassName != null ? payloadClassName : "null");
+      stringBuilder.append(") or type (");
+      stringBuilder.append(payloadType != null ? payloadType : "null");
+      stringBuilder.append(") should be consistent with the record merge mode ");
+      stringBuilder.append(recordMergeMode);
+      return stringBuilder.toString();
+    }
+
+    public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, StoragePath basePath) throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
     }
   }

@@ -20,8 +20,11 @@
 package org.apache.hudi.data;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.spark.sql.internal.SQLConf;
 import org.junit.jupiter.api.Test;
 
 import java.util.stream.Collectors;
@@ -36,5 +39,30 @@ public class TestHoodieJavaRDD extends HoodieClientTestBase {
     HoodieData<Integer> rddData = HoodieJavaRDD.of(jsc.parallelize(
         IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()), numPartitions));
     assertEquals(numPartitions, rddData.getNumPartitions());
+  }
+
+  @Test
+  public void testDeduceNumPartitions() {
+    int numPartitions = 100;
+    jsc.sc().conf().remove("spark.default.parallelism");
+    SQLConf.get().unsetConf("spark.sql.shuffle.partitions");
+
+    // rdd parallelize
+    SQLConf.get().setConfString("spark.sql.shuffle.partitions", "5");
+    HoodieData<Integer> rddData = HoodieJavaRDD.of(jsc.parallelize(
+        IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()), numPartitions));
+    assertEquals(5, rddData.deduceNumPartitions());
+
+    // sql parallelize
+    SQLConf.get().unsetConf("spark.sql.shuffle.partitions");
+    jsc.sc().conf().set("spark.default.parallelism", "6");
+    rddData = HoodieJavaRDD.of(jsc.parallelize(
+        IntStream.rangeClosed(0, 100).boxed().collect(Collectors.toList()), numPartitions));
+    assertEquals(6, rddData.deduceNumPartitions());
+
+    // use partitioner num
+    HoodiePairData<Integer, Integer> shuffleRDD = rddData.mapToPair(key -> Pair.of(key, 1))
+        .reduceByKey((p1, p2) -> p1, 11);
+    assertEquals(11, shuffleRDD.deduceNumPartitions());
   }
 }

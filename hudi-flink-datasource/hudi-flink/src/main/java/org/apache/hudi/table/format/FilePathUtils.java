@@ -18,8 +18,9 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.DataTypeUtils;
 
 import org.apache.flink.api.java.tuple.Tuple2;
@@ -98,7 +99,7 @@ public class FilePathUtils {
     int i = 0;
     for (Map.Entry<String, String> e : partitionKVs.entrySet()) {
       if (i > 0) {
-        suffixBuf.append(Path.SEPARATOR);
+        suffixBuf.append(StoragePath.SEPARATOR);
       }
       if (hivePartition) {
         suffixBuf.append(escapePathName(e.getKey()));
@@ -108,7 +109,7 @@ public class FilePathUtils {
       i++;
     }
     if (sepSuffix) {
-      suffixBuf.append(Path.SEPARATOR);
+      suffixBuf.append(StoragePath.SEPARATOR);
     }
     return suffixBuf.toString();
   }
@@ -278,7 +279,7 @@ public class FilePathUtils {
   }
 
   public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, Configuration conf) {
-    return getFileStatusRecursively(path, expectLevel, FSUtils.getFs(path.toString(), conf));
+    return getFileStatusRecursively(path, expectLevel, HadoopFSUtils.getFs(path.toString(), conf));
   }
 
   public static FileStatus[] getFileStatusRecursively(Path path, int expectLevel, FileSystem fs) {
@@ -345,7 +346,7 @@ public class FilePathUtils {
     try {
       return FilePathUtils
           .searchPartKeyValueAndPaths(
-              FSUtils.getFs(path.toString(), hadoopConf),
+              HadoopFSUtils.getFs(path.toString(), hadoopConf),
               path,
               hivePartition,
               partitionKeys.toArray(new String[0]))
@@ -462,6 +463,10 @@ public class FilePathUtils {
    * Transforms the Hadoop path to Flink path.
    */
   public static org.apache.flink.core.fs.Path toFlinkPath(Path path) {
+    return new org.apache.flink.core.fs.Path(path.toUri());
+  }
+
+  public static org.apache.flink.core.fs.Path toFlinkPath(StoragePath path) {
     return new org.apache.flink.core.fs.Path(path.toUri());
   }
 

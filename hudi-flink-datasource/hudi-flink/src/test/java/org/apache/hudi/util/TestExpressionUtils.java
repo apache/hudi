@@ -140,7 +140,7 @@ class TestExpressionUtils {
       if (dataList.get(i) instanceof LocalTime) {
         assertEquals(((LocalTime) dataList.get(i)).get(ChronoField.MILLI_OF_DAY), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       } else if (dataList.get(i) instanceof LocalDate) {
-        assertEquals(((LocalDate) dataList.get(i)).toEpochDay(), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
+        assertEquals((int) ((LocalDate) dataList.get(i)).toEpochDay(), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       } else if (dataList.get(i) instanceof LocalDateTime) {
         assertEquals(((LocalDateTime) dataList.get(i)).toInstant(ZoneOffset.UTC).toEpochMilli(), ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) childExprs.get(1)));
       } else {

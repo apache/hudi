@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
-    pathFilter = new HoodieROTablePathFilter(metaClient.getHadoopConf());
+    pathFilter = new HoodieROTablePathFilter(metaClient.getStorageConf().unwrapAs(Configuration.class));
     testTable = HoodieTestTable.of(metaClient);
   }
 
@@ -63,8 +64,8 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p2, "f3")));
     assertFalse(pathFilter.accept(testTable.forCommit("003").getBaseFilePath(p1, "f3")));
 
-    assertFalse(pathFilter.accept(testTable.getCommitFilePath("001")));
-    assertFalse(pathFilter.accept(testTable.getCommitFilePath("002")));
+    assertFalse(pathFilter.accept(new Path(testTable.getCommitFilePath("001").toUri())));
+    assertFalse(pathFilter.accept(new Path(testTable.getCommitFilePath("002").toUri())));
     assertFalse(pathFilter.accept(testTable.getInflightCommitFilePath("003")));
     assertFalse(pathFilter.accept(testTable.getRequestedCompactionFilePath("004")));
     assertFalse(pathFilter.accept(new Path("file:///" + basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")));

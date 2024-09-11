@@ -96,7 +96,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)
@@ -135,7 +136,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertNoWriteErrors(statuses);
       HoodieWriteConfig config = getConfig();
       List<String> partitionPaths =
-          FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), cfg.getBasePath());
+          FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
@@ -192,7 +193,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       if (testFailedRestore) {
         //test to make sure that restore commit is reused when the restore fails and is re-ran
         HoodieInstant inst =  table.getActiveTimeline().getRestoreTimeline().getInstants().get(0);
-        String restoreFileName = table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" + inst.getFileName();
+        String restoreFileName = table.getMetaClient().getBasePath() + "/.hoodie/" + inst.getFileName();
 
         //delete restore commit file
         assertTrue((new File(restoreFileName)).delete());
@@ -200,7 +201,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         if (!failedRestoreInflight) {
           //delete restore inflight file
           HoodieInstant inflightInst = new HoodieInstant(true, inst.getAction(), inst.getTimestamp());
-          assertTrue((new File(table.getMetaClient().getBasePathV2().toString() + "/.hoodie/" + inflightInst.getFileName())).delete());
+          assertTrue((new File(table.getMetaClient().getBasePath() + "/.hoodie/" + inflightInst.getFileName())).delete());
         }
         try (SparkRDDWriteClient newClient = getHoodieWriteClient(cfg)) {
           //restore again
@@ -232,7 +233,8 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS).retainCommits(1).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)
@@ -276,7 +278,8 @@ public class TestClientRollback extends HoodieClientTestBase {
     HoodieWriteConfig cfg = getConfigBuilder().withCleanConfig(HoodieCleanConfig.newBuilder()
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS).retainFileVersions(2).build()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      HoodieTestDataGenerator.writePartitionMetadataDeprecated(fs, HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
+      HoodieTestDataGenerator.writePartitionMetadataDeprecated(storage,
+          HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS, basePath);
 
       /**
        * Write 1 (only inserts)
@@ -315,7 +318,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       assertNoWriteErrors(statuses);
       HoodieWriteConfig config = getConfig();
       List<String> partitionPaths =
-              FSUtils.getAllPartitionPaths(context, config.getMetadataConfig(), cfg.getBasePath());
+          FSUtils.getAllPartitionPaths(context, storage, config.getMetadataConfig(), cfg.getBasePath());
       metaClient = HoodieTableMetaClient.reload(metaClient);
       HoodieSparkTable table = HoodieSparkTable.create(getConfig(), context, metaClient);
       final BaseFileOnlyView view1 = table.getBaseFileOnlyView();
@@ -406,7 +409,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
 
       Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap1 = new HashMap<>();
@@ -522,7 +525,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
-    HoodieTableMetadataWriter metadataWriter = enableMetadataTable ? SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context) : null;
+    HoodieTableMetadataWriter metadataWriter = enableMetadataTable ? SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context) : null;
     HoodieTestTable testTable = enableMetadataTable
         ? HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
         : HoodieTestTable.of(metaClient);
@@ -631,7 +634,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build()).build();
 
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(hadoopConf, config, context)) {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
 
       Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap1 = new HashMap<>();
@@ -728,7 +731,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     HoodieTableMetadataWriter metadataWriter = enableMetadataTable ? SparkHoodieBackedTableMetadataWriter.create(
-        metaClient.getHadoopConf(), config, context) : null;
+        metaClient.getStorageConf(), config, context) : null;
     HoodieTestTable testTable = enableMetadataTable
         ? HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context))
         : HoodieTestTable.of(metaClient);
@@ -744,7 +747,7 @@ public class TestClientRollback extends HoodieClientTestBase {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       if (isRollbackPlanCorrupted) {
         // Add a corrupted requested rollback plan
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath(), rollbackInstantTime, new byte[] {0, 1, 2});
+        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, new byte[] {0, 1, 2});
       } else {
         // Add a valid requested rollback plan to roll back commitTime3
         HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan();
@@ -756,7 +759,7 @@ public class TestClientRollback extends HoodieClientTestBase {
             .collect(Collectors.toList());
         rollbackPlan.setRollbackRequests(rollbackRequestList);
         rollbackPlan.setInstantToRollback(new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION));
-        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath(), rollbackInstantTime, rollbackPlan);
+        FileCreateUtils.createRequestedRollbackFile(metaClient.getBasePath().toString(), rollbackInstantTime, rollbackPlan);
       }
 
       // Rollback commit3
@@ -823,7 +826,7 @@ public class TestClientRollback extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
 
     // create test table with all commits completed
-    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getHadoopConf(), config, context)) {
+    try (HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(metaClient.getStorageConf(), config, context)) {
       HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, metadataWriter, Option.of(context));
       testTable.withPartitionMetaFiles(p1, p2, p3)
           .addCommit(commitTime1)

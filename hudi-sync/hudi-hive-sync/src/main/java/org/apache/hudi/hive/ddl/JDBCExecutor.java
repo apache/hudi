@@ -47,7 +47,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.HIVE_ESCAPE_CHARACTER;
  */
 public class JDBCExecutor extends QueryBasedDDLExecutor {
 
-  private static final Logger LOG = LoggerFactory.getLogger(QueryBasedDDLExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(JDBCExecutor.class);
 
   private Connection connection;
 

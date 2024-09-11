@@ -22,12 +22,10 @@ import org.apache.flink.runtime.client.JobStatusMessage;
 import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration;
 import org.apache.flink.test.util.AbstractTestBase;
 import org.apache.flink.test.util.MiniClusterWithClientResource;
-
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

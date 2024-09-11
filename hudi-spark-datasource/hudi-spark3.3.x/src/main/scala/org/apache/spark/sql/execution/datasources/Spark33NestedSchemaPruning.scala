@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hudi.{HoodieBaseRelation, SparkAdapterSupport}
+
 import org.apache.spark.sql.HoodieSpark3CatalystPlanUtils
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, NamedExpression, ProjectionOverSchema}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation

@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.HoodieTable;
@@ -81,12 +82,12 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getFs());
+    this.txnManager = new TransactionManager(config, table.getStorage());
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
-    this.metrics = new HoodieMetrics(config);
+    this.metrics = new HoodieMetrics(config, metaClient.getStorage());
   }
 
   public int archiveIfRequired(HoodieEngineContext context) throws IOException {
@@ -102,17 +103,23 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
         // there is no owner or instant time per se for archival.
         txnManager.beginTransaction(Option.empty(), Option.empty());
       }
+    } catch (HoodieLockException e) {
+      LOG.error("Fail to begin transaction", e);
+      return 0;
+    }
+
+    try {
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
       if (!instantsToArchive.isEmpty()) {
-        LOG.info("Archiving instants " + instantsToArchive);
+        LOG.info("Archiving and deleting instants {}", instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
           if (this.config.isFailOnTimelineArchivingEnabled()) {
             throw new HoodieException(e);
           }
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
-        LOG.info("Deleting archived instants " + instantsToArchive);
+        LOG.debug("Deleting archived instants");
         deleteArchivedInstants(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
@@ -201,19 +208,21 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     // Meanwhile, when inline or async clustering is enabled, we need to ensure that there is a commit in the active timeline
     // to check whether the file slice generated in pending clustering after archive isn't committed.
     Option<HoodieInstant> earliestInstantToRetainForClustering =
-        ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient());
+        ClusteringUtils.getEarliestInstantToRetainForClustering(table.getActiveTimeline(), table.getMetaClient(),
+            config.getCleanerPolicy());
     earliestInstantToRetainCandidates.add(earliestInstantToRetainForClustering);
 
     // 4. If metadata table is enabled, do not archive instants which are more recent than the last compaction on the
     // metadata table.
     if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
-      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(table.getContext(), config.getMetadataConfig(), config.getBasePath())) {
+      try (HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
+          table.getContext(), table.getStorage(), config.getMetadataConfig(), config.getBasePath())) {
         Option<String> latestCompactionTime = tableMetadata.getLatestCompactionTime();
         if (!latestCompactionTime.isPresent()) {
           LOG.info("Not archiving as there is no compaction yet on the metadata table");
           return Collections.emptyList();
         } else {
-          LOG.info("Limiting archiving of instants to latest compaction on metadata table at " + latestCompactionTime.get());
+          LOG.info("Limiting archiving of instants to latest compaction on metadata table at {}", latestCompactionTime.get());
           earliestInstantToRetainCandidates.add(
               completedCommitsTimeline.findInstantsModifiedAfterByCompletionTime(latestCompactionTime.get()).firstInstant());
         }
@@ -228,7 +237,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
     if (table.isMetadataTable()) {
       HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
           .setBasePath(HoodieTableMetadata.getDatasetBasePath(config.getBasePath()))
-          .setConf(metaClient.getHadoopConf())
+          .setConf(metaClient.getStorageConf().newInstance())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
           TimelineUtils.getEarliestInstantForMetadataArchival(
@@ -316,8 +325,6 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   }
 
   private boolean deleteArchivedInstants(List<ActiveAction> activeActions, HoodieEngineContext context) {
-    LOG.info("Deleting instants " + activeActions);
-
     List<HoodieInstant> pendingInstants = new ArrayList<>();
     List<HoodieInstant> completedInstants = new ArrayList<>();
 
@@ -357,7 +364,7 @@ public class HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
   private void deleteAnyLeftOverMarkers(HoodieEngineContext context, ActiveAction activeAction) {
     WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, activeAction.getInstantTime());
     if (writeMarkers.deleteMarkerDir(context, config.getMarkersDeleteParallelism())) {
-      LOG.info("Cleaned up left over marker directory for instant :" + activeAction);
+      LOG.info("Cleaned up left over marker directory for instant: {}", activeAction);
     }
   }
 }

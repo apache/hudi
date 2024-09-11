@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
@@ -134,7 +135,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     pipeline1.assertEmptyDataFiles();
 
     // schedule compaction outside all writers
-    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());
     }
@@ -202,7 +203,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
         .assertNextEvent();
 
     // schedule compaction outside all writers
-    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());
     }
@@ -323,7 +324,7 @@ public class TestWriteMergeOnReadWithCompact extends TestWriteCopyOnWrite {
     pipeline2.checkWrittenData(tmpSnapshotResult, 1);
 
     // schedule compaction outside all writers
-    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
       Option<String> scheduleInstant = writeClient.scheduleCompaction(Option.empty());
       assertNotNull(scheduleInstant.get());
     }

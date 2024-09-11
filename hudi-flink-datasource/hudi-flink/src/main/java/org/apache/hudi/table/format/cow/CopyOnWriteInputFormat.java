@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.format.cow;
 
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
@@ -59,7 +59,7 @@ import java.util.Set;
  * to support TIMESTAMP_MILLIS.
  *
  * <p>Note: Override the {@link #createInputSplits} method from parent to rewrite the logic creating the FileSystem,
- * use {@link FSUtils#getFs} to get a plugin filesystem.
+ * use {@link HadoopFSUtils#getFs} to get a plugin filesystem.
  *
  * @see ParquetSplitReaderUtil
  */
@@ -161,7 +161,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
     for (Path path : getFilePaths()) {
       final org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(path.toUri());
-      final FileSystem fs = FSUtils.getFs(hadoopPath.toString(), this.conf.conf());
+      final FileSystem fs = HadoopFSUtils.getFs(hadoopPath.toString(), this.conf.conf());
       final FileStatus pathFile = fs.getFileStatus(hadoopPath);
 
       if (pathFile.isDirectory()) {
@@ -178,7 +178,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     if (unsplittable) {
       int splitNum = 0;
       for (final FileStatus file : files) {
-        final FileSystem fs = FSUtils.getFs(file.getPath().toString(), this.conf.conf());
+        final FileSystem fs = HadoopFSUtils.getFs(file.getPath().toString(), this.conf.conf());
         final BlockLocation[] blocks = fs.getFileBlockLocations(file, 0, file.getLen());
         Set<String> hosts = new HashSet<>();
         for (BlockLocation block : blocks) {
@@ -202,7 +202,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     int splitNum = 0;
     for (final FileStatus file : files) {
 
-      final FileSystem fs = FSUtils.getFs(file.getPath().toString(), this.conf.conf());
+      final FileSystem fs = HadoopFSUtils.getFs(file.getPath().toString(), this.conf.conf());
       final long len = file.getLen();
       final long blockSize = file.getBlockSize();
 
@@ -306,7 +306,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private long addFilesInDir(org.apache.hadoop.fs.Path path, List<FileStatus> files, boolean logExcludedFiles)
       throws IOException {
     final org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(path.toUri());
-    final FileSystem fs = FSUtils.getFs(hadoopPath.toString(), this.conf.conf());
+    final FileSystem fs = HadoopFSUtils.getFs(hadoopPath.toString(), this.conf.conf());
 
     long length = 0;
 

@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -39,13 +40,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.NESTED_AVRO_SCHEMA;
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 import static org.apache.spark.sql.types.DataTypes.createStructField;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -88,7 +93,7 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
   })
   public void testChainedTransformerValidationFails(String transformerName) {
     try {
-      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty());
+      ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option::empty);
       fail();
     } catch (Exception e) {
       assertTrue(e instanceof HoodieTransformPlanException, e.getMessage());
@@ -103,18 +108,36 @@ public class TestChainedTransformer extends SparkClientFunctionalTestHarness {
       "org.apache.hudi.utilities.transform.FlatteningTransformer,org.apache.hudi.utilities.transform.FlatteningTransformer"
   })
   public void testChainedTransformerValidationPasses(String transformerName) {
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.empty());
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option::empty);
     assertNotNull(transformer);
   }
 
   @Test
   public void testChainedTransformerTransformedSchema() {
     String transformerName = "org.apache.hudi.utilities.transform.FlatteningTransformer";
-    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), Option.of(NESTED_AVRO_SCHEMA));
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), () -> Option.of(NESTED_AVRO_SCHEMA));
     StructType transformedSchema = transformer.transformedSchema(jsc(), spark(), null, new TypedProperties());
     // Verify transformed nested fields are present in the transformed schema
     assertTrue(Arrays.asList(transformedSchema.fieldNames()).contains("fare_amount"));
     assertTrue(Arrays.asList(transformedSchema.fieldNames()).contains("fare_currency"));
     assertNotNull(transformer);
+  }
+
+  @Test
+  public void assertSchemaSupplierIsCalledPerInvocationOfTransformedSchema() {
+    String transformerName = "org.apache.hudi.utilities.transform.FlatteningTransformer";
+    AtomicInteger count = new AtomicInteger(0);
+    Supplier<Option<Schema>> schemaSupplier = () -> {
+      if (count.getAndIncrement() == 0) {
+        return Option.of(AVRO_SCHEMA);
+      } else {
+        return Option.of(NESTED_AVRO_SCHEMA);
+      }
+    };
+    ChainedTransformer transformer = new ChainedTransformer(Arrays.asList(transformerName.split(",")), schemaSupplier);
+    StructType transformedSchema1 = transformer.transformedSchema(jsc(), spark(), null, new TypedProperties());
+    StructType transformedSchema2 = transformer.transformedSchema(jsc(), spark(), null, new TypedProperties());
+    assertNotEquals(transformedSchema1, transformedSchema2);
+    assertEquals(2, count.get());
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,14 +30,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.stream.IntStream;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS;
-import static org.apache.hudi.sync.common.util.ManifestFileWriter.fetchLatestBaseFilesForAllPartitions;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestManifestFileWriter extends HoodieCommonTestHarness {
 
@@ -50,7 +50,7 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     // Generate 10 files under each partition
     createTestDataForPartitionedTable(metaClient, 10);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setMetaClient(metaClient).build();
-    assertEquals(30, fetchLatestBaseFilesForAllPartitions(metaClient, false, false).count());
+    assertEquals(30, manifestFileWriter.fetchLatestBaseFilesForAllPartitions(false).count());
   }
 
   @Test
@@ -59,8 +59,8 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     createTestDataForPartitionedTable(metaClient, 3);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setMetaClient(metaClient).build();
     manifestFileWriter.writeManifestFile(false);
-    Path manifestFilePath = manifestFileWriter.getManifestFilePath(false);
-    try (InputStream is = metaClient.getFs().open(manifestFilePath)) {
+    StoragePath manifestFilePath = manifestFileWriter.getManifestFilePath(false);
+    try (InputStream is = metaClient.getStorage().open(manifestFilePath)) {
       List<String> expectedLines = FileIOUtils.readAsUTFStringLines(is);
       assertEquals(9, expectedLines.size(), "there should be 9 base files in total; 3 per partition.");
       expectedLines.forEach(line -> assertFalse(line.contains(basePath)));
@@ -73,11 +73,11 @@ public class TestManifestFileWriter extends HoodieCommonTestHarness {
     createTestDataForPartitionedTable(metaClient, 3);
     ManifestFileWriter manifestFileWriter = ManifestFileWriter.builder().setMetaClient(metaClient).build();
     manifestFileWriter.writeManifestFile(true);
-    Path manifestFilePath = manifestFileWriter.getManifestFilePath(true);
-    try (InputStream is = metaClient.getFs().open(manifestFilePath)) {
+    StoragePath manifestFilePath = manifestFileWriter.getManifestFilePath(true);
+    try (InputStream is = metaClient.getStorage().open(manifestFilePath)) {
       List<String> expectedLines = FileIOUtils.readAsUTFStringLines(is);
       assertEquals(9, expectedLines.size(), "there should be 9 base files in total; 3 per partition.");
-      expectedLines.forEach(line -> assertTrue(line.startsWith(metaClient.getFs().getScheme() + ":" + basePath)));
+      expectedLines.forEach(line -> assertTrue(line.startsWith(metaClient.getStorage().getScheme() + ":" + basePath)));
     }
   }
 

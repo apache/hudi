@@ -20,8 +20,6 @@
 
 package org.apache.hudi;
 
-import org.apache.avro.Schema;
-
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
@@ -46,6 +44,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.SparkDatasetTestUtils;
 
+import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -88,8 +87,8 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
         HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().toString());
     properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "record_key");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(),"partition_path");
-    properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(),"partition_path");
-    metaClient = getHoodieMetaClient(hadoopConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
+    properties.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    metaClient = getHoodieMetaClient(storageConf(), basePath(), HoodieTableType.MERGE_ON_READ, properties);
   }
 
   @Test
@@ -161,7 +160,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     Properties extraProperties = new Properties();
     extraProperties.setProperty(
         RECORD_MERGER_IMPLS.key(),
-        "org.apache.hudi.HoodieSparkRecordMerger");
+        "org.apache.hudi.DefaultSparkRecordMerger");
     extraProperties.setProperty(
         LOGFILE_DATA_BLOCK_FORMAT.key(),
         "parquet");
@@ -230,7 +229,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     Map<String, String> properties = new HashMap<>();
     properties.put(
         RECORD_MERGER_IMPLS.key(),
-        "org.apache.hudi.HoodieSparkRecordMerger");
+        "org.apache.hudi.DefaultSparkRecordMerger");
     properties.put(
         LOGFILE_DATA_BLOCK_FORMAT.key(),
         "parquet");
@@ -362,21 +361,21 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
     }
   }
 
-  public static class DefaultMerger extends HoodieSparkRecordMerger {
+  public static class DefaultMerger extends DefaultSparkRecordMerger {
     @Override
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
       return true;
     }
   }
 
-  public static class NoFlushMerger extends HoodieSparkRecordMerger {
+  public static class NoFlushMerger extends DefaultSparkRecordMerger {
     @Override
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) {
       return false;
     }
   }
 
-  public static class CustomMerger extends HoodieSparkRecordMerger {
+  public static class CustomMerger extends DefaultSparkRecordMerger {
     @Override
     public boolean shouldFlush(HoodieRecord record, Schema schema, TypedProperties props) throws IOException {
       return !((HoodieSparkRecord) record).getData().getString(0).equals("001");

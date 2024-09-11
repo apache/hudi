@@ -20,6 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.common.util.ValidationUtils.checkState
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.SparkSession

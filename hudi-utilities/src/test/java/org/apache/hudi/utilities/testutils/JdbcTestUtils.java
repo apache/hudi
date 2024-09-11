@@ -44,6 +44,11 @@ public class JdbcTestUtils {
 
   private static final Logger LOG = LoggerFactory.getLogger(JdbcTestUtils.class);
 
+  public static final String JDBC_URL = "jdbc:h2:mem:test_mem";
+  public static final String JDBC_DRIVER = "org.h2.Driver";
+  public static final String JDBC_USER = "test";
+  public static final String JDBC_PASS = "jdbc";
+
   public static List<HoodieRecord> clearAndInsert(String commitTime, int numRecords, Connection connection, HoodieTestDataGenerator dataGenerator, TypedProperties props)
       throws SQLException {
     execute(connection, "DROP TABLE triprec", "Table does not exists");

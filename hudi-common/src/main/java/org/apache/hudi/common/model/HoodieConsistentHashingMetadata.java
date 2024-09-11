@@ -31,11 +31,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 /**
@@ -159,7 +159,7 @@ public class HoodieConsistentHashingMetadata implements Serializable {
 
   public static HoodieConsistentHashingMetadata fromBytes(byte[] bytes) throws IOException {
     try {
-      return fromJsonString(new String(bytes, StandardCharsets.UTF_8), HoodieConsistentHashingMetadata.class);
+      return fromJsonString(fromUTF8Bytes(bytes), HoodieConsistentHashingMetadata.class);
     } catch (Exception e) {
       throw new IOException("unable to read hashing metadata", e);
     }

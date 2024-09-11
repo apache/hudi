@@ -19,6 +19,8 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 
 import org.apache.flink.api.common.functions.Partitioner;
@@ -34,6 +36,8 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
   private final int bucketNum;
   private final String indexKeyFields;
 
+  private Functions.Function2<String, Integer, Integer> partitionIndexFunc;
+
   public BucketIndexPartitioner(int bucketNum, String indexKeyFields) {
     this.bucketNum = bucketNum;
     this.indexKeyFields = indexKeyFields;
@@ -41,9 +45,10 @@ public class BucketIndexPartitioner<T extends HoodieKey> implements Partitioner<
 
   @Override
   public int partition(HoodieKey key, int numPartitions) {
+    if (this.partitionIndexFunc == null) {
+      this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(bucketNum, numPartitions);
+    }
     int curBucket = BucketIdentifier.getBucketId(key, indexKeyFields, bucketNum);
-    int partitionIndex = (key.getPartitionPath().hashCode() & Integer.MAX_VALUE) % numPartitions;
-    int globalIndex = partitionIndex + curBucket;
-    return BucketIdentifier.mod(globalIndex, numPartitions);
+    return this.partitionIndexFunc.apply(key.getPartitionPath(), curBucket);
   }
 }

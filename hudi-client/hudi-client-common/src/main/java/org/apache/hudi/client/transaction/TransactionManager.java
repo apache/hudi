@@ -22,8 +22,8 @@ import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +41,8 @@ public class TransactionManager implements Serializable {
   protected Option<HoodieInstant> currentTxnOwnerInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedTxnOwnerInstant = Option.empty();
 
-  public TransactionManager(HoodieWriteConfig config, FileSystem fs) {
-    this(new LockManager(config, fs), config.isLockRequired());
+  public TransactionManager(HoodieWriteConfig config, HoodieStorage storage) {
+    this(new LockManager(config, storage), config.isLockRequired());
   }
 
   protected TransactionManager(LockManager lockManager, boolean isLockRequired) {

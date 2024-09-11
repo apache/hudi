@@ -23,14 +23,13 @@ import org.apache.hudi.callback.impl.HoodieWriteCommitHttpCallback;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -49,6 +48,7 @@ import static org.apache.hudi.callback.TestHoodieClientInitCallback.AddConfigIni
 import static org.apache.hudi.callback.TestHoodieClientInitCallback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_KEY2;
 import static org.apache.hudi.callback.TestHoodieClientInitCallback.ChangeConfigInitCallbackTestClass.CUSTOM_CONFIG_VALUE2;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_NESTED_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.config.HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -69,8 +69,8 @@ public class TestHoodieClientInitCallback {
 
   @BeforeAll
   public static void setup() {
-    when(engineContext.getHadoopConf())
-        .thenReturn(new SerializableConfiguration(new Configuration()));
+    StorageConfiguration storageConfToReturn = getDefaultStorageConf();
+    when(engineContext.getStorageConf()).thenReturn(storageConfToReturn);
   }
 
   @Test
