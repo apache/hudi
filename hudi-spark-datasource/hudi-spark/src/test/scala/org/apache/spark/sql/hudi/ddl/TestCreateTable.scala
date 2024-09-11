@@ -1270,6 +1270,29 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          | )
      """.stripMargin)
     assertResult("org.apache.hudi.keygen.ComplexKeyGenerator")(getKeyGenerator(tableName))
+
+    val tableName2 = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName2 (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert',
+         |   keygen = 'org.apache.hudi.keygen.ComplexKeyGenerator'
+         |
+         | )
+     """.stripMargin)
+    assertResult("org.apache.hudi.keygen.ComplexKeyGenerator")(getKeyGenerator(tableName2))
   }
 
   test("Test CTAS not de-duplicating (by default)") {
