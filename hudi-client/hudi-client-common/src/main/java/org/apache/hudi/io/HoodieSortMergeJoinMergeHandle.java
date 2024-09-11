@@ -22,7 +22,7 @@ import org.apache.hudi.avro.HoodieFileFooterSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.log.HoodieUnMergedSortedLogRecordScanner;
+import org.apache.hudi.common.table.compaction.SortMergeCompactionHelper;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -30,6 +30,7 @@ import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,15 +38,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 
-public class HoodieSortedMerge2Handle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSortedMerge2Handle.class);
+public class HoodieSortMergeJoinMergeHandle<T, I, K, O> extends HoodieMergeHandle<T, I, K, O> {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSortMergeJoinMergeHandle.class);
 
   private final Iterator<HoodieRecord> logRecords;
   private Option<HoodieRecord> currentLogRecord = Option.empty();
 
-  public HoodieSortedMerge2Handle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  Iterator<HoodieRecord> recordItr, String partitionPath, String fileId, HoodieBaseFile baseFile,
-                                  TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieSortMergeJoinMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                        Iterator<HoodieRecord> recordItr, String partitionPath, String fileId, HoodieBaseFile baseFile,
+                                        TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
     super(config, instantTime, hoodieTable, Collections.emptyMap(), partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
     this.logRecords = recordItr;
     init();
@@ -59,8 +60,10 @@ public class HoodieSortedMerge2Handle<T, I, K, O> extends HoodieMergeHandle<T, I
 
   @Override
   public void write(HoodieRecord<T> oldRecord) {
+    Schema oldSchema = writeSchemaWithMetaFields;
+    String oldKey = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     // write all log records which have a key less than the base record
-    while (currentLogRecord.isPresent() && HoodieUnMergedSortedLogRecordScanner.DEFAULT_KEY_COMPARATOR.compare(currentLogRecord.get().getKey(), oldRecord.getKey()) < 0) {
+    while (currentLogRecord.isPresent() && SortMergeCompactionHelper.DEFAULT_RECORD_KEY_COMPACTOR.compare(currentLogRecord.get().getRecordKey(), oldKey) < 0) {
       // pick the current log record to write out
       try {
         writeInsertRecord(currentLogRecord.get());

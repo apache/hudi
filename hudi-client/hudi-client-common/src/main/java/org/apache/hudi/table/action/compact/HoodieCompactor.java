@@ -35,7 +35,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.AbstractHoodieLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.HoodieUnMergedSortedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieSortedMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -254,7 +254,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     AbstractHoodieLogRecordScanner scanner;
     if (context.isSortMergeCompaction()) {
-      scanner = HoodieUnMergedSortedLogRecordScanner.newBuilder()
+      scanner = HoodieSortedMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFiles)

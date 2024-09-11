@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.log.AbstractHoodieLogRecordScanner;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
-import org.apache.hudi.common.table.log.HoodieUnMergedSortedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieSortedMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -79,8 +79,8 @@ public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> i
                                                                   String instantTime,
                                                                   AbstractHoodieLogRecordScanner scanner,
                                                                   Option<HoodieBaseFile> oldDataFileOpt, CompactionContext compactionContext) throws IOException {
-    if (scanner instanceof HoodieUnMergedSortedLogRecordScanner) {
-      return writeFileAndGetWriteStats(compactionHandler, operation, instantTime, (HoodieUnMergedSortedLogRecordScanner) scanner, oldDataFileOpt, compactionContext);
+    if (scanner instanceof HoodieSortedMergedLogRecordScanner) {
+      return writeFileAndGetWriteStats(compactionHandler, operation, instantTime, (HoodieSortedMergedLogRecordScanner) scanner, oldDataFileOpt, compactionContext);
     } else {
       return writeFileAndGetWriteStats(compactionHandler, operation, instantTime, (HoodieMergedLogRecordScanner) scanner, oldDataFileOpt, compactionContext);
     }
@@ -89,7 +89,7 @@ public class CompactionExecutionHelper<T extends HoodieRecordPayload, I, K, O> i
   protected Iterator<List<WriteStatus>> writeFileAndGetWriteStats(HoodieCompactionHandler compactionHandler,
                                                                   CompactionOperation operation,
                                                                   String instantTime,
-                                                                  HoodieUnMergedSortedLogRecordScanner scanner,
+                                                                  HoodieSortedMergedLogRecordScanner scanner,
                                                                   Option<HoodieBaseFile> oldDataFileOpt, CompactionContext compactionContext) throws IOException {
     if (!oldDataFileOpt.isPresent()) {
       // handle insert

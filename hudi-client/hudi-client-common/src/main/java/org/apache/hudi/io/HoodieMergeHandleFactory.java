@@ -116,7 +116,7 @@ public class HoodieMergeHandleFactory {
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
     LOG.info("Get sortedUnmergeUpdateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
-    return new HoodieSortedMerge2Handle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, dataFileToBeMerged,
+    return new HoodieSortMergeJoinMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, dataFileToBeMerged,
         taskContextSupplier, keyGeneratorOpt);
   }
 }

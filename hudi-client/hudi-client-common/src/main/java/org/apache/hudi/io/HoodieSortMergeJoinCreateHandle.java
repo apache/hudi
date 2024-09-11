@@ -31,15 +31,15 @@ import org.slf4j.LoggerFactory;
 import java.util.Collections;
 import java.util.Iterator;
 
-public class HoodieSortedCreateHandle<T, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
+public class HoodieSortMergeJoinCreateHandle<T, I, K, O> extends HoodieCreateHandle<T, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSortedCreateHandle.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSortMergeJoinCreateHandle.class);
 
   private Iterator<HoodieRecord> unmergedRecordsIter;
 
-  public HoodieSortedCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                  String partitionPath, String fileId, Iterator<HoodieRecord> recordItr,
-                                  TaskContextSupplier taskContextSupplier) {
+  public HoodieSortMergeJoinCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                         String partitionPath, String fileId, Iterator<HoodieRecord> recordItr,
+                                         TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, Collections.EMPTY_MAP, taskContextSupplier);
     unmergedRecordsIter = recordItr;
   }

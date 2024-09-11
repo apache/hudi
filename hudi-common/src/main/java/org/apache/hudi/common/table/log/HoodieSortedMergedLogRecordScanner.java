@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.compaction.SortMergeCompactionHelper;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -58,27 +59,9 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
 
-public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecordScanner {
+public class HoodieSortedMergedLogRecordScanner extends AbstractHoodieLogRecordScanner {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieUnMergedSortedLogRecordScanner.class);
-
-  public static final Comparator<HoodieKey> DEFAULT_KEY_COMPARATOR = Comparator.comparing(HoodieKey::getRecordKey);
-
-  private final Comparator<HoodieRecord> defaultComparator = (o1, o2) -> {
-    // Compare by key first
-    int keyCompareResult = DEFAULT_KEY_COMPARATOR.compare(o1.getKey(), o2.getKey());
-    if (keyCompareResult != 0) {
-      return keyCompareResult;
-    }
-
-    // For same key, compare by ordering value
-    // TODO: consider delete record's ordering value
-    Comparable order1 = o1.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-    Comparable order2 = o2.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-    return order1.compareTo(order2);
-  };
-
-  private final Comparator<HoodieRecord> keyCompactor = (o1, o2) -> DEFAULT_KEY_COMPARATOR.compare(o1.getKey(), o2.getKey());
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSortedMergedLogRecordScanner.class);
 
   private final ExternalSorter<WrapNaturalOrderHoodieRecord> records;
 
@@ -87,17 +70,17 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
   private long maxMemoryUsageForSorting;
   private long totalLogRecords;
 
-  protected HoodieUnMergedSortedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
-                                                 String latestInstantTime, boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
-                                                 boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
-                                                 InternalSchema internalSchema, Option<String> keyFieldOverride,
-                                                 boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                                 Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
-                                                 Option<Comparator<HoodieRecord>> comparator, long maxMemoryUsageForSorting, String externalSorterBasePath, ExternalSorterType sorterType,
-                                                 SortEngine sortEngine) {
+  protected HoodieSortedMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
+                                               String latestInstantTime, boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
+                                               boolean withOperationField, boolean forceFullScan, Option<String> partitionNameOverride,
+                                               InternalSchema internalSchema, Option<String> keyFieldOverride,
+                                               boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                               Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
+                                               Option<Comparator<HoodieRecord>> comparator, long maxMemoryUsageForSorting, String externalSorterBasePath, ExternalSorterType sorterType,
+                                               SortEngine sortEngine) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange, withOperationField, forceFullScan, partitionNameOverride, internalSchema,
         keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger, hoodieTableMetaClientOption);
-    this.hoodieRecordComparator = comparator.orElse(keyCompactor);
+    this.hoodieRecordComparator = comparator.orElse(SortMergeCompactionHelper.DEFAULT_RECORD_COMPACTOR);
     this.wrapNaturalOrderHoodieRecordComparator = (o1, o2) -> {
       int compare = hoodieRecordComparator.compare(o1.getRecord(), o2.getRecord());
       if (compare != 0) {
@@ -296,8 +279,8 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     this.records.close();
   }
 
-  public static HoodieUnMergedSortedLogRecordScanner.Builder newBuilder() {
-    return new HoodieUnMergedSortedLogRecordScanner.Builder();
+  public static HoodieSortedMergedLogRecordScanner.Builder newBuilder() {
+    return new HoodieSortedMergedLogRecordScanner.Builder();
   }
 
   public static class Builder extends AbstractHoodieLogRecordReader.Builder {
@@ -452,12 +435,12 @@ public class HoodieUnMergedSortedLogRecordScanner extends AbstractHoodieLogRecor
     }
 
     @Override
-    public HoodieUnMergedSortedLogRecordScanner build() {
+    public HoodieSortedMergedLogRecordScanner build() {
       if (this.partitionName == null && CollectionUtils.nonEmpty(this.logFilePaths)) {
         this.partitionName = getRelativePartitionPath(
             new StoragePath(basePath), new StoragePath(this.logFilePaths.get(0)).getParent());
       }
-      return new HoodieUnMergedSortedLogRecordScanner(
+      return new HoodieSortedMergedLogRecordScanner(
           storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
           withOperationField, forceFullScan, Option.ofNullable(partitionName), internalSchema, keyFieldOverride,
           enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient), comparator, maxMemorySizeInBytes, externalSorterBasePath,

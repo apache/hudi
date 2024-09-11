@@ -48,7 +48,7 @@ import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.HoodieSortedCreateHandle;
+import org.apache.hudi.io.HoodieSortMergeJoinCreateHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -269,7 +269,7 @@ public class HoodieSparkCopyOnWriteTable<T>
   @Override
   public Iterator<List<WriteStatus>> handleInsertWithUnMergedIterator(String instantTime, String partitionPath, String fileId, Iterator<HoodieRecord> unMergedRecordsItr,
                                                                       CompactionContext context) throws IOException {
-    HoodieCreateHandle<?, ?, ?, ?> createHandle = new HoodieSortedCreateHandle(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
+    HoodieCreateHandle<?, ?, ?, ?> createHandle = new HoodieSortMergeJoinCreateHandle(config, instantTime, this, partitionPath, fileId, unMergedRecordsItr, taskContextSupplier);
     createHandle.write();
     return Collections.singletonList(createHandle.close()).iterator();
   }
