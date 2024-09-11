@@ -237,14 +237,24 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   }
 
   @Override
-  public boolean isDelete(Schema recordSchema, Properties props) throws IOException {
+  public boolean isDelete(Schema recordSchema, Properties props) {
     if (null == data) {
       return true;
     }
-    if (recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) == null) {
+
+    // Use metadata filed to decide.
+    Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
+    if (operationField != null && "D".equals(data.get(operationField.pos(), StringType))) {
+      return true;
+    }
+
+    // Use data field to decide.
+    if (recordSchema.getField(HOODIE_IS_DELETED_FIELD) == null) {
       return false;
     }
-    Object deleteMarker = data.get(recordSchema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
+
+    Object deleteMarker = data.get(
+        recordSchema.getField(HOODIE_IS_DELETED_FIELD).pos(), BooleanType);
     return deleteMarker instanceof Boolean && (boolean) deleteMarker;
   }
 
