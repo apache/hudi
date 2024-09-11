@@ -357,16 +357,18 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
      * @throws HoodieException if the end of the input stream is reached before the required amount of data is available.
      */
     private void ensureBufferHasData(int dataLength) throws IOException {
-      if (buffer.position() > 0) {
+      // Check if the current buffer has enough space to read the required data length
+      if (buffer.capacity() - buffer.position() < dataLength) {
         buffer.compact();
-        // Reset to read mode
+        // Reset the buffer to read mode
         buffer.flip();
       }
 
-      if (buffer.capacity() - buffer.remaining() < dataLength) {
-        ByteBuffer newBuffer = ByteBuffer.allocate(buffer.remaining() + dataLength);
+      // Check again if the buffer still doesn't have enough space after compaction
+      if (buffer.capacity() - buffer.position() < dataLength) {
+        ByteBuffer newBuffer = ByteBuffer.allocate(buffer.position() + dataLength);
         newBuffer.put(buffer);
-        // Reset to read mode
+        // Reset the new buffer to read mode
         newBuffer.flip();
         buffer = newBuffer;
       }

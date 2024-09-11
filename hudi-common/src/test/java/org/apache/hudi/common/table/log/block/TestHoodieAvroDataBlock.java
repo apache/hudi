@@ -84,7 +84,7 @@ public class TestHoodieAvroDataBlock {
       "false, false"
   })
   public void testGetRecordIteratorWithRecordsPresent(boolean useKeyFilter, boolean keyFilterFullKeyMatch) throws IOException {
-    List<HoodieRecord> records = generateRandomHoodieRecords(SCHEMA, 1001);
+    List<HoodieRecord> records = generateRandomHoodieRecords(SCHEMA, 1000);
     HoodieAvroDataBlock block = createHoodieAvroDataBlock(SCHEMA, records);
 
     // Expect records for using key filter
