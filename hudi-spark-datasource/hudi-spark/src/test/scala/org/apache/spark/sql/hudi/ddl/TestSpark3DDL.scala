@@ -26,7 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex
 import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSparkUtils, QuickstartUtils}
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -698,7 +698,7 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
   }
 
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 

@@ -28,7 +28,7 @@ import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, DefaultSparkRecordMerger}
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
@@ -62,7 +62,7 @@ class TestDataSourceForBootstrap {
   )
 
   val sparkRecordTypeOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 

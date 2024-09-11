@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieSparkRecordMerger;
+import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.HoodieSparkUtils$;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -183,7 +183,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   private void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
     if (type == HoodieRecordType.SPARK) {
       Map<String, String> opts = new HashMap<>();
-      opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), HoodieSparkRecordMerger.class.getName());
+      opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), DefaultSparkRecordMerger.class.getName());
       opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));

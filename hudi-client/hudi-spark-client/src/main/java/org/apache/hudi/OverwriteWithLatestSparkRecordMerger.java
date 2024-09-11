@@ -19,24 +19,33 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 
-public abstract class HoodieSparkRecordMerger implements HoodieRecordMerger {
+import org.apache.avro.Schema;
+
+import java.io.IOException;
+
+/**
+ * Spark merger that always chooses the newer record
+ */
+public class OverwriteWithLatestSparkRecordMerger extends HoodieSparkRecordMerger {
+
+  @Override
+  public String getMergingStrategy() {
+    return OVERWRITE_MERGER_STRATEGY_UUID;
+  }
+
+  @Override
+  public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
+    return Option.of(Pair.of(newer, newSchema));
+  }
+
   @Override
   public HoodieRecord.HoodieRecordType getRecordType() {
-    return HoodieRecord.HoodieRecordType.SPARK;
+    return null;
   }
 
-  static HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    switch (mergerStrategy) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return new DefaultSparkRecordMerger();
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return new OverwriteWithLatestSparkRecordMerger();
-      default:
-        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy);
-    }
-  }
 }

@@ -1762,7 +1762,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.DefaultSparkRecordMerger"
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 
