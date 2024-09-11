@@ -83,6 +83,7 @@ import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
+import org.apache.hudi.table.action.compact.sort.merge.SortMergeCompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
@@ -2764,7 +2765,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return metadataConfig.getSecondaryIndexParallelism();
   }
 
-  public boolean isSortedMergeCompactionEnabled() {
+  /**
+   * Sort Merge Join Compaction configs.
+   */
+  public boolean isSortMergeCompactionEnabled() {
     return commonConfig.getBoolean(HoodieCompactionConfig.SORT_MERGE_COMPACTION);
   }
 
@@ -2782,6 +2786,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public double getMagnificationRatioForLogFile() {
     return commonConfig.getDouble(HoodieCompactionConfig.MAGNIFICATION_RATION_FOR_LOG_FILE);
+  }
+
+  public SortMergeCompactionTriggerStrategy getSortMergeCompactionTriggerStrategy() {
+    return ReflectionUtils.loadClass(commonConfig.getString(HoodieCompactionConfig.SORT_MERGE_COMPACTION_TRIGGER_STRATEGY));
   }
 
   public static class Builder {

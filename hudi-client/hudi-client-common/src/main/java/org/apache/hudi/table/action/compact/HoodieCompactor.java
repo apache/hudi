@@ -235,9 +235,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
 
     // TODO: disable sort merge join compaction in metadata table now, consider if we need to enable it
-    if (!context.isMetadataTableCompaction() && config.isSortedMergeCompactionEnabled()) {
-      // TODO: determine whether to use sort merge join compaction, now always true when sorted merge configuration is enabled
-      context.setSortMergeCompaction(true);
+    if (!context.isMetadataTableCompaction() && config.isSortMergeCompactionEnabled()) {
+      boolean trigger = config.getSortMergeCompactionTriggerStrategy().trigger(context, config);
+      context.setSortMergeCompaction(trigger);
     }
 
     if (context.isSortMergeCompaction()) {
