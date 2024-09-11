@@ -442,6 +442,49 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test query with custom key generator without partition path field config") {
+    for (extractPartition <- Seq(true, false)) {
+      withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
+        withTempDir { tmp => {
+          val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
+          val writePartitionFields = "ts:timestamp"
+          val dateFormat = "yyyy/MM/dd"
+          val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+          val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
+          val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+
+          prepareTableWithKeyGenerator(
+            tableName, tablePath, "MERGE_ON_READ",
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
+
+          // We are not specifying config hoodie.datasource.write.partitionpath.field while creating
+          // table
+          createTableWithSql(tableName, tablePath,
+            keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+          testFirstRoundInserts(tableName, extractPartition, tsGenFunc, customPartitionFunc)
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from $tableName
+               | """.stripMargin).count())
+          val incrementalDF = spark.read.format("hudi").
+            option("hoodie.datasource.query.type", "incremental").
+            option("hoodie.datasource.read.begin.instanttime", 0).
+            load(tablePath)
+          incrementalDF.createOrReplaceTempView("tbl_incremental")
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from tbl_incremental
+               | """.stripMargin).count())
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+        }
+        }
+      }
+    }
+  }
+
   test("Test create table with custom key generator") {
     withTempDir { tmp => {
       val tableName = generateTableName
