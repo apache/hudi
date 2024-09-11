@@ -59,13 +59,13 @@ import java.util.Stack;
  */
 public class ComparableVersion
         implements Comparable<ComparableVersion> {
+  private static final String INVALID_ITEM = "invalid item: ";
+
   private String value;
 
   private String canonical;
 
   private ComparableVersion.ListItem items;
-
-  private final static String INVALID_ITEM = "invalid item: ";
 
   private interface Item {
     int INTEGER_ITEM = 0;
