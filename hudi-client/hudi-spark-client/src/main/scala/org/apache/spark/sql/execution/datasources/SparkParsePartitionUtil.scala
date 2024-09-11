@@ -67,6 +67,7 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
 
     def getPartitionStructFields(keyGeneratorPartitionFieldsOpt: util.Option[String], keyGeneratorClassName: String) = {
       val partitionFields: Array[StructField] = if (keyGeneratorPartitionFieldsOpt.isPresent
+        && keyGeneratorPartitionFieldsOpt.get().contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)
         && (classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName))) {
         val keyGeneratorPartitionFields = keyGeneratorPartitionFieldsOpt.get().split(BaseKeyGenerator.FIELD_SEPARATOR)
