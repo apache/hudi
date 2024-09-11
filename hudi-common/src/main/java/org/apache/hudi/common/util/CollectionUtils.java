@@ -70,6 +70,26 @@ public class CollectionUtils {
   }
 
   /**
+   * Reduces provided {@link Collection} using provided {@code reducer} applied to
+   * every element of the collection like following
+   *
+   * {@code reduce(reduce(reduce(identity, e1), e2), ...)}
+   *
+   * @param c target collection to be reduced
+   * @param identity element for reducing to start from
+   * @param reducer actual reducing operator
+   *
+   * @return result of the reduction of the collection using reducing operator
+   */
+  public static <T, U> U reduce(Collection<T> c, U identity, BiFunction<U, T, U> reducer) {
+    return c.stream()
+        .sequential()
+        .reduce(identity, reducer, (a, b) -> {
+          throw new UnsupportedOperationException();
+        });
+  }
+
+  /**
    * Makes a copy of provided {@link Properties} object
    */
   public static Properties copy(Properties props) {
@@ -164,9 +184,10 @@ public class CollectionUtils {
   }
 
   /**
-   * Returns difference b/w {@code one} {@link Set} of elements and {@code another}
+   * Returns difference b/w {@code one} {@link Collection} of elements and {@code another}
+   * The elements in collection {@code one} are also duplicated and returned as a {@link Set}.
    */
-  public static <E> Set<E> diffSet(Set<E> one, Set<E> another) {
+  public static <E> Set<E> diffSet(Collection<E> one, Set<E> another) {
     Set<E> diff = new HashSet<>(one);
     diff.removeAll(another);
     return diff;
@@ -223,39 +244,30 @@ public class CollectionUtils {
   }
 
   @SafeVarargs
-  public static <T> Set<T> createSet(final T... elements) {
-    return Stream.of(elements).collect(Collectors.toSet());
-  }
-
-  public static <K,V> Map<K, V> createImmutableMap(final K key, final V value) {
-    return Collections.unmodifiableMap(Collections.singletonMap(key, value));
-  }
-
-  @SafeVarargs
   public static <T> List<T> createImmutableList(final T... elements) {
     return Collections.unmodifiableList(Stream.of(elements).collect(Collectors.toList()));
   }
 
-  public static <K,V> Map<K,V> createImmutableMap(final Map<K,V> map) {
-    return Collections.unmodifiableMap(map);
+  public static <T> List<T> createImmutableList(final List<T> list) {
+    return Collections.unmodifiableList(list);
   }
 
   @SafeVarargs
-  public static <K,V> Map<K,V> createImmutableMap(final Pair<K,V>... elements) {
-    Map<K,V> map = new HashMap<>();
-    for (Pair<K,V> pair: elements) {
+  public static <K, V> Map<K, V> createImmutableMap(final Pair<K, V>... elements) {
+    Map<K, V> map = new HashMap<>();
+    for (Pair<K, V> pair : elements) {
       map.put(pair.getLeft(), pair.getRight());
     }
     return Collections.unmodifiableMap(map);
   }
 
+  public static <K, V> Map<K, V> createImmutableMap(final Map<K, V> map) {
+    return Collections.unmodifiableMap(map);
+  }
+
   @SafeVarargs
-  public static <K,V> HashMap<K, V> createHashMap(final Pair<K, V>... elements) {
-    HashMap<K,V> map = new HashMap<>();
-    for (Pair<K,V> pair: elements) {
-      map.put(pair.getLeft(), pair.getRight());
-    }
-    return map;
+  public static <T> Set<T> createSet(final T... elements) {
+    return Stream.of(elements).collect(Collectors.toSet());
   }
 
   @SafeVarargs
@@ -265,10 +277,6 @@ public class CollectionUtils {
 
   public static <T> Set<T> createImmutableSet(final Set<T> set) {
     return Collections.unmodifiableSet(set);
-  }
-
-  public static <T> List<T> createImmutableList(final List<T> list) {
-    return Collections.unmodifiableList(list);
   }
 
   private static Object[] checkElementsNotNull(Object... array) {

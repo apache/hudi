@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
@@ -31,14 +32,19 @@ import org.apache.hudi.util.FlinkTables;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static java.util.stream.Collectors.toList;
 
@@ -49,6 +55,7 @@ import static java.util.stream.Collectors.toList;
  */
 public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPlanEvent>
     implements OneInputStreamOperator<Object, CompactionPlanEvent>, BoundedOneInput {
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionPlanOperator.class);
 
   /**
    * Config options.
@@ -61,6 +68,8 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @SuppressWarnings("rawtypes")
   private transient HoodieFlinkTable table;
 
+  private transient FlinkCompactionMetrics compactionMetrics;
+
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
   }
@@ -68,6 +77,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void open() throws Exception {
     super.open();
+    registerMetrics();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
@@ -100,9 +110,15 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   }
 
   private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
+    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+
     // the first instant takes the highest priority.
-    Option<HoodieInstant> firstRequested = table.getActiveTimeline().filterPendingCompactionTimeline()
+    Option<HoodieInstant> firstRequested = pendingCompactionTimeline
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
+    // record metrics
+    compactionMetrics.setFirstPendingCompactionInstant(firstRequested);
+    compactionMetrics.setPendingCompactionCount(pendingCompactionTimeline.countInstants());
+
     if (!firstRequested.isPresent()) {
       // do nothing.
       LOG.info("No compaction plan for checkpoint " + checkpointId);
@@ -132,8 +148,18 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
       WriteMarkersFactory
           .get(table.getConfig().getMarkersType(), table, compactionInstantTime)
           .deleteMarkerDir(table.getContext(), table.getConfig().getMarkersDeleteParallelism());
+      Map<String, Integer> fileIdIndexMap = new HashMap<>();
+      int index = 0;
       for (CompactionOperation operation : operations) {
-        output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation)));
+        int operationIndex;
+        if (fileIdIndexMap.containsKey(operation.getFileId())) {
+          operationIndex = fileIdIndexMap.get(operation.getFileId());
+        } else {
+          operationIndex = index;
+          fileIdIndexMap.put(operation.getFileId(), operationIndex);
+          index++;
+        }
+        output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation, operationIndex)));
       }
     }
   }
@@ -147,5 +173,11 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void endInput() throws Exception {
     // Called when the input data ends, only used in batch mode.
     notifyCheckpointComplete(-1);
+  }
+
+  private void registerMetrics() {
+    MetricGroup metrics = getRuntimeContext().getMetricGroup();
+    compactionMetrics = new FlinkCompactionMetrics(metrics);
+    compactionMetrics.registerMetrics();
   }
 }

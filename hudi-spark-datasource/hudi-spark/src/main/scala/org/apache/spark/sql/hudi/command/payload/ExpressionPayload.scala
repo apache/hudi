@@ -17,35 +17,35 @@
 
 package org.apache.spark.sql.hudi.command.payload
 
+import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
+import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
+import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
+import org.apache.hudi.common.util.ValidationUtils.checkState
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils, ValidationUtils, Option => HOption}
+import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
+
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
-import org.apache.hudi.AvroConversionUtils.convertAvroSchemaToStructType
-import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.isNullable
-import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
-import org.apache.hudi.common.model.BaseAvroPayload.isDeleteRecord
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{BinaryUtil, ValidationUtils, Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.{KryoSerializer, SerializerInstance}
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, Projection, SafeProjection}
 import org.apache.spark.sql.hudi.command.payload.ExpressionPayload._
-import org.apache.spark.sql.types.BooleanType
+import org.apache.spark.sql.types.{BooleanType, StructType}
 import org.apache.spark.{SparkConf, SparkEnv}
 
 import java.nio.ByteBuffer
 import java.util.function.{Function, Supplier}
-import java.util.{Base64, Properties}
+import java.util.{Base64, Objects, Properties}
+
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * A HoodieRecordPayload for MergeIntoHoodieTableCommand.
@@ -83,7 +83,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
 
     val sourceRecord = bytesToAvro(recordBytes, recordSchema)
-    val joinedRecord = joinRecord(sourceRecord, targetRecord)
+    val joinedRecord = joinRecord(sourceRecord, targetRecord, properties)
 
     processMatchedRecord(ConvertibleRecord(joinedRecord), Some(targetRecord), properties)
   }
@@ -126,7 +126,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If the update condition matched  then execute assignment expression
       // to compute final record to update. We will return the first matched record.
       if (conditionEvalResult) {
-        val writerSchema = getWriterSchema(properties)
+        val writerSchema = getWriterSchema(properties, true)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
         lazy val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
@@ -206,7 +206,7 @@ class ExpressionPayload(@transient record: GenericRecord,
       // If matched the insert condition then execute the assignment expressions to compute the
       // result record. We will return the first matched record.
       if (conditionEvalResult) {
-        val writerSchema = getWriterSchema(properties)
+        val writerSchema = getWriterSchema(properties, false)
         val resultingRow = assignmentEvaluator.apply(inputRecord.asRow)
         val resultingAvroRecord = getAvroSerializerFor(writerSchema)
           .serialize(resultingRow)
@@ -238,7 +238,7 @@ class ExpressionPayload(@transient record: GenericRecord,
     val recordSchema = getRecordSchema(properties)
     val incomingRecord = ConvertibleRecord(bytesToAvro(recordBytes, recordSchema))
 
-    if (isDeleteRecord(incomingRecord.asAvro)) {
+    if (super.isDeleteRecord(incomingRecord.asAvro)) {
       HOption.empty[IndexedRecord]()
     } else if (isMORTable(properties)) {
       // For the MOR table, both the matched and not-matched record will step into the getInsertValue() method.
@@ -272,24 +272,23 @@ class ExpressionPayload(@transient record: GenericRecord,
 
   /**
    * Join the source record with the target record.
-   *
-   * @return
    */
-  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): GenericRecord = {
+  private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord, props: Properties): GenericRecord = {
     val leftSchema = sourceRecord.getSchema
     val joinSchema = getMergedSchema(leftSchema, targetRecord.getSchema)
 
     // TODO rebase onto JoinRecord
-    val values = new ArrayBuffer[AnyRef](joinSchema.getFields.size())
+    val values = new Array[AnyRef](joinSchema.getFields.size())
     for (i <- 0 until joinSchema.getFields.size()) {
       val value = if (i < leftSchema.getFields.size()) {
         sourceRecord.get(i)
       } else { // skip meta field
         targetRecord.get(i - leftSchema.getFields.size() + HoodieRecord.HOODIE_META_COLUMNS.size())
       }
-      values += value
+      values(i) = value
     }
-    convertToRecord(values.toArray, joinSchema)
+
+    convertToRecord(values, joinSchema)
   }
 }
 
@@ -301,12 +300,12 @@ object ExpressionPayload {
   val PAYLOAD_DELETE_CONDITION = "hoodie.payload.delete.condition"
 
   /**
-   * Property for pass the merge-into update clauses's condition and assignments.
+   * Property for pass the merge-into update clauses' condition and assignments.
    */
   val PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS = "hoodie.payload.update.condition.assignments"
 
   /**
-   * Property for pass the merge-into insert clauses's condition and assignments.
+   * Property for pass the merge-into insert clauses' condition and assignments.
    */
   val PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS = "hoodie.payload.insert.condition.assignments"
 
@@ -314,6 +313,18 @@ object ExpressionPayload {
    * Property holding record's original (Avro) schema
    */
   val PAYLOAD_RECORD_AVRO_SCHEMA = "hoodie.payload.record.schema"
+
+  /**
+   * Property associated w/ expected combined schema of the joined records of the source (incoming batch)
+   * and target (existing) tables
+   */
+  val PAYLOAD_EXPECTED_COMBINED_SCHEMA = "hoodie.payload.combined.schema"
+
+  /**
+   * Internal property determining whether combined schema should be validated by [[ExpressionPayload]],
+   * against the one provide by [[PAYLOAD_EXPECTED_COMBINED_SCHEMA]] (default is "false")
+   */
+  private[sql] val PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA = "hoodie.payload.combined.schema.validate"
 
   /**
    * NOTE: PLEASE READ CAREFULLY
@@ -369,22 +380,51 @@ object ExpressionPayload {
   )
 
   private val schemaCache = Caffeine.newBuilder()
-    .maximumSize(16).build[String, Schema]()
+    .maximumSize(16)
+    .build[String, AnyRef]()
+
+  def getExpectedCombinedSchema(props: Properties): StructType = {
+    ValidationUtils.checkArgument(props.containsKey(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
+      s"Missing ${PAYLOAD_EXPECTED_COMBINED_SCHEMA} property in the provided config")
+
+    getCachedSchema(props.getProperty(PAYLOAD_EXPECTED_COMBINED_SCHEMA),
+      base64EncodedStructType =>
+        Serializer.toObject(Base64.getDecoder.decode(base64EncodedStructType)).asInstanceOf[StructType])
+  }
+
+  private def getCachedSchema[T <: AnyRef](key: String, ctor: String => T): T = {
+    schemaCache.get(key, new Function[String, T] {
+      override def apply(key: String): T = {
+        ctor.apply(key)
+      }
+    }).asInstanceOf[T]
+  }
 
   private val mergedSchemaCache = Caffeine.newBuilder()
     .maximumSize(16).build[(Schema, Schema), Schema]()
 
   private def parseSchema(schemaStr: String): Schema = {
-    schemaCache.get(schemaStr,
-      new Function[String, Schema] {
-        override def apply(t: String): Schema = new Schema.Parser().parse(t)
-    })
+    getCachedSchema(schemaStr, new Schema.Parser().parse(_))
   }
 
   private def getRecordSchema(props: Properties) = {
     ValidationUtils.checkArgument(props.containsKey(PAYLOAD_RECORD_AVRO_SCHEMA),
       s"Missing ${PAYLOAD_RECORD_AVRO_SCHEMA} property")
     parseSchema(props.getProperty(PAYLOAD_RECORD_AVRO_SCHEMA))
+  }
+
+  private def getWriterSchema(props: Properties, shouldConsiderPartialUpdate: Boolean): Schema = {
+    if (shouldConsiderPartialUpdate) {
+      val partialSchema = ConfigUtils.getStringWithAltKeys(
+        props, HoodieWriteConfig.WRITE_PARTIAL_UPDATE_SCHEMA, true)
+      if (!StringUtils.isNullOrEmpty(partialSchema)) {
+        parseSchema(partialSchema)
+      } else {
+        getWriterSchema(props)
+      }
+    } else {
+      getWriterSchema(props)
+    }
   }
 
   private def getWriterSchema(props: Properties): Schema = {
@@ -446,13 +486,44 @@ object ExpressionPayload {
     })
   }
 
+  private def validateCompatibleSchemas(joinedSchema: Schema, expectedStructType: StructType, props: Properties): Unit = {
+    ValidationUtils.checkState(expectedStructType.fields.length == joinedSchema.getFields.size,
+      s"Expected schema diverges from the merged one: " +
+        s"expected has ${expectedStructType.fields.length} fields, while merged one has ${joinedSchema.getFields.size}")
+
+    val shouldValidate = props.getProperty(PAYLOAD_SHOULD_VALIDATE_COMBINED_SCHEMA, "false").toBoolean
+    if (shouldValidate) {
+      val expectedSchema = convertStructTypeToAvroSchema(expectedStructType, joinedSchema.getName, joinedSchema.getNamespace)
+      // NOTE: Since compared schemas are produced by essentially combining (joining)
+      //       2 schemas together, field names might not be appropriate and therefore
+      //       just structural compatibility will be checked (ie based on ordering of
+      //       the fields as well as corresponding data-types)
+      expectedSchema.getFields.asScala
+        .zip(joinedSchema.getFields.asScala)
+        .zipWithIndex
+        .foreach {
+          case ((expectedField, targetField), idx) =>
+            val expectedFieldSchema = resolveNullableSchema(expectedField.schema())
+            val targetFieldSchema = resolveNullableSchema(targetField.schema())
+
+            val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
+            ValidationUtils.checkState(equal,
+              s"""
+                 |Expected schema diverges from the target one in #$idx field:
+                 |Expected data-type: $expectedFieldSchema
+                 |Received data-type: $targetFieldSchema
+                 |""".stripMargin)
+        }
+    }
+  }
+
   private def mergeSchema(a: Schema, b: Schema): Schema = {
     val mergedFields =
       a.getFields.asScala.map(field =>
-        new Schema.Field("a_" + field.name,
+        new Schema.Field("source_" + field.name,
           field.schema, field.doc, field.defaultVal, field.order)) ++
         b.getFields.asScala.map(field =>
-          new Schema.Field("b_" + field.name,
+          new Schema.Field("target_" + field.name,
             field.schema, field.doc, field.defaultVal, field.order))
     Schema.createRecord(a.getName, a.getDoc, a.getNamespace, a.isError, mergedFields.asJava)
   }

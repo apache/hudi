@@ -31,8 +31,8 @@ import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -48,7 +48,7 @@ public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus
   public static final String KAFKA_AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
   public static final String KAFKA_JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   public static final String KAFKA_STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
-  private static final Logger LOG = LogManager.getLogger(AbstractConnectWriter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractConnectWriter.class);
   protected final String instantTime;
 
   private final KeyGenerator keyGenerator;

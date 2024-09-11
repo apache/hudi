@@ -33,6 +33,13 @@ case class MergeIntoTable(
    matchedActions: Seq[MergeAction],
    notMatchedActions: Seq[MergeAction]) extends Command  {
   override def children: Seq[LogicalPlan] = Seq(targetTable, sourceTable)
+
+  // NOTE: Overriding this field is necessary to disable application of the [[ResolveReferences]]
+  //       of the standard resolution rule from Spark, such that [[MergeIntoTable]] is resolved
+  //       by [[HoodieSpark2Analysis$ResolveReferences]] rule instead
+  override def childrenResolved: Boolean = false
+
+  override lazy val resolved: Boolean = expressions.forall(_.resolved) && children.forall(_.resolved)
 }
 
 

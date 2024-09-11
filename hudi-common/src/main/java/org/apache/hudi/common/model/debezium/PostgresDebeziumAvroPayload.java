@@ -25,14 +25,15 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Properties;
+
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 
 /**
  * Provides support for seamlessly applying changes captured via Debezium for PostgresDB.
@@ -42,13 +43,13 @@ import java.util.Properties;
  * - For inserts, op=i
  * - For deletes, op=d
  * - For updates, op=u
- * - For snapshort inserts, op=r
+ * - For snapshot inserts, op=r
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
 public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LogManager.getLogger(PostgresDebeziumAvroPayload.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
@@ -141,7 +142,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
         || (field.schema().getType() == Schema.Type.UNION && field.schema().getTypes().stream().anyMatch(s -> s.getType() == Schema.Type.BYTES)))
         // Check length first as an optimization
         && ((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array().length == DEBEZIUM_TOASTED_VALUE.length()
-        && DEBEZIUM_TOASTED_VALUE.equals(new String(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array(), StandardCharsets.UTF_8)));
+        && DEBEZIUM_TOASTED_VALUE.equals(fromUTF8Bytes(((ByteBuffer) ((GenericData.Record) incomingRecord).get(field.name())).array())));
   }
 }
 

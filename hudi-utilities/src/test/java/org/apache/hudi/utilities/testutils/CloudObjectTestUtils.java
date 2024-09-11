@@ -19,18 +19,20 @@
 
 package org.apache.hudi.utilities.testutils;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageBatchResult;
-import com.amazonaws.services.sqs.model.GetQueueAttributesRequest;
-import com.amazonaws.services.sqs.model.GetQueueAttributesResult;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
-import com.amazonaws.services.sqs.model.ReceiveMessageResult;
 import org.apache.hadoop.fs.Path;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchRequest;
+import software.amazon.awssdk.services.sqs.model.DeleteMessageBatchResponse;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
+import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS_ATTR_APPROX_MESSAGES;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,9 +50,9 @@ public class CloudObjectTestUtils {
    * @param sqs  Mocked instance of AmazonSQS
    * @param path Absolute Path of file in FileSystem
    */
-  public static void setMessagesInQueue(AmazonSQS sqs, Path path) {
+  public static void setMessagesInQueue(SqsClient sqs, Path path) {
 
-    ReceiveMessageResult receiveMessageResult = new ReceiveMessageResult();
+    ReceiveMessageResponse receiveMessageResult = ReceiveMessageResponse.builder().build();
     String approximateNumberOfMessages = "0";
 
     if (path != null) {
@@ -69,21 +71,25 @@ public class CloudObjectTestUtils {
               + path.getName()
               + "\\\",\\\"size\\\":123,\\\"eTag\\\":\\\"test\\\",\\\"sequencer\\\":\\\"1\\\"}}}]}\"}";
 
-      Message message = new Message();
-      message.setReceiptHandle("1");
-      message.setMessageId("1");
-      message.setBody(body);
+      Message message = Message.builder()
+              .receiptHandle("1")
+              .messageId("1")
+              .body(body)
+              .build();
 
       List<Message> messages = new ArrayList<>();
       messages.add(message);
-      receiveMessageResult.setMessages(messages);
+      receiveMessageResult = ReceiveMessageResponse.builder().messages(messages).build();
       approximateNumberOfMessages = "1";
     }
+    Map<String, String> attributes = new HashMap();
+    attributes.put(SQS_ATTR_APPROX_MESSAGES, approximateNumberOfMessages);
     when(sqs.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(receiveMessageResult);
     when(sqs.getQueueAttributes(any(GetQueueAttributesRequest.class)))
         .thenReturn(
-            new GetQueueAttributesResult()
-                .addAttributesEntry(SQS_ATTR_APPROX_MESSAGES, approximateNumberOfMessages));
+            GetQueueAttributesResponse.builder()
+                    .attributesWithStrings(attributes)
+                    .build());
   }
 
   /**
@@ -91,8 +97,8 @@ public class CloudObjectTestUtils {
    *
    * @param sqs Mocked instance of AmazonSQS
    */
-  public static void deleteMessagesInQueue(AmazonSQS sqs) {
+  public static void deleteMessagesInQueue(SqsClient sqs) {
     when(sqs.deleteMessageBatch(any(DeleteMessageBatchRequest.class)))
-        .thenReturn(new DeleteMessageBatchResult());
+        .thenReturn(DeleteMessageBatchResponse.builder().build());
   }
 }

@@ -29,8 +29,8 @@ import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * within and among partitions.
  */
 public class BucketAssigner implements AutoCloseable {
-  private static final Logger LOG = LogManager.getLogger(BucketAssigner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BucketAssigner.class);
 
   /**
    * Task ID.
@@ -291,17 +291,17 @@ public class BucketAssigner implements AutoCloseable {
    */
   private static class SmallFileAssignState {
     long assigned;
-    long totalUnassigned;
+    long total;
     final String fileId;
 
     SmallFileAssignState(long parquetMaxFileSize, SmallFile smallFile, long averageRecordSize) {
       this.assigned = 0;
-      this.totalUnassigned = (parquetMaxFileSize - smallFile.sizeBytes) / averageRecordSize;
+      this.total = (parquetMaxFileSize - smallFile.sizeBytes) / averageRecordSize;
       this.fileId = smallFile.location.getFileId();
     }
 
     public boolean canAssign() {
-      return this.totalUnassigned > 0 && this.totalUnassigned > this.assigned;
+      return this.total > 0 && this.total > this.assigned;
     }
 
     /**

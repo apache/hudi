@@ -39,7 +39,7 @@ public class FixedLenBytesColumnReader<V extends WritableColumnVector>
     extends AbstractColumnReader<V> {
 
   public FixedLenBytesColumnReader(
-      ColumnDescriptor descriptor, PageReader pageReader, int precision) throws IOException {
+      ColumnDescriptor descriptor, PageReader pageReader) throws IOException {
     super(descriptor, pageReader);
     checkTypeName(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY);
   }

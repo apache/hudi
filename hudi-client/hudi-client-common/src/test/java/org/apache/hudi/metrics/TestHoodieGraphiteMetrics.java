@@ -18,15 +18,19 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.apache.hudi.metrics.Metrics.registerGauge;
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -37,24 +41,30 @@ import static org.mockito.Mockito.when;
 public class TestHoodieGraphiteMetrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
+  HoodieMetrics hoodieMetrics;
+  Metrics metrics;
 
   @AfterEach
   void shutdownMetrics() {
-    Metrics.shutdown();
+    metrics.shutdown();
   }
 
   @Test
   public void testRegisterGauge() {
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getTableName()).thenReturn("table1");
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.GRAPHITE);
-    when(config.getGraphiteServerHost()).thenReturn("localhost");
-    when(config.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
-    when(config.getGraphiteReportPeriodSeconds()).thenReturn(30);
-    new HoodieMetrics(config);
-    registerGauge("graphite_metric", 123L);
-    assertEquals("123", Metrics.getInstance().getRegistry().getGauges()
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.GRAPHITE);
+    when(metricsConfig.getGraphiteServerHost()).thenReturn("localhost");
+    when(metricsConfig.getGraphiteServerPort()).thenReturn(NetworkTestUtils.nextFreePort());
+    when(metricsConfig.getGraphiteReportPeriodSeconds()).thenReturn(30);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
+    metrics = hoodieMetrics.getMetrics();
+    metrics.registerGauge("graphite_metric", 123L);
+    assertEquals("123", metrics.getRegistry().getGauges()
                             .get("graphite_metric").getValue().toString());
   }
 }

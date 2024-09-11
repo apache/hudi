@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -26,17 +27,24 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 
 import javax.annotation.Nullable;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoField;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Utilities for expression resolving.
@@ -152,15 +160,19 @@ public class ExpressionUtils {
             .orElse(null);
       case DATE:
         return expr.getValueAs(LocalDate.class)
-            .map(LocalDate::toEpochDay)
+            .map(date -> (int) date.toEpochDay())
             .orElse(null);
       // NOTE: All integral types of size less than Int are encoded as Ints in MT
       case BOOLEAN:
         return expr.getValueAs(Boolean.class).orElse(null);
       case TINYINT:
+        return expr.getValueAs(Byte.class).orElse(null);
       case SMALLINT:
+        return expr.getValueAs(Short.class).orElse(null);
       case INTEGER:
         return expr.getValueAs(Integer.class).orElse(null);
+      case BIGINT:
+        return expr.getValueAs(Long.class).orElse(null);
       case FLOAT:
         return expr.getValueAs(Float.class).orElse(null);
       case DOUBLE:
@@ -176,5 +188,156 @@ public class ExpressionUtils {
       default:
         throw new UnsupportedOperationException("Unsupported type: " + logicalType);
     }
+  }
+
+  /**
+   * Returns the field as part of a hoodie key with given value literal expression.
+   *
+   * <p>CAUTION: the data type and value parsing should follow the impl of {@link #getValueFromLiteral(ValueLiteralExpression)}.
+   *
+   * <p>CAUTION: the data and timestamp conversion should follow the impl if {@code HoodieAvroUtils.convertValueForAvroLogicalTypes}.
+   *
+   * <p>Returns null if the value can not parse as the output data type correctly,
+   * should call {@code ValueLiteralExpression.isNull} first to decide whether
+   * the literal is NULL.
+   */
+  @Nullable
+  public static Object getKeyFromLiteral(ValueLiteralExpression expr, boolean logicalTimestamp) {
+    Object val = getValueFromLiteral(expr);
+    if (val == null) {
+      return null;
+    }
+    LogicalType logicalType = expr.getOutputDataType().getLogicalType();
+    switch (logicalType.getTypeRoot()) {
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+        return logicalTimestamp ? new Timestamp((long) val) : val;
+      case DATE:
+        return LocalDate.ofEpochDay((int) val);
+      default:
+        return val;
+    }
+  }
+
+  /**
+   * Returns whether all the fields {@code fields} are involved in the filtering predicates.
+   *
+   * @param exprs  The filters
+   * @param fields The field set
+   */
+  public static boolean isFilteringByAllFields(List<ResolvedExpression> exprs, Set<String> fields) {
+    if (exprs.size() != fields.size()) {
+      return false;
+    }
+    Set<String> referencedPks = exprs.stream()
+        .map(ResolvedExpression::getChildren)
+        .flatMap(Collection::stream)
+        .filter(expr -> expr instanceof FieldReferenceExpression)
+        .map(rExpr -> ((FieldReferenceExpression) rExpr).getName())
+        .collect(Collectors.toSet());
+    return referencedPks.size() == fields.size();
+  }
+
+  /**
+   * Returns whether the given expression {@code resolvedExpr} is a
+   * literal equivalence predicate within the fields {@code fields}.
+   */
+  public static boolean isEqualsLitExpr(ResolvedExpression resolvedExpr, Set<String> fields) {
+    CallExpression callExpr = (CallExpression) resolvedExpr;
+    FunctionDefinition funcDef = callExpr.getFunctionDefinition();
+    if (funcDef != BuiltInFunctionDefinitions.EQUALS) {
+      return false;
+    }
+
+    if (!isFieldReferenceAndLiteral(callExpr.getChildren())) {
+      return false;
+    }
+
+    return callExpr.getChildren().stream()
+        .filter(expr -> expr instanceof FieldReferenceExpression)
+        .anyMatch(expr -> fields.contains(((FieldReferenceExpression) expr).getName()));
+  }
+
+  public static List<ResolvedExpression> filterSimpleCallExpression(List<ResolvedExpression> exprs) {
+    return exprs.stream()
+        .filter(ExpressionUtils::isSimpleCallExpression)
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Extracts partition predicate from filter condition.
+   *
+   * <p>NOTE: the {@code expressions} should be simple call expressions.
+   *
+   * @return A tuple of partition predicates and non-partition predicates.
+   */
+  public static Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitExprByPartitionCall(
+      List<ResolvedExpression> expressions,
+      List<String> partitionKeys,
+      RowType tableRowType) {
+    if (partitionKeys.isEmpty()) {
+      return Tuple2.of(expressions, Collections.emptyList());
+    } else {
+      List<ResolvedExpression> partitionFilters = new ArrayList<>();
+      List<ResolvedExpression> nonPartitionFilters = new ArrayList<>();
+      final List<String> fieldNames = tableRowType.getFieldNames();
+      Set<Integer> parFieldPos = partitionKeys.stream().map(fieldNames::indexOf).collect(Collectors.toSet());
+      for (ResolvedExpression expr : expressions) {
+        for (CallExpression e : splitByAnd(expr)) {
+          if (isPartitionCallExpr(e, parFieldPos)) {
+            partitionFilters.add(expr);
+          } else {
+            nonPartitionFilters.add(e);
+          }
+        }
+      }
+      return Tuple2.of(nonPartitionFilters, partitionFilters);
+    }
+  }
+
+  private static List<CallExpression> splitByAnd(ResolvedExpression expr) {
+    List<CallExpression> result = new ArrayList<>();
+    splitByAnd(expr, result);
+    return result;
+  }
+
+  private static void splitByAnd(
+      ResolvedExpression expr,
+      List<CallExpression> result) {
+    if (!(expr instanceof CallExpression)) {
+      return;
+    }
+    CallExpression callExpr = (CallExpression) expr;
+    FunctionDefinition funcDef = callExpr.getFunctionDefinition();
+
+    if (funcDef == BuiltInFunctionDefinitions.AND) {
+      callExpr.getChildren().stream()
+          .filter(child -> child instanceof CallExpression)
+          .forEach(child -> splitByAnd((CallExpression) child, result));
+    } else {
+      result.add(callExpr);
+    }
+  }
+
+  /**
+   * Returns whether the {@code expr} is a partition call expression.
+   *
+   * @param expr        The expression
+   * @param parFieldPos The partition field positions within the table schema
+   */
+  private static boolean isPartitionCallExpr(CallExpression expr, Set<Integer> parFieldPos) {
+    List<Expression> children = expr.getChildren();
+    // if any child expr reference a non-partition field, returns false.
+    return children.stream()
+        .allMatch(
+            child -> {
+              if (child instanceof FieldReferenceExpression) {
+                FieldReferenceExpression refExpr = (FieldReferenceExpression) child;
+                return parFieldPos.contains(refExpr.getFieldIndex());
+              } else if (child instanceof CallExpression) {
+                return isPartitionCallExpr((CallExpression) child, parFieldPos);
+              } else {
+                return true;
+              }
+            });
   }
 }

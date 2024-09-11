@@ -38,9 +38,9 @@ public class SchemaChangeUtils {
   /**
    * Whether to allow the column type to be updated.
    * now only support:
-   * int => long/float/double/string
-   * long => float/double/string
-   * float => double/String
+   * int => long/float/double/String/Decimal
+   * long => float/double/String/Decimal
+   * float => double/String/Decimal
    * double => String/Decimal
    * Decimal => Decimal/String
    * String => date/decimal
@@ -58,6 +58,17 @@ public class SchemaChangeUtils {
     if (src.equals(dsr)) {
       return true;
     }
+    return isTypeUpdateAllowInternal(src, dsr);
+  }
+
+  public static boolean shouldPromoteType(Type src, Type dsr) {
+    if (src.equals(dsr) || src.isNestedType() || dsr.isNestedType()) {
+      return false;
+    }
+    return isTypeUpdateAllowInternal(src, dsr);
+  }
+
+  private static boolean isTypeUpdateAllowInternal(Type src, Type dsr) {
     switch (src.typeId()) {
       case INT:
         return dsr == Types.LongType.get() || dsr == Types.FloatType.get()
@@ -69,6 +80,7 @@ public class SchemaChangeUtils {
       case DOUBLE:
         return dsr == Types.StringType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
       case DATE:
+      case BINARY:
         return dsr == Types.StringType.get();
       case DECIMAL:
         if (dsr.typeId() == Type.TypeID.DECIMAL) {
@@ -77,12 +89,15 @@ public class SchemaChangeUtils {
           if (decimalDsr.isWiderThan(decimalSrc)) {
             return true;
           }
+          if (decimalDsr.precision() >= decimalSrc.precision() && decimalDsr.scale() == decimalSrc.scale()) {
+            return true;
+          }
         } else if (dsr.typeId() == Type.TypeID.STRING) {
           return true;
         }
         break;
       case STRING:
-        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL;
+        return dsr == Types.DateType.get() || dsr.typeId() == Type.TypeID.DECIMAL || dsr == Types.BinaryType.get();
       default:
         return false;
     }

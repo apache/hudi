@@ -18,10 +18,20 @@
 
 package org.apache.hudi.avro;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+
 import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Collections;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestAvroSchemaUtils {
@@ -106,6 +116,46 @@ public class TestAvroSchemaUtils {
       + "}\n";
 
   @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullSchema() {
+    // This test should throw an IllegalArgumentException
+    assertThrows(IllegalArgumentException.class, () -> AvroSchemaUtils.createNewSchemaFromFieldsWithReference(null, Collections.emptyList()));
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_NullObjectProps() {
+    // Create a schema without any object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [] }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Ensure getObjectProps returns null by mocking or creating a schema without props
+    Schema newSchema = AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, Collections.emptyList());
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(0, newSchema.getFields().size());
+  }
+
+  @Test
+  public void testCreateNewSchemaFromFieldsWithReference_WithObjectProps() {
+    // Create a schema with object properties
+    String schemaStr = "{ \"type\": \"record\", \"name\": \"TestRecord\", \"fields\": [], \"prop1\": \"value1\" }";
+    Schema schema = new Schema.Parser().parse(schemaStr);
+
+    // Add an object property to the schema
+    schema.addProp("prop1", "value1");
+
+    // Create new fields to add
+    Schema.Field newField = new Schema.Field("newField", Schema.create(Schema.Type.STRING), null, (Object) null);
+    Schema newSchema = AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, Collections.singletonList(newField));
+
+    // Validate the new schema
+    assertEquals("TestRecord", newSchema.getName());
+    assertEquals(1, newSchema.getFields().size());
+    assertEquals("value1", newSchema.getProp("prop1"));
+    assertEquals("newField", newSchema.getFields().get(0).name());
+  }
+
+  @Test
   public void testIsStrictProjection() {
     Schema sourceSchema = new Schema.Parser().parse(SOURCE_SCHEMA);
     Schema projectedNestedSchema = new Schema.Parser().parse(PROJECTED_NESTED_SCHEMA_STRICT);
@@ -171,5 +221,149 @@ public class TestAvroSchemaUtils {
         AvroSchemaUtils.isCompatibleProjectionOf(
             Schema.createUnion(Schema.create(Schema.Type.NULL), sourceSchema),
             Schema.createUnion(Schema.create(Schema.Type.NULL), projectedNestedSchema)));
+  }
+
+  private static final Schema FULL_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"record\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"c\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}");
+
+  private static final Schema SHORT_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"record\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}\n");
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatibleProjectionNotAllowed(boolean shouldValidate) {
+    assertThrows(SchemaCompatibilityException.class,
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.emptySet()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatibleProjectionAllowed(boolean shouldValidate) {
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, true, Collections.emptySet());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testIsCompatiblePartitionDropCols(boolean shouldValidate) {
+    AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, SHORT_SCHEMA, shouldValidate, false, Collections.singleton("c"));
+  }
+
+  private static final Schema BROKEN_SCHEMA = new Schema.Parser().parse("{\n"
+      + "  \"type\" : \"record\",\n"
+      + "  \"name\" : \"broken\",\n"
+      + "  \"fields\" : [ {\n"
+      + "    \"name\" : \"a\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"b\",\n"
+      + "    \"type\" : [ \"null\", \"int\" ],\n"
+      + "    \"default\" : null\n"
+      + "  }, {\n"
+      + "    \"name\" : \"c\",\n"
+      + "    \"type\" : [ \"null\", \"boolean\" ],\n"
+      + "    \"default\" : null\n"
+      + "  } ]\n"
+      + "}");
+
+  @Test
+  public void  testBrokenSchema() {
+    assertThrows(SchemaBackwardsCompatibilityException.class,
+        () -> AvroSchemaUtils.checkSchemaCompatible(FULL_SCHEMA, BROKEN_SCHEMA, true, false, Collections.emptySet()));
+  }
+
+  @Test
+  public void testAppendFieldsToSchemaDedupNested() {
+    Schema fullSchema = new Schema.Parser().parse("{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"namespace\": \"example.schema\",\n"
+        + "  \"name\": \"source\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"number\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"nested_record\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"nested\",\n"
+        + "        \"type\": \"record\",\n"
+        + "        \"fields\": [\n"
+        + "          {\n"
+        + "            \"name\": \"string\",\n"
+        + "            \"type\": [\"null\", \"string\"]\n"
+        + "          },\n"
+        + "          {\n"
+        + "            \"name\": \"long\",\n"
+        + "            \"type\": [\"null\", \"long\"]\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"other\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n");
+
+    Schema missingFieldSchema = new Schema.Parser().parse("{\n"
+        + "  \"type\": \"record\",\n"
+        + "  \"namespace\": \"example.schema\",\n"
+        + "  \"name\": \"source\",\n"
+        + "  \"fields\": [\n"
+        + "    {\n"
+        + "      \"name\": \"number\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"nested_record\",\n"
+        + "      \"type\": {\n"
+        + "        \"name\": \"nested\",\n"
+        + "        \"type\": \"record\",\n"
+        + "        \"fields\": [\n"
+        + "          {\n"
+        + "            \"name\": \"string\",\n"
+        + "            \"type\": [\"null\", \"string\"]\n"
+        + "          }\n"
+        + "        ]\n"
+        + "      }\n"
+        + "    },\n"
+        + "    {\n"
+        + "      \"name\": \"other\",\n"
+        + "      \"type\": [\"null\", \"int\"]\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}\n");
+
+    Option<Schema.Field> missingField = AvroSchemaUtils.findNestedField(fullSchema, "nested_record.long");
+    assertTrue(missingField.isPresent());
+    assertEquals(fullSchema, AvroSchemaUtils.appendFieldsToSchemaDedupNested(missingFieldSchema, Collections.singletonList(missingField.get())));
   }
 }

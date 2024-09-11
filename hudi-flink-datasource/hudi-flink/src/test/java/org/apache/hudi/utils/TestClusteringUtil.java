@@ -25,7 +25,6 @@ import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
@@ -33,15 +32,17 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 import org.apache.flink.configuration.Configuration;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -72,6 +73,13 @@ public class TestClusteringUtil {
     beforeEach(Collections.emptyMap());
   }
 
+  @AfterEach
+  void afterEach() {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
+  }
+
   void beforeEach(Map<String, String> options) throws IOException {
     this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
@@ -82,6 +90,10 @@ public class TestClusteringUtil {
     this.table = FlinkTables.createTable(conf);
     this.metaClient = table.getMetaClient();
     this.writeClient = FlinkWriteClients.createWriteClient(conf);
+    // init the metadata table if it is enabled
+    if (this.writeClient.getConfig().isMetadataTableEnabled()) {
+      this.writeClient.initMetadataTable();
+    }
   }
 
   @Test
@@ -101,6 +113,16 @@ public class TestClusteringUtil {
         .stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList());
     assertThat(actualInstants, is(oriInstants));
   }
+  
+  @Test
+  void validateClusteringScheduling() throws Exception {
+    beforeEach();
+    ClusteringUtil.validateClusteringScheduling(this.conf);
+    
+    // validate bucket index
+    this.conf.setString(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    ClusteringUtil.validateClusteringScheduling(this.conf);
+  }
 
   /**
    * Generates a clustering plan on the timeline and returns its instant time.
@@ -111,13 +133,13 @@ public class TestClusteringUtil {
         HoodieClusteringStrategy.newBuilder().build(), Collections.emptyMap(), 1, false);
     HoodieRequestedReplaceMetadata metadata = new HoodieRequestedReplaceMetadata(WriteOperationType.CLUSTER.name(),
         plan, Collections.emptyMap(), 1);
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = table.getMetaClient().createNewInstantTime();
     HoodieInstant clusteringInstant =
-        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
+        new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, instantTime);
     try {
-      metaClient.getActiveTimeline().saveToPendingReplaceCommit(clusteringInstant,
+      metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant,
           TimelineMetadataUtils.serializeRequestedReplaceMetadata(metadata));
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
+      table.getActiveTimeline().transitionClusterRequestedToInflight(clusteringInstant, Option.empty());
     } catch (IOException ioe) {
       throw new HoodieIOException("Exception scheduling clustering", ioe);
     }

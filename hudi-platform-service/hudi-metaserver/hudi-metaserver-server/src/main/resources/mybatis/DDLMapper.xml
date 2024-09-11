@@ -20,7 +20,7 @@
 
 <mapper namespace="DDLMapper">
     <update id="createDBs">
-        CREATE TABLE dbs
+        CREATE TABLE IF NOT EXISTS dbs
         (
             db_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             description VARCHAR(512) COMMENT 'database description',
@@ -34,7 +34,7 @@
     </update>
 
     <update id="createTables">
-        CREATE TABLE tbls
+        CREATE TABLE IF NOT EXISTS tbls
         (
             tbl_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             db_id BIGINT COMMENT 'database id',
@@ -48,7 +48,7 @@
     </update>
 
     <update id="createTableParams">
-        CREATE TABLE tbl_params
+        CREATE TABLE IF NOT EXISTS tbl_params
         (
             tbl_id BIGINT UNSIGNED COMMENT 'tbl id',
             param_key VARCHAR(256) COMMENT 'param_key',
@@ -60,7 +60,7 @@
     </update>
 
     <update id="createPartitions">
-        CREATE TABLE partitions
+        CREATE TABLE IF NOT EXISTS partitions
         (
             part_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             tbl_id BIGINT COMMENT 'table id',
@@ -73,7 +73,7 @@
     </update>
 
     <update id="createTableTimestamp">
-        CREATE TABLE tbl_timestamp
+        CREATE TABLE IF NOT EXISTS tbl_timestamp
         (
             tbl_id BIGINT UNSIGNED PRIMARY KEY COMMENT 'uuid',
             ts VARCHAR(17) COMMENT 'instant timestamp'
@@ -81,7 +81,7 @@
     </update>
 
     <update id="createInstant">
-        CREATE TABLE instant
+        CREATE TABLE IF NOT EXISTS instant
         (
             instant_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             tbl_id BIGINT COMMENT 'table id',
@@ -96,7 +96,7 @@
     </update>
 
     <update id="createInstantMetadata">
-        CREATE TABLE instant_meta_data
+        CREATE TABLE IF NOT EXISTS instant_meta_data
         (
             commit_id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             tbl_id BIGINT COMMENT 'table id',
@@ -110,7 +110,7 @@
     </update>
 
     <update id="createFiles">
-        CREATE TABLE files
+        CREATE TABLE IF NOT EXISTS files
         (
             id          BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT COMMENT 'uuid',
             tbl_id      BIGINT COMMENT 'table id',

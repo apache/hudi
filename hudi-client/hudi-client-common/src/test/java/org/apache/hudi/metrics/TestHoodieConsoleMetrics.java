@@ -18,7 +18,10 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +29,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.apache.hudi.metrics.Metrics.registerGauge;
+import java.util.UUID;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
@@ -34,24 +38,30 @@ import static org.mockito.Mockito.when;
 public class TestHoodieConsoleMetrics {
 
   @Mock
-  HoodieWriteConfig config;
+  HoodieWriteConfig writeConfig;
+  @Mock
+  HoodieMetricsConfig metricsConfig;
+  HoodieMetrics hoodieMetrics;
+  Metrics metrics;
 
   @BeforeEach
   public void start() {
-    when(config.getTableName()).thenReturn("console_metrics_test");
-    when(config.isMetricsOn()).thenReturn(true);
-    when(config.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
-    new HoodieMetrics(config);
+    when(writeConfig.getMetricsConfig()).thenReturn(metricsConfig);
+    when(writeConfig.isMetricsOn()).thenReturn(true);
+    when(metricsConfig.getMetricsReporterType()).thenReturn(MetricsReporterType.CONSOLE);
+    when(metricsConfig.getBasePath()).thenReturn("s3://test" + UUID.randomUUID());
+    hoodieMetrics = new HoodieMetrics(writeConfig, HoodieTestUtils.getDefaultStorage());
+    metrics = hoodieMetrics.getMetrics();
   }
 
   @AfterEach
   public void stop() {
-    Metrics.shutdown();
+    metrics.shutdown();
   }
 
   @Test
   public void testRegisterGauge() {
-    registerGauge("metric1", 123L);
-    assertEquals("123", Metrics.getInstance().getRegistry().getGauges().get("metric1").getValue().toString());
+    metrics.registerGauge("metric1", 123L);
+    assertEquals("123", metrics.getRegistry().getGauges().get("metric1").getValue().toString());
   }
 }

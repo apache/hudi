@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import org.apache.hudi.utilities.config.CloudSourceConfig;
+
 /**
  * Configs that are common during ingestion across different cloud stores
  */
@@ -27,70 +29,82 @@ public class CloudStoreIngestionConfig {
    * How many metadata messages to pull at a time.
    * Also see {@link #DEFAULT_BATCH_SIZE}.
    */
-  public static final String BATCH_SIZE_CONF = "hoodie.deltastreamer.source.cloud.meta.batch.size";
+  @Deprecated
+  public static final String BATCH_SIZE_CONF = CloudSourceConfig.BATCH_SIZE_CONF.key();
 
   /**
    * Provide a reasonable setting to use for default batch size when fetching File Metadata as part of Cloud Ingestion.
    * If batch size is too big, two possible issues can happen:
    * i) Acknowledgement takes too long (given that Hudi needs to commit first).
    * ii) In the case of Google Cloud Pubsub:
-   *   a) it will keep delivering the same message since it wasn't acked in time.
-   *   b) The size of the request that acks outstanding messages may exceed the limit,
-   *      which is 512KB as per Google's docs. See: https://cloud.google.com/pubsub/quotas#resource_limits
+   * a) it will keep delivering the same message since it wasn't acknowledged in time.
+   * b) The size of the request that acknowledges outstanding messages may exceed the limit,
+   * which is 512KB as per Google's docs. See: https://cloud.google.com/pubsub/quotas#resource_limits
    */
-  public static final int DEFAULT_BATCH_SIZE = 10;
+  @Deprecated
+  public static final int DEFAULT_BATCH_SIZE = CloudSourceConfig.BATCH_SIZE_CONF.defaultValue();
 
   /**
    * Whether to acknowledge Metadata messages during Cloud Ingestion or not. This is useful during dev and testing.
    * In Prod this should always be true.
    * In case of Cloud Pubsub, not acknowledging means Pubsub will keep redelivering the same messages.
    */
-  public static final String ACK_MESSAGES = "hoodie.deltastreamer.source.cloud.meta.ack";
+  @Deprecated
+  public static final String ACK_MESSAGES = CloudSourceConfig.ACK_MESSAGES.key();
 
   /**
    * Default value for {@link #ACK_MESSAGES}
    */
-  public static final boolean ACK_MESSAGES_DEFAULT_VALUE = true;
+  @Deprecated
+  public static final boolean ACK_MESSAGES_DEFAULT_VALUE = CloudSourceConfig.ACK_MESSAGES.defaultValue();
 
   /**
    * Check whether file exists before attempting to pull it
    */
-  public static final String ENABLE_EXISTS_CHECK = "hoodie.deltastreamer.source.cloud.data.check.file.exists";
+  @Deprecated
+  public static final String ENABLE_EXISTS_CHECK = CloudSourceConfig.ENABLE_EXISTS_CHECK.key();
 
   /**
    * Default value for {@link #ENABLE_EXISTS_CHECK}
    */
-  public static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = false;
+  @Deprecated
+  public static final Boolean DEFAULT_ENABLE_EXISTS_CHECK = CloudSourceConfig.ENABLE_EXISTS_CHECK.defaultValue();
 
   // Only select objects in the bucket whose relative path matches this prefix
-  public static final String SELECT_RELATIVE_PATH_PREFIX =
-          "hoodie.deltastreamer.source.cloud.data.select.relpath.prefix";
+  @Deprecated
+  public static final String SELECT_RELATIVE_PATH_PREFIX = CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key();
 
   // Ignore objects in the bucket whose relative path matches this prefix
-  public static final String IGNORE_RELATIVE_PATH_PREFIX =
-          "hoodie.deltastreamer.source.cloud.data.ignore.relpath.prefix";
+  @Deprecated
+  public static final String IGNORE_RELATIVE_PATH_PREFIX = CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX.key();
 
   // Ignore objects in the bucket whose relative path contains this substring
-  public static final String IGNORE_RELATIVE_PATH_SUBSTR =
-          "hoodie.deltastreamer.source.cloud.data.ignore.relpath.substring";
+  @Deprecated
+  public static final String IGNORE_RELATIVE_PATH_SUBSTR = CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR.key();
 
   /**
    * A JSON string passed to the Spark DataFrameReader while loading the dataset.
-   * Example: hoodie.deltastreamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
+   * Example: hoodie.streamer.gcp.spark.datasource.options={"header":"true","encoding":"UTF-8"}
    */
-  public static final String SPARK_DATASOURCE_OPTIONS = "hoodie.deltastreamer.source.cloud.data.datasource.options";
+  @Deprecated
+  public static final String SPARK_DATASOURCE_OPTIONS = CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key();
 
   /**
    * Only match files with this extension. By default, this is the same as
-   * {@link HoodieIncrSource.Config#SOURCE_FILE_FORMAT}.
+   * {@link org.apache.hudi.utilities.config.HoodieIncrSourceConfig#SOURCE_FILE_FORMAT}.
    */
-  public static final String CLOUD_DATAFILE_EXTENSION =
-          "hoodie.deltastreamer.source.cloud.data.select.file.extension";
+  @Deprecated
+  public static final String CLOUD_DATAFILE_EXTENSION = CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key();
 
   /**
    * Format of the data file. By default, this will be the same as
-   * {@link HoodieIncrSource.Config#SOURCE_FILE_FORMAT}.
+   * {@link org.apache.hudi.utilities.config.HoodieIncrSourceConfig#SOURCE_FILE_FORMAT}.
    */
-  public static final String DATAFILE_FORMAT = "hoodie.deltastreamer.source.cloud.data.datafile.format";
+  @Deprecated
+  public static final String DATAFILE_FORMAT = CloudSourceConfig.DATAFILE_FORMAT.key();
 
+  /**
+   * A comma delimited list of path-based partition fields in the source file structure
+   */
+  public static final String PATH_BASED_PARTITION_FIELDS = "hoodie.deltastreamer.source.cloud.data.partition.fields.from.path";
 }

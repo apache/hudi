@@ -18,7 +18,6 @@
 
 package org.apache.hudi.keygen;
 
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,13 +27,17 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
-import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+
+import org.apache.avro.generic.GenericRecord;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class KeyGenUtils {
 
@@ -46,9 +49,54 @@ public class KeyGenUtils {
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
   public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
 
+  public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
+  public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
+
+  /**
+   * Infers the key generator type based on the record key and partition fields.
+   * <p>
+   * (1) partition field is empty: {@link KeyGeneratorType#NON_PARTITION};
+   * (2) Only one partition field and one record key field: {@link KeyGeneratorType#SIMPLE};
+   * (3) More than one partition and/or record key fields: {@link KeyGeneratorType#COMPLEX}.
+   *
+   * @param recordsKeyFields Record key field list.
+   * @param partitionFields  Partition field list.
+   * @return Inferred key generator type.
+   */
+  public static KeyGeneratorType inferKeyGeneratorType(
+      Option<String> recordsKeyFields, String partitionFields) {
+    boolean autoGenerateRecordKeys = !recordsKeyFields.isPresent();
+    if (autoGenerateRecordKeys) {
+      return inferKeyGeneratorTypeForAutoKeyGen(partitionFields);
+    } else {
+      if (!StringUtils.isNullOrEmpty(partitionFields)) {
+        int numPartFields = partitionFields.split(",").length;
+        int numRecordKeyFields = recordsKeyFields.get().split(",").length;
+        if (numPartFields == 1 && numRecordKeyFields == 1) {
+          return KeyGeneratorType.SIMPLE;
+        }
+        return KeyGeneratorType.COMPLEX;
+      }
+      return KeyGeneratorType.NON_PARTITION;
+    }
+  }
+
+  // When auto record key gen is enabled, our inference will be based on partition path only.
+  private static KeyGeneratorType inferKeyGeneratorTypeForAutoKeyGen(String partitionFields) {
+    if (!StringUtils.isNullOrEmpty(partitionFields)) {
+      int numPartFields = partitionFields.split(",").length;
+      if (numPartFields == 1) {
+        return KeyGeneratorType.SIMPLE;
+      }
+      return KeyGeneratorType.COMPLEX;
+    }
+    return KeyGeneratorType.NON_PARTITION;
+  }
+
   /**
    * Fetches record key from the GenericRecord.
-   * @param genericRecord generic record of interest.
+   *
+   * @param genericRecord   generic record of interest.
    * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
    * @return the record key for the passed in generic record.
    */
@@ -58,7 +106,8 @@ public class KeyGenUtils {
 
   /**
    * Fetches partition path from the GenericRecord.
-   * @param genericRecord generic record of interest.
+   *
+   * @param genericRecord   generic record of interest.
    * @param keyGeneratorOpt Optional BaseKeyGenerator. If not, meta field will be used.
    * @return the partition path for the passed in generic record.
    */
@@ -80,63 +129,73 @@ public class KeyGenUtils {
   public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
     String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
     return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FILED_VALUE, 2))
-            .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
-            .map(kvArray -> {
-              if (kvArray.length == 1) {
-                return kvArray[0];
-              } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
-                return null;
-              } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
-                return "";
-              } else {
-                return kvArray[1];
-              }
-            }).toArray(String[]::new);
+        .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
+        .map(kvArray -> {
+          if (kvArray.length == 1) {
+            return kvArray[0];
+          } else if (kvArray[1].equals(NULL_RECORDKEY_PLACEHOLDER)) {
+            return null;
+          } else if (kvArray[1].equals(EMPTY_RECORDKEY_PLACEHOLDER)) {
+            return "";
+          } else {
+            return kvArray[1];
+          }
+        }).toArray(String[]::new);
   }
 
   public static String getRecordKey(GenericRecord record, List<String> recordKeyFields, boolean consistentLogicalTimestampEnabled) {
     boolean keyIsNullEmpty = true;
     StringBuilder recordKey = new StringBuilder();
-    for (String recordKeyField : recordKeyFields) {
+    for (int i = 0; i < recordKeyFields.size(); i++) {
+      String recordKeyField = recordKeyFields.get(i);
       String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(EMPTY_RECORDKEY_PLACEHOLDER);
       } else {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(recordKeyValue);
         keyIsNullEmpty = false;
       }
+      if (i != recordKeyFields.size() - 1) {
+        recordKey.append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+      }
     }
-    recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
-          + recordKeyFields.toString() + " cannot be entirely null or empty.");
+          + recordKeyFields + " cannot be entirely null or empty.");
     }
     return recordKey.toString();
   }
 
   public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                              boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
 
     StringBuilder partitionPath = new StringBuilder();
-    for (String partitionPathField : partitionPathFields) {
+    for (int i = 0; i < partitionPathFields.size(); i++) {
+      String partitionPathField = partitionPathFields.get(i);
       String fieldVal = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
       if (fieldVal == null || fieldVal.isEmpty()) {
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + HUDI_DEFAULT_PARTITION_PATH
-            : HUDI_DEFAULT_PARTITION_PATH);
+        if (hiveStylePartitioning) {
+          partitionPath.append(partitionPathField).append("=");
+        }
+        partitionPath.append(HUDI_DEFAULT_PARTITION_PATH);
       } else {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
-        partitionPath.append(hiveStylePartitioning ? partitionPathField + "=" + fieldVal : fieldVal);
+        if (hiveStylePartitioning) {
+          partitionPath.append(partitionPathField).append("=");
+        }
+        partitionPath.append(fieldVal);
       }
-      partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      if (i != partitionPathFields.size() - 1) {
+        partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
+      }
     }
-    partitionPath.deleteCharAt(partitionPath.length() - 1);
     return partitionPath.toString();
   }
 
@@ -149,7 +208,7 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-      boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -166,20 +225,12 @@ public class KeyGenUtils {
   /**
    * Create a date time parser class for TimestampBasedKeyGenerator, passing in any configs needed.
    */
-  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException  {
+  public static BaseHoodieDateTimeParser createDateTimeParser(TypedProperties props, String parserClass) throws IOException {
     try {
       return (BaseHoodieDateTimeParser) ReflectionUtils.loadClass(parserClass, props);
     } catch (Throwable e) {
       throw new IOException("Could not load date time parser class " + parserClass, e);
     }
-  }
-
-  public static void checkRequiredProperties(TypedProperties props, List<String> checkPropNames) {
-    checkPropNames.forEach(prop -> {
-      if (!props.containsKey(prop)) {
-        throw new HoodieNotSupportedException("Required property " + prop + " is missing");
-      }
-    });
   }
 
   /**
@@ -200,5 +251,25 @@ public class KeyGenUtils {
       }
     }
     return keyGenerator;
+  }
+
+  public static List<String> getRecordKeyFields(TypedProperties props) {
+    return Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
+        .map(recordKeyConfigValue ->
+            Arrays.stream(recordKeyConfigValue.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList())
+        ).orElse(Collections.emptyList());
+  }
+
+  /**
+   * @param props props of interest.
+   * @return true if record keys need to be auto generated. false otherwise.
+   */
+  public static boolean isAutoGeneratedRecordKeysEnabled(TypedProperties props) {
+    return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+        || props.getProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()).equals(StringUtils.EMPTY_STRING);
+    // spark-sql sets record key config to empty string for update, and couple of other statements.
   }
 }

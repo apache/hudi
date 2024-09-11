@@ -17,9 +17,11 @@
 
 package org.apache.spark.hudi.benchmark
 
-import java.io.{File, FileOutputStream, OutputStream}
+import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
 
 import org.apache.spark.util.Utils
+
+import java.io.{File, FileOutputStream, OutputStream}
 
 /**
  * Reference from spark.
@@ -38,7 +40,7 @@ abstract class HoodieBenchmarkBase {
 
   final def runBenchmark(benchmarkName: String)(func: => Any): Unit = {
     val separator = "=" * 96
-    val testHeader = (separator + '\n' + benchmarkName + '\n' + separator + '\n' + '\n').getBytes
+    val testHeader = getUTF8Bytes(separator + '\n' + benchmarkName + '\n' + separator + '\n' + '\n')
     output.foreach(_.write(testHeader))
     func
     output.foreach(_.write('\n'))

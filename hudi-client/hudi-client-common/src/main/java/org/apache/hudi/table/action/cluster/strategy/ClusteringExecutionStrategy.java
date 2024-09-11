@@ -26,8 +26,8 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import org.apache.avro.Schema;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 
@@ -35,7 +35,7 @@ import java.io.Serializable;
  * Pluggable implementation for writing data into new file groups based on ClusteringPlan.
  */
 public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(ClusteringExecutionStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringExecutionStrategy.class);
 
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final transient HoodieEngineContext engineContext;

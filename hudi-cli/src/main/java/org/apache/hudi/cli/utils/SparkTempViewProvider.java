@@ -20,8 +20,7 @@ package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -31,13 +30,15 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class SparkTempViewProvider implements TempViewProvider {
 
-  private static final Logger LOG = LogManager.getLogger(SparkTempViewProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkTempViewProvider.class);
 
   private JavaSparkContext jsc;
   private SQLContext sqlContext;

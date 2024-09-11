@@ -18,29 +18,50 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
-import java.io.IOException;
+import org.apache.avro.Schema;
 import org.apache.spark.sql.internal.SQLConf;
 
-public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory  {
+import java.io.IOException;
 
-  protected HoodieFileReader newParquetFileReader(Configuration conf, Path path) {
-    conf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(),
-        SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
-    conf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(),
-        SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
-    conf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
-    return new HoodieSparkParquetReader(conf, path);
+public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
+
+  public HoodieSparkFileReaderFactory(HoodieStorage storage) {
+    super(storage);
   }
 
-  protected HoodieFileReader newHFileFileReader(Configuration conf, Path path) throws IOException {
+  @Override
+  public HoodieFileReader newParquetFileReader(StoragePath path) {
+    storage.getConf().setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
+    storage.getConf().setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
+    storage.getConf().setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
+    // Using string value of this conf to preserve compatibility across spark versions.
+    storage.getConf().setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
+    // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
+    // Using string value of this conf to preserve compatibility across spark versions.
+    storage.getConf().setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
+    return new HoodieSparkParquetReader(storage, path);
+  }
+
+  @Override
+  protected HoodieFileReader newHFileFileReader(HoodieConfig hoodieConfig,
+                                                StoragePath path,
+                                                Option<Schema> schemaOption) throws IOException {
     throw new HoodieIOException("Not support read HFile");
   }
 
-  protected HoodieFileReader newOrcFileReader(Configuration conf, Path path) {
+  @Override
+  protected HoodieFileReader newOrcFileReader(StoragePath path) {
     throw new HoodieIOException("Not support read orc file");
+  }
+
+  @Override
+  public HoodieFileReader newBootstrapFileReader(HoodieFileReader skeletonFileReader, HoodieFileReader dataFileReader, Option<String[]> partitionFields, Object[] partitionValues) {
+    return new HoodieSparkBootstrapFileReader(skeletonFileReader, dataFileReader, partitionFields, partitionValues);
   }
 }

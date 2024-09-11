@@ -41,6 +41,7 @@ public class GlobalHiveSyncConfig extends HiveSyncConfig {
   public static final ConfigProperty<String> META_SYNC_GLOBAL_REPLICATE_TIMESTAMP = ConfigProperty
       .key("hoodie.meta_sync.global.replicate.timestamp")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("");
 
   public GlobalHiveSyncConfig(Properties props, Configuration hadoopConf) {

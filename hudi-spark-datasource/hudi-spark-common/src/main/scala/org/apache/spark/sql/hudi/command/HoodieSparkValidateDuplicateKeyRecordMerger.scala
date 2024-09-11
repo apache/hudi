@@ -18,11 +18,10 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkRecordMerger}
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.model.HoodieAvroRecordMerger.Config
-import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.util.{collection, Option => HOption}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, OperationModeAwareness}
+import org.apache.hudi.common.util.{HoodieRecordUtils, collection, Option => HOption}
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
 /**
@@ -30,18 +29,19 @@ import org.apache.hudi.exception.HoodieDuplicateKeyException
  * config.
  * @see org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload
  */
-class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerger {
+class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerger with OperationModeAwareness {
 
   override def merge(older: HoodieRecord[_], oldSchema: Schema, newer: HoodieRecord[_], newSchema: Schema, props: TypedProperties): HOption[collection.Pair[HoodieRecord[_], Schema]] = {
-    val legacyOperatingMode = Config.LegacyOperationMode.valueOf(props.getString(Config.LEGACY_OPERATING_MODE.key, Config.LEGACY_OPERATING_MODE.defaultValue))
-    legacyOperatingMode match {
-      case Config.LegacyOperationMode.PRE_COMBINING =>
-        super.merge(older, oldSchema, newer, newSchema, props)
-      case Config.LegacyOperationMode.COMBINING =>
-        val key = older.getRecordKey(oldSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
-        throw new HoodieDuplicateKeyException(key)
-      case _ =>
-        throw new UnsupportedOperationException(String.format("Unsupported legacy operating mode (%s)", legacyOperatingMode))
-    }
+    val key = older.getRecordKey(oldSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
+    throw new HoodieDuplicateKeyException(key)
   }
+
+  override def asPreCombiningMode(): HoodieRecordMerger = {
+    HoodieRecordUtils.loadRecordMerger(classOf[DefaultSparkRecordMerger].getName)
+  }
+
+  /**
+   * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+   */
+  override def getMergingStrategy: String = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID
 }

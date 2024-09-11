@@ -18,8 +18,6 @@
 
 package org.apache.hudi
 
-import java.nio.ByteBuffer
-import java.util.Objects
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.catalyst.InternalRow
@@ -27,141 +25,156 @@ import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, DataTypes, MapType, StringType, StructField, StructType}
 import org.scalatest.{FunSuite, Matchers}
 
+import java.nio.ByteBuffer
+import java.util.Objects
+
 class TestAvroConversionUtils extends FunSuite with Matchers {
 
 
-  test("test convertStructTypeToAvroSchema") {
+  val complexSchemaStr =
+    s"""
+    {
+       "type" : "record",
+       "name" : "SchemaName",
+       "namespace" : "SchemaNS",
+       "fields" : [ {
+         "name" : "key",
+         "type" : "string"
+       }, {
+         "name" : "version",
+         "type" : [ "null", "string" ],
+         "default" : null
+       }, {
+         "name" : "data1",
+         "type" : {
+           "type" : "record",
+           "name" : "data1",
+           "namespace" : "SchemaNS.SchemaName",
+           "fields" : [ {
+             "name" : "innerKey",
+             "type" : "string"
+           }, {
+             "name" : "value",
+             "type" : [ "null", "long" ],
+             "default" : null
+           } ]
+         }
+       }, {
+         "name" : "data2",
+         "type" : [ "null", {
+           "type" : "record",
+           "name" : "data2",
+           "namespace" : "SchemaNS.SchemaName",
+           "fields" : [ {
+             "name" : "innerKey",
+             "type" : "string"
+           }, {
+             "name" : "value",
+             "type" : [ "null", "long" ],
+             "default" : null
+           } ]
+         } ],
+         "default" : null
+       }, {
+         "name" : "nullableMap",
+         "type" : [ "null", {
+           "type" : "map",
+           "values" : [
+           "null",
+           {
+             "type" : "record",
+             "name" : "nullableMap",
+             "namespace" : "SchemaNS.SchemaName",
+             "fields" : [ {
+               "name" : "mapKey",
+               "type" : "string"
+             }, {
+               "name" : "mapVal",
+               "type" : [ "null", "int" ],
+               "default" : null
+             } ]
+           } ]
+         } ],
+         "default" : null
+       }, {
+         "name" : "map",
+         "type" : {
+           "type" : "map",
+           "values" : [
+           "null",
+           {
+             "type" : "record",
+             "name" : "map",
+             "namespace" : "SchemaNS.SchemaName",
+             "fields" : [ {
+               "name" : "mapKey",
+               "type" : "string"
+             }, {
+               "name" : "mapVal",
+               "type" : [ "null", "int" ],
+               "default" : null
+             } ]
+           } ]
+         }
+       }, {
+         "name" : "nullableArray",
+         "type" : [ "null", {
+           "type" : "array",
+           "items" : [
+           "null",
+           {
+             "type" : "record",
+             "name" : "nullableArray",
+             "namespace" : "SchemaNS.SchemaName",
+             "fields" : [ {
+               "name" : "arrayKey",
+               "type" : "string"
+             }, {
+               "name" : "arrayVal",
+               "type" : [ "null", "int" ],
+               "default" : null
+             } ]
+           } ]
+         } ],
+         "default" : null
+       }, {
+         "name" : "array",
+         "type" : {
+           "type" : "array",
+           "items" : [
+           "null",
+           {
+             "type" : "record",
+             "name" : "array",
+             "namespace" : "SchemaNS.SchemaName",
+             "fields" : [ {
+               "name" : "arrayKey",
+               "type" : "string"
+             }, {
+               "name" : "arrayVal",
+               "type" : [ "null", "int" ],
+               "default" : null
+             } ]
+           } ]
+         }
+       } ]
+     }
+    """
+
+
+  test("test convertStructTypeToAvroSchema_orig") {
     val mapType = DataTypes.createMapType(StringType, new StructType().add("mapKey", "string", false).add("mapVal", "integer", true))
-    val arrayType =  ArrayType(new StructType().add("arrayKey", "string", false).add("arrayVal", "integer", true))
-    val innerStruct = new StructType().add("innerKey","string",false).add("value", "long", true)
+    val arrayType = ArrayType(new StructType().add("arrayKey", "string", false).add("arrayVal", "integer", true))
+    val innerStruct = new StructType().add("innerKey", "string", false).add("value", "long", true)
 
     val struct = new StructType().add("key", "string", false).add("version", "string", true)
-      .add("data1",innerStruct,false).add("data2",innerStruct,true)
-      .add("nullableMap", mapType, true).add("map",mapType,false)
-      .add("nullableArray", arrayType, true).add("array",arrayType,false)
+      .add("data1", innerStruct, false).add("data2", innerStruct, true)
+      .add("nullableMap", mapType, true).add("map", mapType, false)
+      .add("nullableArray", arrayType, true).add("array", arrayType, false)
 
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(struct, "SchemaName", "SchemaNS")
 
-    val expectedSchemaStr = s"""
-       {
-         "type" : "record",
-         "name" : "SchemaName",
-         "namespace" : "SchemaNS",
-         "fields" : [ {
-           "name" : "key",
-           "type" : "string"
-         }, {
-           "name" : "version",
-           "type" : [ "null", "string" ],
-           "default" : null
-         }, {
-           "name" : "data1",
-           "type" : {
-             "type" : "record",
-             "name" : "data1",
-             "namespace" : "SchemaNS.SchemaName",
-             "fields" : [ {
-               "name" : "innerKey",
-               "type" : "string"
-             }, {
-               "name" : "value",
-               "type" : [ "null", "long" ],
-               "default" : null
-             } ]
-           }
-         }, {
-           "name" : "data2",
-           "type" : [ "null", {
-             "type" : "record",
-             "name" : "data2",
-             "namespace" : "SchemaNS.SchemaName",
-             "fields" : [ {
-               "name" : "innerKey",
-               "type" : "string"
-             }, {
-               "name" : "value",
-               "type" : [ "null", "long" ],
-               "default" : null
-             } ]
-           } ],
-           "default" : null
-         }, {
-           "name" : "nullableMap",
-           "type" : [ "null", {
-             "type" : "map",
-             "values" : [ {
-               "type" : "record",
-               "name" : "nullableMap",
-               "namespace" : "SchemaNS.SchemaName",
-               "fields" : [ {
-                 "name" : "mapKey",
-                 "type" : "string"
-               }, {
-                 "name" : "mapVal",
-                 "type" : [ "null", "int" ],
-                 "default" : null
-               } ]
-             }, "null" ]
-           } ],
-           "default" : null
-         }, {
-           "name" : "map",
-           "type" : {
-             "type" : "map",
-             "values" : [ {
-               "type" : "record",
-               "name" : "map",
-               "namespace" : "SchemaNS.SchemaName",
-               "fields" : [ {
-                 "name" : "mapKey",
-                 "type" : "string"
-               }, {
-                 "name" : "mapVal",
-                 "type" : [ "null", "int" ],
-                 "default" : null
-               } ]
-             }, "null" ]
-           }
-         }, {
-           "name" : "nullableArray",
-           "type" : [ "null", {
-             "type" : "array",
-             "items" : [ {
-               "type" : "record",
-               "name" : "nullableArray",
-               "namespace" : "SchemaNS.SchemaName",
-               "fields" : [ {
-                 "name" : "arrayKey",
-                 "type" : "string"
-               }, {
-                 "name" : "arrayVal",
-                 "type" : [ "null", "int" ],
-                 "default" : null
-               } ]
-             }, "null" ]
-           } ],
-           "default" : null
-         }, {
-           "name" : "array",
-           "type" : {
-             "type" : "array",
-             "items" : [ {
-               "type" : "record",
-               "name" : "array",
-               "namespace" : "SchemaNS.SchemaName",
-               "fields" : [ {
-                 "name" : "arrayKey",
-                 "type" : "string"
-               }, {
-                 "name" : "arrayVal",
-                 "type" : [ "null", "int" ],
-                 "default" : null
-               } ]
-             }, "null" ]
-           }
-         } ]
-       }
-    """
+    val expectedSchemaStr = complexSchemaStr
     val expectedAvroSchema = new Schema.Parser().parse(expectedSchemaStr)
 
     assert(avroSchema.equals(expectedAvroSchema))
@@ -257,6 +270,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                 {
                   "type": "map",
                   "values": [
+                    "null",
                     {
                       "type": "record",
                       "name": "nullableMap",
@@ -276,8 +290,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                           "default": null
                         }
                       ]
-                    },
-                    "null"
+                    }
                   ]
                 }
               ],
@@ -288,6 +301,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
               "type": {
                 "type": "map",
                 "values": [
+                  "null",
                   {
                     "type": "record",
                     "name": "map",
@@ -307,8 +321,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                         "default": null
                       }
                     ]
-                  },
-                  "null"
+                  }
                 ]
               }
             },
@@ -319,6 +332,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                 {
                   "type": "array",
                   "items": [
+                    "null",
                     {
                       "type": "record",
                       "name": "nullableArray",
@@ -338,8 +352,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                           "default": null
                         }
                       ]
-                    },
-                    "null"
+                    }
                   ]
                 }
               ],
@@ -350,6 +363,7 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
               "type": {
                 "type": "array",
                 "items": [
+                  "null",
                   {
                     "type": "record",
                     "name": "array",
@@ -369,13 +383,12 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
                         "default": null
                       }
                     ]
-                  },
-                  "null"
+                  }
                 ]
               }
             }
           ]
-        }}
+        }
     """
 
     val expectedAvroSchema = new Schema.Parser().parse(expectedSchemaStr)

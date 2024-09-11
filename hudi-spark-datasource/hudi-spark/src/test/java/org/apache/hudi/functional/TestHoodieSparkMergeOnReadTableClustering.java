@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -33,15 +34,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.hadoop.fs.FileStatus;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -61,28 +61,20 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
   private static Stream<Arguments> testClustering() {
     // enableClusteringAsRow, doUpdates, populateMetaFields, preserveCommitMetadata
     return Stream.of(
-        Arguments.of(true, true, true, true),
-        Arguments.of(true, true, true, false),
-        Arguments.of(true, true, false, true),
-        Arguments.of(true, true, false, false),
-        Arguments.of(true, false, true, true),
-        Arguments.of(true, false, true, false),
-        Arguments.of(true, false, false, true),
-        Arguments.of(true, false, false, false),
-        Arguments.of(false, true, true, true),
-        Arguments.of(false, true, true, false),
-        Arguments.of(false, true, false, true),
-        Arguments.of(false, true, false, false),
-        Arguments.of(false, false, true, true),
-        Arguments.of(false, false, true, false),
-        Arguments.of(false, false, false, true),
-        Arguments.of(false, false, false, false)
+        Arguments.of(false, true, true),
+        Arguments.of(true, true, false),
+        Arguments.of(true, false, true),
+        Arguments.of(true, false, false),
+        Arguments.of(false, true, true),
+        Arguments.of(false, true, false),
+        Arguments.of(false, false, true),
+        Arguments.of(false, false, false)
     );
   }
 
   @ParameterizedTest
   @MethodSource
-  void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields, boolean preserveCommitMetadata) throws Exception {
+  void testClustering(boolean clusteringAsRow, boolean doUpdates, boolean populateMetaFields) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -106,7 +98,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
             .withClusteringTargetPartitions(0)
             .withInlineClustering(true)
             .withInlineClusteringNumCommits(1)
-            .withPreserveHoodieCommitMetadata(preserveCommitMetadata).build())
+            .build())
         .withRollbackUsingMarkers(false);
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig cfg = cfgBuilder.build();
@@ -146,15 +138,16 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
-      FileStatus[] allFiles = listAllBaseFilesInPath(hoodieTable);
+      List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 2 base files for each partition
-      assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.length);
+      assertEquals(dataGen.getPartitionPaths().length * 2, allFiles.size());
 
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
       hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       // verify all files are included in clustering plan.
-      assertEquals(allFiles.length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
+      assertEquals(allFiles.size(),
+          hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
       // Do the clustering and validate
       doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
@@ -163,16 +156,18 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
   private static Stream<Arguments> testClusteringWithNoBaseFiles() {
     return Stream.of(
-        Arguments.of(true, true),
-        Arguments.of(true, false),
-        Arguments.of(false, true),
-        Arguments.of(false, false)
+        Arguments.of(true, true, false),
+        Arguments.of(true, false, false),
+        Arguments.of(false, true, false),
+        Arguments.of(false, false, false),
+        // do updates with file slice having no base files and write record positions in log blocks
+        Arguments.of(true, true, true)
     );
   }
 
   @ParameterizedTest
   @MethodSource
-  void testClusteringWithNoBaseFiles(boolean clusteringAsRow, boolean doUpdates) throws Exception {
+  void testClusteringWithNoBaseFiles(boolean clusteringAsRow, boolean doUpdates, boolean shouldWriteRecordPositions) throws Exception {
     // set low compaction small File Size to generate more file groups.
     HoodieWriteConfig.Builder cfgBuilder = HoodieWriteConfig.newBuilder()
         .forTable("test-trip-table")
@@ -193,6 +188,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         // set index type to INMEMORY so that log files can be indexed, and it is safe to send
         // inserts straight to the log to produce file slices with only log files and no data files
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withWriteRecordPositionsEnabled(shouldWriteRecordPositions)
         .withClusteringConfig(HoodieClusteringConfig.newBuilder()
             .withClusteringMaxNumGroups(10)
             .withClusteringTargetPartitions(0)
@@ -224,9 +220,9 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
       HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
-      FileStatus[] allBaseFiles = listAllBaseFilesInPath(hoodieTable);
+      List<StoragePathInfo> allBaseFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 0 base files for each partition
-      assertEquals(0, allBaseFiles.length);
+      assertEquals(0, allBaseFiles.size());
 
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);

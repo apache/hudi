@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.pubsub.v1.PubsubMessage;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -36,7 +36,7 @@ import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.Proc
  */
 public class MetadataMessage {
 
-  private static final Logger LOG = LogManager.getLogger(MetadataMessage.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetadataMessage.class);
 
   // The CSPN message to wrap
   private final PubsubMessage message;
@@ -68,8 +68,8 @@ public class MetadataMessage {
     if (isOverwriteOfExistingFile()) {
       return new MessageValidity(DO_SKIP,
       "eventType: " + getEventType()
-              + ". Overwrite of existing objectId: " + getObjectId()
-              + " with generation numner: " + getOverwroteGeneration()
+          + ". Overwrite of existing objectId: " + getObjectId()
+          + " with generation number: " + getOverwroteGeneration()
       );
     }
 

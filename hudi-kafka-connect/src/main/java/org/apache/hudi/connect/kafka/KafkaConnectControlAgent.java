@@ -29,8 +29,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -52,7 +52,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class KafkaConnectControlAgent implements KafkaControlAgent {
 
-  private static final Logger LOG = LogManager.getLogger(KafkaConnectControlAgent.class);
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectControlAgent.class);
   private static final Object LOCK = new Object();
   private static final long KAFKA_POLL_TIMEOUT_MS = 100;
   private static final int EXEC_SHUTDOWN_TIMEOUT_MS = 5000;

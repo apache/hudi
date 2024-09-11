@@ -18,12 +18,12 @@
 
 package org.apache.hudi.integ.testsuite.dag;
 
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.integ.testsuite.HoodieContinousTestSuiteWriter;
-import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.integ.testsuite.HoodieContinuousTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.HoodieInlineTestSuiteWriter;
+import org.apache.hudi.integ.testsuite.HoodieTestSuiteJob.HoodieTestSuiteConfig;
 import org.apache.hudi.integ.testsuite.HoodieTestSuiteWriter;
 import org.apache.hudi.integ.testsuite.configuration.DFSDeltaConfig;
 import org.apache.hudi.integ.testsuite.generator.DeltaGenerator;
@@ -33,10 +33,10 @@ import org.apache.hudi.keygen.BuiltinKeyGenerator;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -47,7 +47,7 @@ import java.util.concurrent.Executors;
  */
 public class WriterContext {
 
-  protected static Logger log = LogManager.getLogger(WriterContext.class);
+  protected static Logger log = LoggerFactory.getLogger(WriterContext.class);
 
   private final HoodieTestSuiteConfig cfg;
   private TypedProperties props;
@@ -72,16 +72,16 @@ public class WriterContext {
     try {
       this.schemaProvider = UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, jsc);
       String schemaStr = schemaProvider.getSourceSchema().toString();
-      this.hoodieTestSuiteWriter = (cfg.testContinousMode && cfg.useDeltaStreamer) ? new HoodieContinousTestSuiteWriter(jsc, props, cfg, schemaStr)
+      this.hoodieTestSuiteWriter = (cfg.testContinuousMode && cfg.useDeltaStreamer) ? new HoodieContinuousTestSuiteWriter(jsc, props, cfg, schemaStr)
           : new HoodieInlineTestSuiteWriter(jsc, props, cfg, schemaStr);
       int inputParallelism = cfg.inputParallelism > 0 ? cfg.inputParallelism : jsc.defaultParallelism();
       this.deltaGenerator = new DeltaGenerator(
           new DFSDeltaConfig(DeltaOutputMode.valueOf(cfg.outputTypeName), DeltaInputType.valueOf(cfg.inputFormatName),
-              new SerializableConfiguration(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
+              HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.inputBasePath, cfg.targetBasePath,
               schemaStr, cfg.limitFileSize, inputParallelism, cfg.deleteOldInput, cfg.useHudiToGenerateUpdates),
           jsc, sparkSession, schemaStr, keyGenerator);
       log.info(String.format("Initialized writerContext with: %s", schemaStr));
-      if (cfg.testContinousMode) {
+      if (cfg.testContinuousMode) {
         executorService = Executors.newFixedThreadPool(1);
         executorService.execute(new TestSuiteWriterRunnable(hoodieTestSuiteWriter));
       }

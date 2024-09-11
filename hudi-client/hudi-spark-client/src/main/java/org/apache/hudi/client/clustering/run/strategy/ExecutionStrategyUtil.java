@@ -18,22 +18,19 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 
-import java.io.IOException;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 public class ExecutionStrategyUtil {
 
@@ -49,18 +46,7 @@ public class ExecutionStrategyUtil {
       HoodieWriteConfig writeConfig) {
 
     GenericRecord record = (GenericRecord) indexedRecord;
-    Option<BaseKeyGenerator> keyGeneratorOpt = Option.empty();
-
-    if (!writeConfig.populateMetaFields()) {
-      try {
-        TypedProperties typedProperties = new TypedProperties(writeConfig.getProps());
-        keyGeneratorOpt = Option.of((BaseKeyGenerator)
-            HoodieSparkKeyGeneratorFactory.createKeyGenerator(typedProperties));
-      } catch (IOException e) {
-        throw new HoodieIOException(
-            "Only BaseKeyGenerators are supported when meta columns are disabled ", e);
-      }
-    }
+    Option<BaseKeyGenerator> keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
 
     String key = KeyGenUtils.getRecordKeyFromGenericRecord(record, keyGeneratorOpt);
     String partition = KeyGenUtils.getPartitionPathFromGenericRecord(record, keyGeneratorOpt);

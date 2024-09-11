@@ -33,8 +33,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,7 +47,7 @@ import java.util.stream.Stream;
 public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRestorePlan>> {
 
 
-  private static final Logger LOG = LogManager.getLogger(RestorePlanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RestorePlanActionExecutor.class);
 
   public static final Integer RESTORE_PLAN_VERSION_1 = 1;
   public static final Integer RESTORE_PLAN_VERSION_2 = 2;
@@ -69,9 +69,9 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     try {
       // Get all the commits on the timeline after the provided commit time
       // rollback pending clustering instants first before other instants (See HUDI-3362)
-      List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceTimeline()
+      List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
-              .filter(instant -> ClusteringUtils.isPendingClusteringInstant(table.getMetaClient(), instant))
+              .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant))
               .getReverseOrderedInstants()
               .filter(instant -> HoodieActiveTimeline.GREATER_THAN.test(instant.getTimestamp(), savepointToRestoreTimestamp))
               .collect(Collectors.toList());

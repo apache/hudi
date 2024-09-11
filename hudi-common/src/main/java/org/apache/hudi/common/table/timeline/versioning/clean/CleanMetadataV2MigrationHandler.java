@@ -24,8 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.versioning.AbstractMigratorBase;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-
-import org.apache.hadoop.fs.Path;
+import org.apache.hudi.storage.StoragePath;
 
 import java.util.List;
 import java.util.Map;
@@ -91,7 +90,7 @@ public class CleanMetadataV2MigrationHandler extends AbstractMigratorBase<Hoodie
   }
 
   private List<String> convertToV2Path(List<String> paths) {
-    return paths.stream().map(path -> new Path(path).getName())
+    return paths.stream().map(path -> new StoragePath(path).getName())
         .collect(Collectors.toList());
   }
 }

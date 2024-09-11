@@ -102,6 +102,12 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_SUCCEEDED = "Succeeded";
 
   /**
+   * Fields of Restore.
+   */
+  public static final String HEADER_RESTORE_INSTANT = "Restored " + HEADER_INSTANT;
+  public static final String HEADER_RESTORE_STATE = "Restore State";
+
+  /**
    * Fields of Stats.
    */
   public static final String HEADER_COMMIT_TIME = "CommitTime";
@@ -174,7 +180,6 @@ public class HoodieTableHeaderFields {
   public static final String HEADER_REQUESTED_TIME = "Requested\nTime";
   public static final String HEADER_INFLIGHT_TIME = "Inflight\nTime";
   public static final String HEADER_COMPLETED_TIME = "Completed\nTime";
-  public static final String HEADER_ROLLBACK_INFO = "Rollback Info";
   public static final String HEADER_MT_PREFIX = "MT\n";
   public static final String HEADER_MT_ACTION = HEADER_MT_PREFIX + HEADER_ACTION;
   public static final String HEADER_MT_STATE = HEADER_MT_PREFIX + HEADER_STATE;

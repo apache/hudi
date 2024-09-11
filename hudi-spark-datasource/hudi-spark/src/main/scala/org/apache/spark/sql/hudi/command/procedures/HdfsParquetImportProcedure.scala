@@ -18,27 +18,28 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.cli.HDFSParquetImporterUtils
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
+
 import scala.language.higherKinds
 
 class HdfsParquetImportProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "table_type", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "src_path", DataTypes.StringType, None),
-    ProcedureParameter.required(3, "target_path", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "row_key", DataTypes.StringType, None),
-    ProcedureParameter.required(5, "partition_key", DataTypes.StringType, None),
-    ProcedureParameter.required(6, "schema_file_path", DataTypes.StringType, None),
-    ProcedureParameter.optional(7, "format", DataTypes.StringType, "parquet"),
-    ProcedureParameter.optional(8, "command", DataTypes.StringType, "insert"),
-    ProcedureParameter.optional(9, "retry", DataTypes.IntegerType, 0),
-    ProcedureParameter.optional(10, "parallelism", DataTypes.IntegerType, jsc.defaultParallelism),
-    ProcedureParameter.optional(11, "props_file_path", DataTypes.StringType, "")
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
+    ProcedureParameter.required(1, "table_type", DataTypes.StringType),
+    ProcedureParameter.required(2, "src_path", DataTypes.StringType),
+    ProcedureParameter.required(3, "target_path", DataTypes.StringType),
+    ProcedureParameter.required(4, "row_key", DataTypes.StringType),
+    ProcedureParameter.required(5, "partition_key", DataTypes.StringType),
+    ProcedureParameter.required(6, "schema_file_path", DataTypes.StringType),
+    ProcedureParameter.optional(7, "command", DataTypes.StringType, "insert"),
+    ProcedureParameter.optional(8, "retry", DataTypes.IntegerType, 0),
+    ProcedureParameter.optional(9, "parallelism", DataTypes.IntegerType, jsc.defaultParallelism),
+    ProcedureParameter.optional(10, "props_file_path", DataTypes.StringType, "")
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -59,11 +60,10 @@ class HdfsParquetImportProcedure extends BaseProcedure with ProcedureBuilder wit
     val rowKey = getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String]
     val partitionKey = getArgValueOrDefault(args, PARAMETERS(5)).get.asInstanceOf[String]
     val schemaFilePath = getArgValueOrDefault(args, PARAMETERS(6)).get.asInstanceOf[String]
-    val format = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
-    val command = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[String]
-    val retry = getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[Int]
-    val parallelism = getArgValueOrDefault(args, PARAMETERS(10)).get.asInstanceOf[Int]
-    val propsFilePath = getArgValueOrDefault(args, PARAMETERS(11)).get.asInstanceOf[String]
+    val command = getArgValueOrDefault(args, PARAMETERS(7)).get.asInstanceOf[String]
+    val retry = getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[Int]
+    val parallelism = getArgValueOrDefault(args, PARAMETERS(9)).get.asInstanceOf[Int]
+    val propsFilePath = getArgValueOrDefault(args, PARAMETERS(10)).get.asInstanceOf[String]
 
     val parquetImporterUtils: HDFSParquetImporterUtils = new HDFSParquetImporterUtils(command, srcPath, targetPath,
       tableName, tableType, rowKey, partitionKey, parallelism, schemaFilePath, retry, propsFilePath)
@@ -81,5 +81,3 @@ object HdfsParquetImportProcedure {
     override def get() = new HdfsParquetImportProcedure()
   }
 }
-
-

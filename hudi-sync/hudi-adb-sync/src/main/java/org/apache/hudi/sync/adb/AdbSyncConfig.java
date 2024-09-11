@@ -37,76 +37,91 @@ public class AdbSyncConfig extends HiveSyncConfig {
   public static final ConfigProperty<String> ADB_SYNC_USER = ConfigProperty
       .key("hoodie.datasource.adb.sync.username")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("ADB username");
 
   public static final ConfigProperty<String> ADB_SYNC_PASS = ConfigProperty
       .key("hoodie.datasource.adb.sync.password")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("ADB user password");
 
   public static final ConfigProperty<String> ADB_SYNC_JDBC_URL = ConfigProperty
       .key("hoodie.datasource.adb.sync.jdbc_url")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Adb jdbc connect url");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_SKIP_RO_SUFFIX = ConfigProperty
       .key("hoodie.datasource.adb.sync.skip_ro_suffix")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether skip the `_ro` suffix for read optimized table when syncing");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_SKIP_RT_SYNC = ConfigProperty
       .key("hoodie.datasource.adb.sync.skip_rt_sync")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether skip the rt table when syncing");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_USE_HIVE_STYLE_PARTITIONING = ConfigProperty
       .key("hoodie.datasource.adb.sync.hive_style_partitioning")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Whether use hive style partitioning, true if like the following style: field1=value1/field2=value2");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_SUPPORT_TIMESTAMP = ConfigProperty
       .key("hoodie.datasource.adb.sync.support_timestamp")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("If true, converts int64(timestamp_micros) to timestamp type");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_SYNC_AS_SPARK_DATA_SOURCE_TABLE = ConfigProperty
       .key("hoodie.datasource.adb.sync.sync_as_spark_datasource")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether sync this table as spark data source table");
 
   public static final ConfigProperty<String> ADB_SYNC_TABLE_PROPERTIES = ConfigProperty
       .key("hoodie.datasource.adb.sync.table_properties")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Table properties, to support read hoodie table as datasource table");
 
   public static final ConfigProperty<String> ADB_SYNC_SERDE_PROPERTIES = ConfigProperty
       .key("hoodie.datasource.adb.sync.serde_properties")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Serde properties, to support read hoodie table as datasource table");
 
   public static final ConfigProperty<Integer> ADB_SYNC_SCHEMA_STRING_LENGTH_THRESHOLD = ConfigProperty
       .key("hoodie.datasource.adb.sync.schema_string_length_threshold")
       .defaultValue(4000)
+      .markAdvanced()
       .withDocumentation("The maximum length allowed in a single cell when storing additional schema information in Hive's metastore");
 
   public static final ConfigProperty<String> ADB_SYNC_DB_LOCATION = ConfigProperty
       .key("hoodie.datasource.adb.sync.db_location")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Database location");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_AUTO_CREATE_DATABASE = ConfigProperty
       .key("hoodie.datasource.adb.sync.auto_create_database")
       .defaultValue(true)
+      .markAdvanced()
       .withDocumentation("Whether auto create adb database");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_SKIP_LAST_COMMIT_TIME_SYNC = ConfigProperty
       .key("hoodie.datasource.adb.sync.skip_last_commit_time_sync")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Whether skip last commit time syncing");
 
   public static final ConfigProperty<Boolean> ADB_SYNC_DROP_TABLE_BEFORE_CREATION = ConfigProperty
       .key("hoodie.datasource.adb.sync.drop_table_before_creation")
       .defaultValue(false)
+      .markAdvanced()
       .withDocumentation("Whether drop table before creation");
 
   public AdbSyncConfig(Properties props) {
@@ -186,9 +201,8 @@ public class AdbSyncConfig extends HiveSyncConfig {
       props.setPropertyIfNonNull(ADB_SYNC_PASS.key(), hiveSyncConfigParams.hivePass);
       props.setPropertyIfNonNull(ADB_SYNC_JDBC_URL.key(), hiveSyncConfigParams.jdbcUrl);
       props.setPropertyIfNonNull(META_SYNC_BASE_PATH.key(), hiveSyncConfigParams.hoodieSyncConfigParams.basePath);
-      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), String.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
+      props.setPropertyIfNonNull(META_SYNC_PARTITION_FIELDS.key(), StringUtils.join(",", hiveSyncConfigParams.hoodieSyncConfigParams.partitionFields));
       props.setPropertyIfNonNull(META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), hiveSyncConfigParams.hoodieSyncConfigParams.partitionValueExtractorClass);
-      props.setPropertyIfNonNull(META_SYNC_ASSUME_DATE_PARTITION.key(), String.valueOf(hiveSyncConfigParams.hoodieSyncConfigParams.assumeDatePartitioning));
       props.setPropertyIfNonNull(ADB_SYNC_SKIP_RO_SUFFIX.key(), String.valueOf(hiveSyncConfigParams.skipROSuffix));
       props.setPropertyIfNonNull(ADB_SYNC_SKIP_RT_SYNC.key(), String.valueOf(skipRTSync));
       props.setPropertyIfNonNull(ADB_SYNC_USE_HIVE_STYLE_PARTITIONING.key(), String.valueOf(useHiveStylePartitioning));

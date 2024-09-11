@@ -27,9 +27,9 @@ import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Partition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +39,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DECODE_PART
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
 public class HivePartitionUtil {
-  private static final Logger LOG = LogManager.getLogger(HivePartitionUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HivePartitionUtil.class);
 
   /**
    * Build String, example as year=2021/month=06/day=25
@@ -50,14 +50,15 @@ public class HivePartitionUtil {
         "Partition key parts " + config.getSplitStrings(META_SYNC_PARTITION_FIELDS) + " does not match with partition values " + partitionValues
             + ". Check partition strategy. ");
     List<String> partBuilder = new ArrayList<>();
-    for (int i = 0; i < config.getSplitStrings(META_SYNC_PARTITION_FIELDS).size(); i++) {
+    List<String> partitionKeys = config.getSplitStrings(META_SYNC_PARTITION_FIELDS);
+    for (int i = 0; i < partitionKeys.size(); i++) {
       String partitionValue = partitionValues.get(i);
       // decode the partition before sync to hive to prevent multiple escapes of HIVE
       if (config.getBoolean(META_SYNC_DECODE_PARTITION)) {
         // This is a decode operator for encode in KeyGenUtils#getRecordPartitionPath
         partitionValue = PartitionPathEncodeUtils.unescapePathName(partitionValue);
       }
-      partBuilder.add(config.getSplitStrings(META_SYNC_PARTITION_FIELDS).get(i) + "=" + partitionValue);
+      partBuilder.add(partitionKeys.get(i).toLowerCase() + "=" + partitionValue);
     }
     return String.join("/", partBuilder);
   }

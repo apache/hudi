@@ -93,7 +93,7 @@ public class TestKafkaAvroSchemaDeserializer {
   }
 
   /**
-   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(Boolean, String, Boolean, byte[], Schema)}.
+   * Tests {@link KafkaAvroSchemaDeserializer#deserialize(String, Boolean, byte[], Schema)}.
    */
   @Test
   public void testKafkaAvroSchemaDeserializer() {
@@ -105,7 +105,7 @@ public class TestKafkaAvroSchemaDeserializer {
     avroDeserializer.configure(new HashMap(config), false);
     bytesOrigRecord = avroSerializer.serialize(topic, avroRecord);
     // record is serialized in orig schema and deserialized using same schema.
-    assertEquals(avroRecord, avroDeserializer.deserialize(false, topic, false, bytesOrigRecord, origSchema));
+    assertEquals(avroRecord, avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema));
 
     IndexedRecord avroRecordWithAllField = createExtendUserRecord();
     byte[] bytesExtendedRecord = avroSerializer.serialize(topic, avroRecordWithAllField);
@@ -115,12 +115,12 @@ public class TestKafkaAvroSchemaDeserializer {
     avroDeserializer = new KafkaAvroSchemaDeserializer(schemaRegistry, new HashMap(config));
     avroDeserializer.configure(new HashMap(config), false);
     // record is serialized w/ evolved schema, and deserialized w/ evolved schema
-    IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(false, topic, false, bytesExtendedRecord, evolSchema);
+    IndexedRecord avroRecordWithAllFieldActual = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesExtendedRecord, evolSchema);
     assertEquals(avroRecordWithAllField, avroRecordWithAllFieldActual);
     assertEquals(avroRecordWithAllFieldActual.getSchema(), evolSchema);
 
     // read old record w/ evolved schema.
-    IndexedRecord actualRec = (IndexedRecord) avroDeserializer.deserialize(false, topic, false, bytesOrigRecord, origSchema);
+    IndexedRecord actualRec = (IndexedRecord) avroDeserializer.deserialize(topic, false, bytesOrigRecord, origSchema);
     // record won't be equal to original record as we read w/ evolved schema. "age" will be added w/ default value of null
     assertNotEquals(avroRecord, actualRec);
     GenericRecord genericRecord = (GenericRecord) actualRec;

@@ -42,6 +42,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> AUTO_ARCHIVE = ConfigProperty
       .key("hoodie.archive.automatic")
       .defaultValue("true")
+      .markAdvanced()
       .withDocumentation("When enabled, the archival table service is invoked immediately after each commit,"
           + " to archive commits if we cross a maximum value of commits."
           + " It's recommended to enable this, to ensure number of active commits is bounded.");
@@ -49,6 +50,7 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> ASYNC_ARCHIVE = ConfigProperty
       .key("hoodie.archive.async")
       .defaultValue("false")
+      .markAdvanced()
       .sinceVersion("0.11.0")
       .withDocumentation("Only applies when " + AUTO_ARCHIVE.key() + " is turned on. "
           + "When turned on runs archiver async with writing, which can speed up overall write performance.");
@@ -63,7 +65,15 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> DELETE_ARCHIVED_INSTANT_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.archive.delete.parallelism")
       .defaultValue(100)
-      .withDocumentation("Parallelism for deleting archived hoodie commits.");
+      .markAdvanced()
+      .withDocumentation("When performing archival operation, Hudi needs to delete the files of "
+          + "the archived instants in the active timeline in .hoodie folder. The file deletion "
+          + "also happens after merging small archived files into larger ones if enabled. "
+          + "This config limits the Spark parallelism for deleting files in both cases, i.e., "
+          + "parallelism of deleting files does not go above the configured value and the "
+          + "parallelism is the number of files to delete if smaller than the "
+          + "configured value.  If you see that the file deletion in archival operation is slow "
+          + "because of the limited parallelism, you can increase this to tune the performance.");
 
   public static final ConfigProperty<String> MIN_COMMITS_TO_KEEP = ConfigProperty
       .key("hoodie.keep.min.commits")
@@ -74,28 +84,20 @@ public class HoodieArchivalConfig extends HoodieConfig {
   public static final ConfigProperty<String> COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
       .key("hoodie.commits.archival.batch")
       .defaultValue(String.valueOf(10))
+      .markAdvanced()
       .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
           + " archive log. This config controls such archival batch size.");
 
-  public static final ConfigProperty<Integer> ARCHIVE_MERGE_FILES_BATCH_SIZE = ConfigProperty
-      .key("hoodie.archive.merge.files.batch.size")
+  public static final ConfigProperty<Integer> TIMELINE_COMPACTION_BATCH_SIZE = ConfigProperty
+      .key("hoodie.timeline.compaction.batch.size")
       .defaultValue(10)
-      .withDocumentation("The number of small archive files to be merged at once.");
-
-  public static final ConfigProperty<Long> ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES = ConfigProperty
-      .key("hoodie.archive.merge.small.file.limit.bytes")
-      .defaultValue(20L * 1024 * 1024)
-      .withDocumentation("This config sets the archive file size limit below which an archive file becomes a candidate to be selected as such a small file.");
-
-  public static final ConfigProperty<Boolean> ARCHIVE_MERGE_ENABLE = ConfigProperty
-      .key("hoodie.archive.merge.enable")
-      .defaultValue(false)
-      .withDocumentation("When enable, hoodie will auto merge several small archive files into larger one. It's"
-          + " useful when storage scheme doesn't support append operation.");
+      .markAdvanced()
+      .withDocumentation("The number of small files to compact at once.");
 
   public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
       .key("hoodie.archive.beyond.savepoint")
       .defaultValue(false)
+      .markAdvanced()
       .sinceVersion("0.12.0")
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
@@ -171,18 +173,8 @@ public class HoodieArchivalConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieArchivalConfig.Builder withArchiveMergeFilesBatchSize(int number) {
-      archivalConfig.setValue(ARCHIVE_MERGE_FILES_BATCH_SIZE, String.valueOf(number));
-      return this;
-    }
-
-    public HoodieArchivalConfig.Builder withArchiveMergeSmallFileLimit(long size) {
-      archivalConfig.setValue(ARCHIVE_MERGE_SMALL_FILE_LIMIT_BYTES, String.valueOf(size));
-      return this;
-    }
-
-    public HoodieArchivalConfig.Builder withArchiveMergeEnable(boolean enable) {
-      archivalConfig.setValue(ARCHIVE_MERGE_ENABLE, String.valueOf(enable));
+    public HoodieArchivalConfig.Builder withTimelineCompactionBatchSize(int number) {
+      archivalConfig.setValue(TIMELINE_COMPACTION_BATCH_SIZE, String.valueOf(number));
       return this;
     }
 

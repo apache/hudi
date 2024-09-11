@@ -31,8 +31,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -45,11 +45,12 @@ import java.util.List;
  */
 public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRollbackPlan>> {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackPlanActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackPlanActionExecutor.class);
 
   protected final HoodieInstant instantToRollback;
   private final boolean skipTimelinePublish;
   private final boolean shouldRollbackUsingMarkers;
+  protected final Boolean isRestore;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
   public static final Integer LATEST_ROLLBACK_PLAN_VERSION = ROLLBACK_PLAN_VERSION_1;
@@ -60,11 +61,13 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
                                         String instantTime,
                                         HoodieInstant instantToRollback,
                                         boolean skipTimelinePublish,
-                                        boolean shouldRollbackUsingMarkers) {
+                                        boolean shouldRollbackUsingMarkers,
+                                        boolean isRestore) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
     this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
+    this.isRestore = isRestore;
   }
 
   /**
@@ -89,12 +92,12 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
     if (shouldRollbackUsingMarkers) {
       return new MarkerBasedRollbackStrategy(table, context, config, instantTime);
     } else {
-      return new ListingBasedRollbackStrategy(table, context, config, instantTime);
+      return new ListingBasedRollbackStrategy(table, context, config, instantTime, isRestore);
     }
   }
 
   /**
-   * Creates a Rollback plan if there are files to be rolledback and stores them in instant file.
+   * Creates a Rollback plan if there are files to be rolled back and stores them in instant file.
    * Rollback Plan contains absolute file paths.
    *
    * @param startRollbackTime Rollback Instant Time

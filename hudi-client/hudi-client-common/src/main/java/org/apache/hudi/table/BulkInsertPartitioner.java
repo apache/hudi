@@ -47,13 +47,13 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   I repartitionRecords(I records, int outputPartitions);
 
   /**
-   * @return {@code true} if the records within a partition are sorted; {@code false} otherwise.
+   * @return {@code true} if the records are sorted by partition-path; {@code false} otherwise.
    */
   boolean arePartitionRecordsSorted();
 
   /**
    * Return file group id prefix for the given data partition.
-   * By defauult, return a new file group id prefix, so that incoming records will route to a fresh new file group
+   * By default, return a new file group id prefix, so that incoming records will route to a fresh new file group
    *
    * @param partitionId data partition
    * @return
@@ -71,5 +71,4 @@ public interface BulkInsertPartitioner<I> extends Serializable {
   default Option<WriteHandleFactory> getWriteHandleFactory(int partitionId) {
     return Option.empty();
   }
-
 }

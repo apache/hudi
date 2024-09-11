@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -210,17 +211,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
 
   @Test
   public void testCustomColumnSortPartitioner() {
-    String sortColumnString = "rider";
-    String[] sortColumns = sortColumnString.split(",");
-    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, sortColumns);
-
-    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
-    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
-        records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
-    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, false),
-        records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
-
+    String sortColumnString = "begin_lat";
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
@@ -228,26 +219,43 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
         .withUserDefinedBulkInsertPartitionerClass(RDDCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
         .build();
+    String[] sortColumns = sortColumnString.split(",");
+    Comparator<HoodieRecord<? extends HoodieRecordPayload>> columnComparator = getCustomColumnComparator(HoodieTestDataGenerator.AVRO_SCHEMA, true, sortColumns);
+
+    JavaRDD<HoodieRecord> records1 = generateTestRecordsForBulkInsert(jsc);
+    JavaRDD<HoodieRecord> records2 = generateTripleTestRecordsForBulkInsert(jsc);
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+        records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
+    testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(sortColumns, HoodieTestDataGenerator.AVRO_SCHEMA, config),
+        records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
+
+
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
         records1, true, true, true, generateExpectedPartitionNumRecords(records1), Option.of(columnComparator), true);
     testBulkInsertInternalPartitioner(new RDDCustomColumnsSortPartitioner(config),
         records2, true, true, true, generateExpectedPartitionNumRecords(records2), Option.of(columnComparator), true);
   }
 
-  private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(Schema schema, String[] sortColumns) {
+  private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(Schema schema, boolean prependPartitionPath, String[] sortColumns) {
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> comparator = Comparator.comparing(record -> {
       try {
         GenericRecord genericRecord = (GenericRecord) record.getData().getInsertValue(schema).get();
-        StringBuilder sb = new StringBuilder();
-        for (String col : sortColumns) {
-          sb.append(genericRecord.get(col));
+        List<Object> keys = new ArrayList<>();
+        if (prependPartitionPath) {
+          keys.add(record.getPartitionPath());
         }
-
-        return sb.toString();
+        for (String col : sortColumns) {
+          keys.add(genericRecord.get(col));
+        }
+        return keys;
       } catch (IOException e) {
         throw new HoodieIOException("unable to read value for " + sortColumns);
       }
-    });
+    }, (o1, o2) -> {
+        FlatLists.ComparableList values1 = FlatLists.ofComparableArray(o1.toArray());
+        FlatLists.ComparableList values2 = FlatLists.ofComparableArray(o2.toArray());
+        return values1.compareTo(values2);
+      });
 
     return comparator;
   }

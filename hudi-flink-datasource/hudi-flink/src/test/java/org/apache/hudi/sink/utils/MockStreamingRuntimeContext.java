@@ -17,10 +17,10 @@
 
 package org.apache.hudi.sink.utils;
 
-import org.apache.hudi.adapter.StreamingRuntimeContextAdapter;
-
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.KeyedStateStore;
+import org.apache.flink.metrics.groups.OperatorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.operators.testutils.MockEnvironment;
@@ -37,12 +37,14 @@ import java.util.HashMap;
  *
  * <p>NOTE: Adapted from Apache Flink, the MockStreamOperator is modified to support MapState.
  */
-public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter {
+public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
   private final boolean isCheckpointingEnabled;
 
   private final int numParallelSubtasks;
   private final int subtaskIndex;
+
+  private int attemptNumber;
 
   public MockStreamingRuntimeContext(
       boolean isCheckpointingEnabled,
@@ -66,6 +68,7 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter 
     this.isCheckpointingEnabled = isCheckpointingEnabled;
     this.numParallelSubtasks = numParallelSubtasks;
     this.subtaskIndex = subtaskIndex;
+    this.attemptNumber = 0;
   }
 
   @Override
@@ -81,6 +84,15 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter 
   @Override
   public int getNumberOfParallelSubtasks() {
     return numParallelSubtasks;
+  }
+
+  @Override
+  public int getAttemptNumber() {
+    return this.attemptNumber;
+  }
+
+  public void setAttemptNumber(int attemptNumber) {
+    this.attemptNumber = attemptNumber;
   }
 
   private static class MockStreamOperator extends AbstractStreamOperator<Integer> {
@@ -115,5 +127,10 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContextAdapter 
       }
       return mockOperatorStateStore;
     }
+  }
+
+  @Override
+  public OperatorMetricGroup getMetricGroup() {
+    return UnregisteredMetricsGroup.createOperatorMetricGroup();
   }
 }

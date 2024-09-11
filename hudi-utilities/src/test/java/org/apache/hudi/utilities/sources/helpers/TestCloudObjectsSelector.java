@@ -21,11 +21,9 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.CloudObjectTestUtils;
 
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.model.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONObject;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +33,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -42,8 +42,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_REGION;
-import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.Config.S3_SOURCE_QUEUE_URL;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_REGION;
+import static org.apache.hudi.utilities.config.S3SourceConfig.S3_SOURCE_QUEUE_URL;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_FILE_PATH;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_FILE_SIZE;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.S3_MODEL_EVENT_TIME;
@@ -54,7 +54,7 @@ import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector.SQS
 import static org.apache.hudi.utilities.testutils.CloudObjectTestUtils.deleteMessagesInQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestCloudObjectsSelector extends HoodieClientTestHarness {
+public class TestCloudObjectsSelector extends HoodieSparkClientTestHarness {
 
   static final String REGION_NAME = "us-east-1";
 
@@ -62,7 +62,7 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   String sqsUrl;
 
   @Mock
-  AmazonSQS sqs;
+  SqsClient sqs;
 
   @Mock
   private CloudObjectsSelector cloudObjectsSelector;
@@ -71,13 +71,13 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
   void setUp() {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     MockitoAnnotations.initMocks(this);
 
     props = new TypedProperties();
     sqsUrl = "test-queue";
-    props.setProperty(S3_SOURCE_QUEUE_URL, sqsUrl);
-    props.setProperty(S3_SOURCE_QUEUE_REGION, REGION_NAME);
+    props.setProperty(S3_SOURCE_QUEUE_URL.key(), sqsUrl);
+    props.setProperty(S3_SOURCE_QUEUE_REGION.key(), REGION_NAME);
   }
 
   @AfterEach
@@ -156,22 +156,22 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
 
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
-    testSingleList.add(new Message().addAttributesEntry("id", "1"));
-    testSingleList.add(new Message().addAttributesEntry("id", "2"));
-    testSingleList.add(new Message().addAttributesEntry("id", "3"));
-    testSingleList.add(new Message().addAttributesEntry("id", "4"));
-    testSingleList.add(new Message().addAttributesEntry("id", "5"));
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "3")).build());
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "4")).build());
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "5")).build());
 
     List<Message> expectedFirstList = new ArrayList<>();
-    expectedFirstList.add(new Message().addAttributesEntry("id", "1"));
-    expectedFirstList.add(new Message().addAttributesEntry("id", "2"));
+    expectedFirstList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
+    expectedFirstList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
 
     List<Message> expectedSecondList = new ArrayList<>();
-    expectedSecondList.add(new Message().addAttributesEntry("id", "3"));
-    expectedSecondList.add(new Message().addAttributesEntry("id", "4"));
+    expectedSecondList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "3")).build());
+    expectedSecondList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "4")).build());
 
     List<Message> expectedFinalList = new ArrayList<>();
-    expectedFinalList.add(new Message().addAttributesEntry("id", "5"));
+    expectedFinalList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "5")).build());
 
     //  test the return values
     List<List<Message>> partitionedList = selector.createListPartitions(testSingleList, 2);
@@ -191,8 +191,8 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
 
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
-    testSingleList.add(new Message().addAttributesEntry("id", "1"));
-    testSingleList.add(new Message().addAttributesEntry("id", "2"));
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "1")).build());
+    testSingleList.add(Message.builder().attributesWithStrings(createAttributeMap("id", "2")).build());
 
     //  test the return values
     List<List<Message>> partitionedList = selector.createListPartitions(testSingleList, 0);
@@ -210,17 +210,26 @@ public class TestCloudObjectsSelector extends HoodieClientTestHarness {
     // setup lists
     List<Message> testSingleList = new ArrayList<>();
     testSingleList.add(
-        new Message()
-            .addAttributesEntry("MessageId", "1")
-            .addAttributesEntry("ReceiptHandle", "1"));
+            Message.builder()
+                    .attributesWithStrings(createAttributeMap("MessageId", "1"))
+                    .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
+                    .build());
     testSingleList.add(
-        new Message()
-            .addAttributesEntry("MessageId", "2")
-            .addAttributesEntry("ReceiptHandle", "1"));
+            Message.builder()
+                    .attributesWithStrings(createAttributeMap("MessageId", "2"))
+                    .attributesWithStrings(createAttributeMap("ReceiptHandle", "1"))
+                    .build());
 
     deleteMessagesInQueue(sqs);
 
     //  test the return values
     selector.deleteProcessedMessages(sqs, sqsUrl, testSingleList);
   }
+
+  public Map<String, String> createAttributeMap(String key, String value) {
+    Map<String, String> attribute = new HashMap<>();
+    attribute.put(key, value);
+    return attribute;
+  }
+
 }

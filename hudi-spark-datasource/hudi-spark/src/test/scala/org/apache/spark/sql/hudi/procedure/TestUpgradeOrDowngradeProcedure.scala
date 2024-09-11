@@ -17,12 +17,17 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 
 import java.io.IOException
+import java.time.Instant
+import scala.collection.JavaConverters._
+
 
 class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
 
@@ -49,16 +54,13 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       checkExceptionContain(s"""call downgrade_table(table => '$tableName')""")(
         s"Argument: to_version is required")
 
-      var metaClient = HoodieTableMetaClient.builder
-        .setConf(new JavaSparkContext(spark.sparkContext).hadoopConfiguration())
-        .setBasePath(tablePath)
-        .build
+      var metaClient = createMetaClient(spark, tablePath)
 
       // verify hoodie.table.version of the original table
-      assertResult(HoodieTableVersion.FIVE.versionCode) {
+      assertResult(HoodieTableVersion.EIGHT.versionCode) {
         metaClient.getTableConfig.getTableVersion.versionCode()
       }
-      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.FIVE.versionCode)
+      assertTableVersionFromPropertyFile(metaClient, HoodieTableVersion.EIGHT.versionCode)
 
       // downgrade table to ZERO
       checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'ZERO')""")(Seq(true))
@@ -82,11 +84,122 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test Call upgrade_table from version three") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      // downgrade table to THREE
+      checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'THREE')""")(Seq(true))
+      var metaClient = createMetaClient(spark, tablePath)
+      val storage = metaClient.getStorage
+      // verify hoodie.table.version of the table is THREE
+      assertResult(HoodieTableVersion.THREE.versionCode) {
+        metaClient.getTableConfig.getTableVersion.versionCode()
+      }
+      val metaPathDir = new StoragePath(metaClient.getBasePath, HoodieTableMetaClient.METAFOLDER_NAME)
+      // delete checksum from hoodie.properties
+      val props = ConfigUtils.fetchConfigs(
+        storage,
+        metaPathDir,
+        HoodieTableConfig.HOODIE_PROPERTIES_FILE,
+        HoodieTableConfig.HOODIE_PROPERTIES_FILE_BACKUP,
+        1,
+        1000)
+      props.remove(HoodieTableConfig.TABLE_CHECKSUM.key)
+      try {
+        val outputStream = storage.create(new StoragePath(metaPathDir, HoodieTableConfig.HOODIE_PROPERTIES_FILE))
+        props.store(outputStream, "Updated at " + Instant.now)
+        outputStream.close()
+      } catch {
+        case e: Exception => fail(e)
+      }
+      // verify hoodie.table.checksum is deleted from hoodie.properties
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertResult(false) {metaClient.getTableConfig.contains(HoodieTableConfig.TABLE_CHECKSUM)}
+      // upgrade table to SIX
+      checkAnswer(s"""call upgrade_table(table => '$tableName', to_version => 'SIX')""")(Seq(true))
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertResult(HoodieTableVersion.SIX.versionCode) {
+        metaClient.getTableConfig.getTableVersion.versionCode()
+      }
+      val expectedCheckSum = BinaryUtil.generateChecksum(StringUtils.getUTF8Bytes(tableName))
+      assertResult(expectedCheckSum) {
+        metaClient.getTableConfig.getLong(HoodieTableConfig.TABLE_CHECKSUM)
+      }
+    }
+  }
+
+  test("Test downgrade table from version eight to version seven") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | options (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql("set hoodie.compact.inline=true")
+      spark.sql("set hoodie.compact.inline.max.delta.commits=1")
+      spark.sql("set hoodie.clean.commits.retained = 2")
+      spark.sql("set hoodie.keep.min.commits = 3")
+      spark.sql("set hoodie.keep.min.commits = 4")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+      var metaClient = createMetaClient(spark, tablePath)
+      // verify hoodie.table.version of the table is EIGHT
+      if (metaClient.getTableConfig.getTableVersion.versionCode().equals(HoodieTableVersion.EIGHT.versionCode())) {
+        // downgrade table from version eight to version seven
+        checkAnswer(s"""call downgrade_table(table => '$tableName', to_version => 'SEVEN')""")(Seq(true))
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        assertResult(HoodieTableVersion.SEVEN.versionCode) {
+          metaClient.getTableConfig.getTableVersion.versionCode()
+        }
+        // Verify whether the naming format of instant files is consistent with 0.x
+        metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(f.getFileName).find())
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
+
   @throws[IOException]
   private def assertTableVersionFromPropertyFile(metaClient: HoodieTableMetaClient, versionCode: Int): Unit = {
-    val propertyFile = new Path(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
+    val propertyFile = new StoragePath(metaClient.getMetaPath + "/" + HoodieTableConfig.HOODIE_PROPERTIES_FILE)
     // Load the properties and verify
-    val fsDataInputStream = metaClient.getFs.open(propertyFile)
+    val fsDataInputStream = metaClient.getStorage.open(propertyFile)
     val config = new HoodieConfig
     config.getProps.load(fsDataInputStream)
     fsDataInputStream.close()

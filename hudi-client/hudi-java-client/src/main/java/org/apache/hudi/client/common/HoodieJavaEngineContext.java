@@ -18,12 +18,10 @@
 
 package org.apache.hudi.client.common;
 
-import org.apache.hadoop.conf.Configuration;
-
-import org.apache.hudi.common.config.SerializableConfiguration;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -33,10 +31,11 @@ import org.apache.hudi.common.function.SerializableConsumer;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.function.SerializablePairFunction;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
-
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -59,12 +58,12 @@ import static org.apache.hudi.common.function.FunctionWrapper.throwingReduceWrap
  */
 public class HoodieJavaEngineContext extends HoodieEngineContext {
 
-  public HoodieJavaEngineContext(Configuration conf) {
+  public HoodieJavaEngineContext(StorageConfiguration<?> conf) {
     this(conf, new JavaTaskContextSupplier());
   }
 
-  public HoodieJavaEngineContext(Configuration conf, TaskContextSupplier taskContextSupplier) {
-    super(new SerializableConfiguration(conf), taskContextSupplier);
+  public HoodieJavaEngineContext(StorageConfiguration<?> conf, TaskContextSupplier taskContextSupplier) {
+    super(conf, taskContextSupplier);
   }
 
   @Override
@@ -145,5 +144,35 @@ public class HoodieJavaEngineContext extends HoodieEngineContext {
   @Override
   public void setJobStatus(String activeModule, String activityDescription) {
     // no operation for now
+  }
+
+  @Override
+  public void putCachedDataIds(HoodieDataCacheKey cacheKey, int... ids) {
+    // no operation for now
+  }
+
+  @Override
+  public List<Integer> getCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public List<Integer> removeCachedDataIds(HoodieDataCacheKey cacheKey) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public void cancelJob(String jobId) {
+    // no operation for now
+  }
+
+  @Override
+  public void cancelAllJobs() {
+    // no operation for now
+  }
+
+  @Override
+  public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
+    return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
   }
 }

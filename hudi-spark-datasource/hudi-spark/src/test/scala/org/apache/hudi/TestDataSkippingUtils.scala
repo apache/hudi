@@ -18,7 +18,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.hudi.testutils.HoodieSparkClientTestBase
+
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
@@ -30,7 +31,7 @@ import org.apache.spark.sql.functions.{col, lower}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, HoodieCatalystExpressionUtils, Row, SparkSession}
+import org.apache.spark.sql.{Column, Row, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,6 +39,7 @@ import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
 import java.sql.Timestamp
+
 import scala.collection.JavaConverters._
 import scala.collection.immutable.HashSet
 
@@ -48,21 +50,21 @@ case class IndexRow(fileName: String,
                     // Corresponding A column is LongType
                     A_minValue: Long = -1,
                     A_maxValue: Long = -1,
-                    A_nullCount: Long = -1,
+                    A_nullCount: java.lang.Long = null,
 
                     // Corresponding B column is StringType
                     B_minValue: String = null,
                     B_maxValue: String = null,
-                    B_nullCount: Long = -1,
+                    B_nullCount: java.lang.Long = null,
 
                     // Corresponding B column is TimestampType
                     C_minValue: Timestamp = null,
                     C_maxValue: Timestamp = null,
-                    C_nullCount: Long = -1) {
+                    C_nullCount: java.lang.Long = null) {
   def toRow: Row = Row(productIterator.toSeq: _*)
 }
 
-class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSupport {
+class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterSupport {
 
   var spark: SparkSession = _
 
@@ -83,13 +85,14 @@ class TestDataSkippingUtils extends HoodieClientTestBase with SparkAdapterSuppor
       )
     )
 
-  val indexSchema: StructType = composeIndexSchema(indexedCols, sourceTableSchema)
+  val (indexSchema: StructType, targetIndexedColumns:  Seq[String]) = composeIndexSchema(indexedCols, indexedCols.toSet, sourceTableSchema)
 
   @ParameterizedTest
   @MethodSource(Array(
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
-    "testCompositeFilterExpressionsSource"
+    "testCompositeFilterExpressionsSource",
+    "testSupportedAndUnsupportedDataSkippingColumnsSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -194,6 +197,38 @@ object TestDataSkippingUtils {
           IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
         ),
         Seq("file_1", "file_2", "file_3"))
+    )
+  }
+
+  def testSupportedAndUnsupportedDataSkippingColumnsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      arguments(
+        "A = 1 and B is not null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2")
+      ),
+      arguments(
+        "B = 1 and B is not null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2", "file_3")
+      ),
+      arguments(
+        "A = 1 and A is not null and B is not null and B > 2",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
+        ),
+        Seq("file_1", "file_2")
+      )
     )
   }
 

@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -35,11 +36,11 @@ import scala.collection.JavaConverters._
 class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder with Logging {
 
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "src_table", DataTypes.StringType, None),
-    ProcedureParameter.required(1, "dst_table", DataTypes.StringType, None),
-    ProcedureParameter.required(2, "mode", DataTypes.StringType, "complete"),
-    ProcedureParameter.required(3, "hive_server_url", DataTypes.StringType, None),
-    ProcedureParameter.required(4, "hive_pass", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "src_table", DataTypes.StringType),
+    ProcedureParameter.required(1, "dst_table", DataTypes.StringType),
+    ProcedureParameter.required(2, "mode", DataTypes.StringType),
+    ProcedureParameter.required(3, "hive_server_url", DataTypes.StringType),
+    ProcedureParameter.required(4, "hive_pass", DataTypes.StringType),
     ProcedureParameter.optional(5, "src_db", DataTypes.StringType, "rawdata"),
     ProcedureParameter.optional(6, "target_db", DataTypes.StringType, "dwh_hoodie"),
     ProcedureParameter.optional(7, "partition_cnt", DataTypes.IntegerType, 5),
@@ -79,8 +80,8 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
     val srcBasePath = getBasePath(srcTable, Option.empty)
     val dstBasePath = getBasePath(dstTable, Option.empty)
 
-    val srcMetaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(srcBasePath).build
-    val targetMetaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(dstBasePath).build
+    val srcMetaClient = createMetaClient(jsc, srcBasePath)
+    val targetMetaClient = createMetaClient(jsc, dstBasePath)
 
     val targetTimeline = targetMetaClient.getActiveTimeline.getCommitsTimeline
     val sourceTimeline = srcMetaClient.getActiveTimeline.getCommitsTimeline
@@ -190,7 +191,7 @@ class ValidateHoodieSyncProcedure extends BaseProcedure with ProcedureBuilder wi
   @throws[IOException]
   def countNewRecords(target: HoodieTableMetaClient, commitsToCatchup: List[String]): Long = {
     var totalNew: Long = 0
-    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitTimeline.filterCompletedInstants
+    val timeline: HoodieTimeline = target.reloadActiveTimeline.getCommitAndReplaceTimeline.filterCompletedInstants
     for (commit <- commitsToCatchup) {
       val c: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get, classOf[HoodieCommitMetadata])
       totalNew += c.fetchTotalRecordsWritten - c.fetchTotalUpdateRecordsWritten

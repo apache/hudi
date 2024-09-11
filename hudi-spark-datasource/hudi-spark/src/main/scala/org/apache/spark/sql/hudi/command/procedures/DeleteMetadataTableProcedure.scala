@@ -17,10 +17,10 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieTableMetadata
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.deleteMetadataTable
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
@@ -29,7 +29,7 @@ import java.util.function.Supplier
 
 class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -44,18 +44,22 @@ class DeleteMetadataTableProcedure extends BaseProcedure with ProcedureBuilder w
     super.checkArgs(PARAMETERS, args)
 
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
-    val basePath = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
-    val metadataPath = new Path(HoodieTableMetadata.getMetadataTableBasePath(basePath))
+    val tableNames = tableName.get.asInstanceOf[String].split(",")
+    var metadataPaths = ""
+    for (tb <- tableNames) {
+      val basePath = getBasePath(Option.apply(tb))
+      val metaClient = createMetaClient(jsc, basePath)
 
-    try {
-      val statuses = metaClient.getFs.listStatus(metadataPath)
-      if (statuses.nonEmpty) metaClient.getFs.delete(metadataPath, true)
-    } catch {
-      case e: FileNotFoundException =>
-      // Metadata directory does not exist
+      try {
+        val metadataTableBasePath = deleteMetadataTable(metaClient, new HoodieSparkEngineContext(jsc), false)
+        metadataPaths = s"$metadataPaths,$metadataTableBasePath"
+        Seq(Row(s"Deleted Metadata Table at '$metadataTableBasePath'"))
+      } catch {
+        case e: FileNotFoundException =>
+          Seq(Row("File not found: " + e.getMessage))
+      }
     }
-    Seq(Row("Removed Metadata Table from " + metadataPath))
+    Seq(Row(s"Deleted Metadata Table at '$metadataPaths'"))
   }
 
   override def build = new DeleteMetadataTableProcedure()

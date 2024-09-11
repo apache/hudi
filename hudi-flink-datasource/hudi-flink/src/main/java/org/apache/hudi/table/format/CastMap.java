@@ -19,33 +19,18 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.table.format.TypeConverters.TypeConverter;
 import org.apache.hudi.util.RowDataCastProjection;
 import org.apache.hudi.util.RowDataProjection;
 
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.table.data.DecimalData;
-import org.apache.flink.table.data.binary.BinaryStringData;
 import org.apache.flink.table.types.DataType;
-import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.apache.flink.table.types.logical.LogicalTypeRoot;
 
-import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.BIGINT;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.DATE;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.DECIMAL;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.DOUBLE;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.FLOAT;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.INTEGER;
-import static org.apache.flink.table.types.logical.LogicalTypeRoot.VARCHAR;
 
 /**
  * CastMap is responsible for conversion of flink types when full schema evolution enabled.
@@ -99,91 +84,15 @@ public final class CastMap implements Serializable {
 
   @VisibleForTesting
   void add(int pos, LogicalType fromType, LogicalType toType) {
-    Function<Object, Object> conversion = getConversion(fromType, toType);
-    if (conversion == null) {
+    TypeConverter converter = TypeConverters.getInstance(fromType, toType);
+    if (converter == null) {
       throw new IllegalArgumentException(String.format("Cannot create cast %s => %s at pos %s", fromType, toType, pos));
     }
-    add(pos, new Cast(fromType, toType, conversion));
-  }
-
-  private @Nullable Function<Object, Object> getConversion(LogicalType fromType, LogicalType toType) {
-    LogicalTypeRoot from = fromType.getTypeRoot();
-    LogicalTypeRoot to = toType.getTypeRoot();
-    switch (to) {
-      case BIGINT: {
-        if (from == INTEGER) {
-          return val -> ((Number) val).longValue();
-        }
-        break;
-      }
-      case FLOAT: {
-        if (from == INTEGER || from == BIGINT) {
-          return val -> ((Number) val).floatValue();
-        }
-        break;
-      }
-      case DOUBLE: {
-        if (from == INTEGER || from == BIGINT) {
-          return val -> ((Number) val).doubleValue();
-        }
-        if (from == FLOAT) {
-          return val -> Double.parseDouble(val.toString());
-        }
-        break;
-      }
-      case DECIMAL: {
-        if (from == INTEGER || from == BIGINT || from == DOUBLE) {
-          return val -> toDecimalData((Number) val, toType);
-        }
-        if (from == FLOAT) {
-          return val -> toDecimalData(Double.parseDouble(val.toString()), toType);
-        }
-        if (from == VARCHAR) {
-          return val -> toDecimalData(Double.parseDouble(val.toString()), toType);
-        }
-        if (from == DECIMAL) {
-          return val -> toDecimalData(((DecimalData) val).toBigDecimal(), toType);
-        }
-        break;
-      }
-      case VARCHAR: {
-        if (from == INTEGER
-            || from == BIGINT
-            || from == FLOAT
-            || from == DOUBLE
-            || from == DECIMAL) {
-          return val -> new BinaryStringData(String.valueOf(val));
-        }
-        if (from == DATE) {
-          return val -> new BinaryStringData(LocalDate.ofEpochDay(((Integer) val).longValue()).toString());
-        }
-        break;
-      }
-      case DATE: {
-        if (from == VARCHAR) {
-          return val -> (int) LocalDate.parse(val.toString()).toEpochDay();
-        }
-        break;
-      }
-      default:
-    }
-    return null;
+    add(pos, new Cast(fromType, toType, converter));
   }
 
   private void add(int pos, Cast cast) {
     castMap.put(pos, cast);
-  }
-
-  private DecimalData toDecimalData(Number val, LogicalType decimalType) {
-    BigDecimal valAsDecimal = BigDecimal.valueOf(val.doubleValue());
-    return toDecimalData(valAsDecimal, decimalType);
-  }
-
-  private DecimalData toDecimalData(BigDecimal valAsDecimal, LogicalType decimalType) {
-    return DecimalData.fromBigDecimal(
-        valAsDecimal,
-        ((DecimalType) decimalType).getPrecision(),
-        ((DecimalType) decimalType).getScale());
   }
 
   /**
@@ -196,16 +105,16 @@ public final class CastMap implements Serializable {
 
     private final LogicalType from;
     private final LogicalType to;
-    private final Function<Object, Object> conversion;
+    private final TypeConverter castMapConverter;
 
-    Cast(LogicalType from, LogicalType to, Function<Object, Object> conversion) {
+    Cast(LogicalType from, LogicalType to, TypeConverter conversion) {
       this.from = from;
       this.to = to;
-      this.conversion = conversion;
+      this.castMapConverter = conversion;
     }
 
     Object convert(Object val) {
-      return conversion.apply(val);
+      return castMapConverter.convert(val);
     }
 
     @Override

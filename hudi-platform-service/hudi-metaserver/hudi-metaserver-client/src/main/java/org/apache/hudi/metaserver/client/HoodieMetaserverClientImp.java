@@ -27,13 +27,14 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.thrift.Table;
 import org.apache.hudi.metaserver.thrift.ThriftHoodieMetaserver;
 import org.apache.hudi.metaserver.util.EntityConversions;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -46,7 +47,7 @@ import java.util.stream.Collectors;
  */
 public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
 
-  private static final Logger LOG =  LogManager.getLogger(HoodieMetaserverClientImp.class);
+  private static final Logger LOG =  LoggerFactory.getLogger(HoodieMetaserverClientImp.class);
   private final HoodieMetaserverConfig config;
   private final int retryLimit;
   private final long retryDelayMs;

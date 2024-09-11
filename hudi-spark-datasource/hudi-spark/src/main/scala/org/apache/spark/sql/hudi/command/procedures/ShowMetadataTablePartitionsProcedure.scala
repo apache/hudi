@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -29,11 +31,12 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 import java.util
 import java.util.Collections
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -50,9 +53,9 @@ class ShowMetadataTablePartitionsProcedure() extends BaseProcedure with Procedur
     val table = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath = getBasePath(table)
+    val storage = new HoodieHadoopStorage(basePath, spark.sessionState.newHadoopConf())
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
-    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc),
-      config, basePath, "/tmp")
+    val metadata = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), storage, config, basePath)
     if (!metadata.enabled){
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
     }

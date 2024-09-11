@@ -18,12 +18,17 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.util.ClientIds;
+
 import org.apache.flink.configuration.Configuration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tool helping to infer the flink options {@link FlinkOptions}.
  */
 public class OptionsInference {
+  private static final Logger LOG = LoggerFactory.getLogger(OptionsInference.class);
 
   /**
    * Sets up the default source task parallelism if it is not specified.
@@ -60,6 +65,29 @@ public class OptionsInference {
     // clustering tasks, default same as write tasks
     if (!conf.contains(FlinkOptions.CLUSTERING_TASKS)) {
       conf.setInteger(FlinkOptions.CLUSTERING_TASKS, writeTasks);
+    }
+  }
+
+  /**
+   * Utilities that help to auto generate the client id for multi-writer scenarios.
+   * It basically handles two cases:
+   *
+   * <ul>
+   *   <li>find the next client id for the new job;</li>
+   *   <li>clean the existing inactive client heartbeat files.</li>
+   * </ul>
+   *
+   * @see ClientIds
+   */
+  public static void setupClientId(Configuration conf) {
+    if (OptionsResolver.isMultiWriter(conf)) {
+      // explicit client id always has higher priority
+      if (!conf.contains(FlinkOptions.WRITE_CLIENT_ID)) {
+        try (ClientIds clientIds = ClientIds.builder().conf(conf).build()) {
+          String clientId = clientIds.nextId(conf);
+          conf.setString(FlinkOptions.WRITE_CLIENT_ID, clientId);
+        }
+      }
     }
   }
 }

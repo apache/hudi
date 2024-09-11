@@ -27,8 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
@@ -41,14 +40,13 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 public class DirectMarkerTransactionManager extends TransactionManager {
   private final String filePath;
 
-  public DirectMarkerTransactionManager(HoodieWriteConfig config, FileSystem fs, String partitionPath, String fileId) {
-    super(new LockManager(config, fs, createUpdatedLockProps(config, partitionPath, fileId)),
-        config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl());
+  public DirectMarkerTransactionManager(HoodieWriteConfig config, HoodieStorage storage, String partitionPath, String fileId) {
+    super(new LockManager(config, storage, createUpdatedLockProps(config, partitionPath, fileId)), config.isLockRequired());
     this.filePath = partitionPath + "/" + fileId;
   }
 
   public void beginTransaction(String newTxnOwnerInstantTime) {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (isLockRequired) {
       LOG.info("Transaction starting for " + newTxnOwnerInstantTime + " and " + filePath);
       lockManager.lock();
 
@@ -58,7 +56,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
   }
 
   public void endTransaction(String currentTxnOwnerInstantTime) {
-    if (isOptimisticConcurrencyControlEnabled) {
+    if (isLockRequired) {
       LOG.info("Transaction ending with transaction owner " + currentTxnOwnerInstantTime
           + " for " + filePath);
       if (reset(Option.of(getInstant(currentTxnOwnerInstantTime)), Option.empty(), Option.empty())) {
@@ -83,7 +81,7 @@ public class DirectMarkerTransactionManager extends TransactionManager {
       throw new HoodieNotSupportedException("Only Support ZK-based lock for DirectMarkerTransactionManager now.");
     }
     TypedProperties props = new TypedProperties(writeConfig.getProps());
-    props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, partitionPath + "/" + fileId);
+    props.setProperty(LockConfiguration.ZK_LOCK_KEY_PROP_KEY, (null != partitionPath && !partitionPath.isEmpty()) ? partitionPath + "/" + fileId : fileId);
     return props;
   }
 

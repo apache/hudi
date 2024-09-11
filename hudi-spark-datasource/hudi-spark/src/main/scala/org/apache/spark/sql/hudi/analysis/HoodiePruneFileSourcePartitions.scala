@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
@@ -41,17 +42,17 @@ case class HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[Log
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
     case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
-      if sparkAdapter.isHoodieTable(lr, spark) && !fileIndex.hasPredicatesPushedDown =>
+      if !fileIndex.hasPredicatesPushedDown =>
 
       val deterministicFilters = filters.filter(f => f.deterministic && !SubqueryExpression.hasSubquery(f))
       val normalizedFilters = exprUtils.normalizeExprs(deterministicFilters, lr.output)
 
-      val (partitionPruningFilters, _) =
+      val (partitionPruningFilters, dataFilters) =
         getPartitionFiltersAndDataFilters(fileIndex.partitionSchema, normalizedFilters)
 
       // [[HudiFileIndex]] is a caching one, therefore we don't need to reconstruct new relation,
       // instead we simply just refresh the index and update the stats
-      fileIndex.listFiles(partitionPruningFilters, Seq())
+      fileIndex.filterFileSlices(dataFilters, partitionPruningFilters, isPartitionPruned = true)
 
       if (partitionPruningFilters.nonEmpty) {
         // Change table stats based on the sizeInBytes of pruned files

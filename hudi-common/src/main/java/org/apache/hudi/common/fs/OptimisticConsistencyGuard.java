@@ -18,10 +18,11 @@
 
 package org.apache.hudi.common.fs;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -41,7 +42,7 @@ import java.util.concurrent.TimeoutException;
  * Step1 and Step2 is handled by {@link FailSafeConsistencyGuard}.
  *
  * We are simplifying these steps with {@link OptimisticConsistencyGuard}.
- * Step1: Check if all files adhere to visibility event. If yes, proceed to Sptep 3.
+ * Step1: Check if all files adhere to visibility event. If yes, proceed to Step 3.
  * Step2: If not, Sleep for a configured threshold and then proceed to next step.
  * Step3: issue deletes.
  *
@@ -50,32 +51,35 @@ import java.util.concurrent.TimeoutException;
  */
 public class OptimisticConsistencyGuard extends FailSafeConsistencyGuard {
 
-  private static final Logger LOG = LogManager.getLogger(OptimisticConsistencyGuard.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OptimisticConsistencyGuard.class);
 
-  public OptimisticConsistencyGuard(FileSystem fs, ConsistencyGuardConfig consistencyGuardConfig) {
-    super(fs, consistencyGuardConfig);
+  public OptimisticConsistencyGuard(HoodieStorage storage,
+                                    ConsistencyGuardConfig consistencyGuardConfig) {
+    super(storage, consistencyGuardConfig);
   }
 
   @Override
-  public void waitTillFileAppears(Path filePath) throws TimeoutException {
+  public void waitTillFileAppears(StoragePath filePath) throws TimeoutException {
     try {
       if (!checkFileVisibility(filePath, FileVisibility.APPEAR)) {
         Thread.sleep(consistencyGuardConfig.getOptimisticConsistencyGuardSleepTimeMs());
       }
     } catch (IOException | InterruptedException ioe) {
-      LOG.warn("Got IOException or InterruptedException waiting for file visibility. Ignoring", ioe);
+      LOG.warn("Got IOException or InterruptedException waiting for file visibility. Ignoring",
+          ioe);
     }
   }
 
   @Override
-  public void waitTillFileDisappears(Path filePath) throws TimeoutException {
+  public void waitTillFileDisappears(StoragePath filePath) throws TimeoutException {
     // no op
   }
 
   @Override
   public void waitTillAllFilesAppear(String dirPath, List<String> files) throws TimeoutException {
     try {
-      if (!checkFilesVisibility(1, new Path(dirPath), getFilesWithoutSchemeAndAuthority(files), FileVisibility.APPEAR)) {
+      if (!checkFilesVisibility(1, new StoragePath(dirPath),
+          getFilesWithoutSchemeAndAuthority(files), FileVisibility.APPEAR)) {
         Thread.sleep(consistencyGuardConfig.getOptimisticConsistencyGuardSleepTimeMs());
       }
     } catch (InterruptedException ie) {

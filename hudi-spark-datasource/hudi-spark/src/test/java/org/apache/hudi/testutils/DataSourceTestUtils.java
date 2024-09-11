@@ -18,16 +18,18 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.StoragePath;
+
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.common.util.FileIOUtils;
-
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
@@ -66,6 +68,18 @@ public class DataSourceTestUtils {
       Object[] values = new Object[3];
       values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
       values[1] = partitions.get(RANDOM.nextInt(3));
+      values[2] = new Date().getTime();
+      toReturn.add(RowFactory.create(values));
+    }
+    return toReturn;
+  }
+
+  public static List<Row> generateRandomRowsByPartition(int count, String partition) {
+    List<Row> toReturn = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      Object[] values = new Object[3];
+      values[0] = HoodieTestDataGenerator.genPseudoRandomUUID(RANDOM).toString();
+      values[1] = partition;
       values[2] = new Date().getTime();
       toReturn.add(RowFactory.create(values));
     }
@@ -130,17 +144,14 @@ public class DataSourceTestUtils {
    */
   public static boolean isLogFileOnly(String basePath) throws IOException {
     Configuration conf = new Configuration();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-            .setConf(conf).setBasePath(basePath)
-            .build();
-    String baseDataFormat = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
     Path path = new Path(basePath);
     FileSystem fs = path.getFileSystem(conf);
     RemoteIterator<LocatedFileStatus> files = fs.listFiles(path, true);
     while (files.hasNext()) {
       LocatedFileStatus file = files.next();
-      if (file.isFile()) {
-        if (file.getPath().toString().endsWith(baseDataFormat)) {
+      // skip meta folder
+      if (file.isFile() && !file.getPath().toString().contains(HoodieTableMetaClient.METAFOLDER_NAME + StoragePath.SEPARATOR)) {
+        if (HadoopFSUtils.isBaseFile(file.getPath())) {
           return false;
         }
       }

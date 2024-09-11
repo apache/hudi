@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.bootstrap.index.BootstrapIndex
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -27,7 +28,7 @@ import java.util.function.Supplier
 
 class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "table", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -44,7 +45,7 @@ class ShowBootstrapPartitionsProcedure extends BaseProcedure with ProcedureBuild
     val tableName = getArgValueOrDefault(args, PARAMETERS(0))
 
     val basePath: String = getBasePath(tableName)
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
 
     val indexReader = createBootstrapIndexReader(metaClient)
     val indexedPartitions = indexReader.getIndexedPartitionPaths
@@ -68,8 +69,3 @@ object ShowBootstrapPartitionsProcedure {
     override def get() = new ShowBootstrapPartitionsProcedure
   }
 }
-
-
-
-
-

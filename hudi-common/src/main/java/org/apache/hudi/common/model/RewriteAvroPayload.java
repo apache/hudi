@@ -27,7 +27,7 @@ import org.apache.avro.generic.IndexedRecord;
 import java.io.IOException;
 
 /**
- * Default payload used for rewrite use cases where we dont change schema. We dont need to serialize/deserialize avro record in payload.
+ * Default payload used for rewrite use cases where we don't change schema. We dont need to serialize/deserialize avro record in payload.
  */
 public class RewriteAvroPayload implements HoodieRecordPayload<RewriteAvroPayload> {
 

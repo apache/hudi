@@ -20,17 +20,16 @@ package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.fs.Path;
-
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -51,17 +50,31 @@ public class HoodieKeyLocationFetchHandle<T, I, K, O> extends HoodieReadHandle<T
     this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
+  private List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
+    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
+        .getFileFormatUtils(baseFile.getStoragePath());
+    if (keyGeneratorOpt.isPresent()) {
+      return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath(), keyGeneratorOpt);
+    } else {
+      return fileFormatUtils.fetchRecordKeysWithPositions(hoodieTable.getStorage(), baseFile.getStoragePath());
+    }
+  }
+
   public Stream<Pair<HoodieKey, HoodieRecordLocation>> locations() {
     HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
-    BaseFileUtils baseFileUtils = BaseFileUtils.getInstance(baseFile.getPath());
-    List<HoodieKey> hoodieKeyList = new ArrayList<>();
-    if (keyGeneratorOpt.isPresent()) {
-      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()), keyGeneratorOpt);
-    } else {
-      hoodieKeyList = baseFileUtils.fetchHoodieKeys(hoodieTable.getHadoopConf(), new Path(baseFile.getPath()));
-    }
-    return hoodieKeyList.stream()
-        .map(entry -> Pair.of(entry,
-            new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId())));
+    String commitTime = baseFile.getCommitTime();
+    String fileId = baseFile.getFileId();
+    return fetchRecordKeysWithPositions(baseFile).stream()
+        .map(entry -> Pair.of(entry.getLeft(),
+            new HoodieRecordLocation(commitTime, fileId, entry.getRight())));
+  }
+
+  public Stream<Pair<String, HoodieRecordGlobalLocation>> globalLocations() {
+    HoodieBaseFile baseFile = partitionPathBaseFilePair.getRight();
+    return fetchRecordKeysWithPositions(baseFile).stream()
+        .map(entry -> Pair.of(entry.getLeft().getRecordKey(),
+            new HoodieRecordGlobalLocation(
+                entry.getLeft().getPartitionPath(), baseFile.getCommitTime(),
+                baseFile.getFileId(), entry.getRight())));
   }
 }

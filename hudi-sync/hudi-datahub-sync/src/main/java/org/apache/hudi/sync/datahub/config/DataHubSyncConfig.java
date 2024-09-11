@@ -46,32 +46,38 @@ public class DataHubSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_IDENTIFIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.identifier.class")
       .defaultValue(HoodieDataHubDatasetIdentifier.class.getName())
+      .markAdvanced()
       .withDocumentation("Pluggable class to help provide info to identify a DataHub Dataset.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_EMITTER_SERVER = ConfigProperty
       .key("hoodie.meta.sync.datahub.emitter.server")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Server URL of the DataHub instance.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_EMITTER_TOKEN = ConfigProperty
       .key("hoodie.meta.sync.datahub.emitter.token")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Auth token to connect to the DataHub instance.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_EMITTER_SUPPLIER_CLASS = ConfigProperty
       .key("hoodie.meta.sync.datahub.emitter.supplier.class")
       .noDefaultValue()
+      .markAdvanced()
       .withDocumentation("Pluggable class to supply a DataHub REST emitter to connect to the DataHub instance. This overwrites other emitter configs.");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATAPLATFORM_NAME = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataplatform.name")
       .defaultValue(DEFAULT_HOODIE_DATAHUB_PLATFORM_NAME)
+      .markAdvanced()
       .withDocumentation("String used to represent Hudi when creating its corresponding DataPlatform entity "
           + "within Datahub");
 
   public static final ConfigProperty<String> META_SYNC_DATAHUB_DATASET_ENV = ConfigProperty
       .key("hoodie.meta.sync.datahub.dataset.env")
       .defaultValue(DEFAULT_DATAHUB_ENV.name())
+      .markAdvanced()
       .withDocumentation("Environment to use when pushing entities to Datahub");
 
   public final HoodieDataHubDatasetIdentifier datasetIdentifier;

@@ -18,44 +18,49 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.DataSourceUtils;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 public class DFSPathSelector implements Serializable {
 
-  protected static volatile Logger log = LogManager.getLogger(DFSPathSelector.class);
+  protected static volatile Logger log = LoggerFactory.getLogger(DFSPathSelector.class);
 
   /**
    * Configs supported.
    */
   public static class Config {
 
-    public static final String ROOT_INPUT_PATH_PROP = "hoodie.deltastreamer.source.dfs.root";
-    public static final String SOURCE_INPUT_SELECTOR = "hoodie.deltastreamer.source.input.selector";
+    @Deprecated
+    public static final String ROOT_INPUT_PATH_PROP = DFSPathSelectorConfig.ROOT_INPUT_PATH.key();
+    @Deprecated
+    public static final String SOURCE_INPUT_SELECTOR = DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key();
   }
 
   protected static final List<String> IGNORE_FILEPREFIX_LIST = Arrays.asList(".", "_");
@@ -64,9 +69,11 @@ public class DFSPathSelector implements Serializable {
   protected final TypedProperties props;
 
   public DFSPathSelector(TypedProperties props, Configuration hadoopConf) {
-    DataSourceUtils.checkRequiredProperties(props, Collections.singletonList(Config.ROOT_INPUT_PATH_PROP));
+    checkRequiredConfigProperties(
+        props, Collections.singletonList(DFSPathSelectorConfig.ROOT_INPUT_PATH));
     this.props = props;
-    this.fs = FSUtils.getFs(props.getString(Config.ROOT_INPUT_PATH_PROP), hadoopConf);
+    this.fs = HadoopFSUtils.getFs(
+        getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH), hadoopConf);
   }
 
   /**
@@ -75,11 +82,11 @@ public class DFSPathSelector implements Serializable {
    */
   public static DFSPathSelector createSourceSelector(TypedProperties props,
                                                      Configuration conf) {
-    String sourceSelectorClass = props.getString(DFSPathSelector.Config.SOURCE_INPUT_SELECTOR,
-        DFSPathSelector.class.getName());
+    String sourceSelectorClass = getStringWithAltKeys(
+        props, DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR, DFSPathSelector.class.getName());
     try {
       DFSPathSelector selector = (DFSPathSelector) ReflectionUtils.loadClass(sourceSelectorClass,
-          new Class<?>[]{TypedProperties.class, Configuration.class},
+          new Class<?>[] {TypedProperties.class, Configuration.class},
           props, conf);
 
       log.info("Using path selector " + selector.getClass().getName());
@@ -114,9 +121,11 @@ public class DFSPathSelector implements Serializable {
                                                                              long sourceLimit) {
     try {
       // obtain all eligible files under root folder.
-      log.info("Root path => " + props.getString(Config.ROOT_INPUT_PATH_PROP) + " source limit => " + sourceLimit);
+      log.info("Root path => " + getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)
+          + " source limit => " + sourceLimit);
       long lastCheckpointTime = lastCheckpointStr.map(Long::parseLong).orElse(Long.MIN_VALUE);
-      List<FileStatus> eligibleFiles = listEligibleFiles(fs, new Path(props.getString(Config.ROOT_INPUT_PATH_PROP)), lastCheckpointTime);
+      List<FileStatus> eligibleFiles = listEligibleFiles(
+          fs, new Path(getStringWithAltKeys(props, DFSPathSelectorConfig.ROOT_INPUT_PATH)), lastCheckpointTime);
       // sort them by modification time.
       eligibleFiles.sort(Comparator.comparingLong(FileStatus::getModificationTime));
       // Filter based on checkpoint & input size, if needed
@@ -156,9 +165,9 @@ public class DFSPathSelector implements Serializable {
   protected List<FileStatus> listEligibleFiles(FileSystem fs, Path path, long lastCheckpointTime) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     FileStatus[] statuses = fs.listStatus(path, file ->
-      IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
+        IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
     List<FileStatus> res = new ArrayList<>();
-    for (FileStatus status: statuses) {
+    for (FileStatus status : statuses) {
       if (status.isDirectory()) {
         // avoid infinite loop
         if (!status.isSymlink()) {

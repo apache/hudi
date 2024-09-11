@@ -27,14 +27,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.util.ExecutorFactory;
 
 import org.apache.avro.Schema;
-import org.apache.hudi.util.ExecutorFactory;
 
 import java.util.Iterator;
 import java.util.List;
-
-import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
 
@@ -78,7 +76,6 @@ public class SparkLazyInsertIterable<T> extends HoodieLazyInsertIterable<T> {
           getTransformer(schema, hoodieConfig), hoodieTable.getPreExecuteRunnable());
 
       final List<WriteStatus> result = bufferedIteratorExecutor.execute();
-      checkState(result != null && !result.isEmpty());
       return result;
     } catch (Exception e) {
       throw new HoodieException(e);

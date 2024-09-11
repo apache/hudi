@@ -17,18 +17,19 @@
 
 package org.apache.hudi
 
-import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
+
+import org.apache.avro.generic.GenericRecord
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 
-import scala.collection.JavaConversions.collectionAsScalaIterable
+import scala.collection.JavaConverters._
 
 trait SparkDatasetMixin {
 
   def toDataset(spark: SparkSession, records: java.util.List[HoodieRecord[_]]) = {
-    val avroRecords = records.map(
+    val avroRecords = records.asScala.map(
       _.getData
         .asInstanceOf[HoodieRecordPayload[_]]
         .getInsertValue(HoodieTestDataGenerator.AVRO_SCHEMA)

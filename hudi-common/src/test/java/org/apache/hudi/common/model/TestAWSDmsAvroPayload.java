@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -106,6 +107,7 @@ public class TestAWSDmsAvroPayload {
       Option<IndexedRecord> outputPayload = payload.combineAndGetUpdateValue(oldRecord, avroSchema, properties);
       // expect nothing to be committed to table
       assertFalse(outputPayload.isPresent());
+      assertTrue(payload.isDeleted(avroSchema, properties));
     } catch (Exception e) {
       fail("Unexpected exception");
     }
@@ -142,19 +144,13 @@ public class TestAWSDmsAvroPayload {
     deleteRecord.put("Op", "D");
 
     GenericRecord oldRecord = new GenericData.Record(avroSchema);
-    oldRecord.put("field1", 4);
+    oldRecord.put("field1", 3);
     oldRecord.put("Op", "I");
 
     AWSDmsAvroPayload payload = new AWSDmsAvroPayload(Option.of(deleteRecord));
     AWSDmsAvroPayload insertPayload = new AWSDmsAvroPayload(Option.of(oldRecord));
 
-    try {
-      OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
-      Option<IndexedRecord> outputPayload = output.getInsertValue(avroSchema, properties);
-      // expect nothing to be committed to table
-      assertFalse(outputPayload.isPresent());
-    } catch (Exception e) {
-      fail("Unexpected exception");
-    }
+    OverwriteWithLatestAvroPayload output = payload.preCombine(insertPayload);
+    assertEquals(payload, output);
   }
 }

@@ -18,19 +18,18 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathFilter;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.common.bootstrap.FileStatusUtils;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -44,54 +43,53 @@ public class BootstrapUtils {
 
   /**
    * Returns leaf folders with files under a path.
-   * @param metaClient Hoodie table metadata client
-   * @param fs  File System
+   * @param baseFileFormat Hoodie base file format
+   * @param storage  Hoodie Storage
    * @param context JHoodieEngineContext
    * @return list of partition paths with files under them.
    * @throws IOException
    */
-  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(HoodieTableMetaClient metaClient,
-      FileSystem fs, String basePathStr, HoodieEngineContext context) throws IOException {
-    final Path basePath = new Path(basePathStr);
-    final String baseFileExtension = metaClient.getTableConfig().getBaseFileFormat().getFileExtension();
+  public static List<Pair<String, List<HoodieFileStatus>>> getAllLeafFoldersWithFiles(
+      HoodieFileFormat baseFileFormat,
+      HoodieStorage storage,
+      String basePathStr,
+      HoodieEngineContext context) throws IOException {
+    final StoragePath basePath = new StoragePath(basePathStr);
+    final String baseFileExtension = baseFileFormat.getFileExtension();
     final Map<Integer, List<String>> levelToPartitions = new HashMap<>();
     final Map<String, List<HoodieFileStatus>> partitionToFiles = new HashMap<>();
-    PathFilter filePathFilter = getFilePathFilter(baseFileExtension);
-    PathFilter metaPathFilter = getExcludeMetaPathFilter();
+    StoragePathFilter filePathFilter = getFilePathFilter(baseFileExtension);
+    StoragePathFilter metaPathFilter = getExcludeMetaPathFilter();
 
-    FileStatus[] topLevelStatuses = fs.listStatus(basePath);
+    List<StoragePathInfo> topLevelPathInfos = storage.listDirectEntries(basePath);
     List<String> subDirectories = new ArrayList<>();
 
     List<Pair<HoodieFileStatus, Pair<Integer, String>>> result = new ArrayList<>();
 
-    for (FileStatus topLevelStatus: topLevelStatuses) {
-      if (topLevelStatus.isFile() && filePathFilter.accept(topLevelStatus.getPath())) {
-        String relativePath = FSUtils.getRelativePartitionPath(basePath, topLevelStatus.getPath().getParent());
+    for (StoragePathInfo topLevelPathInfo: topLevelPathInfos) {
+      if (topLevelPathInfo.isFile() && filePathFilter.accept(topLevelPathInfo.getPath())) {
+        String relativePath = FSUtils.getRelativePartitionPath(basePath, topLevelPathInfo.getPath().getParent());
         Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-        HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(topLevelStatus);
+        HoodieFileStatus hoodieFileStatus = FSUtils.fromPathInfo(topLevelPathInfo);
         result.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
-      } else if (topLevelStatus.isDirectory() && metaPathFilter.accept(topLevelStatus.getPath())) {
-        subDirectories.add(topLevelStatus.getPath().toString());
+      } else if (topLevelPathInfo.isDirectory() && metaPathFilter.accept(topLevelPathInfo.getPath())) {
+        subDirectories.add(topLevelPathInfo.getPath().toString());
       }
     }
 
-    if (subDirectories.size() > 0) {
+    if (!subDirectories.isEmpty()) {
       result.addAll(context.flatMap(subDirectories, directory -> {
-        PathFilter pathFilter = getFilePathFilter(baseFileExtension);
-        Path path = new Path(directory);
-        FileSystem fileSystem = path.getFileSystem(new Configuration());
-        RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
-        List<Pair<HoodieFileStatus, Pair<Integer, String>>> res = new ArrayList<>();
-        while (itr.hasNext()) {
-          FileStatus status = itr.next();
-          if (pathFilter.accept(status.getPath())) {
-            String relativePath = FSUtils.getRelativePartitionPath(new Path(basePathStr), status.getPath().getParent());
-            Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
-            HoodieFileStatus hoodieFileStatus = FileStatusUtils.fromFileStatus(status);
-            res.add(Pair.of(hoodieFileStatus, Pair.of(level, relativePath)));
-          }
-        }
-        return res.stream();
+        StoragePathFilter pathFilter = getFilePathFilter(baseFileExtension);
+        StoragePath path = new StoragePath(directory);
+        HoodieStorage tmpStorage = HoodieStorageUtils.getStorage(path, HadoopFSUtils.getStorageConf());
+        return tmpStorage.listFiles(path).stream()
+            .filter(pathInfo -> pathFilter.accept(pathInfo.getPath()))
+            .map(pathInfo -> {
+              String relativePath = FSUtils.getRelativePartitionPath(basePath, pathInfo.getPath().getParent());
+              Integer level = (int) relativePath.chars().filter(ch -> ch == '/').count();
+              HoodieFileStatus hoodieFileStatus = FSUtils.fromPathInfo(pathInfo);
+              return Pair.of(hoodieFileStatus, Pair.of(level, relativePath));
+            });
       }, subDirectories.size()));
     }
 
@@ -118,14 +116,12 @@ public class BootstrapUtils {
             .map(d -> Pair.of(d, partitionToFiles.get(d))).collect(Collectors.toList()) : new ArrayList<>();
   }
 
-  private static PathFilter getFilePathFilter(String baseFileExtension) {
-    return (path) -> {
-      return path.getName().endsWith(baseFileExtension);
-    };
+  private static StoragePathFilter getFilePathFilter(String baseFileExtension) {
+    return path -> path.getName().endsWith(baseFileExtension);
   }
 
-  private static PathFilter getExcludeMetaPathFilter() {
-    // Avoid listing and including any folders under the metafolder
-    return (path) -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
+  private static StoragePathFilter getExcludeMetaPathFilter() {
+    // Avoid listing and including any folders under the meta folder
+    return path -> !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME);
   }
 }

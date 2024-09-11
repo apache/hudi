@@ -18,14 +18,15 @@
 
 package org.apache.hudi.cli.testutils;
 
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
  * Class to start Bootstrap and JLineShellComponent.
  */
-public class HoodieCLIIntegrationTestHarness extends HoodieClientTestHarness {
+public class HoodieCLIIntegrationTestHarness extends HoodieSparkClientTestHarness {
 
   @BeforeEach
   public void setup() throws Exception {

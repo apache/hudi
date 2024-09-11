@@ -30,16 +30,26 @@ import java.util.Objects;
  * Location of a HoodieRecord within the partition it belongs to. Ultimately, this points to an actual file on disk
  */
 public class HoodieRecordLocation implements Serializable, KryoSerializable {
+  public static final long INVALID_POSITION = -1L;
 
   protected String instantTime;
   protected String fileId;
+  // Position of the record in the file, e.g., row position starting from 0 in the Parquet file
+  // Valid position should be non-negative. Negative position, i.e., -1, means it's invalid
+  // and should not be used
+  protected long position;
 
   public HoodieRecordLocation() {
   }
 
   public HoodieRecordLocation(String instantTime, String fileId) {
+    this(instantTime, fileId, INVALID_POSITION);
+  }
+
+  public HoodieRecordLocation(String instantTime, String fileId, long position) {
     this.instantTime = instantTime;
     this.fileId = fileId;
+    this.position = position;
   }
 
   @Override
@@ -63,7 +73,8 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
   public String toString() {
     final StringBuilder sb = new StringBuilder("HoodieRecordLocation {");
     sb.append("instantTime=").append(instantTime).append(", ");
-    sb.append("fileId=").append(fileId);
+    sb.append("fileId=").append(fileId).append(", ");
+    sb.append("position=").append(position);
     sb.append('}');
     return sb.toString();
   }
@@ -84,15 +95,29 @@ public class HoodieRecordLocation implements Serializable, KryoSerializable {
     this.fileId = fileId;
   }
 
+  public static boolean isPositionValid(long position) {
+    return position > INVALID_POSITION;
+  }
+
+  public long getPosition() {
+    return position;
+  }
+
+  public void setPosition(long position) {
+    this.position = position;
+  }
+
   @Override
   public void write(Kryo kryo, Output output) {
     output.writeString(instantTime);
     output.writeString(fileId);
+    output.writeLong(position);
   }
 
   @Override
   public void read(Kryo kryo, Input input) {
     this.instantTime = input.readString();
     this.fileId = input.readString();
+    this.position = input.readLong();
   }
 }

@@ -14,49 +14,120 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-## Testing dbt project: `hudi_examples_dbt`
+# Testing dbt project: `hudi_examples_dbt`
 
 This dbt project transforms demonstrates hudi integration with dbt, it has a few models to demonstrate the different ways in which you can create hudi datasets using dbt.
 
-### What is this repo?
-What this repo _is_:
-- A self-contained playground dbt project, useful for testing out scripts, and communicating some of the core dbt concepts.
+This directory serves as a self-contained playground dbt project, useful for testing out scripts, and communicating some of the core dbt concepts.
 
-### Running this project
-To get up and running with this project:
-1. Install dbt using [these instructions](https://docs.getdbt.com/docs/installation).
+## Setup
 
-2. Install [dbt-spark](https://github.com/dbt-labs/dbt-spark) package:
-```bash
-pip install dbt-spark
-```
+Switch working directory and have `python3` installed.
 
-3. Clone this repo and change into the `hudi-examples-dbt` directory from the command line:
-```bash
+```shell
 cd hudi-examples/hudi-examples-dbt
 ```
 
-4. Set up a profile called `spark` to connect to a spark cluster by following [these instructions](https://docs.getdbt.com/reference/warehouse-profiles/spark-profile). If you have access to a data warehouse, you can use those credentials – we recommend setting your [target schema](https://docs.getdbt.com/docs/configure-your-profile#section-populating-your-profile) to be a new schema (dbt will create the schema for you, as long as you have the right privileges). If you don't have access to an existing data warehouse, you can also setup a local postgres database and connect to it in your profile.
+## Install dbt
 
-> **NOTE:** You need to include the hudi spark bundle to the spark cluster, the latest supported version is 0.10.1.
+Create python virtual environment ([Reference](https://docs.getdbt.com/docs/installation)).
 
-5. Ensure your profile is setup correctly from the command line:
-```bash
+```shell
+python3 -m venv dbt-env
+source dbt-env/bin/activate
+```
+
+We are using `thrift` as the connection method ([Reference](https://docs.getdbt.com/docs/core/connect-data-platform/spark-setup)).
+
+```shell
+python3 -m pip install "dbt-spark[PyHive]"
+```
+
+### Configure dbt for Spark
+
+Set up a profile called `spark` to connect to a spark cluster via thrift server ([Reference](https://docs.getdbt.com/docs/core/connect-data-platform/spark-setup#thrift)).
+
+```yaml
+spark:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: thrift
+      schema: hudi_examples_dbt
+      host: localhost
+      port: 10000
+      server_side_parameters:
+        "spark.driver.memory": "3g"
+```
+
+_If you have access to a data warehouse, you can use those credentials – we recommend setting your [target schema](https://docs.getdbt.com/docs/configure-your-profile#section-populating-your-profile) to be a new schema (dbt will create the schema for you, as long as you have the right privileges). If you don't have access to an existing data warehouse, you can also setup a local postgres database and connect to it in your profile._
+
+## Start Spark Thrift server
+
+> **NOTE** Using these versions
+> - Spark 3.2.3 (with Derby 10.14.2.0)
+> - Hudi 0.14.0
+
+Start a local Derby server
+
+```shell
+export DERBY_VERSION=10.14.2.0
+wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P /opt/
+tar -xf /opt/db-derby-$DERBY_VERSION-bin.tar.gz -C /opt/
+export DERBY_HOME=/opt/db-derby-$DERBY_VERSION-bin
+$DERBY_HOME/bin/startNetworkServer -h 0.0.0.0
+```
+
+Start a local Thrift server for Spark
+
+```shell
+export SPARK_VERSION=3.2.3
+wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop2.7.tgz -P /opt/
+tar -xf /opt/spark-$SPARK_VERSION-bin-hadoop2.7.tgz -C /opt/
+export SPARK_HOME=/opt/spark-$SPARK_VERSION-bin-hadoop2.7
+
+# install dependencies
+cp $DERBY_HOME/lib/{derby,derbyclient}.jar $SPARK_HOME/jars/
+wget https://repository.apache.org/content/repositories/releases/org/apache/hudi/hudi-spark3.2-bundle_2.12/0.14.0/hudi-spark3.2-bundle_2.12-0.14.0.jar -P $SPARK_HOME/jars/
+
+# start Thrift server connecting to Derby as HMS backend
+$SPARK_HOME/sbin/start-thriftserver.sh \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+--conf spark.sql.warehouse.dir=/tmp/hudi/hive/warehouse \
+--hiveconf hive.metastore.warehouse.dir=/tmp/hudi/hive/warehouse \
+--hiveconf hive.metastore.schema.verification=false \
+--hiveconf datanucleus.schema.autoCreateAll=true \
+--hiveconf javax.jdo.option.ConnectionDriverName=org.apache.derby.jdbc.ClientDriver \
+--hiveconf 'javax.jdo.option.ConnectionURL=jdbc:derby://localhost:1527/default;create=true'
+```
+
+## Verify dbt setup
+
+```shell
 dbt debug
 ```
 
 Output of the above command should show this text at the end of the output:
-```bash
+
+```
 All checks passed!
 ```
 
-6. Run the models:
-```bash
-dbt run
+## Run the models
+
+### Run `example`
+
+```shell
+dbt run -m example
 ```
 
-Output should look like this:
-```bash
+<details>
+<summary>Output should look like this</summary>
+
+```
 05:47:28  Running with dbt=1.0.0
 05:47:28  Found 5 models, 10 tests, 0 snapshots, 0 analyses, 0 macros, 0 operations, 0 seed files, 0 sources, 0 exposures, 0 metrics
 05:47:28
@@ -77,12 +148,18 @@ Output should look like this:
 05:47:42
 05:47:42  Completed successfully
 ```
-7. Test the output of the models:
-```bash
-dbt test
+</details>
+
+### Test `example`
+
+```shell
+dbt test -m example
 ```
-Output should look like this:
-```bash
+
+<details>
+<summary>Output should look like this</summary>
+
+```
 05:48:17  Running with dbt=1.0.0
 05:48:17  Found 5 models, 10 tests, 0 snapshots, 0 analyses, 0 macros, 0 operations, 0 seed files, 0 sources, 0 exposures, 0 metrics
 05:48:17
@@ -115,15 +192,91 @@ Output should look like this:
 05:48:26
 05:48:26  Done. PASS=10 WARN=0 ERROR=0 SKIP=0 TOTAL=10
 ```
+</details>
 
-8. Generate documentation for the project:
-```bash
-dbt docs generate
+### Run `example_cdc`
+
+Bootstrap the raw table `raw_updates` and `profiles`.
+
+```shell
+dbt run -m example_cdc.raw_updates -m example_cdc.profiles
 ```
 
-9. View the [documentation](http://127.0.0.1:8080/#!/overview) for the project after running the following command:
-```bash
+Launch a `spark-sql` shell to interact with the tables created by `example_cdc`.
+
+```shell
+spark-sql \
+--packages org.apache.hudi:hudi-spark3.2-bundle_2.12:0.14.0 \
+--conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
+--conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog \
+--conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension \
+--conf spark.sql.warehouse.dir=/tmp/hudi/hive/warehouse \
+--conf spark.hadoop.hive.metastore.warehouse.dir=/tmp/hudi/hive/warehouse \
+--conf spark.hadoop.hive.metastore.schema.verification=false \
+--conf spark.hadoop.datanucleus.schema.autoCreateAll=true \
+--conf spark.hadoop.javax.jdo.option.ConnectionDriverName=org.apache.derby.jdbc.ClientDriver \
+--conf 'spark.hadoop.javax.jdo.option.ConnectionURL=jdbc:derby://localhost:1527/default;create=true' \
+--conf 'spark.hadoop.hive.cli.print.header=true'
+```
+
+Insert sample records.
+
+```sql
+use hudi_examples_dbt;
+insert into raw_updates values ('101', 'D', UNIX_TIMESTAMP());
+insert into raw_updates values ('102', 'E', UNIX_TIMESTAMP());
+insert into raw_updates values ('103', 'F', UNIX_TIMESTAMP());
+```
+
+Process the updates and write new date to `profiles`.
+
+```shell
+dbt run -m example_cdc.profiles
+```
+
+<details>
+<summary>Check `profiles` records.</summary>
+
+```shell
+spark-sql> refresh table profiles;
+spark-sql> select _hoodie_commit_time, user_id, city, updated_at from profiles order by updated_at;
+_hoodie_commit_time	user_id	city	updated_at
+20231128013722030	101	D	1701157027
+20231128013722030	102	E	1701157031
+20231128013722030	103	F	1701157035
+Time taken: 0.219 seconds, Fetched 3 row(s)
+```
+</details>
+
+Extract changed data from `profiles` to `profile_changes`.
+
+```shell
+dbt run -m example_cdc.profile_changes
+```
+
+<details>
+<summary>Check `profile_changes` records.</summary>
+
+```shell
+spark-sql> refresh table profile_changes;
+spark-sql> select user_id, old_city, new_city from profile_changes order by process_ts;
+user_id	old_city	new_city
+101	Nil	A
+102	Nil	B
+103	Nil	C
+101	A	D
+102	B	E
+103	C	F
+Time taken: 0.129 seconds, Fetched 6 row(s)
+```
+</details>
+
+### Generate documentation
+
+```shell
+dbt docs generate
 dbt docs serve
+# then visit http://127.0.0.1:8080/#!/overview
 ```
 
 ---

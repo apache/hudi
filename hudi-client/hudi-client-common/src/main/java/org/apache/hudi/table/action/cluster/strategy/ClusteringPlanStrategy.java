@@ -34,8 +34,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -50,11 +50,11 @@ import java.util.stream.Stream;
  * Pluggable implementation for scheduling clustering and creating ClusteringPlan.
  */
 public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
-  private static final Logger LOG = LogManager.getLogger(ClusteringPlanStrategy.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ClusteringPlanStrategy.class);
 
   public static final int CLUSTERING_PLAN_VERSION_1 = 1;
 
-  private final HoodieTable<T,I,K,O> hoodieTable;
+  protected final HoodieTable<T,I,K,O> hoodieTable;
   private final transient HoodieEngineContext engineContext;
   private final HoodieWriteConfig writeConfig;
 
@@ -121,7 +121,7 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
             .collect(Collectors.toSet());
     fgIdsInPendingCompactionLogCompactionAndClustering.addAll(fileSystemView.getFileGroupsInPendingClustering().map(Pair::getKey).collect(Collectors.toSet()));
 
-    return hoodieTable.getSliceView().getLatestFileSlices(partition)
+    return hoodieTable.getSliceView().getLatestFileSlicesStateless(partition)
         // file ids already in clustering are not eligible
         .filter(slice -> !fgIdsInPendingCompactionLogCompactionAndClustering.contains(slice.getFileGroupId()));
   }

@@ -20,6 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
@@ -40,10 +41,10 @@ import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,7 +71,8 @@ public class TestHoodieRealtimeFileSplit {
   @BeforeEach
   public void setUp(@TempDir java.nio.file.Path tempDir) throws Exception {
     basePath = tempDir.toAbsolutePath().toString();
-    deltaLogFiles = Collections.singletonList(new HoodieLogFile(new Path(basePath + "/1.log"), 0L));
+    StoragePath logPath = new StoragePath(basePath + "/1.log");
+    deltaLogFiles = Collections.singletonList(new HoodieLogFile(logPath, 0L));
     deltaLogPaths = Collections.singletonList(basePath + "/1.log");
     fileSplitName = basePath + "/test.file";
     baseFileSplit = new FileSplit(new Path(fileSplitName), 0, 100, new String[] {});
@@ -100,12 +102,12 @@ public class TestHoodieRealtimeFileSplit {
     inorder.verify(out, times(1)).writeByte(eq(fileSplitName.length()));
     inorder.verify(out, times(1)).write(aryEq(Text.encode(fileSplitName).array()), eq(0), eq(fileSplitName.length()));
     inorder.verify(out, times(1)).writeInt(eq(basePath.length()));
-    inorder.verify(out, times(1)).write(aryEq(basePath.getBytes(StandardCharsets.UTF_8)));
+    inorder.verify(out, times(1)).write(aryEq(getUTF8Bytes(basePath)));
     inorder.verify(out, times(1)).writeInt(eq(maxCommitTime.length()));
-    inorder.verify(out, times(1)).write(aryEq(maxCommitTime.getBytes(StandardCharsets.UTF_8)));
+    inorder.verify(out, times(1)).write(aryEq(getUTF8Bytes(maxCommitTime)));
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.size()));
     inorder.verify(out, times(1)).writeInt(eq(deltaLogPaths.get(0).length()));
-    inorder.verify(out, times(1)).write(aryEq(deltaLogPaths.get(0).getBytes(StandardCharsets.UTF_8)));
+    inorder.verify(out, times(1)).write(aryEq(getUTF8Bytes(deltaLogPaths.get(0))));
     inorder.verify(out, times(1)).writeBoolean(false);
     // verify there are no more interactions happened on the mocked object
     inorder.verifyNoMoreInteractions();
@@ -133,11 +135,11 @@ public class TestHoodieRealtimeFileSplit {
     });
     Answer<Void> readFullyAnswer = new Answer<Void>() {
       private int count = 0;
-      private byte[][] answers = new byte[][]{
-          fileSplitName.getBytes(StandardCharsets.UTF_8),
-          basePath.getBytes(StandardCharsets.UTF_8),
-          maxCommitTime.getBytes(StandardCharsets.UTF_8),
-          deltaLogPaths.get(0).getBytes(StandardCharsets.UTF_8),
+      private byte[][] answers = new byte[][] {
+          getUTF8Bytes(fileSplitName),
+          getUTF8Bytes(basePath),
+          getUTF8Bytes(maxCommitTime),
+          getUTF8Bytes(deltaLogPaths.get(0)),
       };
 
       @Override

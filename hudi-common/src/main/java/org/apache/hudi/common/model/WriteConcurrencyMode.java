@@ -18,49 +18,50 @@
 
 package org.apache.hudi.common.model;
 
-import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.common.config.EnumDescription;
+import org.apache.hudi.common.config.EnumFieldDescription;
 
 import java.util.Locale;
 
 /**
  * Different concurrency modes for write operations.
  */
+@EnumDescription("Concurrency modes for write operations.")
 public enum WriteConcurrencyMode {
   // Only a single writer can perform write ops
-  SINGLE_WRITER("single_writer"),
+  @EnumFieldDescription("Only one active writer to the table. Maximizes throughput.")
+  SINGLE_WRITER,
+
+
   // Multiple writer can perform write ops with lazy conflict resolution using locks
-  OPTIMISTIC_CONCURRENCY_CONTROL("optimistic_concurrency_control");
+  @EnumFieldDescription("Multiple writers can operate on the table with lazy conflict resolution "
+      + "using locks. This means that only one writer succeeds if multiple writers write to the "
+      + "same file group.")
+  OPTIMISTIC_CONCURRENCY_CONTROL,
 
-  private final String value;
+  // Multiple writer can perform write ops on a MOR table with non-blocking conflict resolution
+  @EnumFieldDescription("Multiple writers can operate on the table with non-blocking conflict resolution. "
+      + "The writers can write into the same file group with the conflicts resolved automatically "
+      + "by the query reader and the compactor.")
+  NON_BLOCKING_CONCURRENCY_CONTROL;
 
-  WriteConcurrencyMode(String value) {
-    this.value = value;
+  public boolean supportsMultiWriter() {
+    return this == OPTIMISTIC_CONCURRENCY_CONTROL || this == NON_BLOCKING_CONCURRENCY_CONTROL;
   }
 
-  /**
-   * Getter for write concurrency mode.
-   * @return
-   */
-  public String value() {
-    return value;
+  public static boolean supportsMultiWriter(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase(Locale.ROOT)).supportsMultiWriter();
   }
 
-  /**
-   * Convert string value to WriteConcurrencyMode.
-   */
-  public static WriteConcurrencyMode fromValue(String value) {
-    switch (value.toLowerCase(Locale.ROOT)) {
-      case "single_writer":
-        return SINGLE_WRITER;
-      case "optimistic_concurrency_control":
-        return OPTIMISTIC_CONCURRENCY_CONTROL;
-      default:
-        throw new HoodieException("Invalid value of Type.");
-    }
-  }
-
-  public boolean supportsOptimisticConcurrencyControl() {
+  public boolean isOptimisticConcurrencyControl() {
     return this == OPTIMISTIC_CONCURRENCY_CONTROL;
   }
 
+  public boolean isNonBlockingConcurrencyControl() {
+    return this == NON_BLOCKING_CONCURRENCY_CONTROL;
+  }
+
+  public static boolean isNonBlockingConcurrencyControl(String name) {
+    return WriteConcurrencyMode.valueOf(name.toUpperCase()).isNonBlockingConcurrencyControl();
+  }
 }

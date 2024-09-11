@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -30,10 +31,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
-import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.Schema;
@@ -44,8 +48,10 @@ import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +59,9 @@ import java.util.List;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
+import static org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness {
@@ -74,9 +82,9 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
       throws Exception {
     // initialize parquet input format
     HoodieParquetInputFormat hoodieInputFormat = new HoodieParquetInputFormat();
-    JobConf jobConf = new JobConf(hadoopConf);
+    JobConf jobConf = new JobConf(storageConf.unwrap());
     hoodieInputFormat.setConf(jobConf);
-    HoodieTestUtils.init(hadoopConf, basePath, HoodieTableType.COPY_ON_WRITE);
+    HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
     setupIncremental(jobConf, startCommitTime, numCommitsToPull);
     FileInputFormat.setInputPaths(jobConf, Paths.get(basePath, partitionPath).toString());
     return hoodieInputFormat.listStatus(jobConf);
@@ -96,13 +104,50 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     jobConf.setInt(maxCommitPulls, numberOfCommitsToPull);
   }
 
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  public void testWriteClientAndTableServiceClientWithTimelineServer(
+      boolean enableEmbeddedTimelineServer, boolean passInTimelineServer) throws IOException {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
+        .withPath(metaClient.getBasePath())
+        .withEmbeddedTimelineServerEnabled(enableEmbeddedTimelineServer)
+        .build();
+
+    HoodieJavaWriteClient writeClient;
+    if (passInTimelineServer) {
+      EmbeddedTimelineService timelineService = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(context, null, writeConfig);
+      writeConfig.setViewStorageConfig(timelineService.getRemoteFileSystemViewConfig());
+      writeClient = new HoodieJavaWriteClient(context, writeConfig, true, Option.of(timelineService));
+      // Both the write client and the table service client should use the same passed-in
+      // timeline server instance.
+      assertEquals(timelineService, writeClient.getTimelineServer().get());
+      assertEquals(timelineService, writeClient.getTableServiceClient().getTimelineServer().get());
+      // Write config should not be changed
+      assertEquals(writeConfig, writeClient.getConfig());
+      timelineService.stopForBasePath(writeConfig.getBasePath());
+    } else {
+      writeClient = new HoodieJavaWriteClient(context, writeConfig);
+      // Only one timeline server should be instantiated, and the same timeline server
+      // should be used by both the write client and the table service client.
+      assertEquals(
+          writeClient.getTimelineServer(),
+          writeClient.getTableServiceClient().getTimelineServer());
+      if (!enableEmbeddedTimelineServer) {
+        assertFalse(writeClient.getTimelineServer().isPresent());
+      }
+    }
+    writeClient.close();
+  }
+
   @Test
   public void testInsert() throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder(basePath).withMergeAllowDuplicateOnInserts(true).build();
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
 
     // Get some records belong to the same partition (2021/09/11)
     String insertRecordStr1 = "{\"_row_key\":\"1\","
@@ -127,7 +172,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storage, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records1) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
@@ -159,7 +204,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     records1.addAll(records2);
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     int index = 0;
     for (GenericRecord record : fileRecords) {
       assertEquals(records1.get(index).getRecordKey(), record.get("_row_key").toString());
@@ -176,7 +221,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    BaseFileUtils fileUtils = BaseFileUtils.getInstance(metaClient);
+    FileFormatUtils fileUtils = getFileUtilsInstance(metaClient);
 
     String partitionPath = "2021/09/11";
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[]{partitionPath});
@@ -194,7 +239,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
 
     // Read out the bloom filter and make sure filter can answer record exist or not
     Path filePath = allFiles[0].getPath();
-    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(hadoopConf, filePath);
+    BloomFilter filter = fileUtils.readBloomFilterFromMetadata(storage, new StoragePath(filePath.toUri()));
     for (HoodieRecord record : records1) {
       assertTrue(filter.mightContain(record.getRecordKey()));
     }
@@ -215,7 +260,7 @@ public class TestHoodieJavaWriteClientInsert extends HoodieJavaClientTestHarness
     records1.addAll(records2);
 
     // Read the base file, check the record content
-    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(hadoopConf, filePath);
+    List<GenericRecord> fileRecords = fileUtils.readAvroRecords(storage, new StoragePath(filePath.toUri()));
     assertEquals(fileRecords.size(), mergeAllowDuplicateOnInsertsEnable ? records1.size() : records2.size());
 
     int index = 0;

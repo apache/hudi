@@ -21,6 +21,7 @@ package org.apache.hudi.execution.bulkinsert;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.sort.SpaceCurveSortingHelper;
 import org.apache.hudi.table.BulkInsertPartitioner;
+
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -76,8 +77,12 @@ public abstract class SpatialCurveSortPartitionerBase<T> implements BulkInsertPa
     }
   }
 
+  /**
+   * The data is sorted using a function that maps multiple columns into a single dimension.
+   * Therefore, it is not sorted by partition.
+   */
   @Override
   public boolean arePartitionRecordsSorted() {
-    return true;
+    return false;
   }
 }

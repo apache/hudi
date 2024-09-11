@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common;
 
-import org.apache.hadoop.fs.FileStatus;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.Serializable;
 import java.util.Collections;
@@ -37,17 +37,20 @@ public class HoodieRollbackStat implements Serializable {
   // Files that could not be deleted
   private final List<String> failedDeleteFiles;
   // Count of HoodieLogFile to commandBlocks written for a particular rollback
-  private final Map<FileStatus, Long> commandBlocksCount;
+  private final Map<StoragePathInfo, Long> commandBlocksCount;
+
+  private final Map<String, Long> logFilesFromFailedCommit;
 
   public HoodieRollbackStat(String partitionPath, List<String> successDeleteFiles, List<String> failedDeleteFiles,
-      Map<FileStatus, Long> commandBlocksCount) {
+                            Map<StoragePathInfo, Long> commandBlocksCount, Map<String, Long> logFilesFromFailedCommit) {
     this.partitionPath = partitionPath;
     this.successDeleteFiles = successDeleteFiles;
     this.failedDeleteFiles = failedDeleteFiles;
     this.commandBlocksCount = commandBlocksCount;
+    this.logFilesFromFailedCommit = logFilesFromFailedCommit;
   }
 
-  public Map<FileStatus, Long> getCommandBlocksCount() {
+  public Map<StoragePathInfo, Long> getCommandBlocksCount() {
     return commandBlocksCount;
   }
 
@@ -63,6 +66,10 @@ public class HoodieRollbackStat implements Serializable {
     return failedDeleteFiles;
   }
 
+  public Map<String, Long> getLogFilesFromFailedCommit() {
+    return logFilesFromFailedCommit;
+  }
+
   public static HoodieRollbackStat.Builder newBuilder() {
     return new Builder();
   }
@@ -74,10 +81,11 @@ public class HoodieRollbackStat implements Serializable {
 
     private List<String> successDeleteFiles;
     private List<String> failedDeleteFiles;
-    private Map<FileStatus, Long> commandBlocksCount;
+    private Map<StoragePathInfo, Long> commandBlocksCount;
+    private Map<String, Long> logFilesFromFailedCommit;
     private String partitionPath;
 
-    public Builder withDeletedFileResults(Map<FileStatus, Boolean> deletedFiles) {
+    public Builder withDeletedFileResults(Map<StoragePathInfo, Boolean> deletedFiles) {
       // noinspection Convert2MethodRef
       successDeleteFiles = deletedFiles.entrySet().stream().filter(s -> s.getValue())
           .map(s -> s.getKey().getPath().toString()).collect(Collectors.toList());
@@ -95,13 +103,18 @@ public class HoodieRollbackStat implements Serializable {
       return this;
     }
 
-    public Builder withRollbackBlockAppendResults(Map<FileStatus, Long> commandBlocksCount) {
+    public Builder withRollbackBlockAppendResults(Map<StoragePathInfo, Long> commandBlocksCount) {
       this.commandBlocksCount = commandBlocksCount;
       return this;
     }
 
     public Builder withPartitionPath(String partitionPath) {
       this.partitionPath = partitionPath;
+      return this;
+    }
+
+    public Builder withLogFilesFromFailedCommit(Map<String, Long> logFilesFromFailedCommit) {
+      this.logFilesFromFailedCommit = logFilesFromFailedCommit;
       return this;
     }
 
@@ -115,7 +128,10 @@ public class HoodieRollbackStat implements Serializable {
       if (commandBlocksCount == null) {
         commandBlocksCount = Collections.EMPTY_MAP;
       }
-      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount);
+      if (logFilesFromFailedCommit == null) {
+        logFilesFromFailedCommit = Collections.EMPTY_MAP;
+      }
+      return new HoodieRollbackStat(partitionPath, successDeleteFiles, failedDeleteFiles, commandBlocksCount, logFilesFromFailedCommit);
     }
   }
 }

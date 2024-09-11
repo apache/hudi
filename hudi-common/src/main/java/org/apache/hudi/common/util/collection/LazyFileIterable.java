@@ -19,8 +19,10 @@
 package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
-import org.apache.hudi.common.util.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -33,6 +35,7 @@ import java.util.stream.Collectors;
  * the latest value for a key spilled to disk and returns the result.
  */
 public class LazyFileIterable<T, R> implements Iterable<R> {
+  private static final Logger LOG = LoggerFactory.getLogger(LazyFileIterable.class);
 
   // Used to access the value written at a specific position in the file
   private final String filePath;
@@ -129,7 +132,10 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
     }
 
     private void addShutdownHook() {
-      shutdownThread = new Thread(this::closeHandle);
+      shutdownThread = new Thread(() -> {
+        LOG.warn("Failed to properly close LazyFileIterable in application.");
+        this.closeHandle();
+      });
       Runtime.getRuntime().addShutdownHook(shutdownThread);
     }
   }

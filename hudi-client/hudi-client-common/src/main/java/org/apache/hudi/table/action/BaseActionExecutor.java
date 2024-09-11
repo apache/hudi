@@ -18,22 +18,27 @@
 
 package org.apache.hudi.table.action;
 
-import java.io.Serializable;
-
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+
+import java.io.Serializable;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
+  private static final long serialVersionUID = 1L;
   protected final transient HoodieEngineContext context;
-  protected final transient Configuration hadoopConf;
+  protected final transient StorageConfiguration<?> storageConf;
 
   protected final HoodieWriteConfig config;
 
@@ -43,7 +48,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
 
   public BaseActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     this.context = context;
-    this.hadoopConf = context.getHadoopConf().get();
+    this.storageConf = context.getStorageConf();
     this.config = config;
     this.table = table;
     this.instantTime = instantTime;
@@ -53,11 +58,22 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
 
   /**
    * Writes commits metadata to table metadata.
+   *
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, String actionType) {
-    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(
-        metadata, instantTime, table.isTableServiceAction(actionType, instantTime)));
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to update metadata", e);
+        }
+      }
+    }
   }
 
   /**
@@ -65,7 +81,18 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * @param metadata clean metadata of interest.
    */
   protected final void writeTableMetadata(HoodieCleanMetadata metadata, String instantTime) {
-    table.getMetadataWriter(instantTime).ifPresent(w -> w.update(metadata, instantTime));
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.update(metadata, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply clean commit to metadata", e);
+        }
+      }
+    }
   }
 
   /**
@@ -73,7 +100,18 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * @param metadata rollback metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRollbackMetadata metadata) {
-    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.update(metadata, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply rollbacks in metadata", e);
+        }
+      }
+    }
   }
 
   /**
@@ -81,6 +119,17 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    * @param metadata restore metadata of interest.
    */
   protected final void writeTableMetadata(HoodieRestoreMetadata metadata) {
-    table.getMetadataWriter(instantTime, Option.of(metadata)).ifPresent(w -> w.update(metadata, instantTime));
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
+    if (metadataWriterOpt.isPresent()) {
+      try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        metadataWriter.update(metadata, instantTime);
+      } catch (Exception e) {
+        if (e instanceof HoodieException) {
+          throw (HoodieException) e;
+        } else {
+          throw new HoodieException("Failed to apply restore to metadata", e);
+        }
+      }
+    }
   }
 }

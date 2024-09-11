@@ -18,9 +18,10 @@
 
 package org.apache.hudi.common.util.queue;
 
-import org.apache.hudi.common.util.ClosableIterator;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.common.util.collection.ClosableIterator;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
 
@@ -31,7 +32,7 @@ import java.util.Iterator;
  */
 public class IteratorBasedQueueProducer<I> implements HoodieProducer<I> {
 
-  private static final Logger LOG = LogManager.getLogger(IteratorBasedQueueProducer.class);
+  private static final Logger LOG = LoggerFactory.getLogger(IteratorBasedQueueProducer.class);
 
   private final Iterator<I> inputIterator;
 

@@ -27,14 +27,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 import org.apache.avro.Schema;
-import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
+import org.apache.avro.generic.IndexedRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -49,20 +49,20 @@ import java.util.List;
 public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
     extends FlinkMergeAndReplaceHandle<T, I, K, O> {
 
-  private static final Logger LOG = LogManager.getLogger(FlinkMergeAndReplaceHandleWithChangeLog.class);
+  private static final Logger LOG = LoggerFactory.getLogger(FlinkMergeAndReplaceHandleWithChangeLog.class);
 
   private final HoodieCDCLogger cdcLogger;
 
   public FlinkMergeAndReplaceHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                  Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
-                                                 TaskContextSupplier taskContextSupplier, Path basePath) {
+                                                 TaskContextSupplier taskContextSupplier, StoragePath basePath) {
     super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, basePath);
     this.cdcLogger = new HoodieCDCLogger(
         instantTime,
         config,
         hoodieTable.getMetaClient().getTableConfig(),
         partitionPath,
-        getFileSystem(),
+        getStorage(),
         getWriterSchema(),
         createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX),
         IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
@@ -83,7 +83,7 @@ public class FlinkMergeAndReplaceHandleWithChangeLog<T, I, K, O>
   }
 
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
-    Schema schema = useWriterSchemaForCompaction ? writeSchemaWithMetaFields : writeSchema;
+    Schema schema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     // TODO Remove these unnecessary newInstance invocations
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);

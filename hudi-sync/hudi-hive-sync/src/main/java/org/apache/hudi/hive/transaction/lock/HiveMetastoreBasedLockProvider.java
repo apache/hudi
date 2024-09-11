@@ -19,6 +19,14 @@
 
 package org.apache.hudi.hive.transaction.lock;
 
+import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.storage.StorageConfiguration;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -32,26 +40,25 @@ import org.apache.hadoop.hive.metastore.api.LockType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
-import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieLockException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_DATABASE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_METASTORE_URI_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.HIVE_TABLE_NAME_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_HEARTBEAT_INTERVAL_MS_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_PORT_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
@@ -69,25 +76,26 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *
  */
-public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse> {
+public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse>, Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(HiveMetastoreBasedLockProvider.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
   private final String hiveMetastoreUris;
-  private IMetaStoreClient hiveClient;
+  private transient IMetaStoreClient hiveClient;
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
-  ExecutorService executor = Executors.newSingleThreadExecutor();
+  private transient ScheduledFuture<?> future = null;
+  private final transient ScheduledExecutorService executor = Executors.newScheduledThreadPool(2);
 
-  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
+  public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration);
     try {
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
-      hiveConf.addResource(conf);
-      this.hiveClient = Hive.get(hiveConf).getMSC();
+      hiveConf.addResource(conf.unwrapAs(Configuration.class));
+      this.hiveClient = IMetaStoreClientUtil.getMSC(hiveConf);
     } catch (MetaException | HiveException e) {
       throw new HoodieLockException("Failed to create HiveMetaStoreClient", e);
     }
@@ -126,6 +134,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         return;
       }
       lock = null;
+      if (future != null) {
+        future.cancel(false);
+      }
       hiveClient.unlock(lockResponseLocal.getLockid());
       LOG.info(generateLogStatement(RELEASED, generateLogSuffixString()));
     } catch (TException e) {
@@ -151,7 +162,11 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         hiveClient.unlock(lock.getLockid());
         lock = null;
       }
+      if (future != null) {
+        future.cancel(false);
+      }
       Hive.closeCurrent();
+      executor.shutdown();
     } catch (Exception e) {
       LOG.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
@@ -185,6 +200,12 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       final LockRequest lockRequestFinal = lockRequest;
       this.lock = executor.submit(() -> hiveClient.lock(lockRequestFinal))
           .get(time, unit);
+
+      // refresh lock in case that certain commit takes a long time.
+      Heartbeat heartbeat = new Heartbeat(hiveClient, lock.getLockid());
+      long heartbeatIntervalMs = lockConfiguration.getConfig()
+          .getLong(LOCK_HEARTBEAT_INTERVAL_MS_KEY, DEFAULT_LOCK_HEARTBEAT_INTERVAL_MS);
+      future = executor.scheduleAtFixedRate(heartbeat, heartbeatIntervalMs / 2, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
     } catch (InterruptedException | TimeoutException e) {
       if (this.lock == null || this.lock.getState() != LockState.ACQUIRED) {
         LockResponse lockResponse = this.hiveClient.checkLock(lockRequest.getTxnid());
@@ -199,6 +220,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       if (this.lock != null && this.lock.getState() != LockState.ACQUIRED) {
         hiveClient.unlock(this.lock.getLockid());
         lock = null;
+        if (future != null) {
+          future.cancel(false);
+        }
       }
     }
   }

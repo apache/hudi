@@ -18,45 +18,55 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.Type;
+
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.streaming.api.TimeCharacteristic;
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.operators.Output;
-import org.apache.flink.streaming.api.operators.StreamSourceContexts;
-import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
+import org.apache.flink.runtime.io.disk.iomanager.IOManager;
+import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedCatalogTable;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.factories.FactoryUtil;
+import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
+import org.apache.flink.table.runtime.generated.RecordComparator;
+import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
+import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
+import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
+import org.apache.flink.table.types.logical.LogicalType;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * Adapter utils.
  */
 public class Utils {
-  public static <O> SourceFunction.SourceContext<O> getSourceContext(
-      TimeCharacteristic timeCharacteristic,
-      ProcessingTimeService processingTimeService,
-      StreamTask<?, ?> streamTask,
-      Output<StreamRecord<O>> output,
-      long watermarkInterval) {
-    return StreamSourceContexts.getSourceContext(
-        timeCharacteristic,
-        processingTimeService,
-        new Object(), // no actual locking needed
-        output,
-        watermarkInterval,
-        -1,
-        true);
-  }
-
   public static FactoryUtil.DefaultDynamicTableContext getTableContext(
       ObjectIdentifier tablePath,
       ResolvedCatalogTable catalogTable,
       ReadableConfig conf) {
     return new FactoryUtil.DefaultDynamicTableContext(tablePath, catalogTable,
         Collections.emptyMap(), conf, Thread.currentThread().getContextClassLoader(), false);
+  }
+
+  public static BinaryExternalSorter  getBinaryExternalSorter(
+      final Object owner,
+      MemoryManager memoryManager,
+      long reservedMemorySize,
+      IOManager ioManager,
+      AbstractRowDataSerializer<RowData> inputSerializer,
+      BinaryRowDataSerializer serializer,
+      NormalizedKeyComputer normalizedKeyComputer,
+      RecordComparator comparator,
+      Configuration conf) {
+    return new BinaryExternalSorter(owner, memoryManager, reservedMemorySize,
+        ioManager, inputSerializer, serializer, normalizedKeyComputer, comparator, conf);
+  }
+
+  public static InternalSchema applyTableChange(InternalSchema oldSchema, List changes, Function<LogicalType, Type> convertFunc) {
+    throw new AssertionError("Unexpected");
   }
 }

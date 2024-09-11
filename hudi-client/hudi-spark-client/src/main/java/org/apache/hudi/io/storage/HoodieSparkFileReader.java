@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.spark.sql.catalyst.InternalRow;
 
 /**
- * Marker interface for every {@link HoodieFileReader} reading in Catalyst (Spark native tyeps, ie
+ * Marker interface for every {@link HoodieFileReader} reading in Catalyst (Spark native types, i.e.,
  * producing {@link InternalRow}s)
  */
 public interface HoodieSparkFileReader extends HoodieFileReader<InternalRow> {}

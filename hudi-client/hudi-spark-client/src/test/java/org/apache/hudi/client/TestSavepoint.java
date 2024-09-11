@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -64,26 +65,39 @@ public class TestSavepoint extends HoodieClientTestBase {
 
   private static Stream<Arguments> testSavepointParams() {
     return Arrays.stream(new Object[][] {
-        {true, MEMORY}, {true, EMBEDDED_KV_STORE},
-        {false, MEMORY}, {false, EMBEDDED_KV_STORE}
+        {true, MEMORY, HoodieTableType.COPY_ON_WRITE}, {true, EMBEDDED_KV_STORE, HoodieTableType.COPY_ON_WRITE},
+        {false, MEMORY, HoodieTableType.COPY_ON_WRITE}, {false, EMBEDDED_KV_STORE, HoodieTableType.COPY_ON_WRITE},
+        {true, MEMORY, HoodieTableType.MERGE_ON_READ}, {true, EMBEDDED_KV_STORE, HoodieTableType.MERGE_ON_READ},
+        {false, MEMORY, HoodieTableType.MERGE_ON_READ}, {false, EMBEDDED_KV_STORE, HoodieTableType.MERGE_ON_READ}
     }).map(Arguments::of);
   }
 
   @ParameterizedTest
   @MethodSource("testSavepointParams")
   public void testSavepoint(boolean enableMetadataTable,
-                            FileSystemViewStorageType storageType) throws IOException {
+                            FileSystemViewStorageType storageType,
+                            HoodieTableType tableType) throws IOException {
     HoodieWriteConfig cfg = getWriteConfig(enableMetadataTable, storageType);
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0x17AB);
+
+    initMetaClient(tableType);
+
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
-      String newCommitTime = "001";
-      client.startCommitWithTime(newCommitTime);
 
-      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, 200);
-      JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+      String commitTime1 = "001";
+      client.startCommitWithTime(commitTime1);
+      List<HoodieRecord> records1 = dataGen.generateInserts(commitTime1, 200);
+      JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
+      List<WriteStatus> statuses1 = client.upsert(writeRecords1, commitTime1).collect();
+      assertNoWriteErrors(statuses1);
 
-      List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
-      assertNoWriteErrors(statuses);
+      String commitTime2 = "002";
+      client.startCommitWithTime(commitTime2);
+      List<HoodieRecord> records2 = dataGen.generateInserts(commitTime2, 200);
+      JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
+      List<WriteStatus> statuses2 = client.upsert(writeRecords2, commitTime2).collect();
+      assertNoWriteErrors(statuses2);
+
       client.savepoint("user", "hoodie-savepoint-unit-test");
 
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -98,7 +112,7 @@ public class TestSavepoint extends HoodieClientTestBase {
 
       HoodieTimeline commitsTimeline = table.getActiveTimeline().getCommitsTimeline();
       Map<String, List<HoodieWriteStat>> partitionToWriteStats = HoodieCommitMetadata.fromBytes(
-              commitsTimeline.getInstantDetails(commitsTimeline.firstInstant().get()).get(),
+              commitsTimeline.getInstantDetails(commitsTimeline.lastInstant().get()).get(),
               HoodieCommitMetadata.class)
           .getPartitionToWriteStats();
 

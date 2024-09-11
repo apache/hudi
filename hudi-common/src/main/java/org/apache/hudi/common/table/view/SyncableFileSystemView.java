@@ -26,7 +26,7 @@ import org.apache.hudi.common.table.view.TableFileSystemView.SliceView;
  * update operations.
  */
 public interface SyncableFileSystemView
-    extends TableFileSystemView, BaseFileOnlyView, SliceView {
+    extends TableFileSystemView, BaseFileOnlyView, SliceView, AutoCloseable {
 
 
 
@@ -42,7 +42,7 @@ public interface SyncableFileSystemView
 
   /**
    * Read the latest timeline and refresh the file-system view to match the current state of the file-system. The
-   * refresh can either be done incrementally (from reading file-slices in metadata files) or from scratch by reseting
+   * refresh can either be done incrementally (from reading file-slices in metadata files) or from scratch by resetting
    * view storage.
    */
   void sync();

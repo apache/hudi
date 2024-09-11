@@ -20,26 +20,24 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.hive.NonPartitionedExtractor;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
-import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
-import org.apache.hudi.keygen.SimpleKeyGenerator;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.FileSystem;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameWriter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -94,7 +92,7 @@ public class HoodieJavaGenerateApp {
   @Parameter(names = {"--help", "-h"}, help = true)
   public Boolean help = false;
 
-  private static final Logger LOG = LogManager.getLogger(HoodieJavaGenerateApp.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieJavaGenerateApp.class);
 
   public static void main(String[] args) throws Exception {
     HoodieJavaGenerateApp cli = new HoodieJavaGenerateApp();
@@ -164,7 +162,7 @@ public class HoodieJavaGenerateApp {
     JavaSparkContext jssc = new JavaSparkContext(spark.sparkContext());
 
     // Generate some input..
-    String instantTime = HoodieActiveTimeline.createNewInstantTime();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
     List<HoodieRecord> recordsSoFar = new ArrayList<>(dataGen.generateInserts(instantTime/* ignore */, 100));
     List<String> records1 = recordsToStrings(recordsSoFar);
     Dataset<Row> inputDF1 = spark.read().json(jssc.parallelize(records1, 2));
@@ -188,10 +186,6 @@ public class HoodieJavaGenerateApp {
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp")
         // Used by hive sync and queries
         .option(HoodieWriteConfig.TBL_NAME.key(), tableName)
-        // Add Key Extractor
-        .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(),
-            nonPartitionedTable ? NonpartitionedKeyGenerator.class.getCanonicalName()
-                : SimpleKeyGenerator.class.getCanonicalName())
         .mode(commitType);
 
     updateHiveSyncConfig(writer);

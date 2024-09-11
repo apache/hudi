@@ -18,7 +18,8 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.common.util.FileIOUtils
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_INIT = 0
@@ -40,7 +41,9 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         val params = Map(
           "tableType" -> tableType,
-          "tmpDir" -> tmp.getCanonicalPath
+          "tmpDir" -> {
+            tmp.getCanonicalPath.replace('\\', '/')
+          }
         )
         execSqlFile("/sql-statements.sql", params)
       }

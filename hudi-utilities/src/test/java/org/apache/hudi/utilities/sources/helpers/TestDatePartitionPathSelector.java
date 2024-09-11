@@ -20,10 +20,11 @@ package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.testutils.HoodieClientTestHarness;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,14 +40,15 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.utilities.sources.helpers.DFSPathSelector.Config.ROOT_INPUT_PATH_PROP;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.CURRENT_DATE;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_FORMAT;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.DATE_PARTITION_DEPTH;
-import static org.apache.hudi.utilities.sources.helpers.DatePartitionPathSelector.Config.LOOKBACK_DAYS;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.CURRENT_DATE;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_FORMAT;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.DATE_PARTITION_DEPTH;
+import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.LOOKBACK_DAYS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
+public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness {
 
   private transient HoodieSparkEngineContext context = null;
   static List<LocalDate> totalDates;
@@ -68,7 +70,7 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   public void setup() {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     context = new HoodieSparkEngineContext(jsc);
   }
 
@@ -80,12 +82,12 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /*
    * Create Date partitions with some files under each of the leaf Dirs.
    */
-  public List<Path> createDatePartitionsWithFiles(List<Path> leafDirs, boolean hiveStyle, String dateFormat)
+  public List<StoragePath> createDatePartitionsWithFiles(List<StoragePath> leafDirs, boolean hiveStyle, String dateFormat)
       throws IOException {
-    List<Path> allFiles = new ArrayList<>();
-    for (Path path : leafDirs) {
-      List<Path> datePartitions = generateDatePartitionsUnder(path, hiveStyle, dateFormat);
-      for (Path datePartition : datePartitions) {
+    List<StoragePath> allFiles = new ArrayList<>();
+    for (StoragePath path : leafDirs) {
+      List<StoragePath> datePartitions = generateDatePartitionsUnder(path, hiveStyle, dateFormat);
+      for (StoragePath datePartition : datePartitions) {
         allFiles.addAll(createRandomFilesUnder(datePartition));
       }
     }
@@ -95,21 +97,23 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /**
    * Create all parent level dirs before the date partitions.
    *
-   * @param root Current parent dir. Initially this points to table basepath.
-   * @param dirs List o sub dirs to be created under root.
-   * @param depth Depth of partitions before date partitions.
+   * @param root     Current parent dir. Initially this points to table basepath.
+   * @param dirs     List o sub dirs to be created under root.
+   * @param depth    Depth of partitions before date partitions.
    * @param leafDirs Collect list of leaf dirs. These will be the immediate parents of date based partitions.
    * @throws IOException
    */
-  public void createParentDirsBeforeDatePartitions(Path root, List<String> dirs, int depth, List<Path> leafDirs)
+  public void createParentDirsBeforeDatePartitions(StoragePath root, List<String> dirs,
+                                                   int depth,
+                                                   List<StoragePath> leafDirs)
       throws IOException {
     if (depth <= 0) {
       leafDirs.add(root);
       return;
     }
     for (String s : dirs) {
-      Path subdir = new Path(root, s);
-      fs.mkdirs(subdir);
+      StoragePath subdir = new StoragePath(root, s);
+      storage.createDirectory(subdir);
       createParentDirsBeforeDatePartitions(subdir, generateRandomStrings(), depth - 1, leafDirs);
     }
   }
@@ -128,13 +132,15 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /*
    * Generate date based partitions under a parent dir with or without hivestyle formatting.
    */
-  private List<Path> generateDatePartitionsUnder(Path parent, boolean hiveStyle, String dateFormat) throws IOException {
+  private List<StoragePath> generateDatePartitionsUnder(StoragePath parent, boolean hiveStyle,
+                                                        String dateFormat) throws IOException {
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFormat);
-    List<Path> datePartitions = new ArrayList<>();
+    List<StoragePath> datePartitions = new ArrayList<>();
     String prefix = (hiveStyle ? "dt=" : "");
     for (int i = 0; i < 5; i++) {
-      Path child = new Path(parent, prefix + formatter.format(totalDates.get(i)));
-      fs.mkdirs(child);
+      StoragePath child =
+          new StoragePath(parent, prefix + formatter.format(totalDates.get(i)));
+      storage.createDirectory(child);
       datePartitions.add(child);
     }
     return datePartitions;
@@ -143,15 +149,15 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   /*
    * Creates random files under the given directory.
    */
-  private List<Path> createRandomFilesUnder(Path path) throws IOException {
-    List<Path> resultFiles = new ArrayList<>();
+  private List<StoragePath> createRandomFilesUnder(StoragePath path) throws IOException {
+    List<StoragePath> resultFiles = new ArrayList<>();
     List<String> fileNames = generateRandomStrings();
     for (String fileName : fileNames) {
       List<String> fileContent = generateRandomStrings();
       String[] lines = new String[fileContent.size()];
       lines = fileContent.toArray(lines);
-      Path file = new Path(path, fileName);
-      UtilitiesTestBase.Helpers.saveStringsToDFS(lines, fs, file.toString());
+      StoragePath file = new StoragePath(path, fileName);
+      UtilitiesTestBase.Helpers.saveStringsToDFS(lines, storage, file.toString());
       resultFiles.add(file);
     }
     return resultFiles;
@@ -160,11 +166,11 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
   private static TypedProperties getProps(
       String basePath, String dateFormat, int datePartitionDepth, int numDaysToList, String currentDate) {
     TypedProperties properties = new TypedProperties();
-    properties.put(ROOT_INPUT_PATH_PROP, basePath);
-    properties.put(DATE_FORMAT, dateFormat);
-    properties.put(DATE_PARTITION_DEPTH, "" + datePartitionDepth);
-    properties.put(LOOKBACK_DAYS, "" + numDaysToList);
-    properties.put(CURRENT_DATE, currentDate);
+    properties.put(ROOT_INPUT_PATH.key(), basePath);
+    properties.put(DATE_FORMAT.key(), dateFormat);
+    properties.put(DATE_PARTITION_DEPTH.key(), "" + datePartitionDepth);
+    properties.put(LOOKBACK_DAYS.key(), "" + numDaysToList);
+    properties.put(CURRENT_DATE.key(), currentDate);
     return properties;
   }
 
@@ -202,15 +208,16 @@ public class TestDatePartitionPathSelector extends HoodieClientTestHarness {
     TypedProperties props = getProps(basePath + "/" + tableName, dateFormat, datePartitionDepth, numPrevDaysToList, currentDate);
     DatePartitionPathSelector pathSelector = new DatePartitionPathSelector(props, jsc.hadoopConfiguration());
 
-    Path root = new Path(props.getString(ROOT_INPUT_PATH_PROP));
-    int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH) - 1;
+    StoragePath root = new StoragePath(getStringWithAltKeys(props, ROOT_INPUT_PATH));
+    int totalDepthBeforeDatePartitions = props.getInteger(DATE_PARTITION_DEPTH.key()) - 1;
 
     // Create parent dir
-    List<Path> leafDirs = new ArrayList<>();
+    List<StoragePath> leafDirs = new ArrayList<>();
     createParentDirsBeforeDatePartitions(root, generateRandomStrings(), totalDepthBeforeDatePartitions, leafDirs);
     createDatePartitionsWithFiles(leafDirs, isHiveStylePartition, dateFormat);
 
-    List<String> paths = pathSelector.pruneDatePartitionPaths(context, fs, root.toString(), LocalDate.parse(currentDate));
+    List<String> paths = pathSelector.pruneDatePartitionPaths(
+        context, (FileSystem) storage.getFileSystem(), root.toString(), LocalDate.parse(currentDate));
     assertEquals(expectedNumFiles, paths.size());
   }
 }

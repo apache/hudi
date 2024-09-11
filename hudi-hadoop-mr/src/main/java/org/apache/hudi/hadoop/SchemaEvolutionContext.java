@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -35,16 +36,19 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.exec.SerializationUtilities;
 import org.apache.hadoop.hive.ql.plan.ExprNodeColumnDesc;
 import org.apache.hadoop.hive.ql.plan.ExprNodeDesc;
 import org.apache.hadoop.hive.ql.plan.ExprNodeGenericFuncDesc;
 import org.apache.hadoop.hive.ql.plan.TableScanDesc;
-import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
@@ -56,16 +60,18 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
-import java.io.IOException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * This class is responsible for calculating names and types of fields that are actual at a certain point in time for hive.
@@ -74,7 +80,7 @@ import java.util.stream.Collectors;
  */
 public class SchemaEvolutionContext {
 
-  private static final Logger LOG = LogManager.getLogger(SchemaEvolutionContext.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SchemaEvolutionContext.class);
 
   private static final String HIVE_TMP_READ_COLUMN_NAMES_CONF_STR = "hive.tmp.io.file.readcolumn.ids";
   private static final String HIVE_TMP_COLUMNS = "hive.tmp.columns";
@@ -82,7 +88,7 @@ public class SchemaEvolutionContext {
 
   private final InputSplit split;
   private final JobConf job;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
   public Option<InternalSchema> internalSchemaOption;
 
   public SchemaEvolutionContext(InputSplit split, JobConf job) throws IOException {
@@ -102,17 +108,19 @@ public class SchemaEvolutionContext {
       this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
     } catch (Exception e) {
       internalSchemaOption = Option.empty();
-      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePathV2()), e);
+      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePath()), e);
     }
-    LOG.info(String.format("finish init schema evolution for split: %s", split));
+    LOG.info("finish init schema evolution for split: {}", split);
   }
 
   private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
     try {
-      Path inputPath = ((FileSplit)split).getPath();
-      FileSystem fs =  inputPath.getFileSystem(job);
-      Option<Path> tablePath = TablePathUtils.getTablePath(fs, inputPath);
-      return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString()).setConf(job).build();
+      Path inputPath = ((FileSplit) split).getPath();
+      FileSystem fs = inputPath.getFileSystem(job);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
+      return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
       LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
       return null;
@@ -127,7 +135,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.warn(String.format("expect realtime split for mor table, but find other type split %s", split));
+      LOG.warn("expect realtime split for mor table, but find other type split {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {
@@ -149,9 +157,10 @@ public class SchemaEvolutionContext {
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);
       realtimeRecordReader.setHiveSchema(hiveSchema);
+      internalSchemaOption = Option.of(prunedInternalSchema);
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-      LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-          realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns));
+      LOG.info("About to read compacted logs {} for base split {}, projecting cols {}",
+          realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns);
     }
   }
 
@@ -171,8 +180,8 @@ public class SchemaEvolutionContext {
       if (!disableSchemaEvolution) {
         prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
         InternalSchema querySchema = prunedSchema;
-        Long commitTime = Long.valueOf(FSUtils.getCommitTime(finalPath.getName()));
-        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient, false);
+        long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
+        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient);
         InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true,
             true).mergeSchema();
         List<Types.Field> fields = mergedInternalSchema.columns();
@@ -258,10 +267,10 @@ public class SchemaEvolutionContext {
       case DECIMAL:
         return typeInfo;
       case TIME:
-        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", new Object[] { type }));
+        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
-        LOG.error(String.format("cannot convert unknown type: %s to Hive", new Object[] { type }));
-        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", new Object[] { type }));
+        LOG.error("cannot convert unknown type: {} to Hive", type);
+        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", type));
     }
   }
 
@@ -300,8 +309,8 @@ public class SchemaEvolutionContext {
       String filterText = filterExpr.getExprString();
       String serializedFilterExpr = SerializationUtilities.serializeExpression(filterExpr);
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Pushdown initiated with filterText = " + filterText + ", filterExpr = "
-            + filterExpr + ", serializedFilterExpr = " + serializedFilterExpr);
+        LOG.debug("Pushdown initiated with filterText = {}, filterExpr = {}, serializedFilterExpr = {}",
+            filterText, filterExpr, serializedFilterExpr);
       }
       job.set(TableScanDesc.FILTER_TEXT_CONF_STR, filterText);
       job.set(TableScanDesc.FILTER_EXPR_CONF_STR, serializedFilterExpr);
@@ -318,7 +327,7 @@ public class SchemaEvolutionContext {
     }
     StringBuilder readColumnNames = new StringBuilder();
     List<String> tmpColNameList = Arrays.asList(job.get(serdeConstants.LIST_COLUMNS).split(","));
-    List<String> fullColNamelist = new ArrayList<String>(tmpColNameList);
+    List<String> fullColNamelist = new ArrayList<>(tmpColNameList);
     for (int index = 0; index < fields.size(); index++) {
       String colName = fields.get(index).name();
       if (readColumnNames.length() > 0) {

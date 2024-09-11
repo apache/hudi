@@ -29,8 +29,8 @@ import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,7 +56,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   public static final int COORDINATOR_KAFKA_PARTITION = 0;
 
-  private static final Logger LOG = LogManager.getLogger(ConnectTransactionCoordinator.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";

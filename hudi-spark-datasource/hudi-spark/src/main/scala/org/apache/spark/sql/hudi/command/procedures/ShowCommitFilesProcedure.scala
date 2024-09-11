@@ -19,24 +19,23 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieReplaceCommitMetadata, HoodieWriteStat}
-import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.util.ClusteringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.List
 import java.util.function.Supplier
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 
 class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "table", DataTypes.StringType, None),
+    ProcedureParameter.required(0, "table", DataTypes.StringType),
     ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 10),
-    ProcedureParameter.required(2, "instant_time", DataTypes.StringType, None)
+    ProcedureParameter.required(2, "instant_time", DataTypes.StringType)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -64,7 +63,7 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val hoodieCatalogTable = HoodieCLIUtils.getHoodieCatalogTable(sparkSession, table)
     val basePath = hoodieCatalogTable.tableLocation
-    val metaClient = HoodieTableMetaClient.builder.setConf(jsc.hadoopConfiguration()).setBasePath(basePath).build
+    val metaClient = createMetaClient(jsc, basePath)
     val activeTimeline = metaClient.getActiveTimeline
     val timeline = activeTimeline.getCommitsTimeline.filterCompletedInstants
     val hoodieInstantOption = getCommitForInstant(timeline, instantTime)
@@ -76,11 +75,11 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
 
     val meta = commitMetadataOptional.get
     val rows = new util.ArrayList[Row]
-    for (entry <- meta.getPartitionToWriteStats.entrySet) {
+    for (entry <- meta.getPartitionToWriteStats.entrySet.asScala) {
       val action: String = hoodieInstantOption.get.getAction
       val path: String = entry.getKey
       val stats: List[HoodieWriteStat] = entry.getValue
-      for (stat <- stats) {
+      for (stat <- stats.asScala) {
         rows.add(Row(action, path, stat.getFileId, stat.getPrevCommit, stat.getNumUpdateWrites,
           stat.getNumWrites, stat.getTotalWriteBytes, stat.getTotalWriteErrors, stat.getFileSizeInBytes))
       }
@@ -94,15 +93,16 @@ class ShowCommitFilesProcedure() extends BaseProcedure with ProcedureBuilder {
     val instants: util.List[HoodieInstant] = util.Arrays.asList(
       new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime),
+      new HoodieInstant(false, HoodieTimeline.CLUSTERING_ACTION, instantTime),
       new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, instantTime))
 
-    val hoodieInstant: Option[HoodieInstant] = instants.find((i: HoodieInstant) => timeline.containsInstant(i))
+    val hoodieInstant: Option[HoodieInstant] = instants.asScala.find((i: HoodieInstant) => timeline.containsInstant(i))
     hoodieInstant
   }
 
   private def getHoodieCommitMetadata(timeline: HoodieTimeline, hoodieInstant: Option[HoodieInstant]): Option[HoodieCommitMetadata] = {
     if (hoodieInstant.isDefined) {
-      if (hoodieInstant.get.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+      if (ClusteringUtils.isClusteringOrReplaceCommitAction(hoodieInstant.get.getAction)) {
         Option(HoodieReplaceCommitMetadata.fromBytes(timeline.getInstantDetails(hoodieInstant.get).get,
           classOf[HoodieReplaceCommitMetadata]))
       } else {

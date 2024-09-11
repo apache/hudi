@@ -24,9 +24,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.sink.utils.Pipelines;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.catalog.HoodieCatalog;
 import org.apache.hudi.table.catalog.TableOptionProperties;
 import org.apache.hudi.util.AvroSchemaConverter;
@@ -41,12 +43,14 @@ import org.apache.hudi.utils.source.ContinuousFileSource;
 
 import org.apache.flink.api.common.JobStatus;
 import org.apache.flink.api.common.io.FilePathFilter;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.typeinfo.BasicTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.io.TextInputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.core.fs.Path;
+import org.apache.flink.runtime.client.JobExecutionException;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -68,12 +72,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE;
+import static org.apache.hudi.config.HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
 
@@ -113,7 +120,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
 
     testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
@@ -159,7 +165,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.setString(FlinkOptions.INDEX_KEY_FIELD, "id");
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
@@ -210,6 +215,16 @@ public class ITTestDataStreamWrite extends TestLogger {
       String jobName,
       int checkpoints,
       Map<String, List<String>> expected) throws Exception {
+    testWriteToHoodie(conf, transformer, jobName, checkpoints, true, expected);
+  }
+
+  private void testWriteToHoodie(
+      Configuration conf,
+      Option<Transformer> transformer,
+      String jobName,
+      int checkpoints,
+      boolean restartJob,
+      Map<String, List<String>> expected) throws Exception {
 
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     execEnv.getConfig().disableObjectReuse();
@@ -217,6 +232,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     // set up checkpoint interval
     execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
+    if (!restartJob) {
+      execEnv.setRestartStrategy(new RestartStrategies.NoRestartStrategyConfiguration());
+    }
 
     // Read from file source
     RowType rowType =
@@ -297,7 +315,7 @@ public class ITTestDataStreamWrite extends TestLogger {
         .setParallelism(4);
 
     OptionsInference.setupSinkTasks(conf, execEnv.getParallelism());
-    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream, true);
+    DataStream<Object> pipeline = Pipelines.append(conf, rowType, dataStream);
     execEnv.addOperator(pipeline.getTransformation());
 
     Pipelines.cluster(conf, rowType, pipeline);
@@ -423,7 +441,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     // create table dir
     final String dbName = DEFAULT_DATABASE.defaultValue();
     final String tableName = "t1";
-    File testTable = new File(tempFile, dbName + Path.SEPARATOR + tableName);
+    File testTable = new File(tempFile, dbName + StoragePath.SEPARATOR + tableName);
     testTable.mkdir();
 
     Configuration conf = TestConfigurations.getDefaultConf(testTable.toURI().toString());
@@ -514,5 +532,38 @@ public class ITTestDataStreamWrite extends TestLogger {
 
     execute(execEnv, false, "Api_Sink_Test");
     TestData.checkWrittenDataCOW(tempFile, EXPECTED);
+  }
+
+  @Test
+  public void testColumnDroppingIsNotAllowed() throws Exception {
+    // Write cols: uuid, name, age, ts, partition
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
+    testWriteToHoodie(conf, "initial write", 1, EXPECTED);
+
+    // Write cols: uuid, name, ts, partition
+    conf.setBoolean(AVRO_SCHEMA_VALIDATE_ENABLE.key(), false);
+    conf.setBoolean(SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP.key(), false);
+    conf.setString(
+        FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+        Objects.requireNonNull(Thread.currentThread()
+            .getContextClassLoader()
+            .getResource("test_read_schema_dropped_age.avsc")
+        ).toString()
+    );
+
+    // assert job failure with schema compatibility exception
+    try {
+      testWriteToHoodie(conf, Option.empty(), "failing job", 1, false, Collections.emptyMap());
+    } catch (JobExecutionException e) {
+      Throwable actualException = e;
+      while (actualException != null) {
+        if (actualException.getClass() == MissingSchemaFieldException.class) {
+          // test is passed
+          return;
+        }
+        actualException = actualException.getCause();
+      }
+    }
+    throw new AssertionError(String.format("Excepted exception %s is not found", MissingSchemaFieldException.class));
   }
 }

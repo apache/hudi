@@ -21,14 +21,16 @@ package org.apache.hudi.utilities.deser;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieException;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.utilities.sources.AvroKafkaSource;
-import org.apache.kafka.common.errors.SerializationException;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import org.apache.avro.Schema;
+import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 import java.util.Map.Entry;
+
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DESERIALIZER_SCHEMA;
 
 /**
  * Extending {@link KafkaAvroSchemaDeserializer} as we need to be able to inject reader schema during deserialization.
@@ -37,7 +39,8 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
 
   private Schema sourceSchema;
 
-  public KafkaAvroSchemaDeserializer() {}
+  public KafkaAvroSchemaDeserializer() {
+  }
 
   public KafkaAvroSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
     super(client, props);
@@ -48,7 +51,8 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     super.configure(configs, isKey);
     try {
       TypedProperties props = getConvertToTypedProperties(configs);
-      sourceSchema = new Schema.Parser().parse(props.getString(AvroKafkaSource.KAFKA_AVRO_VALUE_DESERIALIZER_SCHEMA));
+      sourceSchema = new Schema.Parser().parse(
+          getStringWithAltKeys(props, KAFKA_VALUE_DESERIALIZER_SCHEMA));
     } catch (Throwable e) {
       throw new HoodieException(e);
     }
@@ -57,7 +61,6 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
   /**
    * We need to inject sourceSchema instead of reader schema during deserialization or later stages of the pipeline.
    *
-   * @param includeSchemaAndVersion
    * @param topic
    * @param isKey
    * @param payload
@@ -67,13 +70,12 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
    */
   @Override
   protected Object deserialize(
-      boolean includeSchemaAndVersion,
       String topic,
       Boolean isKey,
       byte[] payload,
       Schema readerSchema)
       throws SerializationException {
-    return super.deserialize(includeSchemaAndVersion, topic, isKey, payload, sourceSchema);
+    return super.deserialize(topic, isKey, payload, sourceSchema);
   }
 
   protected TypedProperties getConvertToTypedProperties(Map<String, ?> configs) {

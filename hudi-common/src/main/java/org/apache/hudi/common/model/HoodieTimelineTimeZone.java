@@ -18,20 +18,29 @@
 
 package org.apache.hudi.common.model;
 
+import java.time.ZoneId;
+import java.util.TimeZone;
+
 /**
  * Hoodie TimelineZone.
  */
 public enum HoodieTimelineTimeZone {
-  LOCAL("local"),
-  UTC("utc");
+  LOCAL("local", ZoneId.systemDefault()),
+  UTC("utc", TimeZone.getTimeZone("UTC").toZoneId());
 
   private final String timeZone;
+  private final ZoneId zoneId;
 
-  HoodieTimelineTimeZone(String timeZone) {
+  HoodieTimelineTimeZone(String timeZone, ZoneId zoneId) {
     this.timeZone = timeZone;
+    this.zoneId = zoneId;
   }
 
   public String getTimeZone() {
     return timeZone;
+  }
+
+  public ZoneId getZoneId() {
+    return zoneId;
   }
 }

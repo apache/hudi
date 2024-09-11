@@ -19,7 +19,9 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
+
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Cast, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
@@ -27,9 +29,9 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
+import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
-import org.apache.spark.sql._
 
 /**
  * Command for insert into Hudi table.
@@ -87,20 +89,12 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
           extraOptions: Map[String, String] = Map.empty): Boolean = {
     val catalogTable = new HoodieCatalogTable(sparkSession, table)
 
-    var mode = SaveMode.Append
-    var isOverWriteTable = false
-    var isOverWritePartition = false
-    if (overwrite && partitionSpec.isEmpty) {
-      // insert overwrite table
-      mode = SaveMode.Overwrite
-      isOverWriteTable = true
+    val (mode, isOverWriteTable, isOverWritePartition, staticOverwritePartitionPathOpt) = if (overwrite) {
+      deduceOverwriteConfig(sparkSession, catalogTable, partitionSpec, extraOptions)
     } else {
-      // for insert into or insert overwrite partition we use append mode.
-      mode = SaveMode.Append
-      isOverWritePartition = overwrite
+      (SaveMode.Append, false, false, Option.empty)
     }
-
-    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions)
+    val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
     val alignedQuery = alignQueryOutput(query, catalogTable, partitionSpec, sparkSession.sessionState.conf)
 
@@ -139,7 +133,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
 
     // Make sure we strip out meta-fields from the incoming dataset (these will have to be discarded anyway)
-    val cleanedQuery = stripMetaFields(query)
+    val cleanedQuery = stripMetaFieldAttributes(query)
     // To validate and align properly output of the query, we simply filter out partition columns with already
     // provided static values from the table's schema
     //
@@ -163,11 +157,15 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
                                        conf: SQLConf): LogicalPlan = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
-      planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = true, conf)
+      planUtils.resolveOutputColumns(
+        catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = true, conf)
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
-      case ae: AnalysisException if ae.getMessage().startsWith("Cannot write incompatible data to table") =>
-        planUtils.resolveOutputColumns(catalogTable.catalogTableName, expectedSchema.toAttributes, query, byName = false, conf)
+      // SPARK-42309 Error message changed in Spark 3.5.0 so we need to match two strings here
+      case ae: AnalysisException if (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
+        || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
+        planUtils.resolveOutputColumns(
+          catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = false, conf)
     }
   }
 
@@ -196,7 +194,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
       .filter(pf => staticPartitionValues.contains(pf.name))
       .map(pf => {
         val staticPartitionValue = staticPartitionValues(pf.name)
-        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType, conf)
+        val castExpr = castIfNeeded(Literal.create(staticPartitionValue), pf.dataType)
 
         Alias(castExpr, pf.name)()
       })
@@ -214,15 +212,6 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
   }
 
-  def stripMetaFields(query: LogicalPlan): LogicalPlan = {
-    val filteredOutput = query.output.filterNot(attr => isMetaField(attr.name))
-    if (filteredOutput == query.output) {
-      query
-    } else {
-      Project(filteredOutput, query)
-    }
-  }
-
   private def filterStaticPartitionValues(partitionsSpec: Map[String, Option[String]]): Map[String, String] =
-    partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get)
+    partitionsSpec.filter(p => p._2.isDefined).mapValues(_.get).toMap
 }

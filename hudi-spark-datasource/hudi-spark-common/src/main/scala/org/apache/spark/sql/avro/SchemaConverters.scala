@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.LogicalTypes.{Date, Decimal, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type._
-import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 
 import scala.collection.JavaConverters._
 
@@ -168,7 +168,7 @@ private[sql] object SchemaConverters {
 
       case FloatType => builder.floatType()
       case DoubleType => builder.doubleType()
-      case StringType => builder.stringType()
+      case StringType | CharType(_) | VarcharType(_) => builder.stringType()
       case NullType => builder.nullType()
       case d: DecimalType =>
         val avroType = LogicalTypes.decimal(d.precision, d.scale)

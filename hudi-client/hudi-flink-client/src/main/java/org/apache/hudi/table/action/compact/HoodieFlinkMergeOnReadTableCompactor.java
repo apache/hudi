@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.compact;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -44,10 +45,9 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   @Override
   public void preCompact(
       HoodieTable table, HoodieTimeline pendingCompactionTimeline, WriteOperationType operationType, String instantTime) {
-    if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
-      throw new UnsupportedOperationException("Log compaction is not supported for this execution engine.");
-    }
-    HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(instantTime);
+    HoodieInstant inflightInstant = WriteOperationType.COMPACT.equals(operationType)
+        ? HoodieTimeline.getCompactionInflightInstant(instantTime)
+        : HoodieTimeline.getLogCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant);
       table.getMetaClient().reloadActiveTimeline();
@@ -55,7 +55,7 @@ public class HoodieFlinkMergeOnReadTableCompactor<T>
   }
 
   @Override
-  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieWriteConfig config) {
+  public void maybePersist(HoodieData<WriteStatus> writeStatus, HoodieEngineContext context, HoodieWriteConfig config, String instantTime) {
     // No OP
   }
 }

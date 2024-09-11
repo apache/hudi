@@ -20,38 +20,46 @@ package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataInputStream;
+import org.roaringbitmap.longlong.Roaring64NavigableMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
  * Abstract class defining a block in HoodieLogFile.
  */
 public abstract class HoodieLogBlock {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieLogBlock.class);
   /**
    * The current version of the log block. Anytime the logBlock format changes this version needs to be bumped and
    * corresponding changes need to be made to {@link HoodieLogBlockVersion} TODO : Change this to a class, something
    * like HoodieLogBlockVersionV1/V2 and implement/override operations there
+   * Current log block version is V3.
    */
-  public static int version = 2;
+  public static int version = 3;
   // Header for each log block
   private final Map<HeaderMetadataType, String> logBlockHeader;
   // Footer for each log block
@@ -60,10 +68,7 @@ public abstract class HoodieLogBlock {
   private final Option<HoodieLogBlockContentLocation> blockContentLocation;
   // data for a specific block
   private Option<byte[]> content;
-  // TODO : change this to just InputStream so this works for any FileSystem
-  // create handlers to return specific type of inputstream based on FS
-  // input stream corresponding to the log file where this logBlock belongs
-  private final FSDataInputStream inputStream;
+  private final Supplier<SeekableDataInputStream> inputStreamSupplier;
   // Toggle flag, whether to read blocks lazily (I/O intensive) or not (Memory intensive)
   protected boolean readBlockLazily;
 
@@ -72,18 +77,18 @@ public abstract class HoodieLogBlock {
       @Nonnull Map<HeaderMetadataType, String> logBlockFooter,
       @Nonnull Option<HoodieLogBlockContentLocation> blockContentLocation,
       @Nonnull Option<byte[]> content,
-      @Nullable FSDataInputStream inputStream,
+      @Nullable Supplier<SeekableDataInputStream> inputStreamSupplier,
       boolean readBlockLazily) {
     this.logBlockHeader = logBlockHeader;
     this.logBlockFooter = logBlockFooter;
     this.blockContentLocation = blockContentLocation;
     this.content = content;
-    this.inputStream = inputStream;
+    this.inputStreamSupplier = inputStreamSupplier;
     this.readBlockLazily = readBlockLazily;
   }
 
   // Return the bytes representation of the data belonging to a LogBlock
-  public byte[] getContentBytes() throws IOException {
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     throw new HoodieException("No implementation was provided");
   }
 
@@ -122,6 +127,33 @@ public abstract class HoodieLogBlock {
   }
 
   /**
+   * @return A {@link Roaring64NavigableMap} bitmap containing the record positions in long type
+   * if the {@link HeaderMetadataType#RECORD_POSITIONS} block header exists; otherwise, an empty
+   * {@link Roaring64NavigableMap} bitmap.
+   * @throws IOException upon I/O error.
+   */
+  public Roaring64NavigableMap getRecordPositions() throws IOException {
+    if (!logBlockHeader.containsKey(HeaderMetadataType.RECORD_POSITIONS)) {
+      return new Roaring64NavigableMap();
+    }
+    return LogReaderUtils.decodeRecordPositionsHeader(logBlockHeader.get(HeaderMetadataType.RECORD_POSITIONS));
+  }
+
+  protected void addRecordPositionsToHeader(Set<Long> positionSet, int numRecords) {
+    if (positionSet.size() == numRecords) {
+      try {
+        logBlockHeader.put(HeaderMetadataType.RECORD_POSITIONS, LogReaderUtils.encodePositions(positionSet));
+      } catch (IOException e) {
+        LOG.error("Cannot write record positions to the log block header.", e);
+      }
+    } else {
+      LOG.warn("There are duplicate keys in the records (number of unique positions: %s, "
+              + "number of records: %s). Skip writing record positions to the log block header.",
+          positionSet.size(), numRecords);
+    }
+  }
+
+  /**
    * Type of the log block WARNING: This enum is serialized as the ordinal. Only add new enums at the end.
    */
   public enum HoodieLogBlockType {
@@ -152,7 +184,7 @@ public abstract class HoodieLogBlock {
    * new enums at the end.
    */
   public enum HeaderMetadataType {
-    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES
+    INSTANT_TIME, TARGET_INSTANT_TIME, SCHEMA, COMMAND_BLOCK_TYPE, COMPACTED_BLOCK_TIMES, RECORD_POSITIONS, BLOCK_IDENTIFIER, IS_PARTIAL
   }
 
   /**
@@ -167,8 +199,8 @@ public abstract class HoodieLogBlock {
    * intensive CompactedScanner, the location helps to lazily read contents from the log file
    */
   public static final class HoodieLogBlockContentLocation {
-    // Hadoop Config required to access the file
-    private final Configuration hadoopConf;
+    // Storage Config required to access the file
+    private final HoodieStorage storage;
     // The logFile that contains this block
     private final HoodieLogFile logFile;
     // The filePosition in the logFile for the contents of this block
@@ -178,20 +210,20 @@ public abstract class HoodieLogBlock {
     // The final position where the complete block ends
     private final long blockEndPos;
 
-    public HoodieLogBlockContentLocation(Configuration hadoopConf,
+    public HoodieLogBlockContentLocation(HoodieStorage storage,
                                          HoodieLogFile logFile,
                                          long contentPositionInLogFile,
                                          long blockSize,
                                          long blockEndPos) {
-      this.hadoopConf = hadoopConf;
+      this.storage = storage;
       this.logFile = logFile;
       this.contentPositionInLogFile = contentPositionInLogFile;
       this.blockSize = blockSize;
       this.blockEndPos = blockEndPos;
     }
 
-    public Configuration getHadoopConf() {
-      return hadoopConf;
+    public HoodieStorage getStorage() {
+      return storage;
     }
 
     public HoodieLogFile getLogFile() {
@@ -220,7 +252,7 @@ public abstract class HoodieLogBlock {
     output.writeInt(metadata.size());
     for (Map.Entry<HeaderMetadataType, String> entry : metadata.entrySet()) {
       output.writeInt(entry.getKey().ordinal());
-      byte[] bytes = entry.getValue().getBytes();
+      byte[] bytes = getUTF8Bytes(entry.getValue());
       output.writeInt(bytes.length);
       output.write(bytes);
     }
@@ -230,7 +262,7 @@ public abstract class HoodieLogBlock {
   /**
    * Convert bytes to LogMetadata, follow the same order as {@link HoodieLogBlock#getLogMetadataBytes}.
    */
-  public static Map<HeaderMetadataType, String> getLogMetadata(DataInputStream dis) throws IOException {
+  public static Map<HeaderMetadataType, String> getLogMetadata(SeekableDataInputStream dis) throws IOException {
 
     Map<HeaderMetadataType, String> metadata = new HashMap<>();
     // 1. Read the metadata written out
@@ -254,7 +286,7 @@ public abstract class HoodieLogBlock {
    * Read or Skip block content of a log block in the log file. Depends on lazy reading enabled in
    * {@link HoodieMergedLogRecordScanner}
    */
-  public static Option<byte[]> tryReadContent(FSDataInputStream inputStream, Integer contentLength, boolean readLazily)
+  public static Option<byte[]> tryReadContent(SeekableDataInputStream inputStream, Integer contentLength, boolean readLazily)
       throws IOException {
     if (readLazily) {
       // Seek to the end of the content block
@@ -274,13 +306,17 @@ public abstract class HoodieLogBlock {
    */
   protected void inflate() throws HoodieIOException {
     checkState(!content.isPresent(), "Block has already been inflated");
-    checkState(inputStream != null, "Block should have input-stream provided");
+    checkState(inputStreamSupplier != null, "Block should have input-stream provided");
 
-    try {
+    try (SeekableDataInputStream inputStream = inputStreamSupplier.get()) {
       content = Option.of(new byte[(int) this.getBlockContentLocation().get().getBlockSize()]);
       inputStream.seek(this.getBlockContentLocation().get().getContentPositionInLogFile());
       inputStream.readFully(content.get(), 0, content.get().length);
       inputStream.seek(this.getBlockContentLocation().get().getBlockEndPos());
+    } catch (InterruptedIOException e) {
+      // Stop retry inflate if encounters InterruptedIOException
+      Thread.currentThread().interrupt();
+      throw new HoodieIOException("Thread is interrupted while inflating.", e);
     } catch (IOException e) {
       // TODO : fs.open() and return inputstream again, need to pass FS configuration
       // because the inputstream might close/timeout for large number of log blocks to be merged

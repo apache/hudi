@@ -21,7 +21,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.ScalaAssertionSupport
 import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.spark.sql.catalyst.TableIdentifier
+
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, IsNotNull, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -108,12 +108,12 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             case "eager" =>
               // NOTE: In case of partitioned table 3 files will be created, while in case of non-partitioned just 1
               if (partitioned) {
-                assertEquals(1275, f.stats.sizeInBytes.longValue() / 1024)
-                assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+                assertEquals(1275, f.stats.sizeInBytes.longValue / 1024)
+                assertEquals(1275, lr.stats.sizeInBytes.longValue / 1024)
               } else {
                 // NOTE: We're adding 512 to make sure we always round to the next integer value
-                assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
-                assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
+                assertEquals(425, (f.stats.sizeInBytes.longValue + 512) / 1024)
+                assertEquals(425, (lr.stats.sizeInBytes.longValue + 512) / 1024)
               }
 
             // Case #2: Lazy listing (default mode).
@@ -122,18 +122,15 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
             //          list the whole table
             case "lazy" =>
               // NOTE: We're adding 512 to make sure we always round to the next integer value
-              assertEquals(425, (f.stats.sizeInBytes.longValue() + 512) / 1024)
-              assertEquals(425, (lr.stats.sizeInBytes.longValue() + 512) / 1024)
+              assertEquals(425, (f.stats.sizeInBytes.longValue + 512) / 1024)
+              assertEquals(425, (lr.stats.sizeInBytes.longValue + 512) / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }
 
           if (partitioned) {
             val executionPlan = df.queryExecution.executedPlan
-            val expectedPhysicalPlanPartitionFiltersClause = tableType match {
-              case "cow" => s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
-              case "mor" => s"PushedFilters: [IsNotNull(partition), EqualTo(partition,2021-01-05)]"
-            }
+            val expectedPhysicalPlanPartitionFiltersClause = s"PartitionFilters: [isnotnull($attr), ($attr = 2021-01-05)]"
 
             Assertions.assertTrue(executionPlan.toString().contains(expectedPhysicalPlanPartitionFiltersClause))
           }
@@ -204,7 +201,7 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
           // table have to be listed
           listingModeOverride match {
             case "eager" | "lazy" =>
-              assertEquals(1275, lr.stats.sizeInBytes.longValue() / 1024)
+              assertEquals(1275, lr.stats.sizeInBytes.longValue / 1024)
 
             case _ => throw new UnsupportedOperationException()
           }

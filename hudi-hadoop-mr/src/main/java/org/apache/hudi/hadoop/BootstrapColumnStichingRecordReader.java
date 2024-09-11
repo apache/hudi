@@ -18,24 +18,25 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.util.ValidationUtils;
+
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapred.RecordReader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
 
 /**
  * Stitches 2 record reader returned rows and presents a concatenated view to clients.
  */
 public class BootstrapColumnStichingRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
-  private static final Logger LOG = LogManager.getLogger(BootstrapColumnStichingRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapColumnStichingRecordReader.class);
 
   private final RecordReader<NullWritable, ArrayWritable> leftColsRecordReader;
   private final RecordReader<NullWritable, ArrayWritable> rightColsRecordReader;

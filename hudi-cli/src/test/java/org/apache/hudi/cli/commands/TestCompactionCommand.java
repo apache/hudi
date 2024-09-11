@@ -24,10 +24,7 @@ import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.HoodieTestCommitMetadataGenerator;
-import org.apache.hudi.client.HoodieTimelineArchiver;
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
-import org.apache.hudi.common.fs.NoOpConsistencyGuard;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -159,14 +156,12 @@ public class TestCompactionCommand extends CLIFunctionalTestHarness {
     HoodieActiveTimeline activeTimeline = HoodieCLI.getTableMetaClient().reloadActiveTimeline();
     // Create six commits
     Arrays.asList("001", "003", "005", "007").forEach(timestamp -> {
-      activeTimeline.transitionCompactionInflightToComplete(
+      activeTimeline.transitionCompactionInflightToComplete(true,
           new HoodieInstant(HoodieInstant.State.INFLIGHT, COMPACTION_ACTION, timestamp), Option.empty());
     });
     // Simulate a compaction commit in metadata table timeline
     // so the archival in data table can happen
-    HoodieTestUtils.createCompactionCommitInMetadataTable(hadoopConf(),
-        new HoodieWrapperFileSystem(
-            FSUtils.getFs(tablePath, hadoopConf()), new NoOpConsistencyGuard()), tablePath, "007");
+    HoodieTestUtils.createCompactionCommitInMetadataTable(storageConf(), tablePath, "007");
   }
 
   private void generateArchive() throws IOException {

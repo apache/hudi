@@ -257,3 +257,4 @@ volumes:
 
 networks:
   default:
+     name: hudi

@@ -20,7 +20,6 @@ package org.apache.spark.sql.hudi.streaming
 import com.fasterxml.jackson.annotation.JsonInclude.Include
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 

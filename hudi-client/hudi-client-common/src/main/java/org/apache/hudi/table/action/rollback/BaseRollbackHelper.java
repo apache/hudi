@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table.action.rollback;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -35,8 +33,11 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -55,7 +56,8 @@ import java.util.stream.Stream;
  */
 public class BaseRollbackHelper implements Serializable {
 
-  private static final Logger LOG = LogManager.getLogger(BaseRollbackHelper.class);
+  private static final long serialVersionUID = 1L;
+  private static final Logger LOG = LoggerFactory.getLogger(BaseRollbackHelper.class);
   protected static final String EMPTY_STRING = "";
 
   protected final HoodieTableMetaClient metaClient;
@@ -83,7 +85,7 @@ public class BaseRollbackHelper implements Serializable {
   }
 
   /**
-   * Collect all file info that needs to be rollbacked.
+   * Collect all file info that needs to be rolled back.
    */
   public List<HoodieRollbackStat> collectRollbackStats(HoodieEngineContext context, HoodieInstant instantToRollback,
                                                        List<HoodieRollbackRequest> rollbackRequests) {
@@ -120,16 +122,15 @@ public class BaseRollbackHelper implements Serializable {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final Path filePath;
+        final StoragePath filePath;
         try {
           String fileId = rollbackRequest.getFileId();
-          String latestBaseInstant = rollbackRequest.getLatestBaseInstant();
 
           writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.getPartitionPath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
+              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
-              .overBaseCommit(latestBaseInstant)
-              .withFs(metaClient.getFs())
+              .withDeltaCommit(instantToRollback.getTimestamp())
+              .withStorage(metaClient.getStorage())
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
 
           // generate metadata
@@ -156,17 +157,17 @@ public class BaseRollbackHelper implements Serializable {
         // This step is intentionally done after writer is closed. Guarantees that
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
-        Map<FileStatus, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getFs().getFileStatus(Objects.requireNonNull(filePath)),
+        Map<StoragePathInfo, Long> filesToNumBlocksRollback = Collections.singletonMap(
+            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)),
             1L
         );
 
         return Collections.singletonList(
-            Pair.of(rollbackRequest.getPartitionPath(),
-                HoodieRollbackStat.newBuilder()
-                    .withPartitionPath(rollbackRequest.getPartitionPath())
-                    .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                    .build()))
+                Pair.of(rollbackRequest.getPartitionPath(),
+                    HoodieRollbackStat.newBuilder()
+                        .withPartitionPath(rollbackRequest.getPartitionPath())
+                        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
+                        .build()))
             .stream();
       } else {
         return Collections.singletonList(
@@ -184,14 +185,14 @@ public class BaseRollbackHelper implements Serializable {
    */
   protected List<HoodieRollbackStat> deleteFiles(HoodieTableMetaClient metaClient, List<String> filesToBeDeleted, boolean doDelete) throws IOException {
     return filesToBeDeleted.stream().map(fileToDelete -> {
-      String basePath = metaClient.getBasePath();
+      String basePath = metaClient.getBasePath().toString();
       try {
-        Path fullDeletePath = new Path(fileToDelete);
-        String partitionPath = FSUtils.getRelativePartitionPath(new Path(basePath), fullDeletePath.getParent());
+        StoragePath fullDeletePath = new StoragePath(fileToDelete);
+        String partitionPath = FSUtils.getRelativePartitionPath(new StoragePath(basePath), fullDeletePath.getParent());
         boolean isDeleted = true;
         if (doDelete) {
           try {
-            isDeleted = metaClient.getFs().delete(fullDeletePath);
+            isDeleted = metaClient.getStorage().deleteFile(fullDeletePath);
           } catch (FileNotFoundException e) {
             // if first rollback attempt failed and retried again, chances that some files are already deleted.
             isDeleted = true;

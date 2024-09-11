@@ -18,7 +18,7 @@
 
 package org.apache.hudi.table.catalog;
 
-import org.apache.hudi.adapter.TestTableEnvs;
+import org.apache.hudi.utils.TestTableEnvs;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.TableEnvironment;

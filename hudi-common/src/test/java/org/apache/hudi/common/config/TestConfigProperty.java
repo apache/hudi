@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -160,5 +161,38 @@ public class TestConfigProperty extends HoodieConfig {
   public void testSetDefaults() {
     setDefaults(this.getClass().getName());
     assertEquals(4, getProps().size());
+  }
+
+  @Test
+  public void testAdvancedValue() {
+    assertFalse(FAKE_BOOLEAN_CONFIG.isAdvanced());
+    assertFalse(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.isAdvanced());
+
+    assertTrue(FAKE_BOOLEAN_CONFIG.markAdvanced().isAdvanced());
+    assertTrue(FAKE_BOOLEAN_CONFIG_NO_DEFAULT.markAdvanced().isAdvanced());
+  }
+
+  @EnumDescription("Test enum description.")
+  public enum TestEnum {
+    @EnumFieldDescription("Test val a")
+    TEST_VAL_A,
+
+    @EnumFieldDescription("Test val b")
+    TEST_VAL_B,
+
+    @EnumFieldDescription("Other val")
+    OTHER_VAL
+  }
+
+  @Test
+  void testEnumConfigs() {
+    ConfigProperty<String> testConfig = ConfigProperty.key("test.config")
+        .defaultValue(TestEnum.TEST_VAL_B.name())
+        .withDocumentation(TestEnum.class);
+    String[] lines = testConfig.doc().split("\n");
+    assertEquals("org.apache.hudi.common.config.TestConfigProperty$TestEnum: Test enum description.", lines[0]);
+    assertEquals("    TEST_VAL_A: Test val a", lines[1]);
+    assertEquals("    TEST_VAL_B(default): Test val b", lines[2]);
+    assertEquals("    OTHER_VAL: Other val", lines[3]);
   }
 }

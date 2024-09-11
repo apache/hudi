@@ -17,10 +17,12 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.SerializableConfiguration
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+
+import org.apache.hadoop.fs.Path
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.spark.api.java.JavaRDD
@@ -31,7 +33,9 @@ import java.util.function.Supplier
 
 class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
   private val PARAMETERS = Array[ProcedureParameter](
-    ProcedureParameter.required(0, "path", DataTypes.StringType, None)
+    ProcedureParameter.required(0, "path", DataTypes.StringType),
+    ProcedureParameter.optional(1, "limit", DataTypes.IntegerType, 100),
+    ProcedureParameter.optional(2, "needDelete", DataTypes.BooleanType, false)
   )
 
   private val OUTPUT_TYPE = new StructType(Array[StructField](
@@ -46,26 +50,44 @@ class ShowInvalidParquetProcedure extends BaseProcedure with ProcedureBuilder {
     super.checkArgs(PARAMETERS, args)
 
     val srcPath = getArgValueOrDefault(args, PARAMETERS(0)).get.asInstanceOf[String]
-    val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), srcPath, false, false)
+    val limit = getArgValueOrDefault(args, PARAMETERS(1))
+    val needDelete = getArgValueOrDefault(args, PARAMETERS(2)).get.asInstanceOf[Boolean]
+    val storageConf = HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration())
+    val storage = new HoodieHadoopStorage(srcPath, storageConf)
+    val partitionPaths: java.util.List[String] = FSUtils.getAllPartitionPaths(
+      new HoodieSparkEngineContext(jsc), storage, srcPath, false)
     val javaRdd: JavaRDD[String] = jsc.parallelize(partitionPaths, partitionPaths.size())
-    val serHadoopConf = new SerializableConfiguration(jsc.hadoopConfiguration())
-    javaRdd.rdd.map(part => {
-      val fs = FSUtils.getFs(new Path(srcPath), serHadoopConf.get())
-      FSUtils.getAllDataFilesInPartition(fs, FSUtils.getPartitionPath(srcPath, part))
+    val parquetRdd = javaRdd.rdd.map(part => {
+        val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+        HadoopFSUtils.getAllDataFilesInPartition(fs, HadoopFSUtils.constructAbsolutePathInHadoopPath(srcPath, part))
     }).flatMap(_.toList)
       .filter(status => {
         val filePath = status.getPath
         var isInvalid = false
         if (filePath.toString.endsWith(".parquet")) {
-          try ParquetFileReader.readFooter(serHadoopConf.get(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
+          try ParquetFileReader.readFooter(storageConf.unwrap(), filePath, SKIP_ROW_GROUPS).getFileMetaData catch {
             case e: Exception =>
               isInvalid = e.getMessage.contains("is not a Parquet file")
+              if (isInvalid && needDelete) {
+                val fs = HadoopFSUtils.getFs(new Path(srcPath), storageConf.unwrap())
+                try {
+                  isInvalid = !fs.delete(filePath, false)
+                } catch {
+                  case ex: Exception =>
+                    isInvalid = true
+                }
+              }
           }
         }
         isInvalid
       })
       .map(status => Row(status.getPath.toString))
-      .collect()
+    if (limit.isDefined) {
+      parquetRdd.take(limit.get.asInstanceOf[Int])
+    } else {
+      parquetRdd.collect()
+    }
+
   }
 
   override def build = new ShowInvalidParquetProcedure()
@@ -78,6 +100,3 @@ object ShowInvalidParquetProcedure {
     override def get(): ProcedureBuilder = new ShowInvalidParquetProcedure()
   }
 }
-
-
-

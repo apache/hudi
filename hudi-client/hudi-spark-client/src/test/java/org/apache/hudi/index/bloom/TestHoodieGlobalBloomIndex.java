@@ -19,7 +19,6 @@
 package org.apache.hudi.index.bloom;
 
 import org.apache.hudi.client.functional.TestHoodieMetadataBase;
-import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
@@ -31,12 +30,12 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -62,7 +61,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
@@ -72,7 +70,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
   public void setUp() throws Exception {
     initSparkContexts();
     initPath();
-    initFileSystem();
+    initHoodieStorage();
     initMetaClient();
     HoodieIndexConfig.Builder indexBuilder = HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
@@ -133,8 +131,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
 
     final String c1 = "20160401010101";
-    Path baseFilePath = testTable.forCommit(c1).withInserts(p2, fileId2, Collections.emptyList());
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(c1)
+        .withInserts(p2, fileId2, Collections.emptyList());
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p2,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(c1, WriteOperationType.UPSERT, Collections.singletonList(p2),
@@ -143,18 +142,18 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     final String c2 = "20150312101010";
     testTable.forCommit(c2);
     baseFilePath = testTable.withInserts(p3, fileId1, Collections.emptyList());
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
 
     baseFilePath = testTable.withInserts(p3, fileId3, Collections.singletonList(record1));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
 
     baseFilePath = testTable.withInserts(p3, fileId4, Arrays.asList(record2, record3, record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(p3,
         k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
 
@@ -230,7 +229,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
-            .withBloomIndexUpdatePartitionPath(false)
+            .withGlobalBloomIndexUpdatePartitionPath(false)
             .build())
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
@@ -278,16 +277,18 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
 
     // intentionally missed the partition "2015/03/12" to see if the GlobalBloomIndex can pick it up
     String commitTime = "0000001";
-    Path baseFilePath = testTable.forCommit(commitTime).withInserts(partition2, fileId1, Collections.singletonList(record1));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    StoragePath baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition2, fileId1, Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.computeIfAbsent(partition2,
         k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
     testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList(partition2),
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000002";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId2, Collections.emptyList());
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath =
+        testTable.forCommit(commitTime).withInserts(partition3, fileId2, Collections.emptyList());
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId2, Integer.valueOf((int) baseFileLength)));
@@ -295,8 +296,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000003";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId3, Collections.singletonList(record2));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition3, fileId3, Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId3, Integer.valueOf((int) baseFileLength)));
@@ -304,8 +306,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         partitionToFilesNameLengthMap, false, false);
 
     commitTime = "0000004";
-    baseFilePath = testTable.forCommit(commitTime).withInserts(partition3, fileId4, Collections.singletonList(record4));
-    baseFileLength = fs.getFileStatus(baseFilePath).getLen();
+    baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition3, fileId4, Collections.singletonList(record4));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
     partitionToFilesNameLengthMap.clear();
     partitionToFilesNameLengthMap.computeIfAbsent(partition3,
         k -> new ArrayList<>()).add(Pair.of(fileId4, Integer.valueOf((int) baseFileLength)));
@@ -345,100 +348,9 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     }
   }
 
-  @Test
-  public void testTagLocationWhenShouldUpdatePartitionPath() throws Exception {
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .withIndexType(HoodieIndex.IndexType.GLOBAL_BLOOM)
-            .withBloomIndexUpdatePartitionPath(true)
-            .build())
-        .build();
-    HoodieGlobalBloomIndex index =
-        new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
-    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
-    final String p1 = "2016/01/31";
-    final String p2 = "2016/02/28";
-
-    // Create the original partition, and put a record, along with the meta file
-    // "2016/01/31": 1 file (1_0_20160131101010.parquet)
-    // this record will be saved in table and will be tagged to an empty record
-    RawTripTestPayload originalPayload =
-        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord originalRecord =
-        new HoodieAvroRecord(new HoodieKey(originalPayload.getRowKey(), originalPayload.getPartitionPath()),
-            originalPayload);
-
-    /*
-    This record has the same record key as originalRecord but different time so different partition
-    Because GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
-    globalBloomIndex should
-     - tag the original partition of the originalRecord to an empty record for deletion, and
-     - tag the new partition of the incomingRecord
-    */
-    RawTripTestPayload incomingPayload =
-        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-02-28T03:16:41.415Z\",\"number\":12}");
-    HoodieRecord incomingRecord =
-        new HoodieAvroRecord(new HoodieKey(incomingPayload.getRowKey(), incomingPayload.getPartitionPath()),
-            incomingPayload);
-
-    /*
-    This record has the same record key as originalRecord and the same partition
-    Though GLOBAL_BLOOM_INDEX_SHOULD_UPDATE_PARTITION_PATH = true,
-    globalBloomIndex should just tag the original partition
-    */
-    RawTripTestPayload incomingPayloadSamePartition =
-        new RawTripTestPayload("{\"_row_key\":\"000\",\"time\":\"2016-01-31T04:16:41.415Z\",\"number\":15}");
-    HoodieRecord incomingRecordSamePartition =
-        new HoodieAvroRecord(
-            new HoodieKey(incomingPayloadSamePartition.getRowKey(), incomingPayloadSamePartition.getPartitionPath()),
-            incomingPayloadSamePartition);
-
-    final String fileId1 = UUID.randomUUID().toString();
-    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
-
-    final String commitTime = "0000001";
-    Path baseFilePath = testTable.forCommit(commitTime).withInserts(p1, fileId1, Collections.singletonList(originalRecord));
-    long baseFileLength = fs.getFileStatus(baseFilePath).getLen();
-    partitionToFilesNameLengthMap.computeIfAbsent(p1,
-        k -> new ArrayList<>()).add(Pair.of(fileId1, Integer.valueOf((int) baseFileLength)));
-    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(p1),
-        partitionToFilesNameLengthMap, false, false);
-
-    // test against incoming record with a different partition
-    JavaRDD<HoodieRecord> recordRDD = jsc.parallelize(Collections.singletonList(incomingRecord));
-    JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
-
-    assertEquals(2, taggedRecordRDD.count());
-    for (HoodieRecord record : taggedRecordRDD.collect()) {
-      switch (record.getPartitionPath()) {
-        case p1:
-          assertEquals("000", record.getRecordKey());
-          assertTrue(record.getData() instanceof EmptyHoodieRecordPayload);
-          break;
-        case p2:
-          assertEquals("000", record.getRecordKey());
-          assertEquals(incomingPayload.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
-          break;
-        default:
-          fail(String.format("Should not get partition path: %s", record.getPartitionPath()));
-      }
-    }
-
-    // test against incoming record with the same partition
-    JavaRDD<HoodieRecord> recordRDDSamePartition = jsc
-        .parallelize(Collections.singletonList(incomingRecordSamePartition));
-    JavaRDD<HoodieRecord> taggedRecordRDDSamePartition = tagLocation(index, recordRDDSamePartition, hoodieTable);
-
-    assertEquals(1, taggedRecordRDDSamePartition.count());
-    HoodieRecord record = taggedRecordRDDSamePartition.first();
-    assertEquals("000", record.getRecordKey());
-    assertEquals(p1, record.getPartitionPath());
-    assertEquals(incomingPayloadSamePartition.getJsonData(), ((RawTripTestPayload) record.getData()).getJsonData());
-  }
-
-  // convert list to map to avoid sorting order dependencies
+  /**
+   * convert list to map to avoid sorting order dependencies
+   */
   private static Map<String, BloomIndexFileInfo> toFileMap(List<Pair<String, BloomIndexFileInfo>> filesList) {
     Map<String, BloomIndexFileInfo> filesMap = new HashMap<>();
     for (Pair<String, BloomIndexFileInfo> t : filesList) {

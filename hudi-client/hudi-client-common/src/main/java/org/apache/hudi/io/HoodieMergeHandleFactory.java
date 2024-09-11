@@ -27,6 +27,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Iterator;
 import java.util.Map;
 
@@ -34,6 +37,7 @@ import java.util.Map;
  * Factory class for hoodie merge handle.
  */
 public class HoodieMergeHandleFactory {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieMergeHandleFactory.class);
   /**
    * Creates a merge handle for normal write path.
    */
@@ -47,6 +51,7 @@ public class HoodieMergeHandleFactory {
       String fileId,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
+    LOG.info("Create update handle for fileId {} and partition path {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       if (table.getMetaClient().getTableConfig().isCDCEnabled()) {
         return new HoodieSortedMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, taskContextSupplier,
@@ -79,8 +84,15 @@ public class HoodieMergeHandleFactory {
       HoodieBaseFile dataFileToBeMerged,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
+    LOG.info("Get updateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
     if (table.requireSortedRecords()) {
       return new HoodieSortedMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
+          dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+    } else if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      // IMPORTANT: only index type that yields pure log files need to enable the cdc log files for compaction,
+      // index type such as the BLOOM does not need this because it would do delta merge for inserts and generates log for updates,
+      // both of these two cases are already handled in HoodieCDCExtractor.
+      return new HoodieMergeHandleWithChangeLog<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,
           dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     } else {
       return new HoodieMergeHandle<>(writeConfig, instantTime, table, keyToNewRecords, partitionPath, fileId,

@@ -19,15 +19,18 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.SortUtils;
+import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.config.HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS;
 
 /**
  * A partitioner that does sorting based on specified column values for Java client.
@@ -40,25 +43,29 @@ public class JavaCustomColumnsSortPartitioner<T>
   private final String[] sortColumnNames;
   private final Schema schema;
   private final boolean consistentLogicalTimestampEnabled;
+  private final boolean suffixRecordKey;
 
-  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, boolean consistentLogicalTimestampEnabled) {
+  public JavaCustomColumnsSortPartitioner(String[] columnNames, Schema schema, HoodieWriteConfig config) {
     this.sortColumnNames = columnNames;
     this.schema = schema;
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
+    this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
+    this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
   }
 
   @Override
   public List<HoodieRecord<T>> repartitionRecords(
       List<HoodieRecord<T>> records, int outputPartitions) {
-    return records.stream().sorted((o1, o2) -> {
-      Object values1 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o1, sortColumnNames, schema, consistentLogicalTimestampEnabled);
-      Object values2 = HoodieAvroUtils.getRecordColumnValues((HoodieAvroRecord)o2, sortColumnNames, schema, consistentLogicalTimestampEnabled);
-      return values1.toString().compareTo(values2.toString());
-    }).collect(Collectors.toList());
+    return records.stream()
+        .sorted((o1, o2) -> getComparableSortColumns(o1).compareTo(getComparableSortColumns(o2)))
+        .collect(Collectors.toList());
   }
 
   @Override
   public boolean arePartitionRecordsSorted() {
     return true;
+  }
+
+  FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(HoodieRecord record) {
+    return SortUtils.getComparableSortColumns(record, sortColumnNames, schema, suffixRecordKey, consistentLogicalTimestampEnabled);
   }
 }

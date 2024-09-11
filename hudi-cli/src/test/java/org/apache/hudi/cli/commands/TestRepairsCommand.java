@@ -38,15 +38,19 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.RawTripTestPayload;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.SQLContext;
@@ -57,8 +61,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.shell.Shell;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.core.Logger;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -105,7 +107,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   public void init() throws IOException {
     String tableName = tableName();
     tablePath = tablePath(tableName);
-    fs = FSUtils.getFs(tablePath, hadoopConf());
+    fs = HadoopFSUtils.getFs(tablePath, storageConf());
 
     // Create table and connect
     new TableCommand().createTable(
@@ -139,7 +141,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
     // expected all 'No'.
-    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath)
+    String[][] rows = FSUtils.getAllPartitionFoldersThreeLevelsDown(new HoodieHadoopStorage(fs), tablePath)
         .stream()
         .map(partition -> new String[] {partition, "No", "None"})
         .toArray(String[][]::new);
@@ -169,7 +171,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
     Object result = shell.evaluate(() -> "repair addpartitionmeta --dryrun false");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
 
-    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(fs, tablePath);
+    List<String> paths = FSUtils.getAllPartitionFoldersThreeLevelsDown(new HoodieHadoopStorage(fs), tablePath);
     // after dry run, the action will be 'Repaired'
     String[][] rows = paths.stream()
         .map(partition -> new String[] {partition, "No", "Repaired"})
@@ -239,9 +241,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testRemoveCorruptedPendingCleanAction() throws IOException {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
-    Configuration conf = HoodieCLI.conf;
+    StorageConfiguration<?> conf = HoodieCLI.conf;
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -271,9 +273,9 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
    */
   @Test
   public void testShowFailedCommits() {
-    HoodieCLI.conf = hadoopConf();
+    HoodieCLI.conf = storageConf();
 
-    Configuration conf = HoodieCLI.conf;
+    StorageConfiguration<?> conf = HoodieCLI.conf;
 
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
 
@@ -285,7 +287,11 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
     metaClient.getActiveTimeline().getInstantsAsStream().filter(hoodieInstant -> Integer.parseInt(hoodieInstant.getTimestamp()) % 4 == 0).forEach(hoodieInstant -> {
       metaClient.getActiveTimeline().deleteInstantFileIfExists(hoodieInstant);
-      metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
+      if (hoodieInstant.isCompleted()) {
+        metaClient.getActiveTimeline().createCompleteInstant(hoodieInstant);
+      } else {
+        metaClient.getActiveTimeline().createNewInstant(hoodieInstant);
+      }
     });
 
     final TestLogAppender appender = new TestLogAppender();
@@ -321,7 +327,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
@@ -389,7 +395,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
         .setPartitionFields("partition_path")
         .setRecordKeyFields("_row_key")
         .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
-        .initTable(HoodieCLI.conf, tablePath);
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
 
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(tablePath).withSchema(TRIP_EXAMPLE_SCHEMA).build();
@@ -420,7 +426,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
 
       // all records from old partition should have been migrated to new partition
       totalRecs = sqlContext.read().format("hudi").load(tablePath)
-          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == '" + "2016/03/18" + "'").count();
+          .filter(HoodieRecord.PARTITION_PATH_METADATA_FIELD + " == \"" + "2016/03/18" + "\"").count();
       assertEquals(totalRecs, totalRecsInOldPartition);
     }
   }

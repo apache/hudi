@@ -18,9 +18,9 @@
 
 package org.apache.hudi.integ.testsuite;
 
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.DagUtils;
 import org.apache.hudi.integ.testsuite.dag.WorkflowDag;
@@ -108,22 +109,28 @@ public class HoodieTestSuiteJob {
     this.cfg = cfg;
     this.jsc = jsc;
     this.stopJsc = stopJsc;
-    cfg.propsFilePath = FSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
-    this.sparkSession = SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
-    this.fs = FSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
-    this.props = UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
+    cfg.propsFilePath = HadoopFSUtils.addSchemeIfLocalPath(cfg.propsFilePath).toString();
+    this.sparkSession =
+        SparkSession.builder().config(jsc.getConf()).enableHiveSupport().getOrCreate();
+    this.fs = HadoopFSUtils.getFs(cfg.inputBasePath, jsc.hadoopConfiguration());
+    this.props =
+        UtilHelpers.readConfig(fs.getConf(), new Path(cfg.propsFilePath), cfg.configs).getProps();
     log.info("Creating workload generator with configs : {}", props.toString());
     this.hiveConf = getDefaultHiveConf(jsc.hadoopConfiguration());
-    this.keyGenerator = (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
+    this.keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
       metaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
+          .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
-          .initTable(jsc.hadoopConfiguration(), cfg.targetBasePath);
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), cfg.targetBasePath);
     } else {
-      metaClient = HoodieTableMetaClient.builder().setConf(jsc.hadoopConfiguration()).setBasePath(cfg.targetBasePath).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(cfg.targetBasePath).build();
     }
 
     if (cfg.cleanInput) {
@@ -186,7 +193,7 @@ public class HoodieTestSuiteJob {
     WorkflowDag workflowDag = this.cfg.workloadYamlPath == null ? ((WorkflowDagGenerator) ReflectionUtils
         .loadClass((this.cfg).workloadDagGenerator)).build()
         : DagUtils.convertYamlPathToDag(
-        FSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
+        HadoopFSUtils.getFs(this.cfg.workloadYamlPath, jsc.hadoopConfiguration(), true),
         this.cfg.workloadYamlPath);
     return workflowDag;
   }
@@ -318,7 +325,7 @@ public class HoodieTestSuiteJob {
     public Boolean useHudiToGenerateUpdates = false;
 
     @Parameter(names = {"--test-continuous-mode"}, description = "Tests continuous mode in deltastreamer.")
-    public Boolean testContinousMode = false;
+    public Boolean testContinuousMode = false;
 
     @Parameter(names = {"--enable-presto-validation"}, description = "Enables presto validation")
     public Boolean enablePrestoValidation = false;
@@ -348,7 +355,7 @@ public class HoodieTestSuiteJob {
     @Parameter(names = {"--index-type"}, description = "Index type to use for writes")
     public String indexType = "SIMPLE";
 
-    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enable's metadata for queries")
+    @Parameter(names = {"--enable-metadata-on-read"}, description = "Enables metadata for queries")
     public Boolean enableMetadataOnRead = HoodieMetadataConfig.ENABLE.defaultValue();
   }
 }

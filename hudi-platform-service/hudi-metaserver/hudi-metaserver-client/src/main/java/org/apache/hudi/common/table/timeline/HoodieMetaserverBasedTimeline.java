@@ -18,8 +18,6 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,6 +26,8 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClient;
 import org.apache.hudi.metaserver.client.HoodieMetaserverClientProxy;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 /**
  * Active timeline for hoodie table whose metadata is stored in the hoodie meta server instead of file system.
@@ -51,16 +51,21 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   }
 
   @Override
-  public void transitionState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
+  protected void transitionStateToComplete(boolean shouldLock, HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data) {
+    ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
+    metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
+  }
+
+  @Override
+  public void transitionPendingState(HoodieInstant fromInstant, HoodieInstant toInstant, Option<byte[]> data, boolean allowRedundantTransitions) {
     ValidationUtils.checkArgument(fromInstant.getTimestamp().equals(toInstant.getTimestamp()));
     metaserverClient.transitionInstantState(databaseName, tableName, fromInstant, toInstant, data);
   }
 
   @Override
   public void createFileInMetaPath(String filename, Option<byte[]> content, boolean allowOverwrite) {
-    FileStatus status = new FileStatus();
-    status.setPath(new Path(filename));
-    HoodieInstant instant = new HoodieInstant(status);
+    StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(filename), 0, false, (short) 0, 0, 0);
+    HoodieInstant instant = new HoodieInstant(pathInfo);
     ValidationUtils.checkArgument(instant.getState().equals(HoodieInstant.State.REQUESTED));
     metaserverClient.createNewInstant(databaseName, tableName, instant, Option.empty());
   }
@@ -71,15 +76,28 @@ public class HoodieMetaserverBasedTimeline extends HoodieActiveTimeline {
   }
 
   @Override
-  protected Option<byte[]> readDataFromPath(Path detailPath) {
-    FileStatus status = new FileStatus();
-    status.setPath(detailPath);
-    HoodieInstant instant = new HoodieInstant(status);
+  protected Option<byte[]> readDataFromPath(StoragePath detailPath) {
+    StoragePathInfo pathInfo = new StoragePathInfo(detailPath, 0, false, (short) 0, 0, 0);
+    HoodieInstant instant = new HoodieInstant(pathInfo);
     return metaserverClient.getInstantMetadata(databaseName, tableName, instant);
   }
 
   @Override
   public HoodieMetaserverBasedTimeline reload() {
     return new HoodieMetaserverBasedTimeline(metaClient, metaClient.getMetaserverConfig());
+  }
+
+  /**
+   * Completion time is essential for {@link HoodieActiveTimeline},
+   * TODO [HUDI-6883] We should change HoodieMetaserverBasedTimeline to store completion time as well.
+   */
+  @Override
+  protected String getInstantFileName(HoodieInstant instant) {
+    if (instant.isCompleted()) {
+      // Set a fake completion time.
+      return instant.getFileName("0").replace("_0", "");
+    }
+
+    return instant.getFileName();
   }
 }

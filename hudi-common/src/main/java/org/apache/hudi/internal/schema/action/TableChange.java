@@ -83,10 +83,16 @@ public interface TableChange {
     protected final InternalSchema internalSchema;
     protected final Map<Integer, Integer> id2parent;
     protected final Map<Integer, ArrayList<ColumnPositionChange>> positionChangeMap = new HashMap<>();
+    protected final boolean caseSensitive;
 
     BaseColumnChange(InternalSchema schema) {
+      this(schema, false);
+    }
+
+    BaseColumnChange(InternalSchema schema, boolean caseSensitive) {
       this.internalSchema = schema;
       this.id2parent = InternalSchemaBuilder.getBuilder().index2Parents(schema.getRecord());
+      this.caseSensitive = caseSensitive;
     }
 
     /**
@@ -157,9 +163,9 @@ public interface TableChange {
     protected abstract Integer findIdByFullName(String fullName);
 
     // Modify hudi meta columns is prohibited
-    protected void checkColModifyIsLegal(String colNeedToModfiy) {
-      if (HoodieRecord.HOODIE_META_COLUMNS.stream().anyMatch(f -> f.equalsIgnoreCase(colNeedToModfiy))) {
-        throw new IllegalArgumentException(String.format("cannot modify hudi meta col: %s", colNeedToModfiy));
+    protected void checkColModifyIsLegal(String colNeedToModify) {
+      if (HoodieRecord.HOODIE_META_COLUMNS.stream().anyMatch(f -> f.equalsIgnoreCase(colNeedToModify))) {
+        throw new IllegalArgumentException(String.format("cannot modify hudi meta col: %s", colNeedToModify));
       }
     }
 

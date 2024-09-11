@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -25,7 +26,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
@@ -40,38 +43,40 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.mapred.JobConf;
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
  * Record Reader implementation to merge fresh avro data with base parquet data, to support real time queries.
  */
 public abstract class AbstractRealtimeRecordReader {
-  private static final Logger LOG = LogManager.getLogger(AbstractRealtimeRecordReader.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractRealtimeRecordReader.class);
 
   protected final RealtimeSplit split;
   protected final JobConf jobConf;
   protected final boolean usesCustomPayload;
-  protected Properties payloadProps = new Properties();
+  protected TypedProperties payloadProps = new TypedProperties();
   // Schema handles
   private Schema readerSchema;
   private Schema writerSchema;
   private Schema hiveSchema;
-  private HoodieTableMetaClient metaClient;
+  private final HoodieTableMetaClient metaClient;
   protected SchemaEvolutionContext schemaEvolutionContext;
   // support merge operation
-  protected boolean supportPayload = true;
+  protected boolean supportPayload;
   // handle hive type to avro record
   protected HiveAvroSerializer serializer;
+  private boolean supportTimestamp;
 
   public AbstractRealtimeRecordReader(RealtimeSplit split, JobConf job) {
     this.split = split;
@@ -81,12 +86,18 @@ public abstract class AbstractRealtimeRecordReader {
     LOG.info("partitioningColumns ==> " + job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, ""));
     this.supportPayload = Boolean.parseBoolean(job.get("hoodie.support.payload", "true"));
     try {
-      metaClient = HoodieTableMetaClient.builder().setConf(jobConf).setBasePath(split.getBasePath()).build();
+      metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jobConf)).setBasePath(split.getBasePath()).build();
+      payloadProps.putAll(metaClient.getTableConfig().getProps(true));
       if (metaClient.getTableConfig().getPreCombineField() != null) {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+
+      // get timestamp columns
+      supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
+
       schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
       if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
         schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
@@ -129,7 +140,6 @@ public abstract class AbstractRealtimeRecordReader {
       LOG.warn("fall to init HiveAvroSerializer to support payload merge", e);
       this.supportPayload = false;
     }
-
   }
 
   /**
@@ -147,11 +157,11 @@ public abstract class AbstractRealtimeRecordReader {
         partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
             : new ArrayList<>();
     writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
-    List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR),
-        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), partitioningFields);
+    List<String> projectionFields = HoodieRealtimeRecordReaderUtils.orderFields(jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, EMPTY_STRING),
+        jobConf.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, EMPTY_STRING), partitioningFields);
 
     Map<String, Field> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
-    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS));
+    hiveSchema = constructHiveOrderedSchema(writerSchema, schemaFieldsMap, jobConf.get(hive_metastoreConstants.META_TABLE_COLUMNS, EMPTY_STRING));
     // TODO(vc): In the future, the reader schema should be updated based on log files & be able
     // to null out fields not present before
 
@@ -161,7 +171,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {
-    String[] hiveColumns = hiveColumnString.split(",");
+    String[] hiveColumns = hiveColumnString.isEmpty() ? new String[0] : hiveColumnString.split(",");
     LOG.info("Hive Columns : " + hiveColumnString);
     List<Field> hiveSchemaFields = new ArrayList<>();
 
@@ -198,6 +208,10 @@ public abstract class AbstractRealtimeRecordReader {
 
   public Schema getHiveSchema() {
     return hiveSchema;
+  }
+
+  public boolean isSupportTimestamp() {
+    return supportTimestamp;
   }
 
   public RealtimeSplit getSplit() {

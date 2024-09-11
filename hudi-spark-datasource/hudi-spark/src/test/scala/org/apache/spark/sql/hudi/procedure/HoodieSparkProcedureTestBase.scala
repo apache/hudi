@@ -17,10 +17,24 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.spark.sql.hudi.HoodieSparkSqlTestBase
+import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.execution.columnar.InMemoryRelation
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class HoodieSparkProcedureTestBase extends HoodieSparkSqlTestBase {
   override def generateTableName: String = {
     s"default.${super.generateTableName}"
+  }
+
+  def assertCached(query: Dataset[_], numCachedTables: Int = 1): Unit = {
+    val planWithCaching = query.queryExecution.withCachedData
+    val cachedData = planWithCaching collect {
+      case cached: InMemoryRelation => cached
+    }
+
+    assert(
+      cachedData.size == numCachedTables,
+      s"Expected query to contain $numCachedTables, but it actually had ${cachedData.size}\n" +
+        planWithCaching)
   }
 }

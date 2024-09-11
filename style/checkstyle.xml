@@ -36,6 +36,12 @@
 
     <property name="severity" value="error"/>
 
+    <!-- LineLength module should now be directly under Checker -->
+    <module name="LineLength">
+        <property name="max" value="200"/>
+        <property name="ignorePattern" value="^ *\* *[^ ]+$"/>
+    </module>
+
     <property name="fileExtensions" value="java, properties, xml"/>
     <!-- Checks for whitespace                               -->
     <!-- See http://checkstyle.sf.net/config_whitespace.html -->
@@ -62,10 +68,6 @@
             <property name="allowEscapesForControlCharacters" value="true"/>
             <property name="allowByTailComment" value="true"/>
             <property name="allowNonPrintableEscapes" value="true"/>
-        </module>
-        <module name="LineLength">
-            <property name="max" value="200"/>
-            <property name="ignorePattern" value="^ *\* *[^ ]+$"/>
         </module>
         <module name="OneTopLevelClass"/>
         <module name="NoLineWrap"/>
@@ -267,7 +269,8 @@
         <module name="CommentsIndentation"/>
         <module name="IllegalImport">
             <property name="regexp" value="true"/>
-            <property name="illegalPkgs" value="org\.apache\.commons, com\.google\.common"/>
+            <property name="illegalPkgs"
+                      value="org\.apache\.commons, com\.google\.common, org\.apache\.log4j, org\.codehaus\.jackson"/>
             <property name="illegalClasses"
               value="^java\.util\.Optional, ^org\.junit\.(?!jupiter|platform|contrib|Rule|runner)(.*)"/>
         </module>
