@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
-import org.apache.hudi.common.util.StringUtils
+import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -212,7 +212,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       val (recordName, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(table.identifier.table)
       val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (tableConfigs.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())) {
-        tableConfigs(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key())
+        ConfigUtils.getStringWithAltKeys(tableConfigs.asJava.asInstanceOf[java.util.Map[String, Object]], KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
       } else if (table.partitionColumnNames.isEmpty) {
         null
       } else {
@@ -315,7 +315,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
           KeyGeneratorType.valueOf(originTableConfig(HoodieTableConfig.KEY_GENERATOR_TYPE.key)).getClassName)
     } else {
       val primaryKeys = table.properties.getOrElse(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName, table.storage.properties.get(SQL_KEY_TABLE_PRIMARY_KEY.sqlKeyName)).toString
-      val partitionFieldsOpt = originTableConfig.get(HoodieTableConfig.PARTITION_FIELDS.key)
+      val partitionFieldsOpt = Option.apply(ConfigUtils.getStringWithAltKeys(originTableConfig.asJava.asInstanceOf[java.util.Map[String, Object]], HoodieTableConfig.PARTITION_FIELDS))
         .orElse(sqlOptions.get(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()))
       val partitions = partitionFieldsOpt.getOrElse(table.partitionColumnNames.mkString(","))
       extraConfig(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key) =
