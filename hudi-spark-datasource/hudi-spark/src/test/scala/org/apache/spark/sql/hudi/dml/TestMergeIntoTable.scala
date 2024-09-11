@@ -343,7 +343,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   test("Test MergeInto with changing partition and global index") {
     withRecordType()(withTempDir { tmp =>
       withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
-        Seq("cow", "mor").foreach { tableType => {
+        Seq("cow","mor").foreach { tableType => {
           val sourceTable = generateTableName
           val targetTable = generateTableName
           spark.sql(
@@ -440,7 +440,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
                |    'primaryKey' = 'id',
                |    'type' = '$tableType',
                |    'payloadClass' = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload',
-               |    'payloadType' = 'CUSTOM'
+               |    'payloadType' = 'CUSTOM',
+               |    'preCombineField' = 'version',
+               |    "hoodie.simple.index.update.partition.path" = "false",
+               |    "hoodie.index.type" = "GLOBAL_SIMPLE"
                | )
                | location '${tmp.getCanonicalPath}/$targetTable'
              """.stripMargin)
