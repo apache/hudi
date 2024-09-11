@@ -119,13 +119,23 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.recordBuffer = this.logFiles.isEmpty()
-        ? null
-        : isSkipMerge
-        ? new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props)
-        : shouldUseRecordPosition
-        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props)
-        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, recordMerger, props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
+  }
+
+  /**
+   * Initialize correct record buffer
+   */
+  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieRecordMerger recordMerger,
+                                                             TypedProperties props, boolean hasNoLogFiles, boolean isSkipMerge, boolean shouldUseRecordPosition) {
+    if (hasNoLogFiles) {
+      return null;
+    } else if (isSkipMerge) {
+      return new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    } else if (shouldUseRecordPosition) {
+      return new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    } else {
+      return new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    }
   }
 
   /**
