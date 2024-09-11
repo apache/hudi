@@ -301,6 +301,10 @@ public abstract class HoodieLogBlock {
     return Option.of(content);
   }
 
+  protected Supplier<SeekableDataInputStream> getInputStreamSupplier() {
+    return inputStreamSupplier;
+  }
+
   /**
    * When lazyReading of blocks is turned on, inflate the content of a log block from disk.
    */
