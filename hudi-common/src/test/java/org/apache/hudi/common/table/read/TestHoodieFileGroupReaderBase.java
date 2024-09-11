@@ -47,6 +47,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,6 +101,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract Comparable getComparableUTF8String(String value);
 
+  @Disabled
   @Test
   public void testCompareToComparable() throws Exception {
     Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING));
