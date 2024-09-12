@@ -63,7 +63,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -91,7 +90,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     writeConfigs.put("hoodie.compact.inline", "false");
     writeConfigs.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true");
     writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getRecordPayloadForMergeMode(mergeMode));
-    commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+    commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
 
     String[] partitionPaths = dataGen.getPartitionPaths();
     String[] partitionValues = new String[1];
@@ -120,11 +119,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         readerState.setRecordMerger(new CustomMerger());
         break;
       case EVENT_TIME_ORDERING:
-        readerState.setRecordMerger(new HoodieSparkRecordMerger());
+        readerState.setRecordMerger(new DefaultSparkRecordMerger());
         break;
       case OVERWRITE_WITH_LATEST:
       default:
-        readerState.setRecordMerger(new OverwriteWithLatestSparkMerger());
+        readerState.setRecordMerger(new OverwriteWithLatestSparkRecordMerger());
         break;
     }
     readerState.setSchemaHandler(new HoodiePositionBasedSchemaHandler(readerState, avroSchema, avroSchema, Option.empty()));

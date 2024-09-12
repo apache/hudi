@@ -19,9 +19,11 @@
 
 package org.apache.hudi.functional
 
+import org.apache.avro.Schema
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
@@ -107,11 +109,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                    | INSERT INTO $tableName
                    | SELECT * from ${tableName}_source
                    | """.stripMargin)
-              val sqlStr = if (extractPartition) {
-                s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-              } else {
-                s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-              }
+              val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
               validateResults(
                 tableName,
                 sqlStr,
@@ -243,6 +241,9 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                   Seq(100, "a100", "299.0", 1706800227, "cat10")
                 )
               }
+
+              // Validate ts field is still of type int in the table
+              validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
             }
           }
         }
@@ -325,6 +326,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
             testSecondRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testSecondRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
+
+            // Validate ts field is still of type int in the table
+            validateTsFieldSchema(tablePathCustom1, "ts", Schema.Type.INT)
+            validateTsFieldSchema(tablePathCustom2, "ts", Schema.Type.INT)
           }
           }
         }
@@ -386,10 +391,62 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
             // INSERT INTO should succeed now
             testFirstRoundInserts(tableName, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
           }
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
         }
         }
       }
     }
+  }
+
+  test("Test query with custom key generator") {
+    for (extractPartition <- Seq(true, false)) {
+      withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
+        withTempDir { tmp => {
+          val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
+          val writePartitionFields = "ts:timestamp"
+          val dateFormat = "yyyy/MM/dd"
+          val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+          val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
+          val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+
+          prepareTableWithKeyGenerator(
+            tableName, tablePath, "MERGE_ON_READ",
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
+
+          createTableWithSql(tableName, tablePath,
+            s"hoodie.datasource.write.partitionpath.field = '$writePartitionFields', "
+              + keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+          testFirstRoundInserts(tableName, extractPartition, tsGenFunc, customPartitionFunc)
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from $tableName
+               | """.stripMargin).count())
+          val incrementalDF = spark.read.format("hudi").
+            option("hoodie.datasource.query.type", "incremental").
+            option("hoodie.datasource.read.begin.instanttime", 0).
+            load(tablePath)
+          incrementalDF.createOrReplaceTempView("tbl_incremental")
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from tbl_incremental
+               | """.stripMargin).count())
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+        }
+        }
+      }
+    }
+  }
+
+  private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: Schema.Type): Unit = {
+    val metaClient = createMetaClient(spark, tablePath)
+    val schemaResolver = new TableSchemaResolver(metaClient)
+    val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
+    assertEquals(nullableSchema, schemaResolver.getTableAvroSchema(true).getField(fieldName).schema())
   }
 
   private def testFirstRoundInserts(tableName: String,
@@ -403,11 +460,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
          | INSERT INTO $tableName
          | SELECT * from $sourceTableName
          | """.stripMargin)
-    val sqlStr = if (extractPartition) {
-      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-    } else {
-      s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-    }
+    val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
     validateResults(
       tableName,
       sqlStr,
@@ -436,11 +489,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
          | INSERT INTO $tableName
          | SELECT * from $sourceTableName
          | """.stripMargin)
-    val sqlStr = if (extractPartition) {
-      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
-    } else {
-      s"SELECT id, name, cast(price as string), ts, segment from $tableName"
-    }
+    val sqlStr = s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName"
     validateResults(
       tableName,
       sqlStr,
@@ -553,7 +602,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
                               droppedPartitions: Seq[String],
                               expects: Seq[Any]*): Unit = {
     checkAnswer(sql)(
-      expects.map(e => Seq(e(0), e(1), e(2), if (extractPartition) tsGenFunc.apply(e(3).asInstanceOf[Integer]) else e(3), e(4))): _*
+      expects.map(e => Seq(e(0), e(1), e(2), if (extractPartition) tsGenFunc.apply(e(3).asInstanceOf[Integer]) else e(3).toString, e(4))): _*
     )
     val expectedPartitions: Seq[String] = expects
       .map(e => partitionGenFunc.apply(e(3).asInstanceOf[Integer], e(4).asInstanceOf[String]))
@@ -593,6 +642,9 @@ object TestSparkSqlWithCustomKeyGenerator {
   val TS_TO_STRING_FUNC = (tsSeconds: Integer) => tsSeconds.toString
   val TS_FORMATTER_FUNC = (tsSeconds: Integer) => {
     new DateTime(tsSeconds * 1000L).toString(DateTimeFormat.forPattern(DATE_FORMAT_PATTERN))
+  }
+  val TS_FORMATTER_FUNC_WITH_FORMAT = (tsSeconds: Integer, dateFormat: String) => {
+    new DateTime(tsSeconds * 1000L).toString(DateTimeFormat.forPattern(dateFormat))
   }
 
   def getTimestampKeyGenConfigs: Map[String, String] = {

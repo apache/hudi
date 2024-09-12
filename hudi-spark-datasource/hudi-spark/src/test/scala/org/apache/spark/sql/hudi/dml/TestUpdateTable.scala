@@ -18,10 +18,12 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -312,6 +314,65 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
         spark.sql(s"update $tableName set price = 22 where id = 1")
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 22.0, 1000)
+        )
+      }
+    }
+  }
+
+  // Test update table with clustering
+  test("Test Update Table with Clustering") {
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        // create table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  partition long
+             |) using hudi
+             | partitioned by (partition)
+             | location '$basePath'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'ts',
+             |  hoodie.clustering.keygen.class = "org.apache.hudi.keygen.NonpartitionedKeyGenerator"
+             | )
+       """.stripMargin)
+
+        // insert data
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002, 1002)")
+
+        // update data
+        spark.sql(s"update $tableName set price = 20 where id > 1")
+        checkAnswer(s"select id, name, price, ts from $tableName where id > 1")(
+          Seq(2, "a2", 20.0, 1001),
+          Seq(3, "a3", 20.0, 1002)
+        )
+
+        // update data
+        spark.sql(s"update $tableName set price = price * 2 where id = 2")
+        checkAnswer(s"select id, name, price, ts from $tableName where id = 2")(
+          Seq(2, "a2", 40.0, 1001)
+        )
+
+        val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
+        // Generate the first clustering plan
+        val firstScheduleInstant = client.createNewInstantTime()
+        client.scheduleClusteringAtInstant(firstScheduleInstant, HOption.empty())
+        checkAnswer(s"call show_clustering(path => '$basePath', show_involved_partition => true)")(
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.REQUESTED.name(), "partition=1000,partition=1001,partition=1002")
+        )
+        // Do clustering for all the clustering plan
+        checkAnswer(s"call run_clustering(path => '$basePath', order => 'partition')")(
+          Seq(firstScheduleInstant, 3, HoodieInstant.State.COMPLETED.name(), "*")
         )
       }
     }

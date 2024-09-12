@@ -87,7 +87,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
       supportBatchCalled = true
       supportBatchResult = !isMOR && !isIncremental && !isBootstrap && super.supportBatch(sparkSession, schema)
     }
-    sparkSession.conf.set(PARQUET_VECTORIZED_READER_ENABLED.key, supportBatchResult)
     supportBatchResult
   }
 

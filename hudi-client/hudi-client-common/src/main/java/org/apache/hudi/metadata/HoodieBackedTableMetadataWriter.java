@@ -406,10 +406,6 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             fileGroupCountAndRecordsPair = initializeFunctionalIndexPartition(functionalIndexPartitionsToInit.iterator().next());
             break;
           case PARTITION_STATS:
-            if (dataWriteConfig.getColumnsEnabledForColumnStatsIndex().isEmpty()) {
-              LOG.warn("Skipping partition stats index initialization as target columns are not set");
-              continue;
-            }
             fileGroupCountAndRecordsPair = initializePartitionStatsIndex(partitionInfoList);
             break;
           case SECONDARY_INDEX:

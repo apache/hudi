@@ -29,12 +29,14 @@
   <properties>
     <jar.mainclass>org.apache.hudi.cli.Main</jar.mainclass>
     <main.basedir>${project.parent.basedir}</main.basedir>
+    <hudi.version>${project.parent.version}</hudi.version>
   </properties>
 
   <build>
     <resources>
       <resource>
         <directory>src/main/resources</directory>
+        <filtering>true</filtering>
       </resource>
     </resources>
     <pluginManagement>

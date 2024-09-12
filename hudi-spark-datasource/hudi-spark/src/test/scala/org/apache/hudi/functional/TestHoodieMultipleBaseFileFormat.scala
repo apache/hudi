@@ -26,7 +26,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{DEFAULT_FIRST_P
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, SparkDatasetMixin}
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, SparkDatasetMixin}
 
 import org.apache.spark.sql.{Dataset, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -52,7 +52,7 @@ class TestHoodieMultipleBaseFileFormat extends HoodieSparkClientTestBase with Sp
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
