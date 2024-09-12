@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
@@ -227,12 +228,21 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   }
 
   private void scanLogFiles() {
+    StoragePath basePath = readerState.getMetaClient().getBasePath();
     HoodieMergedLogRecordReader logRecordReader = HoodieMergedLogRecordReader.newBuilder()
         .withHoodieReaderContext(readerContext)
-        .withReaderState(readerState)
+        .withStorage(storage)
+        .withBasePath(basePath.toString())
         .withLogFiles(logFiles)
+        .withLatestInstantTime(readerState.getLatestCommitTime())
+        .withReaderSchema(readerState.getRequestedSchema())
+        .withInternalSchema(readerState.getInternalSchema())
         .withReverseReader(false)
-        .withPartition(getRelativePartitionPath(readerState.getMetaClient().getBasePath(), logFiles.get(0).getPath().getParent()))
+        .withBufferSize(readerState.getBufferSize())
+        .withPartition(getRelativePartitionPath(
+           basePath, logFiles.get(0).getPath().getParent()))
+        .withRecordMerger(readerState.getRecordMerger())
+        .withRecordMergeMode(readerState.getRecordMergeMode())
         .withRecordBuffer(recordBuffer)
         .build();
     logRecordReader.close();
