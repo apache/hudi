@@ -275,7 +275,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     if (HoodieSparkUtils.isSpark2) {
       //already enabled by default for spark 3+
-      sparkSession.conf.set("spark.sql.crossJoin.enabled", "true")
+      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
     }
 
     val projectedJoinedDF: DataFrame = projectedJoinedDataset
