@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigClassProperty;
 import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -279,17 +280,14 @@ public class FlinkOptions extends HoodieConfig {
           + "3) Read Optimized mode (obtain latest view, based on columnar data)\n."
           + "Default: snapshot");
 
-  public static final String REALTIME_SKIP_MERGE = "skip_merge";
-  public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
+  public static final String REALTIME_SKIP_MERGE = HoodieReaderConfig.REALTIME_SKIP_MERGE;
+  public static final String REALTIME_PAYLOAD_COMBINE = HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE;
   @AdvancedConfig
   public static final ConfigOption<String> MERGE_TYPE = ConfigOptions
-      .key("hoodie.datasource.merge.type")
+      .key(HoodieReaderConfig.MERGE_TYPE.key())
       .stringType()
-      .defaultValue(REALTIME_PAYLOAD_COMBINE)
-      .withDescription("For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in\n"
-          + "1) skip_merge: read the base file records plus the log file records;\n"
-          + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
-          + "   log file records(combines the two records with same key for base and log file records), then read the left log file records");
+      .defaultValue(HoodieReaderConfig.MERGE_TYPE.defaultValue())
+      .withDescription(HoodieReaderConfig.MERGE_TYPE.doc());
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_UTC_TIMEZONE = ConfigOptions

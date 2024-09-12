@@ -65,6 +65,10 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_TYPE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
+import static org.apache.hudi.common.config.HoodieReaderConfig.SHOULD_ENABLE_SKIP_MERGE_BOOL;
 import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.fs.FSUtils.getFileId;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -127,6 +131,14 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         props.setProperty(e.getKey(), e.getValue());
       }
     });
+    if (props.containsKey(SHOULD_ENABLE_SKIP_MERGE_BOOL)
+        && !props.containsKey(MERGE_TYPE.key())) {
+      if (props.getString(SHOULD_ENABLE_SKIP_MERGE_BOOL).equalsIgnoreCase("true")) {
+        props.setProperty(MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
+      } else {
+        props.setProperty(MERGE_TYPE.key(), REALTIME_PAYLOAD_COMBINE);
+      }
+    }
     LOG.debug("Creating HoodieFileGroupReaderRecordReader with tableBasePath={}, latestCommitTime={}, fileSplit={}", tableBasePath, latestCommitTime, fileSplit.getPath());
     this.fileGroupReader = new HoodieFileGroupReader<>(readerContext, metaClient.getStorage(), tableBasePath,
         latestCommitTime, getFileSliceFromSplit(fileSplit, getFs(tableBasePath, jobConfCopy), tableBasePath),
