@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -148,7 +149,12 @@ public class KeyGenUtils {
     StringBuilder recordKey = new StringBuilder();
     for (int i = 0; i < recordKeyFields.size(); i++) {
       String recordKeyField = recordKeyFields.get(i);
-      String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
+      String recordKeyValue;
+      try {
+        recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
+      } catch (HoodieException e) {
+        throw new HoodieKeyException("Recordkey field '" + recordKeyField + "' does not exist in the input record");
+      }
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.isEmpty()) {
