@@ -881,6 +881,10 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           readTable(tempRecordPath, useFileGroupReader)
         }
       }
+    } else {
+      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+        readTable(tempRecordPath, useFileGroupReader)
+      }
     }
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
