@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -78,6 +79,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private final Option<byte[]> bytesContent;
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
+  private boolean isMetaInfoLoaded = false;
   private long numKeyValueEntries = -1L;
 
   public HoodieNativeAvroHFileReader(HoodieStorage storage, StoragePath path, Option<Schema> schemaOption) {
@@ -193,18 +195,19 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
   @Override
   public void close() {
+    isMetaInfoLoaded = false;
     metaInfoMap.clear();
   }
 
   @Override
   public long getTotalRecords() {
-    if (numKeyValueEntries < 0) {
-      try {
-        loadAllMetaInfoIntoCache();
-      } catch (IOException e) {
-        throw new HoodieIOException("Cannot get the number of entries from HFile", e);
-      }
+    try {
+      loadAllMetaInfoIntoCacheIfNeeded();
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot get the number of entries from HFile", e);
     }
+    ValidationUtils.checkArgument(
+        numKeyValueEntries >= 0, "Number of entries in HFile must be >= 0");
     return numKeyValueEntries;
   }
 
@@ -254,26 +257,25 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
           + " should only be called on supported meta info keys; this key is not supported: "
           + key);
     }
-    byte[] bytes = metaInfoMap.get(key);
-    if (bytes != null) {
-      return bytes;
-    }
-    loadAllMetaInfoIntoCache();
+    loadAllMetaInfoIntoCacheIfNeeded();
     return metaInfoMap.get(key);
   }
 
-  private synchronized void loadAllMetaInfoIntoCache() throws IOException {
-    // Load all meta info that are small into cache
-    try (HFileReader reader = newHFileReader()) {
-      this.numKeyValueEntries = reader.getNumKeyValueEntries();
-      for (String metaInfoKey : PRELOADED_META_INFO_KEYS) {
-        Option<byte[]> metaInfo = reader.getMetaInfo(new UTF8StringKey(metaInfoKey));
-        if (metaInfo.isPresent()) {
-          metaInfoMap.put(metaInfoKey, metaInfo.get());
+  private synchronized void loadAllMetaInfoIntoCacheIfNeeded() throws IOException {
+    if (!isMetaInfoLoaded) {
+      // Load all meta info that are small into cache
+      try (HFileReader reader = newHFileReader()) {
+        this.numKeyValueEntries = reader.getNumKeyValueEntries();
+        for (String metaInfoKey : PRELOADED_META_INFO_KEYS) {
+          Option<byte[]> metaInfo = reader.getMetaInfo(new UTF8StringKey(metaInfoKey));
+          if (metaInfo.isPresent()) {
+            metaInfoMap.put(metaInfoKey, metaInfo.get());
+          }
         }
+        isMetaInfoLoaded = true;
+      } catch (Exception e) {
+        throw new IOException("Unable to construct HFile reader", e);
       }
-    } catch (Exception e) {
-      throw new IOException("Unable to construct HFile reader", e);
     }
   }
 
