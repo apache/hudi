@@ -45,9 +45,6 @@ import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PART
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
-import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
-import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -61,9 +58,9 @@ class TestEightToSevenDowngradeHandler {
   private File baseDir;
 
   private static final List<String> SAMPLE_METADATA_PATHS = Arrays.asList(
-      FUNCTIONAL_INDEX.getPartitionPath(),
-      SECONDARY_INDEX.getPartitionPath(),
-      PARTITION_STATS.getPartitionPath(),
+      "func_index_random",
+      "secondary_index_random",
+      "partition_stats",
       FILES.getPartitionPath(),
       COLUMN_STATS.getPartitionPath());
   @Mock
@@ -79,15 +76,15 @@ class TestEightToSevenDowngradeHandler {
 
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, FUNCTIONAL_INDEX.getPartitionPath(), true),
+              mdtMetaClient, context, "func_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, SECONDARY_INDEX.getPartitionPath(), true),
+              mdtMetaClient, context, "secondary_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, PARTITION_STATS.getPartitionPath(), true),
+              mdtMetaClient, context, "partition_stats", true),
           times(1));
 
       assertArrayEquals(new String[]{"files", "column_stats"}, leftPartitionPaths.toArray());
