@@ -71,12 +71,14 @@ import static org.apache.hudi.io.hfile.HFileUtils.isPrefixOfKey;
  */
 public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieNativeAvroHFileReader.class);
+  // Keys of the meta info that should be preloaded on demand from the HFile
   private static final Set<String> PRELOADED_META_INFO_KEYS = new HashSet<>(
       Arrays.asList(KEY_MIN_RECORD, KEY_MAX_RECORD, SCHEMA_KEY));
 
   private final HoodieStorage storage;
   private final Option<StoragePath> path;
   private final Option<byte[]> bytesContent;
+  // In-memory cache for meta info
   private final Map<String, byte[]> metaInfoMap;
   private final Lazy<Schema> schema;
   private boolean isMetaInfoLoaded = false;
