@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -119,7 +118,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
 
     // generate clustering plan
     // should support configurable commit metadata
-    HoodieInstant clusteringInstant = HoodieTimeline.getReplaceCommitRequestedInstant(clusteringInstantTime);
+    HoodieInstant clusteringInstant = firstRequested.get();
     Option<Pair<HoodieInstant, HoodieClusteringPlan>> clusteringPlanOption = ClusteringUtils.getClusteringPlan(
         table.getMetaClient(), clusteringInstant);
 
@@ -137,7 +136,7 @@ public class ClusteringPlanOperator extends AbstractStreamOperator<ClusteringPla
       LOG.info("Empty clustering plan for instant " + clusteringInstantTime);
     } else {
       // Mark instant as clustering inflight
-      table.getActiveTimeline().transitionReplaceRequestedToInflight(clusteringInstant, Option.empty());
+      ClusteringUtils.transitionClusteringOrReplaceRequestedToInflight(clusteringInstant, Option.empty(), table.getActiveTimeline());
       table.getMetaClient().reloadActiveTimeline();
 
       for (HoodieClusteringGroup clusteringGroup : clusteringPlan.getInputGroups()) {

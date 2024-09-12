@@ -455,9 +455,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
-    byte[] dataBlockContentBytes = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header).getContentBytes(storage.getConf());
+    byte[] dataBlockContentBytes = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records, header).getContentBytes(storage);
     HoodieLogBlock.HoodieLogBlockContentLocation logBlockContentLoc = new HoodieLogBlock.HoodieLogBlockContentLocation(
-        HoodieTestUtils.getDefaultStorageConfWithDefaults(), null, 0, dataBlockContentBytes.length, 0);
+        HoodieTestUtils.getStorage(basePath), null, 0, dataBlockContentBytes.length, 0);
     HoodieDataBlock reusableDataBlock = new HoodieAvroDataBlock(null, Option.ofNullable(dataBlockContentBytes), false,
         logBlockContentLoc, Option.ofNullable(getSimpleSchema()), header, new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
     long writtenSize = 0;
@@ -2697,10 +2697,12 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Schema schema = getSimpleSchema();
 
     Map<HoodieLogBlock.HeaderMetadataType, String> header =
-        new HashMap<HoodieLogBlock.HeaderMetadataType, String>() {{
-          put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
-          put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
-        }};
+        new HashMap<HoodieLogBlock.HeaderMetadataType, String>() {
+          {
+            put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+            put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
+          }
+        };
 
     // Init Benchmark to report number of bytes actually read from the Block
     BenchmarkCounter.initCounterFromReporter(HadoopMapRedUtils.createTestReporter(),
@@ -2724,14 +2726,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       HoodieDataBlock dataBlockRead = (HoodieDataBlock) nextBlock;
 
       Map<HoodieLogBlockType, Integer> expectedReadBytes =
-          new HashMap<HoodieLogBlockType, Integer>() {{
-            put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
-            put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
-            put(HoodieLogBlockType.PARQUET_DATA_BLOCK,
-                HoodieAvroUtils.gteqAvro1_9()
-                    ? getJavaVersion() == 17 || getJavaVersion() == 11 ? 1803 : 1802
-                    : 1809);
-          }};
+          new HashMap<HoodieLogBlockType, Integer>() {
+            {
+              put(HoodieLogBlockType.AVRO_DATA_BLOCK, 0); // not supported
+              put(HoodieLogBlockType.HFILE_DATA_BLOCK, 0); // not supported
+              put(HoodieLogBlockType.PARQUET_DATA_BLOCK,
+                  HoodieAvroUtils.gteqAvro1_9()
+                      ? getJavaVersion() == 17 || getJavaVersion() == 11 ? 1803 : 1802
+                      : 1809);
+            }
+          };
 
       List<IndexedRecord> recordsRead = getRecords(dataBlockRead);
       assertEquals(projectedRecords.size(), recordsRead.size(),

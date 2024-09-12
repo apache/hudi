@@ -291,17 +291,17 @@ public class BucketAssigner implements AutoCloseable {
    */
   private static class SmallFileAssignState {
     long assigned;
-    long totalUnassigned;
+    long total;
     final String fileId;
 
     SmallFileAssignState(long parquetMaxFileSize, SmallFile smallFile, long averageRecordSize) {
       this.assigned = 0;
-      this.totalUnassigned = (parquetMaxFileSize - smallFile.sizeBytes) / averageRecordSize;
+      this.total = (parquetMaxFileSize - smallFile.sizeBytes) / averageRecordSize;
       this.fileId = smallFile.location.getFileId();
     }
 
     public boolean canAssign() {
-      return this.totalUnassigned > 0 && this.totalUnassigned > this.assigned;
+      return this.total > 0 && this.total > this.assigned;
     }
 
     /**

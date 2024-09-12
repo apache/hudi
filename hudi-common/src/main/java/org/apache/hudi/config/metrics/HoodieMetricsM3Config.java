@@ -18,16 +18,17 @@
 
 package org.apache.hudi.config.metrics;
 
-import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
+import org.apache.hudi.common.config.ConfigClassProperty;
+import org.apache.hudi.common.config.ConfigGroups;
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
-import org.apache.hudi.common.config.ConfigClassProperty;
-import org.apache.hudi.common.config.ConfigGroups;
-import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieConfig;
+
+import static org.apache.hudi.config.metrics.HoodieMetricsConfig.METRIC_PREFIX;
 
 /**
  * Configs for M3 reporter type.
@@ -45,27 +46,32 @@ public class HoodieMetricsM3Config extends HoodieConfig {
   public static final ConfigProperty<String> M3_SERVER_HOST_NAME = ConfigProperty
       .key(M3_PREFIX + ".host")
       .defaultValue("localhost")
+      .sinceVersion("0.15.0")
       .withDocumentation("M3 host to connect to.");
 
   public static final ConfigProperty<Integer> M3_SERVER_PORT_NUM = ConfigProperty
       .key(M3_PREFIX + ".port")
       .defaultValue(9052)
+      .sinceVersion("0.15.0")
       .withDocumentation("M3 port to connect to.");
 
   public static final ConfigProperty<String> M3_TAGS = ConfigProperty
       .key(M3_PREFIX + ".tags")
       .defaultValue("")
+      .sinceVersion("0.15.0")
       .withDocumentation("Optional M3 tags applied to all metrics.");
 
   public static final ConfigProperty<String> M3_ENV = ConfigProperty
       .key(M3_PREFIX + ".env")
       .defaultValue("production")
+      .sinceVersion("0.15.0")
       .withDocumentation("M3 tag to label the environment (defaults to 'production'), "
           + "applied to all metrics.");
 
   public static final ConfigProperty<String> M3_SERVICE = ConfigProperty
       .key(M3_PREFIX + ".service")
       .defaultValue("hoodie")
+      .sinceVersion("0.15.0")
       .withDocumentation("M3 tag to label the service name (defaults to 'hoodie'), "
           + "applied to all metrics.");
 

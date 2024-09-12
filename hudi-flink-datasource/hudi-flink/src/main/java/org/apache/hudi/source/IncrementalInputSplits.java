@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -140,6 +141,7 @@ public class IncrementalInputSplits implements Serializable {
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
+        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .build();
 
     IncrementalQueryAnalyzer.QueryContext analyzingResult = analyzer.analyze();
@@ -250,6 +252,7 @@ public class IncrementalInputSplits implements Serializable {
         .skipCompaction(skipCompaction)
         .skipClustering(skipClustering)
         .skipInsertOverwrite(skipInsertOverwrite)
+        .readCdcFromChangelog(this.conf.getBoolean(FlinkOptions.READ_CDC_FROM_CHANGELOG))
         .limit(OptionsResolver.getReadCommitsLimit(conf))
         .build();
 
@@ -372,7 +375,7 @@ public class IncrementalInputSplits implements Serializable {
               String latestCommit = HoodieTimeline.minInstant(fileSlice.getLatestInstantTime(), endInstant);
               return new MergeOnReadInputSplit(cnt.getAndAdd(1),
                   basePath, logPaths, latestCommit,
-                  metaClient.getBasePath(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+                  metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
             }).collect(Collectors.toList()))
         .flatMap(Collection::stream)
         .sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit))
@@ -382,7 +385,7 @@ public class IncrementalInputSplits implements Serializable {
   private List<MergeOnReadInputSplit> getCdcInputSplits(
       HoodieTableMetaClient metaClient,
       InstantRange instantRange) {
-    HoodieCDCExtractor extractor = new HoodieCDCExtractor(metaClient, instantRange);
+    HoodieCDCExtractor extractor = new HoodieCDCExtractor(metaClient, instantRange, OptionsResolver.readCDCFromChangelog(this.conf));
     Map<HoodieFileGroupId, List<HoodieCDCFileSplit>> fileSplits = extractor.extractCDCFileSplits();
 
     if (fileSplits.isEmpty()) {
@@ -393,7 +396,7 @@ public class IncrementalInputSplits implements Serializable {
     final AtomicInteger cnt = new AtomicInteger(0);
     return fileSplits.entrySet().stream()
         .map(splits ->
-            new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath(), maxCompactionMemoryInBytes,
+            new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes,
                 splits.getKey().getFileId(), splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
         .collect(Collectors.toList());
   }
@@ -409,7 +412,7 @@ public class IncrementalInputSplits implements Serializable {
 
   private FileIndex getFileIndex() {
     return FileIndex.builder()
-        .path(new org.apache.hadoop.fs.Path(path.toUri()))
+        .path(new StoragePath(path.toUri()))
         .conf(conf)
         .rowType(rowType)
         .partitionPruner(partitionPruner)

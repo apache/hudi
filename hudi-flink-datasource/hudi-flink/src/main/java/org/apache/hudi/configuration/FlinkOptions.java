@@ -47,12 +47,14 @@ import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER;
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 
@@ -358,6 +360,17 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The maximum number of commits allowed to read in each instant check, if it is streaming read, "
           + "the avg read instants number per-second would be 'read.commits.limit'/'read.streaming.check-interval', by "
           + "default no limit");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
+      .key("read.cdc.from.changelog")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to consume the delta changes only from the cdc changelog files.\n"
+          + "When CDC is enabled, i). for COW table, the changelog is generated on each file update;\n"
+          + "ii). for MOR table, the changelog is generated on compaction.\n"
+          + "By default, always read from the changelog file,\n"
+          + "once it is disabled, the reader would infer the changes based on the file slice dependencies.");
 
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_DATA_SKIPPING_ENABLED = ConfigOptions
@@ -1057,6 +1070,14 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue(HoodieSyncTableStrategy.ALL.name())
       .withDescription("Hive table synchronization strategy. Available option: RO, RT, ALL.");
+
+  public static final ConfigOption<Duration> LOOKUP_JOIN_CACHE_TTL =
+      key("lookup.join.cache.ttl")
+          .durationType()
+          .defaultValue(Duration.ofMinutes(60))
+          .withDescription(
+              "The cache TTL (e.g. 10min) for the build table in lookup join.");
+
 
   // -------------------------------------------------------------------------
   //  Utilities

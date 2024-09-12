@@ -19,7 +19,9 @@
 
 package org.apache.hudi.storage;
 
-import static org.apache.hudi.io.storage.HoodieIOFactory.getIOFactory;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.exception.HoodieException;
 
 public class HoodieStorageUtils {
   public static final String DEFAULT_URI = "file:///";
@@ -33,6 +35,13 @@ public class HoodieStorageUtils {
   }
 
   public static HoodieStorage getStorage(StoragePath path, StorageConfiguration<?> conf) {
-    return getIOFactory(conf).getStorage(path);
+    String storageClass = conf.getString(HoodieStorageConfig.HOODIE_STORAGE_CLASS.key())
+        .orElse(HoodieStorageConfig.HOODIE_STORAGE_CLASS.defaultValue());
+    try {
+      return (HoodieStorage) ReflectionUtils.loadClass(
+          storageClass, new Class<?>[] {StoragePath.class, StorageConfiguration.class}, path, conf);
+    } catch (Exception e) {
+      throw new HoodieException("Unable to create " + storageClass, e);
+    }
   }
 }

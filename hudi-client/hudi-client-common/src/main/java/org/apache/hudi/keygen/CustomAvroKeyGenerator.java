@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -48,7 +49,6 @@ import java.util.stream.Collectors;
 public class CustomAvroKeyGenerator extends BaseKeyGenerator {
 
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
-  public static final String SPLIT_REGEX = ":";
   private final List<BaseKeyGenerator> partitionKeyGenerators;
   private final BaseKeyGenerator recordKeyGenerator;
 
@@ -63,10 +63,10 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     super(props);
     this.recordKeyFields = Option.ofNullable(props.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), null))
         .map(recordKeyConfigValue ->
-            Arrays.stream(recordKeyConfigValue.split(","))
+            Arrays.stream(recordKeyConfigValue.split(FIELD_SEPARATOR))
                 .map(String::trim).collect(Collectors.toList())
         ).orElse(Collections.emptyList());
-    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(",")).map(String::trim).collect(Collectors.toList());
+    this.partitionPathFields = Arrays.stream(props.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()).split(FIELD_SEPARATOR)).map(String::trim).collect(Collectors.toList());
     this.recordKeyGenerator = getRecordKeyFieldNames().size() == 1 ? new SimpleAvroKeyGenerator(config) : new ComplexAvroKeyGenerator(config);
     this.partitionKeyGenerators = getPartitionKeyGenerators(this.partitionPathFields, config);
   }
@@ -76,12 +76,9 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
       return partitionPathFields.stream().map(field -> {
-        String[] fieldWithType = field.split(SPLIT_REGEX);
-        if (fieldWithType.length != 2) {
-          throw new HoodieKeyException("Unable to find field names for partition path in proper format");
-        }
-        String partitionPathField = fieldWithType[0];
-        PartitionKeyType keyType = PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
+        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
+        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight();
+        String partitionPathField = partitionAndType.getLeft();
         switch (keyType) {
           case SIMPLE:
             return new SimpleAvroKeyGenerator(config, partitionPathField);
@@ -96,6 +93,37 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
         }
       }).collect(Collectors.toList());
     }
+  }
+
+  public static List<PartitionKeyType> getPartitionTypes(List<String> partitionPathFields) {
+    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
+      return Collections.emptyList(); // Corresponds to no partition case
+    } else {
+      return partitionPathFields.stream().map(field -> {
+        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
+        return partitionAndType.getRight();
+      }).collect(Collectors.toList());
+    }
+  }
+
+  public static List<String> getTimestampFields(List<String> partitionPathFields) {
+    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
+      return Collections.emptyList(); // Corresponds to no partition case
+    } else {
+      return partitionPathFields.stream()
+          .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
+          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().equals(PartitionKeyType.TIMESTAMP))
+          .map(Pair::getLeft)
+          .collect(Collectors.toList());
+    }
+  }
+
+  public static Pair<String, PartitionKeyType> getPartitionFieldAndKeyType(String field) {
+    String[] fieldWithType = field.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
+    if (fieldWithType.length != 2) {
+      throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+    }
+    return Pair.of(fieldWithType[0], PartitionKeyType.valueOf(fieldWithType[1].toUpperCase()));
   }
 
   @Override

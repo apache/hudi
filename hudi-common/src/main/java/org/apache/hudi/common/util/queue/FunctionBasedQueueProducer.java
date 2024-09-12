@@ -46,5 +46,7 @@ public class FunctionBasedQueueProducer<I> implements HoodieProducer<I> {
   }
 
   @Override
-  public void close() { /* no-op */ }
+  public void close() {
+    /* no-op */
+  }
 }

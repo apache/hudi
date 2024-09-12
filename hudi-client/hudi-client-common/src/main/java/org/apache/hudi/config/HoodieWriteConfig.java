@@ -27,7 +27,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieFunctionalIndexConfig;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieMetaserverConfig;
@@ -77,6 +77,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.metrics.datadog.DatadogHttpClient.ApiSite;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.RandomFileIdPrefixProvider;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -240,12 +241,6 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Schema string representing the latest schema of the table. Hudi passes this to "
           + "implementations of evolution of schema");
 
-  public static final ConfigProperty<Boolean> ENABLE_INTERNAL_SCHEMA_CACHE = ConfigProperty
-      .key("hoodie.schema.cache.enable")
-      .defaultValue(false)
-      .markAdvanced()
-      .withDocumentation("cache query internalSchemas in driver/executor side");
-
   public static final ConfigProperty<String> AVRO_SCHEMA_VALIDATE_ENABLE = ConfigProperty
       .key("hoodie.avro.schema.validate")
       .defaultValue("false")
@@ -297,6 +292,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
           + "For example 'column1,column2'");
+
+  public static final ConfigProperty<Boolean> BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS = ConfigProperty
+      .key("hoodie.bulkinsert.sort.suffix.record_key")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation(
+          "When using user defined sort columns there can be possibility of skew because spark's RangePartitioner used in sort can reduce the number of outputSparkPartitions"
+              + "if the sampled dataset has a low cardinality on the provided sort columns. This can cause an increase in commit durations as we are not leveraging the original parallelism."
+              + "Enabling this config suffixes the record key at the end to avoid skew."
+              + "This config is used by RowCustomColumnsSortPartitioner, RDDCustomColumnsSortPartitioner and JavaCustomColumnsSortPartitioner");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
@@ -353,14 +359,14 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.buffer.record.sampling.rate")
       .defaultValue(String.valueOf(64))
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Sampling rate of in-memory buffer used to estimate object size. Higher value lead to lower CPU usage.");
 
   public static final ConfigProperty<String> WRITE_BUFFER_RECORD_CACHE_LIMIT = ConfigProperty
       .key("hoodie.write.buffer.record.cache.limit")
       .defaultValue(String.valueOf(128 * 1024))
       .markAdvanced()
-      .sinceVersion("1.0.0")
+      .sinceVersion("0.15.0")
       .withDocumentation("Maximum queue size of in-memory buffer for parallelizing network reads and lake storage writes.");
 
   public static final ConfigProperty<String> WRITE_EXECUTOR_DISRUPTOR_BUFFER_LIMIT_BYTES = ConfigProperty
@@ -801,7 +807,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieCommonConfig commonConfig;
   private HoodieStorageConfig storageConfig;
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
-  private HoodieFunctionalIndexConfig functionalIndexConfig;
+  private HoodieIndexingConfig indexingConfig;
   private EngineType engineType;
 
   /**
@@ -1199,7 +1205,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.storageConfig = HoodieStorageConfig.newBuilder().fromProperties(props).build();
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
         .withDefaultLockProvider(!isLockRequired()).build();
-    this.functionalIndexConfig = HoodieFunctionalIndexConfig.newBuilder().fromProperties(props).build();
+    this.indexingConfig = HoodieIndexingConfig.newBuilder().fromProperties(props).build();
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
@@ -1259,16 +1265,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getString(INTERNAL_SCHEMA_STRING);
   }
 
-  public boolean getInternalSchemaCacheEnable() {
-    return getBoolean(ENABLE_INTERNAL_SCHEMA_CACHE);
-  }
-
   public void setInternalSchemaString(String internalSchemaString) {
     setValue(INTERNAL_SCHEMA_STRING, internalSchemaString);
-  }
-
-  public void setInternalSchemaCacheEnable(boolean enable) {
-    setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
   }
 
   public boolean getSchemaEvolutionEnable() {
@@ -1308,11 +1306,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
-  public boolean isCDCEnabled() {
-    return getBooleanOrDefault(
-        HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
-  }
-
   public boolean isConsistentHashingEnabled() {
     return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
   }
@@ -1320,6 +1313,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isSimpleBucketIndex() {
     return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
+  }
+
+  /**
+   * Returns whether the table writer would generate pure log files at the very first place.
+   */
+  public boolean isYieldingPureLogForMor() {
+    switch (getIndexType()) {
+      case BUCKET:
+      case FLINK_STATE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {
@@ -2434,8 +2440,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return timeGeneratorConfig;
   }
 
-  public HoodieFunctionalIndexConfig getFunctionalIndexConfig() {
-    return functionalIndexConfig;
+  public HoodieIndexingConfig getIndexingConfig() {
+    return indexingConfig;
   }
 
   /**
@@ -2739,6 +2745,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieTTLConfig.MAX_PARTITION_TO_DELETE);
   }
 
+  public boolean isSecondaryIndexEnabled() {
+    return metadataConfig.isSecondaryIndexEnabled();
+  }
+
+  public int getSecondaryIndexParallelism() {
+    return metadataConfig.getSecondaryIndexParallelism();
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -2798,6 +2812,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withPath(StoragePath basePath) {
+      writeConfig.setValue(BASE_PATH, basePath.toString());
+      return this;
+    }
+
     public Builder withBaseFileFormat(String baseFileFormat) {
       writeConfig.setValue(BASE_FILE_FORMAT, HoodieFileFormat.valueOf(baseFileFormat).name());
       return this;
@@ -2810,11 +2829,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withSchemaEvolutionEnable(boolean enable) {
       writeConfig.setValue(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE, String.valueOf(enable));
-      return this;
-    }
-
-    public Builder withInternalSchemaCacheEnable(boolean enable) {
-      writeConfig.setValue(ENABLE_INTERNAL_SCHEMA_CACHE, String.valueOf(enable));
       return this;
     }
 

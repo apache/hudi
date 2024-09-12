@@ -29,7 +29,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -80,9 +79,9 @@ public class AverageRecordSizeUtils {
               break;
             }
           }
-        } catch (IOException ioe) {
+        } catch (Throwable t) {
           // make this fail safe.
-          LOG.error("Error trying to compute average bytes/record ", ioe);
+          LOG.error("Error trying to compute average bytes/record ", t);
         }
       }
     }

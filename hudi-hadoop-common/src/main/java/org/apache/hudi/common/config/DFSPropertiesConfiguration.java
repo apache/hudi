@@ -27,6 +27,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
@@ -147,7 +148,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       throw new IllegalStateException("Loop detected; file " + filePath + " already referenced");
     }
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(
+    HoodieStorage storage = new HoodieHadoopStorage(
         filePath,
         HadoopFSUtils.getStorageConf(Option.ofNullable(hadoopConfig).orElseGet(Configuration::new))
     );

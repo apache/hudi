@@ -188,12 +188,12 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         StoragePath metadataPath =
             FSUtils.constructAbsolutePath(table.getMetaClient().getHashingMetadataPath(), p);
         try {
-          table.getMetaClient().getStorage().listDirectEntries(metadataPath).forEach(fl -> {
+          table.getStorage().listDirectEntries(metadataPath).forEach(fl -> {
             if (fl.getPath().getName()
                 .contains(HoodieConsistentHashingMetadata.HASHING_METADATA_COMMIT_FILE_SUFFIX)) {
               try {
                 // delete commit marker to test recovery job
-                table.getMetaClient().getStorage().deleteDirectory(fl.getPath());
+                table.getStorage().deleteDirectory(fl.getPath());
               } catch (IOException e) {
                 throw new RuntimeException(e);
               }
@@ -219,7 +219,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
    */
   @ParameterizedTest
   @MethodSource("configParamsForSorting")
-  public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws IOException {
+  public void testClusteringColumnSort(String sortColumn, boolean rowWriterEnable) throws Exception {
     Map<String, String> options = new HashMap<>();
     // Record key is handled specially
     if (sortColumn.equals("_row_key")) {

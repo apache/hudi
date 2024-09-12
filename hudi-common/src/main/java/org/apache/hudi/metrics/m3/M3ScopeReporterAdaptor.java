@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics.m3;
 
+import org.apache.hudi.common.util.collection.Pair;
+
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
@@ -29,13 +31,13 @@ import com.codahale.metrics.ScheduledReporter;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.Timer;
 import com.uber.m3.tally.Scope;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
-import org.apache.hudi.common.util.collection.Pair;
 
 /**
  * Implementation of com.codahale.metrics.ScheduledReporter, to emit metrics from

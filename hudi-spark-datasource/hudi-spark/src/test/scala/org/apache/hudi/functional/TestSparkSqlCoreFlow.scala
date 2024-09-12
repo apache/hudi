@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.scalatest.Inspectors.forAll
 
 import java.io.File
+
 import scala.collection.JavaConverters._
 
 @SparkSQLCoreFlow
@@ -143,7 +144,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
     assertEquals(commitInstantTime3, countsPerCommit(0).get(0).toString)
 
 
-    val timeTravelDf = if (HoodieSparkUtils.gteqSpark3_2_1) {
+    val timeTravelDf = if (HoodieSparkUtils.gteqSpark3_3) {
       spark.sql(s"select * from $tableName timestamp as of '$commitInstantTime2'").cache()
     } else {
       //HUDI-5265

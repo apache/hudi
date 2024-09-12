@@ -37,6 +37,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.util.function.Predicate
 import java.util.{Collections, List, Optional}
+
 import scala.collection.JavaConverters._
 
 class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
@@ -343,7 +344,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
          | preCombineField = '_ts'
          |)""".stripMargin)
 
-    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_1) {
+    val failedToResolveErrorMessage = if (HoodieSparkUtils.gteqSpark3_3) {
       "Failed to resolve pre-combine field `_ts` w/in the source-table output"
     } else {
       "Failed to resolve pre-combine field `_ts` w/in the source-table output;"
@@ -388,7 +389,7 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
       new SerializableFunctionUnchecked[HoodieTableMetaClient, HoodieTableMetadata] {
         override def apply(v1: HoodieTableMetaClient): HoodieTableMetadata = {
           HoodieTableMetadata.create(
-            engineContext, metadataConfig, metaClient.getBasePathV2.toString)
+            engineContext, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
         }
       }
     )

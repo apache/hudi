@@ -30,8 +30,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -57,18 +55,18 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public static final String SCHEMA_NAME = ".schema";
   private final StoragePath baseSchemaPath;
-  private final StorageConfiguration<?> conf;
+  private final HoodieStorage storage;
   private HoodieTableMetaClient metaClient;
 
-  public FileBasedInternalSchemaStorageManager(StorageConfiguration<?> conf, StoragePath baseTablePath) {
+  public FileBasedInternalSchemaStorageManager(HoodieStorage storage, StoragePath baseTablePath) {
     StoragePath metaPath = new StoragePath(baseTablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     this.baseSchemaPath = new StoragePath(metaPath, SCHEMA_NAME);
-    this.conf = conf;
+    this.storage = storage;
   }
 
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
     this.baseSchemaPath = new StoragePath(metaClient.getMetaPath(), SCHEMA_NAME);
-    this.conf = metaClient.getStorageConf();
+    this.storage = metaClient.getStorage();
     this.metaClient = metaClient;
   }
 
@@ -77,7 +75,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     if (metaClient == null) {
       metaClient = HoodieTableMetaClient.builder()
           .setBasePath(baseSchemaPath.getParent().getParent().toString())
-          .setConf(conf.newInstance())
+          .setStorage(storage)
           .setTimeGeneratorConfig(
               HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
           .build();
@@ -100,7 +98,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   private void cleanResidualFiles() {
     List<String> validateCommits = getValidInstants();
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
       if (storage.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile())
@@ -124,7 +121,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
 
   public void cleanOldFiles(List<String> validateCommits) {
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
       if (storage.exists(baseSchemaPath)) {
         List<String> candidateSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile())
@@ -155,7 +151,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public String getHistorySchemaStrByGivenValidCommits(List<String> validCommits) {
     List<String> commitList = validCommits == null || validCommits.isEmpty() ? getValidInstants() : validCommits;
     try {
-      HoodieStorage storage = HoodieStorageUtils.getStorage(baseSchemaPath, conf);
       if (storage.exists(baseSchemaPath)) {
         List<String> validaSchemaFiles = storage.listDirectEntries(baseSchemaPath).stream()
             .filter(f -> f.isFile() && f.getPath().getName().endsWith(SCHEMA_COMMIT_ACTION))

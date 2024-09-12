@@ -34,6 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.utilities.UtilHelpers;
 
@@ -42,7 +43,6 @@ import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -79,12 +79,11 @@ public class TimelineServerPerf implements Serializable {
     useExternalTimelineServer = (cfg.serverHost != null);
     TimelineService.Config timelineServiceConf = cfg.getTimelineServerConfig();
     this.timelineServer = new TimelineService(
-        new HoodieLocalEngineContext(
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))),
-        new Configuration(), timelineServiceConf, HoodieStorageUtils.getStorage(
-        HadoopFSUtils.getStorageConf(new Configuration())),
-        TimelineService.buildFileSystemViewManager(timelineServiceConf,
-            HadoopFSUtils.getStorageConf(HadoopFSUtils.prepareHadoopConf(new Configuration()))));
+        new HoodieLocalEngineContext(HadoopFSUtils.getStorageConf()),
+        HadoopFSUtils.getStorageConf(),
+        timelineServiceConf,
+        HoodieStorageUtils.getStorage(HadoopFSUtils.getStorageConf()),
+        TimelineService.buildFileSystemViewManager(timelineServiceConf, HadoopFSUtils.getStorageConf()));
   }
 
   private void setHostAddrFromSparkConf(SparkConf sparkConf) {
@@ -100,7 +99,9 @@ public class TimelineServerPerf implements Serializable {
   public void run() throws IOException {
     JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-view-perf-" + cfg.basePath, cfg.sparkMaster);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
-    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(engineContext, cfg.basePath, cfg.useFileListingFromMetadata);
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(
+        engineContext, new HoodieHadoopStorage(cfg.basePath, engineContext.getStorageConf()),
+        cfg.basePath, cfg.useFileListingFromMetadata);
     Collections.shuffle(allPartitionPaths);
     List<String> selected = allPartitionPaths.stream().filter(p -> !p.contains("error")).limit(cfg.maxPartitions)
         .collect(Collectors.toList());
@@ -114,7 +115,8 @@ public class TimelineServerPerf implements Serializable {
 
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
-            .setConf(timelineServer.getConf().newInstance()).setBasePath(cfg.basePath)
+            .setConf(timelineServer.getStorageConf().newInstance())
+            .setBasePath(cfg.basePath)
             .setLoadActiveTimelineOnLoad(true).build();
     SyncableFileSystemView fsView =
         new RemoteHoodieTableFileSystemView(this.hostAddr, cfg.serverPort, metaClient);

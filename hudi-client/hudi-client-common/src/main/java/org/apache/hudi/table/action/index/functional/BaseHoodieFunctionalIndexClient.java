@@ -49,7 +49,7 @@ public abstract class BaseHoodieFunctionalIndexClient {
             + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FOLDER_NAME
             + StoragePath.SEPARATOR + HoodieTableMetaClient.INDEX_DEFINITION_FILE_NAME);
     // build HoodieFunctionalIndexMetadata and then add to index definition file
-    metaClient.buildFunctionalIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
+    metaClient.buildIndexDefinition(indexMetaPath, indexName, indexType, columns, options);
     // update table config if necessary
     if (!metaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.INDEX_DEFINITION_PATH) || !metaClient.getTableConfig().getIndexDefinitionPath().isPresent()) {
       metaClient.getTableConfig().setValue(HoodieTableConfig.INDEX_DEFINITION_PATH, indexMetaPath);

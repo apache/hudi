@@ -36,6 +36,8 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.OptimisticConsistencyGuard;
@@ -67,8 +69,6 @@ import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.common.fs.ConsistencyGuard;
-import org.apache.hudi.common.fs.ConsistencyGuard.FileVisibility;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -86,7 +86,6 @@ import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -146,7 +145,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
         .build();
-    this.metadata = HoodieTableMetadata.create(context, metadataConfig, config.getBasePath());
+    this.metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
 
     this.viewManager = getViewManager();
     this.metaClient = metaClient;
@@ -318,6 +317,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     return metaClient.getStorageConf();
   }
 
+  public HoodieStorage getStorage() {
+    return metaClient.getStorage();
+  }
+
   /**
    * Get the view of the file system for this table.
    */
@@ -363,8 +366,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   /**
    * Get only the inflights (no-completed) commit timeline.
    */
-  public HoodieTimeline getPendingCommitTimeline() {
-    return metaClient.getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
+  public HoodieTimeline getPendingCommitsTimeline() {
+    return metaClient.getCommitsTimeline().filterInflightsAndRequested();
   }
 
   /**
@@ -648,7 +651,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    */
   public void rollbackInflightClustering(HoodieInstant inflightInstant,
                                          Function<String, Option<HoodiePendingRollbackInfo>> getPendingRollbackInstantFunc, boolean deleteInstants) {
-    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION));
+    ValidationUtils.checkArgument(inflightInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)
+        || inflightInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION),
+        String.format("Expected replace or clustering action instant but got %s", inflightInstant));
     rollbackInflightInstant(inflightInstant, getPendingRollbackInstantFunc);
     if (deleteInstants) {
       // above rollback would still keep requested in the timeline. so, lets delete it if if are looking to purge the pending clustering fully.
@@ -742,7 +747,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
     try {
       // Reconcile marker and data files with WriteStats so that partially written data-files due to failed
       // (but succeeded on retry) tasks are removed.
-      String basePath = getMetaClient().getBasePath();
+      String basePath = getMetaClient().getBasePath().toString();
       WriteMarkers markers = WriteMarkersFactory.get(config.getMarkersType(), this, instantTs);
 
       if (!markers.doesMarkerDirExist()) {
@@ -768,7 +773,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       if (!invalidDataPaths.isEmpty()) {
         LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-            .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
+            .map(dp ->
+                Pair.of(new StoragePath(basePath, dp).getParent().toString(),
+                    new StoragePath(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
@@ -996,7 +1003,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Deletes the metadata partition if the writer disables any metadata index.
    */
   public void deleteMetadataIndexIfNecessary() {
-    Stream.of(MetadataPartitionType.values()).forEach(partitionType -> {
+    Stream.of(MetadataPartitionType.getValidValues()).forEach(partitionType -> {
       if (shouldDeleteMetadataPartition(partitionType)) {
         try {
           LOG.info("Deleting metadata partition because it is disabled in writer: " + partitionType.name());

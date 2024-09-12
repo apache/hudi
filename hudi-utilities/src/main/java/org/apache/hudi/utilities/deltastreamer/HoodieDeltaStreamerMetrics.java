@@ -21,7 +21,7 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 
 /**
@@ -31,11 +31,11 @@ import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 @Deprecated
 public class HoodieDeltaStreamerMetrics extends HoodieStreamerMetrics {
 
-  public HoodieDeltaStreamerMetrics(HoodieWriteConfig writeConfig, StorageConfiguration<?> storageConf) {
-    super(writeConfig.getMetricsConfig(), storageConf);
+  public HoodieDeltaStreamerMetrics(HoodieWriteConfig writeConfig, HoodieStorage storage) {
+    super(writeConfig.getMetricsConfig(), storage);
   }
 
-  public HoodieDeltaStreamerMetrics(HoodieMetricsConfig metricsConfig, StorageConfiguration<?> storageConf) {
-    super(metricsConfig, storageConf);
+  public HoodieDeltaStreamerMetrics(HoodieMetricsConfig metricsConfig, HoodieStorage storage) {
+    super(metricsConfig, storage);
   }
 }

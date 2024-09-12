@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
+
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FileSourceScanExec, ProjectExec, RowDataSourceScanExec, SparkPlan}
 import org.apache.spark.sql.internal.SQLConf
@@ -41,9 +42,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   test("Test NestedSchemaPruning optimization successful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.1
+      // NOTE: This tests are only relevant for Spark >= 3.3
       // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_1) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -106,9 +107,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   test("Test NestedSchemaPruning optimization unsuccessful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.1
+      // NOTE: This tests are only relevant for Spark >= 3.3
       // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_1) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         // TODO add cow
         Seq("mor").foreach { tableType =>
           val tableName = generateTableName

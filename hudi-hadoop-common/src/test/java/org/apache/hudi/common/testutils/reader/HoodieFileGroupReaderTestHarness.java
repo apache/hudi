@@ -23,13 +23,15 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -37,6 +39,7 @@ import org.junit.jupiter.api.AfterAll;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
@@ -53,6 +56,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
   protected static List<DataGenerationPlan.OperationType> operationTypes;
   // Set the instantTime for each record set.
   protected static List<String> instantTimes;
+  protected static List<Boolean> shouldWritePositions;
 
   // Environmental variables.
   protected static StorageConfiguration<?> storageConf;
@@ -83,6 +87,16 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
     return HoodieTableType.MERGE_ON_READ;
   }
 
+  @Override
+  protected void initMetaClient() throws IOException {
+    Properties metaProps = new Properties();
+    metaProps.setProperty(POPULATE_META_FIELDS.key(), "false");
+    if (basePath == null) {
+      initPath();
+    }
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), metaProps);
+  }
+
   protected void setUpMockCommits() throws Exception {
     for (String instantTime : instantTimes) {
       testTable.addDeltaCommit(instantTime);
@@ -91,35 +105,41 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
 
   protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles)
       throws IOException, InterruptedException {
+    return getFileGroupIterator(numFiles, false);
+  }
+
+  protected ClosableIterator<IndexedRecord> getFileGroupIterator(int numFiles, boolean shouldReadPositions)
+      throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
+
+    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
-            readerContext.getStorage(basePath, storageConf),
+            hoodieStorage,
             keyRanges.subList(0, numFiles),
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),
             instantTimes.subList(0, numFiles),
+            shouldWritePositions.subList(0, numFiles),
             basePath,
             PARTITION_PATH,
             FILE_ID
         );
 
-    HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    tableConfig.setValue(POPULATE_META_FIELDS, "false");
     HoodieFileGroupReader<IndexedRecord> fileGroupReader =
         HoodieFileGroupReaderTestUtils.createFileGroupReader(
             fileSliceOpt,
             basePath,
             "1000", // Not used internally.
             AVRO_SCHEMA,
-            false,
+            shouldReadPositions,
             0L,
             Long.MAX_VALUE,
             properties,
-            storageConf,
-            tableConfig,
-            readerContext
+            hoodieStorage,
+            readerContext,
+            metaClient
         );
 
     fileGroupReader.initRecordIterators();

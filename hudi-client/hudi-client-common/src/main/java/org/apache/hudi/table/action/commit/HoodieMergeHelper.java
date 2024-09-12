@@ -38,7 +38,7 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
@@ -78,9 +78,9 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieWriteConfig writeConfig = table.getConfig();
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
-    StorageConfiguration<?> storageConf = table.getStorageConf().newInstance();
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
-    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storageConf)
+    HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(
+            table.getStorage().newInstance(mergeHandle.getOldFilePath(), table.getStorageConf().newInstance()))
         .getReaderFactory(recordType)
         .getFileReader(writeConfig, mergeHandle.getOldFilePath());
     HoodieFileReader bootstrapFileReader = null;
@@ -96,13 +96,13 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // Check whether the writer schema is simply a projection of the file's one, ie
     //   - Its field-set is a proper subset (of the reader schema)
     //   - There's no schema evolution transformation necessary
-    boolean isPureProjection = isStrictProjectionOf(readerSchema, writerSchema)
-        && !schemaEvolutionTransformerOpt.isPresent();
+    boolean isPureProjection = schemaEvolutionTransformerOpt.isEmpty()
+        && isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
-    boolean shouldRewriteInWriterSchema = writeConfig.shouldUseExternalSchemaTransformation()
-        || !isPureProjection
-        || baseFile.getBootstrapBaseFile().isPresent();
+    boolean shouldRewriteInWriterSchema = !isPureProjection
+        || baseFile.getBootstrapBaseFile().isPresent()
+        || writeConfig.shouldUseExternalSchemaTransformation();
 
     HoodieExecutor<Void> executor = null;
 
@@ -111,10 +111,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       Schema recordSchema;
       if (baseFile.getBootstrapBaseFile().isPresent()) {
         StoragePath bootstrapFilePath = baseFile.getBootstrapBaseFile().get().getStoragePath();
-        StorageConfiguration<?> bootstrapFileConfig = table.getStorageConf().newInstance();
-        bootstrapFileReader = HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType).newBootstrapFileReader(
+        HoodieStorage storage = table.getStorage().newInstance(
+            bootstrapFilePath, table.getStorageConf().newInstance());
+        bootstrapFileReader = HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType).newBootstrapFileReader(
             baseFileReader,
-            HoodieIOFactory.getIOFactory(bootstrapFileConfig).getReaderFactory(recordType)
+            HoodieIOFactory.getIOFactory(storage).getReaderFactory(recordType)
                 .getFileReader(writeConfig, bootstrapFilePath),
             mergeHandle.getPartitionFields(),
             mergeHandle.getPartitionValues());
@@ -173,7 +174,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get());
+      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema, querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
       InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
       if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {

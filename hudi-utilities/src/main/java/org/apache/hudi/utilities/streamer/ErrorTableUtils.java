@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.Dataset;
@@ -48,7 +47,7 @@ public final class ErrorTableUtils {
                                                                  SparkSession sparkSession,
                                                                  TypedProperties props,
                                                                  HoodieSparkEngineContext hoodieSparkContext,
-                                                                 HoodieStorage storage) {
+                                                                 FileSystem fileSystem) {
     String errorTableWriterClass = props.getString(ERROR_TABLE_WRITE_CLASS.key());
     ValidationUtils.checkState(!StringUtils.isNullOrEmpty(errorTableWriterClass),
         "Missing error table config " + ERROR_TABLE_WRITE_CLASS);
@@ -65,7 +64,7 @@ public final class ErrorTableUtils {
     try {
       return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass)
           .getConstructor(argClassArr)
-          .newInstance(cfg, sparkSession, props, hoodieSparkContext, storage));
+          .newInstance(cfg, sparkSession, props, hoodieSparkContext, fileSystem));
     } catch (NoSuchMethodException | InvocationTargetException | InstantiationException
              | IllegalAccessException e) {
       throw new HoodieException(errMsg, e);

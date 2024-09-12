@@ -18,7 +18,8 @@
 package org.apache.hudi
 
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -266,9 +267,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
 @Test
 def testBulkInsertForDropPartitionColumn(): Unit = {
-  //create a new table
-  val tableName = "trips_table"
-  val basePath = "file:///tmp/trips_table"
+  // create a new table
   val columns = Seq("ts", "uuid", "rider", "driver", "fare", "city")
   val data =
     Seq((1695159649087L, "334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "driver-K", 19.10, "san_francisco"),
@@ -277,10 +276,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-F", "driver-P", 34.15, "sao_paulo"),
       (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"));
 
-  var inserts = spark.createDataFrame(data).toDF(columns: _*)
+  val inserts = spark.createDataFrame(data).toDF(columns: _*)
   inserts.write.format("hudi").
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "city").
-    option(HoodieWriteConfig.TABLE_NAME, tableName).
+    option(HoodieWriteConfig.TBL_NAME.key(), hoodieFooTableName).
     option("hoodie.datasource.write.recordkey.field", "uuid").
     option("hoodie.datasource.write.precombine.field", "rider").
     option("hoodie.datasource.write.operation", "bulk_insert").
@@ -288,10 +287,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     option("hoodie.populate.meta.fields", "false").
     option("hoodie.datasource.write.drop.partition.columns", "true").
     mode(SaveMode.Overwrite).
-    save(basePath)
+    save(tempBasePath)
 
   // Ensure the partition column (i.e 'city') can be read back
-  val tripsDF = spark.read.format("hudi").load(basePath)
+  val tripsDF = spark.read.format("hudi").load(tempBasePath)
   tripsDF.show()
   tripsDF.select("city").foreach(row => {
     assertNotNull(row)
@@ -301,7 +300,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   val partitions = Seq("city=san_francisco", "city=chennai", "city=sao_paulo")
   val partitionPaths = new Array[String](3)
   for (i <- partitionPaths.indices) {
-    partitionPaths(i) = String.format("%s/%s/*", basePath, partitions(i))
+    partitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
   }
   val rawFileDf = spark.sqlContext.read.parquet(partitionPaths(0), partitionPaths(1), partitionPaths(2))
   rawFileDf.show()
@@ -871,6 +870,27 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     }).count())
   }
 
+  @Test
+  def testDeletePartitionsWithWrongPartition(): Unit = {
+    var (_, fooTableModifier) = deletePartitionSetup()
+    fooTableModifier = fooTableModifier
+      .updated(DataSourceWriteOptions.PARTITIONS_TO_DELETE.key(), "2016/03/15" + "," + "2025/03")
+      .updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, spark.emptyDataFrame)
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
+    assertEquals(0, snapshotDF3.filter(entry => {
+      val partitionPath = entry.getString(3)
+      Seq("2015/03/16", "2015/03/17").count(p => partitionPath.equals(p)) != 1
+    }).count())
+
+    val activeTimeline = createMetaClient(spark, tempBasePath).getActiveTimeline
+    val metadata = TimelineUtils.getCommitMetadata(activeTimeline.lastInstant().get(), activeTimeline)
+      .asInstanceOf[HoodieReplaceCommitMetadata]
+    assertTrue(metadata.getOperationType.equals(WriteOperationType.DELETE_PARTITION))
+    // "2025/03" should not be in partitionToReplaceFileIds
+    assertEquals(Collections.singleton("2016/03/15"), metadata.getPartitionToReplaceFileIds.keySet())
+  }
+
   /**
    * Test case for non partition table with metatable support.
    */
@@ -1252,7 +1272,7 @@ object TestHoodieSparkSqlWriter {
 
     // NOTE: Hudi doesn't support Orc in Spark < 3.0
     //       Please check HUDI-4496 for more details
-    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_0) {
+    val targetScenarios = if (HoodieSparkUtils.gteqSpark3_3) {
       parquetScenarios ++ orcScenarios
     } else {
       parquetScenarios

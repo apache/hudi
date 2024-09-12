@@ -108,9 +108,9 @@ public class SchemaEvolutionContext {
       this.internalSchemaOption = schemaUtil.getTableInternalSchemaFromCommitMetadata();
     } catch (Exception e) {
       internalSchemaOption = Option.empty();
-      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePathV2()), e);
+      LOG.warn(String.format("failed to get internal Schema from hudi table：%s", metaClient.getBasePath()), e);
     }
-    LOG.info(String.format("finish init schema evolution for split: %s", split));
+    LOG.info("finish init schema evolution for split: {}", split);
   }
 
   private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
@@ -135,7 +135,7 @@ public class SchemaEvolutionContext {
    */
   public void doEvolutionForRealtimeInputFormat(AbstractRealtimeRecordReader realtimeRecordReader) throws Exception {
     if (!(split instanceof RealtimeSplit)) {
-      LOG.warn(String.format("expect realtime split for mor table, but find other type split %s", split));
+      LOG.warn("expect realtime split for mor table, but find other type split {}", split);
       return;
     }
     if (internalSchemaOption.isPresent()) {
@@ -159,8 +159,8 @@ public class SchemaEvolutionContext {
       realtimeRecordReader.setHiveSchema(hiveSchema);
       internalSchemaOption = Option.of(prunedInternalSchema);
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
-      LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
-          realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns));
+      LOG.info("About to read compacted logs {} for base split {}, projecting cols {}",
+          realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns);
     }
   }
 
@@ -181,7 +181,7 @@ public class SchemaEvolutionContext {
         prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
         InternalSchema querySchema = prunedSchema;
         long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
-        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient, false);
+        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient);
         InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true,
             true).mergeSchema();
         List<Types.Field> fields = mergedInternalSchema.columns();
@@ -269,7 +269,7 @@ public class SchemaEvolutionContext {
       case TIME:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
-        LOG.error(String.format("cannot convert unknown type: %s to Hive", type));
+        LOG.error("cannot convert unknown type: {} to Hive", type);
         throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", type));
     }
   }
@@ -309,8 +309,8 @@ public class SchemaEvolutionContext {
       String filterText = filterExpr.getExprString();
       String serializedFilterExpr = SerializationUtilities.serializeExpression(filterExpr);
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Pushdown initiated with filterText = " + filterText + ", filterExpr = "
-            + filterExpr + ", serializedFilterExpr = " + serializedFilterExpr);
+        LOG.debug("Pushdown initiated with filterText = {}, filterExpr = {}, serializedFilterExpr = {}",
+            filterText, filterExpr, serializedFilterExpr);
       }
       job.set(TableScanDesc.FILTER_TEXT_CONF_STR, filterText);
       job.set(TableScanDesc.FILTER_EXPR_CONF_STR, serializedFilterExpr);
@@ -327,7 +327,7 @@ public class SchemaEvolutionContext {
     }
     StringBuilder readColumnNames = new StringBuilder();
     List<String> tmpColNameList = Arrays.asList(job.get(serdeConstants.LIST_COLUMNS).split(","));
-    List<String> fullColNamelist = new ArrayList<String>(tmpColNameList);
+    List<String> fullColNamelist = new ArrayList<>(tmpColNameList);
     for (int index = 0; index < fields.size(); index++) {
       String colName = fields.get(index).name();
       if (readColumnNames.length() > 0) {

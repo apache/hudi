@@ -37,8 +37,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -68,20 +66,15 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public HoodieStorage getStorage(String path, StorageConfiguration<?> conf) {
-    return HoodieStorageUtils.getStorage(path, conf);
-  }
-
-  @Override
   public ClosableIterator<IndexedRecord> getFileRecordIterator(
       StoragePath filePath,
       long start,
       long length,
       Schema dataSchema,
       Schema requiredSchema,
-      StorageConfiguration<?> conf
+      HoodieStorage storage
   ) throws IOException {
-    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf)
+    HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO).getFileReader(new HoodieConfig(),
             filePath, HoodieFileFormat.PARQUET, Option.empty());
     return reader.getIndexedRecordIterator(dataSchema, requiredSchema);
@@ -169,14 +162,18 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(
-      ClosableIterator<IndexedRecord> skeletonFileIterator,
-      ClosableIterator<IndexedRecord> dataFileIterator) {
+  public ClosableIterator<IndexedRecord> mergeBootstrapReaders(ClosableIterator<IndexedRecord> skeletonFileIterator,
+                                                               Schema skeletonRequiredSchema,
+                                                               ClosableIterator<IndexedRecord> dataFileIterator,
+                                                               Schema dataRequiredSchema) {
     return null;
   }
 
   @Override
-  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to) {
+  public UnaryOperator<IndexedRecord> projectRecord(Schema from, Schema to, Map<String, String> renamedColumns) {
+    if (!renamedColumns.isEmpty()) {
+      throw new UnsupportedOperationException("Schema evolution is not supported for the test reader context");
+    }
     Map<String, Integer> fromFields = IntStream.range(0, from.getFields().size())
         .boxed()
         .collect(Collectors.toMap(

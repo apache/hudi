@@ -85,7 +85,7 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
   }
 
   @Override
-  public <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
+  protected <T> void processNextRecord(HoodieRecord<T> newRecord) throws IOException {
     String key = newRecord.getRecordKey();
     HoodieRecord<T> prevRecord = records.get(key);
     if (prevRecord != null) {
@@ -155,6 +155,12 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
     @Override
     public Builder withBasePath(String basePath) {
       this.basePath = basePath;
+      return this;
+    }
+
+    @Override
+    public Builder withBasePath(StoragePath basePath) {
+      this.basePath = basePath.toString();
       return this;
     }
 

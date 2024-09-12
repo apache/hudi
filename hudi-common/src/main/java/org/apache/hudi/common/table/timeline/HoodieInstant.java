@@ -24,6 +24,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -44,7 +45,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private static final String DELIMITER = ".";
 
-  private static final String UNDERSCORE = "_";
+  public static final String UNDERSCORE = "_";
 
   private static final String FILE_NAME_FORMAT_ERROR =
       "The provided file name %s does not conform to the required format";
@@ -111,6 +112,8 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   private final String action;
   private final String timestamp;
   private final String completionTime;
+  // Marker for older formats, we need the state transition time (pre table version 7)
+  private boolean isLegacy = false;
 
   /**
    * Load the instant from the meta FileStatus.
@@ -136,7 +139,17 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
           state = State.COMPLETED;
         }
       }
-      completionTime = timestamps.length > 1 ? timestamps[1] : null;
+      if (state == State.COMPLETED) {
+        if (timestamps.length > 1) {
+          completionTime = timestamps[1];
+        } else {
+          // for backward compatibility with 0.x release.
+          completionTime = HoodieInstantTimeGenerator.formatDate(new Date(pathInfo.getModificationTime()));
+          isLegacy = true;
+        }
+      } else {
+        completionTime = null;
+      }
     } else {
       throw new IllegalArgumentException("Failed to construct HoodieInstant: " + String.format(FILE_NAME_FORMAT_ERROR, fileName));
     }
@@ -188,6 +201,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
     Map<String, String> comparableMap = new HashMap<>();
     comparableMap.put(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMMIT_ACTION);
     comparableMap.put(HoodieTimeline.LOG_COMPACTION_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
+    comparableMap.put(HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
     return comparableMap;
   }
 
@@ -242,6 +256,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
       } else if (isRequested()) {
         return HoodieTimeline.makeRequestedReplaceFileName(timestamp);
       }
+    } else if (HoodieTimeline.CLUSTERING_ACTION.equals(action)) {
+      if (isInflight()) {
+        return HoodieTimeline.makeInflightClusteringFileName(timestamp);
+      } else if (isRequested()) {
+        return HoodieTimeline.makeRequestedClusteringFileName(timestamp);
+      }
     } else if (HoodieTimeline.INDEXING_ACTION.equals(action)) {
       if (isInflight()) {
         return HoodieTimeline.makeInflightIndexFileName(timestamp);
@@ -260,7 +280,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   private String getCompleteFileName(String completionTime) {
     ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(completionTime), "Completion time should not be empty");
-    String timestampWithCompletionTime = timestamp + "_" + completionTime;
+    String timestampWithCompletionTime = isLegacy ? timestamp : timestamp + "_" + completionTime;
     switch (action) {
       case HoodieTimeline.COMMIT_ACTION:
       case HoodieTimeline.COMPACTION_ACTION:

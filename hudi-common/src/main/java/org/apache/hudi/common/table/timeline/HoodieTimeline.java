@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -50,6 +51,7 @@ public interface HoodieTimeline extends Serializable {
   String ROLLBACK_ACTION = "rollback";
   String SAVEPOINT_ACTION = "savepoint";
   String REPLACE_COMMIT_ACTION = "replacecommit";
+  String CLUSTERING_ACTION = "clustering";
   String INFLIGHT_EXTENSION = ".inflight";
   // With Async Compaction, compaction instant can be in 3 states :
   // (compaction-requested), (compaction-inflight), (completed)
@@ -63,7 +65,7 @@ public interface HoodieTimeline extends Serializable {
   String SCHEMA_COMMIT_ACTION = "schemacommit";
   String[] VALID_ACTIONS_IN_TIMELINE = {COMMIT_ACTION, DELTA_COMMIT_ACTION,
       CLEAN_ACTION, SAVEPOINT_ACTION, RESTORE_ACTION, ROLLBACK_ACTION,
-      COMPACTION_ACTION, REPLACE_COMMIT_ACTION, INDEXING_ACTION};
+      COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, INDEXING_ACTION};
 
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
@@ -90,6 +92,8 @@ public interface HoodieTimeline extends Serializable {
   String INFLIGHT_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION + REQUESTED_EXTENSION;
   String REPLACE_COMMIT_EXTENSION = "." + REPLACE_COMMIT_ACTION;
+  String INFLIGHT_CLUSTERING_COMMIT_EXTENSION = "." + CLUSTERING_ACTION + INFLIGHT_EXTENSION;
+  String REQUESTED_CLUSTERING_COMMIT_EXTENSION = "." + CLUSTERING_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION + REQUESTED_EXTENSION;
   String INDEX_COMMIT_EXTENSION = "." + INDEXING_ACTION;
@@ -139,11 +143,11 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingExcludingLogCompaction();
 
   /**
-   * Filter this timeline to just include the in-flights excluding major and minor compaction instants.
+   * Filter this timeline to just include the in-flights excluding compaction and log compaction instants.
    *
-   * @return New instance of HoodieTimeline with just in-flights excluding major and minor compaction instants
+   * @return New instance of HoodieTimeline with just in-flights excluding compaction and log compaction instants
    */
-  HoodieTimeline filterPendingExcludingMajorAndMinorCompaction();
+  HoodieTimeline filterPendingExcludingCompactionAndLogCompaction();
 
   /**
    * Filter this timeline to just include the completed instants.
@@ -222,6 +226,21 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterPendingReplaceTimeline();
 
   /**
+   * Filter this timeline to just include requested and inflight cluster commit instants.
+   */
+  HoodieTimeline filterPendingClusteringTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight cluster or replace commit instants.
+   */
+  HoodieTimeline filterPendingReplaceOrClusteringTimeline();
+
+  /**
+   * Filter this timeline to just include requested and inflight cluster, replace commit or compaction instants.
+   */
+  HoodieTimeline filterPendingReplaceClusteringAndCompactionTimeline();
+
+  /**
    * Filter this timeline to include pending rollbacks.
    */
   HoodieTimeline filterPendingRollbackTimeline();
@@ -232,9 +251,14 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterRequestedRollbackTimeline();
 
   /**
-   * Create a new Timeline with all the instants after startTs.
+   * Create a new Timeline with numCommits after startTs.
    */
   HoodieTimeline findInstantsAfterOrEquals(String commitTime, int numCommits);
+
+  /**
+   * Create a new Timeline with all the instants after startTs.
+   */
+  HoodieTimeline findInstantsAfterOrEquals(String commitTime);
 
   /**
    * Create a new Timeline with instants after startTs and before or on endTs.
@@ -405,8 +429,7 @@ public interface HoodieTimeline extends Serializable {
    *
    */
   public Option<HoodieInstant> getLastPendingClusterInstant();
-
-
+  
   /**
    * get the least recent pending cluster commit if present
    */
@@ -415,7 +438,7 @@ public interface HoodieTimeline extends Serializable {
   /**
    * return true if instant is a pending clustering commit, otherwise false
    */
-  public boolean isPendingClusterInstant(String instantTime);
+  public boolean isPendingClusteringInstant(String instantTime);
 
   /**
    * Read the completed instant details.
@@ -435,6 +458,29 @@ public interface HoodieTimeline extends Serializable {
 
   static boolean compareTimestamps(String commit1, BiPredicate<String, String> predicateToApply, String commit2) {
     return predicateToApply.test(commit1, commit2);
+  }
+
+  /**
+   * Returns smaller of the two given timestamps. Returns the non null argument if one of the argument is null.
+   */
+  static String minTimestamp(String commit1, String commit2) {
+    if (StringUtils.isNullOrEmpty(commit1)) {
+      return commit2;
+    } else if (StringUtils.isNullOrEmpty(commit2)) {
+      return commit1;
+    }
+    return minInstant(commit1, commit2);
+  }
+
+  /**
+   * Returns smaller of the two given instants compared by their respective timestamps.
+   * Returns the non null argument if one of the argument is null.
+   */
+  static HoodieInstant minTimestampInstant(HoodieInstant instant1, HoodieInstant instant2) {
+    String commit1 = instant1 != null ? instant1.getTimestamp() : null;
+    String commit2 = instant2 != null ? instant2.getTimestamp() : null;
+    String minTimestamp = minTimestamp(commit1, commit2);
+    return Objects.equals(minTimestamp, commit1) ? instant1 : instant2;
   }
 
   /**
@@ -511,6 +557,14 @@ public interface HoodieTimeline extends Serializable {
 
   static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
     return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
+  }
+
+  static HoodieInstant getClusteringCommitRequestedInstant(final String timestamp) {
+    return new HoodieInstant(State.REQUESTED, CLUSTERING_ACTION, timestamp);
+  }
+
+  static HoodieInstant getClusteringCommitInflightInstant(final String timestamp) {
+    return new HoodieInstant(State.INFLIGHT, CLUSTERING_ACTION, timestamp);
   }
 
   static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
@@ -646,6 +700,14 @@ public interface HoodieTimeline extends Serializable {
 
   static String makeRequestedReplaceFileName(String instant) {
     return StringUtils.join(instant, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
+  }
+
+  static String makeRequestedClusteringFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION);
+  }
+
+  static String makeInflightClusteringFileName(String instant) {
+    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION);
   }
 
   static String makeDeltaFileName(String instantTime) {

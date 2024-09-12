@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -86,16 +87,21 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   private HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieWriteConfig config;
+  private final WriteOperationType operationType;
 
   public UpsertPartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
-      HoodieWriteConfig config) {
+                           HoodieWriteConfig config, WriteOperationType operationType) {
     super(profile, table);
     updateLocationToBucket = new HashMap<>();
     partitionPathToInsertBucketInfos = new HashMap<>();
     bucketInfoMap = new HashMap<>();
     this.config = config;
+    this.operationType = operationType;
     assignUpdates(profile);
-    assignInserts(profile, context);
+    long totalInserts = profile.getInputPartitionPathStatMap().values().stream().mapToLong(stat -> stat.getNumInserts()).sum();
+    if (!WriteOperationType.isPreppedWriteOperation(operationType) || totalInserts > 0) { // skip if its prepped write operation. or if totalInserts = 0.
+      assignInserts(profile, context);
+    }
 
     LOG.info("Total Buckets: {}, bucketInfoMap size: {}, partitionPathToInsertBucketInfos size: {}, updateLocationToBucket size: {}",
         totalBuckets, bucketInfoMap.size(), partitionPathToInsertBucketInfos.size(), updateLocationToBucket.size());
@@ -187,12 +193,12 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
 
         List<SmallFile> smallFiles =
             filterSmallFilesInClustering(partitionPathToPendingClusteringFileGroupsId.getOrDefault(partitionPath, Collections.emptySet()),
-                partitionSmallFilesMap.getOrDefault(partitionPath, new ArrayList<>()));
+                partitionSmallFilesMap.getOrDefault(partitionPath, Collections.emptyList()));
 
         this.smallFiles.addAll(smallFiles);
 
-        LOG.info("For partitionPath : " + partitionPath + " Total Small Files => " + smallFiles.size());
-        LOG.debug("For partitionPath : " + partitionPath + " Small Files => " + smallFiles);
+        LOG.info("For partitionPath : {} Total Small Files => {}", partitionPath, smallFiles.size());
+        LOG.debug("For partitionPath : {} Small Files => {}", partitionPath, smallFiles);
 
         long totalUnassignedInserts = pStat.getNumInserts();
         List<Integer> bucketNumbers = new ArrayList<>();
@@ -271,12 +277,16 @@ public class UpsertPartitioner<T> extends SparkHoodiePartitioner<T> {
   }
 
   private Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths, HoodieEngineContext context) {
+    if (config.getParquetSmallFileLimit() <= 0) {
+      return Collections.emptyMap();
+    }
+
+    if (table.getMetaClient().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
+      return Collections.emptyMap();
+    }
+
     JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(context);
     Map<String, List<SmallFile>> partitionSmallFilesMap = new HashMap<>();
-
-    if (config.getParquetSmallFileLimit() <= 0) {
-      return partitionSmallFilesMap;
-    }
 
     if (partitionPaths != null && partitionPaths.size() > 0) {
       context.setJobStatus(this.getClass().getSimpleName(), "Getting small files from partitions: " + config.getTableName());

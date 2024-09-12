@@ -17,21 +17,20 @@
 
 package org.apache.spark.sql.hudi
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
-import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.storage.StoragePathInfo
-
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -66,24 +65,25 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     avroSchema.map(AvroConversionUtils.convertAvroSchemaToStructType)
   }
 
-  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable): Seq[String] = {
+  def getAllPartitionPaths(spark: SparkSession, table: CatalogTable, storage: HoodieStorage): Seq[String] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getAllPartitionPaths(sparkEngine, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
+    FSUtils.getAllPartitionPaths(sparkEngine, storage, metadataConfig, getTableLocation(table, spark)).asScala.toSeq
   }
 
   def getFilesInPartitions(spark: SparkSession,
                            table: CatalogTable,
+                           storage: HoodieStorage,
                            partitionPaths: Seq[String]): Map[String, Seq[StoragePathInfo]] = {
     val sparkEngine = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
     val metadataConfig = {
       val properties = TypedProperties.fromMap((spark.sessionState.conf.getAllConfs ++ table.storage.properties ++ table.properties).asJava)
       HoodieMetadataConfig.newBuilder.fromProperties(properties).build()
     }
-    FSUtils.getFilesInPartitions(sparkEngine, metadataConfig, getTableLocation(table, spark),
+    FSUtils.getFilesInPartitions(sparkEngine, storage, metadataConfig, getTableLocation(table, spark),
       partitionPaths.toArray).asScala
       .map(e => (e._1, e._2.asScala.toSeq))
       .toMap
@@ -226,8 +226,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    *
    * TODO: standardize the key prefix so that we don't need this helper (HUDI-4935)
    */
-  def isHoodieConfigKey(key: String): Boolean =
-    key.startsWith("hoodie.") || key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
+  private def isHoodieConfigKey(key: String, commitMetadataKeyPrefix: String): Boolean =
+    key.startsWith("hoodie.") || key.startsWith(commitMetadataKeyPrefix) ||
+      key == DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key
+
+  def filterHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filterKeys(isHoodieConfigKey(_,
+      opts.getOrElse(COMMIT_METADATA_KEYPREFIX.key, COMMIT_METADATA_KEYPREFIX.defaultValue()))).toMap
 
   /**
    * Checks whether Spark is using Hive as Session's Catalog

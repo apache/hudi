@@ -41,13 +41,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieBackedTestDelayedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterEach;
@@ -112,7 +112,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
           .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
               .withRemoteServerPort(incrementTimelineServicePortToUse()).build())
           .build();
-      timelineService = new TimelineService(localEngineContext, new Configuration(),
+      timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().enableMarkerRequests(true)
               .serverPort(config.getViewStorageConfig().getRemoteViewServerPort()).build(),
           HoodieStorageUtils.getStorage(getDefaultStorageConf()),
@@ -120,7 +120,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
               context, config.getViewStorageConfig(),
               config.getCommonConfig(),
               metaClient -> new HoodieBackedTestDelayedTableMetadata(
-                  context, config.getMetadataConfig(), metaClient.getBasePathV2().toString(), true)));
+                  context, metaClient.getStorage(), config.getMetadataConfig(), metaClient.getBasePath().toString(), true)));
       timelineService.startService();
       timelineServicePort = timelineService.getServerPort();
       LOG.info("Started timeline server on port: " + timelineServicePort);

@@ -168,7 +168,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> GLOBAL_SIMPLE_INDEX_PARALLELISM = ConfigProperty
       .key("hoodie.global.simple.index.parallelism")
-      .defaultValue("100")
+      .defaultValue("0")
       .markAdvanced()
       .withDocumentation("Only applies if index type is GLOBAL_SIMPLE. "
           + "This limits the parallelism of fetching records from the base files of all table "
@@ -333,6 +333,11 @@ public class HoodieIndexConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Only applies when #recordIndexUseCaching is set. Determine what level of persistence is used to cache input RDDs. "
           + "Refer to org.apache.spark.storage.StorageLevel for different values");
+
+  public static final ConfigProperty<Boolean> BUCKET_QUERY_INDEX = ConfigProperty
+      .key("hoodie.bucket.index.query.pruning")
+      .defaultValue(true)
+      .withDocumentation("Control if table with bucket index use bucket query or not");
 
   /**
    * Deprecated configs. These are now part of {@link HoodieHBaseIndexConfig}.

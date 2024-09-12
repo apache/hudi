@@ -18,12 +18,15 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -31,6 +34,8 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -38,7 +43,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
+import static org.apache.avro.Schema.Type.STRING;
 import static org.apache.avro.Schema.Type.UNION;
 
 /**
@@ -68,6 +75,75 @@ public class AvroInternalSchemaConverter {
    */
   public static Schema convert(InternalSchema internalSchema, String name) {
     return buildAvroSchemaFromInternalSchema(internalSchema, name);
+  }
+
+  public static InternalSchema pruneAvroSchemaToInternalSchema(Schema schema, InternalSchema originSchema) {
+    List<String> pruneNames = collectColNamesFromSchema(schema);
+    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
+  }
+
+  /**
+   * Collect all the leaf nodes names.
+   *
+   * @param schema a avro schema.
+   * @return leaf nodes full names.
+   */
+  @VisibleForTesting
+  static List<String> collectColNamesFromSchema(Schema schema) {
+    List<String> result = new ArrayList<>();
+    Deque<String> visited = new LinkedList<>();
+    collectColNamesFromAvroSchema(schema, visited, result);
+    return result;
+  }
+
+  private static void collectColNamesFromAvroSchema(Schema schema, Deque<String> visited, List<String> resultSet) {
+    switch (schema.getType()) {
+      case RECORD:
+        List<Schema.Field> fields = schema.getFields();
+        for (Schema.Field f : fields) {
+          visited.push(f.name());
+          collectColNamesFromAvroSchema(f.schema(), visited, resultSet);
+          visited.pop();
+          addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
+        }
+        return;
+
+      case UNION:
+        collectColNamesFromAvroSchema(AvroSchemaUtils.resolveNullableSchema(schema), visited, resultSet);
+        return;
+
+      case ARRAY:
+        visited.push("element");
+        collectColNamesFromAvroSchema(schema.getElementType(), visited, resultSet);
+        visited.pop();
+        addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
+        return;
+
+      case MAP:
+        addFullNameIfLeafNode(STRING, "key", visited, resultSet);
+        visited.push("value");
+        collectColNamesFromAvroSchema(schema.getValueType(), visited, resultSet);
+        visited.pop();
+        addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
+        return;
+
+      default:
+    }
+  }
+
+  private static void addFullNameIfLeafNode(Schema schema, String name, Deque<String> visited, List<String> resultSet) {
+    addFullNameIfLeafNode(AvroSchemaUtils.resolveNullableSchema(schema).getType(), name, visited, resultSet);
+  }
+
+  private static void addFullNameIfLeafNode(Schema.Type type, String name, Deque<String> visited, List<String> resultSet) {
+    switch (type) {
+      case RECORD:
+      case ARRAY:
+      case MAP:
+        return;
+      default:
+        resultSet.add(InternalSchemaUtils.createFullName(name, visited));
+    }
   }
 
   /**
@@ -117,10 +193,18 @@ public class AvroInternalSchemaConverter {
 
   /** Convert an avro schema into internal type. */
   public static Type convertToField(Schema schema) {
-    return buildTypeFromAvroSchema(schema);
+    return buildTypeFromAvroSchema(schema, Collections.emptyMap());
+  }
+
+  private static Type convertToField(Schema schema, Map<String, Integer> existingFieldNameToPositionMapping) {
+    return buildTypeFromAvroSchema(schema, existingFieldNameToPositionMapping);
   }
 
   /** Convert an avro schema into internalSchema. */
+  public static InternalSchema convert(Schema schema, Map<String, Integer> existingFieldNameToPositionMapping) {
+    return new InternalSchema((Types.RecordType) convertToField(schema, existingFieldNameToPositionMapping));
+  }
+
   public static InternalSchema convert(Schema schema) {
     return new InternalSchema((Types.RecordType) convertToField(schema));
   }
@@ -151,11 +235,11 @@ public class AvroInternalSchemaConverter {
    * @param schema a avro schema.
    * @return a hudi type.
    */
-  public static Type buildTypeFromAvroSchema(Schema schema) {
+  public static Type buildTypeFromAvroSchema(Schema schema, Map<String, Integer> existingNameToPositions) {
     // set flag to check this has not been visited.
-    Deque<String> visited = new LinkedList();
-    AtomicInteger nextId = new AtomicInteger(1);
-    return visitAvroSchemaToBuildType(schema, visited, true, nextId);
+    Deque<String> visited = new LinkedList<>();
+    AtomicInteger nextId = new AtomicInteger(0);
+    return visitAvroSchemaToBuildType(schema, visited, "", nextId, existingNameToPositions);
   }
 
   private static void checkNullType(Type fieldType, String fieldName, Deque<String> visited) {
@@ -172,11 +256,11 @@ public class AvroInternalSchemaConverter {
       throw new HoodieNullSchemaTypeException(sb.toString());
     } else if (fieldType.typeId() == Type.TypeID.ARRAY) {
       visited.push(fieldName);
-      checkNullType(((Types.ArrayType) fieldType).elementType(), "element", visited);
+      checkNullType(((Types.ArrayType) fieldType).elementType(), InternalSchema.ARRAY_ELEMENT, visited);
       visited.pop();
     } else if (fieldType.typeId() == Type.TypeID.MAP) {
       visited.push(fieldName);
-      checkNullType(((Types.MapType) fieldType).valueType(), "value", visited);
+      checkNullType(((Types.MapType) fieldType).valueType(), InternalSchema.MAP_VALUE, visited);
       visited.pop();
     }
   }
@@ -186,11 +270,11 @@ public class AvroInternalSchemaConverter {
    *
    * @param schema a avro schema.
    * @param visited track the visit node when do traversal for avro schema; used to check if the name of avro record schema is correct.
-   * @param firstVisitRoot track whether the current visited schema node is a root node.
+   * @param currentFieldPath the dot-separated path to the current field; empty at the root and always ends in a '.' otherwise for ease of concatenation.
    * @param nextId an initial id which used to create id for all fields.
    * @return a hudi type match avro schema.
    */
-  private static Type visitAvroSchemaToBuildType(Schema schema, Deque<String> visited, Boolean firstVisitRoot, AtomicInteger nextId) {
+  private static Type visitAvroSchemaToBuildType(Schema schema, Deque<String> visited, String currentFieldPath, AtomicInteger nextId, Map<String, Integer> existingNameToPosition) {
     switch (schema.getType()) {
       case RECORD:
         String name = schema.getFullName();
@@ -198,16 +282,15 @@ public class AvroInternalSchemaConverter {
           throw new HoodieSchemaException(String.format("cannot convert recursive avro record %s", name));
         }
         visited.push(name);
-        List<Schema.Field> fields = schema.getFields();
+        List<Schema.Field> fields = existingNameToPosition.isEmpty() ? schema.getFields() :
+            schema.getFields().stream()
+                .sorted(Comparator.comparing(field -> existingNameToPosition.getOrDefault(currentFieldPath + field.name(), Integer.MAX_VALUE)))
+                .collect(Collectors.toList());
         List<Type> fieldTypes = new ArrayList<>(fields.size());
         int nextAssignId = nextId.get();
-        // when first visit root record, set nextAssignId = 0;
-        if (firstVisitRoot) {
-          nextAssignId = 0;
-        }
         nextId.set(nextAssignId + fields.size());
-        fields.stream().forEach(field -> {
-          Type fieldType = visitAvroSchemaToBuildType(field.schema(), visited, false, nextId);
+        fields.forEach(field -> {
+          Type fieldType = visitAvroSchemaToBuildType(field.schema(), visited, currentFieldPath + field.name() + ".", nextId, existingNameToPosition);
           checkNullType(fieldType, field.name(), visited);
           fieldTypes.add(fieldType);
         });
@@ -226,22 +309,24 @@ public class AvroInternalSchemaConverter {
         //       them up into namespace/struct-name pair)
         return Types.RecordType.get(internalFields, schema.getFullName());
       case UNION:
-        List<Type> fTypes = new ArrayList<>();
-        schema.getTypes().stream().forEach(t -> {
-          fTypes.add(visitAvroSchemaToBuildType(t, visited, false, nextId));
+        List<Type> fTypes = new ArrayList<>(2);
+        schema.getTypes().forEach(t -> {
+          fTypes.add(visitAvroSchemaToBuildType(t, visited, currentFieldPath, nextId, existingNameToPosition));
         });
         return fTypes.get(0) == null ? fTypes.get(1) : fTypes.get(0);
       case ARRAY:
+        String elementPath = currentFieldPath + InternalSchema.ARRAY_ELEMENT + ".";
         Schema elementSchema = schema.getElementType();
         int elementId = nextId.get();
         nextId.set(elementId + 1);
-        Type elementType = visitAvroSchemaToBuildType(elementSchema, visited, false, nextId);
+        Type elementType = visitAvroSchemaToBuildType(elementSchema, visited, elementPath, nextId, existingNameToPosition);
         return Types.ArrayType.get(elementId, AvroInternalSchemaConverter.isOptional(schema.getElementType()), elementType);
       case MAP:
         int keyId = nextId.get();
         int valueId = keyId + 1;
         nextId.set(valueId + 1);
-        Type valueType = visitAvroSchemaToBuildType(schema.getValueType(),  visited, false, nextId);
+        String valuePath = currentFieldPath + InternalSchema.MAP_VALUE + ".";
+        Type valueType = visitAvroSchemaToBuildType(schema.getValueType(), visited, valuePath, nextId, existingNameToPosition);
         return Types.MapType.get(keyId, valueId, Types.StringType.get(), valueType, AvroInternalSchemaConverter.isOptional(schema.getValueType()));
       default:
         return visitAvroPrimitiveToBuildInternalType(schema);
@@ -492,7 +577,7 @@ public class AvroInternalSchemaConverter {
         return LogicalTypes.decimal(decimal.precision(), decimal.scale())
             .addToSchema(fixedSchema);
       }
-      
+
       default:
         throw new UnsupportedOperationException(
                 "Unsupported type ID: " + primitive.typeId());

@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -49,12 +50,10 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -87,6 +86,7 @@ public class HoodieFileSliceTestUtils {
   public static final String PARTITION_PATH = "partition_path";
   public static final String RIDER = "rider";
   public static final String ROW_KEY = "_row_key";
+  public static final int RECORD_KEY_INDEX = AVRO_SCHEMA.getField(ROW_KEY).pos();
   public static final String TIMESTAMP = "timestamp";
   public static final HoodieTestDataGenerator DATA_GEN =
       new HoodieTestDataGenerator(0xDEED);
@@ -167,21 +167,25 @@ public class HoodieFileSliceTestUtils {
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath logFilePath
+      StoragePath logFilePath,
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) {
     return createDataBlock(
         dataBlockType,
-        records.stream().map(HoodieAvroIndexedRecord::new)
+        records.stream().map(r -> new HoodieAvroIndexedRecord(r, new HoodieRecordLocation("", "", keyToPositionMap.get(r.get(RECORD_KEY_INDEX)))))
             .collect(Collectors.toList()),
         header,
-        logFilePath);
+        logFilePath,
+        writePositions);
   }
 
   private static HoodieDataBlock createDataBlock(
       HoodieLogBlock.HoodieLogBlockType dataBlockType,
       List<HoodieRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
-      StoragePath pathForReader
+      StoragePath pathForReader,
+      boolean writePositions
   ) {
     switch (dataBlockType) {
       case CDC_DATA_BLOCK:
@@ -192,7 +196,7 @@ public class HoodieFileSliceTestUtils {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(
             records,
-            false,
+            writePositions,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD);
       case HFILE_DATA_BLOCK:
@@ -205,7 +209,7 @@ public class HoodieFileSliceTestUtils {
       case PARQUET_DATA_BLOCK:
         return new HoodieParquetDataBlock(
             records,
-            false,
+            writePositions,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
             PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
@@ -221,21 +225,23 @@ public class HoodieFileSliceTestUtils {
       List<IndexedRecord> records,
       Map<HoodieLogBlock.HeaderMetadataType, String> header,
       Schema schema,
-      Properties props
+      Properties props,
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) {
     List<HoodieRecord> hoodieRecords = records.stream()
         .map(r -> {
           String rowKey = (String) r.get(r.getSchema().getField(ROW_KEY).pos());
           String partitionPath = (String) r.get(r.getSchema().getField(PARTITION_PATH).pos());
-          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r);
+          return new HoodieAvroIndexedRecord(new HoodieKey(rowKey, partitionPath), r, new HoodieRecordLocation("", "",  keyToPositionMap.get(r.get(RECORD_KEY_INDEX))));
         })
         .collect(Collectors.toList());
     return new HoodieDeleteBlock(
         hoodieRecords.stream().map(
             r -> Pair.of(DeleteRecord.create(
-                r.getKey(), r.getOrderingValue(schema, props)), -1L))
+                r.getKey(), r.getOrderingValue(schema, props)), r.getCurrentLocation().getPosition()))
             .collect(Collectors.toList()),
-        false,
+        writePositions,
         header
     );
   }
@@ -246,7 +252,7 @@ public class HoodieFileSliceTestUtils {
       Schema schema,
       String baseInstantTime
   ) throws IOException {
-    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
+    HoodieStorage storage = HoodieTestUtils.getStorage(baseFilePath);
 
     // TODO: Optimize these hard-coded parameters for test purpose. (HUDI-7214)
     HoodieConfig cfg = new HoodieConfig();
@@ -269,7 +275,7 @@ public class HoodieFileSliceTestUtils {
     cfg.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED.key(), "true");
 
     try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory
-        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), conf, cfg,
+        .getFileWriter(baseInstantTime, new StoragePath(baseFilePath), storage, cfg,
             schema, new LocalTaskContextSupplier(), HoodieRecord.HoodieRecordType.AVRO)) {
       for (IndexedRecord record : records) {
         writer.writeAvro(
@@ -287,7 +293,9 @@ public class HoodieFileSliceTestUtils {
       String fileId,
       String logInstantTime,
       int version,
-      HoodieLogBlock.HoodieLogBlockType blockType
+      HoodieLogBlock.HoodieLogBlockType blockType,
+      boolean writePositions,
+      Map<String, Long> keyToPositionMap
   ) throws InterruptedException, IOException {
     try (HoodieLogFormat.Writer writer =
              HoodieLogFormat.newWriterBuilder()
@@ -303,11 +311,11 @@ public class HoodieFileSliceTestUtils {
 
       if (blockType != DELETE_BLOCK) {
         HoodieDataBlock dataBlock = getDataBlock(
-            blockType, records, header, new StoragePath(logFilePath));
+            blockType, records, header, new StoragePath(logFilePath), writePositions, keyToPositionMap);
         writer.appendBlock(dataBlock);
       } else {
         HoodieDeleteBlock deleteBlock = getDeleteBlock(
-            records, header, schema, PROPERTIES);
+            records, header, schema, PROPERTIES, writePositions, keyToPositionMap);
         writer.appendBlock(deleteBlock);
       }
     }
@@ -330,6 +338,7 @@ public class HoodieFileSliceTestUtils {
     HoodieBaseFile baseFile = null;
     List<HoodieLogFile> logFiles = new ArrayList<>();
 
+    Map<String, Long> keyToPositionMap = new HashMap<>();
     // Generate a base file with records.
     DataGenerationPlan baseFilePlan = plans.get(0);
     if (!baseFilePlan.getRecordKeys().isEmpty()) {
@@ -341,6 +350,9 @@ public class HoodieFileSliceTestUtils {
           records,
           schema,
           baseFilePlan.getInstantTime());
+      for (int i = 0; i < baseFilePlan.getRecordKeys().size(); i++) {
+        keyToPositionMap.put(baseFilePlan.getRecordKeys().get(i), (long) i);
+      }
     }
 
     // Rest of plans are for log files.
@@ -363,7 +375,9 @@ public class HoodieFileSliceTestUtils {
           fileId,
           logFilePlan.getInstantTime(),
           i,
-          blockType));
+          blockType,
+          logFilePlan.getWritePositions(),
+          keyToPositionMap));
     }
 
     // Assemble the FileSlice finally.
@@ -393,6 +407,7 @@ public class HoodieFileSliceTestUtils {
         .withPartitionPath(partitionPath)
         .withTimeStamp(timestamp)
         .withInstantTime(baseInstantTime)
+        .withWritePositions(false)
         .build();
     plans.add(baseFilePlan);
 
@@ -414,6 +429,7 @@ public class HoodieFileSliceTestUtils {
       List<Long> timestamps,
       List<DataGenerationPlan.OperationType> operationTypes,
       List<String> instantTimes,
+      List<Boolean> shouldWritePositions,
       String basePath,
       String partitionPath,
       String fileId
@@ -427,6 +443,7 @@ public class HoodieFileSliceTestUtils {
           .withRecordKeys(keys)
           .withTimeStamp(timestamps.get(i))
           .withInstantTime(instantTimes.get(i))
+          .withWritePositions(shouldWritePositions.get(i))
           .build());
     }
 

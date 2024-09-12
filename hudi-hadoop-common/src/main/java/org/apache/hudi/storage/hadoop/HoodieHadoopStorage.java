@@ -20,6 +20,7 @@
 package org.apache.hudi.storage.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.HoodieRetryWrapperFileSystem;
@@ -59,7 +60,23 @@ public class HoodieHadoopStorage extends HoodieStorage {
   private final FileSystem fs;
 
   public HoodieHadoopStorage(StoragePath path, StorageConfiguration<?> conf) {
-    this(HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class)));
+    super(conf);
+    this.fs = HadoopFSUtils.getFs(path, conf.unwrapAs(Configuration.class));
+  }
+
+  public HoodieHadoopStorage(Path path, Configuration conf) {
+    super(HadoopFSUtils.getStorageConf(conf));
+    this.fs = HadoopFSUtils.getFs(path, conf);
+  }
+
+  public HoodieHadoopStorage(String path, Configuration conf) {
+    super(HadoopFSUtils.getStorageConf(conf));
+    this.fs = HadoopFSUtils.getFs(path, conf);
+  }
+
+  public HoodieHadoopStorage(String path, StorageConfiguration<?> conf) {
+    super(conf);
+    this.fs = HadoopFSUtils.getFs(path, conf);
   }
 
   public HoodieHadoopStorage(StoragePath path,
@@ -70,6 +87,7 @@ public class HoodieHadoopStorage extends HoodieStorage {
                              long initialRetryIntervalMs,
                              String retryExceptions,
                              ConsistencyGuard consistencyGuard) {
+    super(conf);
     FileSystem fileSystem = getFs(path, conf.unwrapCopyAs(Configuration.class));
 
     if (enableRetry) {
@@ -82,7 +100,13 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   public HoodieHadoopStorage(FileSystem fs) {
+    super(new HadoopStorageConfiguration(fs.getConf()));
     this.fs = fs;
+  }
+
+  @Override
+  public HoodieStorage newInstance(StoragePath path, StorageConfiguration<?> storageConf) {
+    return new HoodieHadoopStorage(path, storageConf);
   }
 
   @Override
@@ -189,6 +213,18 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
+  public List<StoragePathInfo> listDirectEntries(List<StoragePath> pathList,
+                                                 StoragePathFilter filter) throws IOException {
+    return Arrays.stream(fs.listStatus(
+            pathList.stream()
+                .map(HadoopFSUtils::convertToHadoopPath)
+                .toArray(Path[]::new),
+            e -> filter.accept(convertToStoragePath(e))))
+        .map(HadoopFSUtils::convertToStoragePathInfo)
+        .collect(Collectors.toList());
+  }
+
+  @Override
   public List<StoragePathInfo> globEntries(StoragePath pathPattern)
       throws IOException {
     return Arrays.stream(fs.globStatus(convertToHadoopPath(pathPattern)))
@@ -212,33 +248,29 @@ public class HoodieHadoopStorage extends HoodieStorage {
 
   @Override
   public boolean deleteDirectory(StoragePath path) throws IOException {
-    return fs.delete(convertToHadoopPath(path), true);
+    return delete(path, true);
+
   }
 
   @Override
   public boolean deleteFile(StoragePath path) throws IOException {
-    return fs.delete(convertToHadoopPath(path), false);
+    return delete(path, false);
   }
 
-  @Override
-  public StoragePath makeQualified(StoragePath path) {
-    return convertToStoragePath(
-        fs.makeQualified(convertToHadoopPath(path)));
+  private boolean delete(StoragePath path, boolean recursive) throws IOException {
+    Path hadoopPath = convertToHadoopPath(path);
+    boolean success = fs.delete(hadoopPath, recursive);
+    if (!success) {
+      if (fs.exists(hadoopPath)) {
+        throw new HoodieIOException("Failed to delete invalid data file: " + path);
+      }
+    }
+    return success;
   }
 
   @Override
   public Object getFileSystem() {
     return fs;
-  }
-
-  @Override
-  public StorageConfiguration<Configuration> getConf() {
-    return new HadoopStorageConfiguration(fs.getConf());
-  }
-
-  @Override
-  public Configuration unwrapConf() {
-    return fs.getConf();
   }
 
   @Override

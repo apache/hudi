@@ -31,8 +31,6 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -80,16 +78,12 @@ public class InternalSchemaCache {
    * @param metaClient current hoodie metaClient
    * @return internalSchema
    */
-  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient, boolean cacheEnable) {
+  public static InternalSchema searchSchemaAndCache(long versionID, HoodieTableMetaClient metaClient) {
     Option<InternalSchema> candidateSchema = getSchemaByReadingCommitFile(versionID, metaClient);
     if (candidateSchema.isPresent()) {
       return candidateSchema.get();
     }
-    if (!cacheEnable) {
-      // parse history schema and return directly
-      return InternalSchemaUtils.searchSchema(versionID, getHistoricalSchemas(metaClient));
-    }
-    String tablePath = metaClient.getBasePath();
+    String tablePath = metaClient.getBasePath().toString();
     // use segment lock to reduce competition.
     synchronized (lockList[tablePath.hashCode() & (lockList.length - 1)]) {
       TreeMap<Long, InternalSchema> historicalSchemas = HISTORICAL_SCHEMA_CACHE.getIfPresent(tablePath);
@@ -174,19 +168,19 @@ public class InternalSchemaCache {
    * step3:
    * if we cannot parser internalSchema in step2  (eg: schema evolution is not enabled when we create hoodie table, however after some inserts we enable schema evolution)
    * try to convert table schema to internalSchema.
-   * @param versionId the internalSchema version to be search.
-   * @param tablePath table path
-   * @param storageConf conf
+   *
+   * @param versionId    the internalSchema version to be search.
+   * @param tablePath    table path
+   * @param storage      {@link HoodieStorage} instance.
    * @param validCommits current validate commits, use to make up the commit file path/verify the validity of the history schema files
    * @return a internalSchema.
    */
-  public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, StorageConfiguration<?> storageConf, String validCommits) {
+  public static InternalSchema getInternalSchemaByVersionId(long versionId, String tablePath, HoodieStorage storage, String validCommits) {
     String avroSchema = "";
     Set<String> commitSet = Arrays.stream(validCommits.split(",")).collect(Collectors.toSet());
     List<String> validateCommitList =
         commitSet.stream().map(HoodieInstant::extractTimestamp).collect(Collectors.toList());
 
-    HoodieStorage storage = HoodieStorageUtils.getStorage(tablePath, storageConf);
     StoragePath hoodieMetaPath = new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME);
     //step1:
     StoragePath candidateCommitFile = commitSet.stream()
@@ -208,14 +202,12 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn(String.format(
-            "Cannot find internal schema from commit file %s. Falling back to parsing historical internal schema",
-            candidateCommitFile.toString()));
+        LOG.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
       }
     }
     // step2:
     FileBasedInternalSchemaStorageManager fileBasedInternalSchemaStorageManager =
-        new FileBasedInternalSchemaStorageManager(storageConf, new StoragePath(tablePath));
+        new FileBasedInternalSchemaStorageManager(storage, new StoragePath(tablePath));
     String latestHistorySchema =
         fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
     if (latestHistorySchema.isEmpty()) {
@@ -234,7 +226,7 @@ public class InternalSchemaCache {
   public static InternalSchema getInternalSchemaByVersionId(long versionId, HoodieTableMetaClient metaClient) {
     String validCommitLists = metaClient
         .getCommitsAndCompactionTimeline().filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getFileName).collect(Collectors.joining(","));
-    return getInternalSchemaByVersionId(versionId, metaClient.getBasePathV2().toString(), metaClient.getStorageConf(), validCommitLists);
+    return getInternalSchemaByVersionId(versionId, metaClient.getBasePath().toString(), metaClient.getStorage(), validCommitLists);
   }
 }
 

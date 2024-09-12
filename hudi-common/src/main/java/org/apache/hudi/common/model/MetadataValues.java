@@ -31,7 +31,8 @@ public class MetadataValues {
 
   private boolean set = false;
 
-  public MetadataValues() {}
+  public MetadataValues() {
+  }
 
   public String getCommitTime() {
     return commitTime;

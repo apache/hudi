@@ -28,6 +28,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -215,7 +216,7 @@ public class HoodieRealtimeRecordReaderUtils {
         }
         return new ArrayWritable(Writable.class, recordValues);
       case ENUM:
-        return new Text(value.toString());
+        return new BytesWritable(value.toString().getBytes());
       case ARRAY:
         GenericArray arrayValue = (GenericArray) value;
         Writable[] arrayValues = new Writable[arrayValue.size()];
@@ -312,7 +313,8 @@ public class HoodieRealtimeRecordReaderUtils {
   public static HoodieFileReader getBaseFileReader(Path path, JobConf conf) throws IOException {
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    return HoodieIOFactory.getIOFactory(storageConf).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    return HoodieIOFactory.getIOFactory(new HoodieHadoopStorage(path, conf))
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, convertToStoragePath(path));
   }
 

@@ -112,7 +112,7 @@ public class HoodieRowCreateHandle implements Serializable {
 
     this.currTimer = HoodieTimer.start();
 
-    HoodieStorage storage = table.getMetaClient().getStorage();
+    HoodieStorage storage = table.getStorage();
 
     String writeToken = getWriteToken(taskPartitionId, taskId, taskEpochId);
     String fileName = FSUtils.makeBaseFileName(instantTime, writeToken, this.fileId,
@@ -238,7 +238,7 @@ public class HoodieRowCreateHandle implements Serializable {
     stat.setPrevCommit(HoodieWriteStat.NULL_COMMIT);
     stat.setFileId(fileId);
     stat.setPath(new StoragePath(writeConfig.getBasePath()), path);
-    long fileSizeInBytes = FSUtils.getFileSize(table.getMetaClient().getStorage(), path);
+    long fileSizeInBytes = FSUtils.getFileSize(table.getStorage(), path);
     stat.setTotalWriteBytes(fileSizeInBytes);
     stat.setFileSizeInBytes(fileSizeInBytes);
     stat.setTotalWriteErrors(writeStatus.getTotalErrorRecords());

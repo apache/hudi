@@ -25,6 +25,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -51,6 +52,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -118,6 +120,7 @@ import java.util.function.Supplier;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
 /**
  * Bunch of helper methods.
@@ -242,13 +245,14 @@ public class UtilHelpers {
   }
 
   public static DFSPropertiesConfiguration readConfig(Configuration hadoopConfig,
-                                                      StoragePath cfgPath,
+                                                      Path cfgPath,
                                                       List<String> overriddenProps) {
-    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, cfgPath);
+    StoragePath storagePath = convertToStoragePath(cfgPath);
+    DFSPropertiesConfiguration conf = new DFSPropertiesConfiguration(hadoopConfig, storagePath);
     try {
       if (!overriddenProps.isEmpty()) {
         LOG.info("Adding overridden properties to file properties.");
-        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), cfgPath);
+        conf.addPropsFromStream(new BufferedReader(new StringReader(String.join("\n", overriddenProps))), storagePath);
       }
     } catch (IOException ioe) {
       throw new HoodieIOException("Unexpected error adding config overrides", ioe);
@@ -274,7 +278,7 @@ public class UtilHelpers {
   public static TypedProperties buildProperties(Configuration hadoopConf, String propsFilePath, List<String> props) {
     return StringUtils.isNullOrEmpty(propsFilePath)
         ? UtilHelpers.buildProperties(props)
-        : UtilHelpers.readConfig(hadoopConf, new StoragePath(propsFilePath), props)
+        : UtilHelpers.readConfig(hadoopConf, new Path(propsFilePath), props)
         .getProps(true);
   }
 
@@ -608,9 +612,12 @@ public class UtilHelpers {
         .build();
   }
 
-  public static void addLockOptions(String basePath, TypedProperties props) {
+  public static void addLockOptions(String basePath, String schema, TypedProperties props) {
     if (!props.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-      props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
+      List<String> customSupportedFSs = props.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
+      if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
+        props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
+      }
     }
   }
 

@@ -18,28 +18,49 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
+import org.apache.hudi.util.JFunction
+
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 abstract class SparkBaseIndexSupport(spark: SparkSession,
                                      metadataConfig: HoodieMetadataConfig,
                                      metaClient: HoodieTableMetaClient) {
   @transient protected lazy val engineCtx = new HoodieSparkEngineContext(new JavaSparkContext(spark.sparkContext))
   @transient protected lazy val metadataTable: HoodieTableMetadata =
-    HoodieTableMetadata.create(engineCtx, metadataConfig, metaClient.getBasePathV2.toString)
+    HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, metaClient.getBasePath.toString)
 
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  def computeCandidateIsStrict(spark: SparkSession,
+                               fileIndex: HoodieFileIndex,
+                               queryFilters: Seq[Expression],
+                               queryReferencedColumns: Seq[String],
+                               prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                               shouldPushDownFilesFilter: Boolean): Option[Set[String]] = {
+    try {
+      computeCandidateFileNames(fileIndex, queryFilters, queryReferencedColumns, prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
+    } catch {
+      case NonFatal(e) =>
+        spark.sqlContext.getConf(DataSkippingFailureMode.configName, DataSkippingFailureMode.Fallback.value) match {
+          case DataSkippingFailureMode.Fallback.value => Option.empty
+          case DataSkippingFailureMode.Strict.value => throw e;
+        }
+    }
+  }
 
   def computeCandidateFileNames(fileIndex: HoodieFileIndex,
                                 queryFilters: Seq[Expression],
@@ -97,12 +118,58 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * or b) executing it on-cluster via Spark [[Dataset]] and [[RDD]] APIs
    */
   protected def shouldReadInMemory(fileIndex: HoodieFileIndex, queryReferencedColumns: Seq[String], inMemoryProjectionThreshold: Integer): Boolean = {
+    // NOTE: Since executing on-cluster via Spark API has its own non-trivial amount of overhead,
+    //       it's most often preferential to fetch index w/in the same process (usually driver),
+    //       w/o resorting to on-cluster execution.
+    //       For that we use a simple-heuristic to determine whether we should read and process the index in-memory or
+    //       on-cluster: total number of rows of the expected projected portion of the index has to be below the
+    //       threshold (of 100k records)
     Option(metadataConfig.getColumnStatsIndexProcessingModeOverride) match {
       case Some(mode) =>
         mode == HoodieMetadataConfig.COLUMN_STATS_INDEX_PROCESSING_MODE_IN_MEMORY
       case None =>
         fileIndex.getFileSlicesCount * queryReferencedColumns.length < inMemoryProjectionThreshold
     }
+  }
+
+  /**
+   * Given query filters, it filters the EqualTo and IN queries on simple record key columns and returns a tuple of
+   * list of such queries and list of record key literals present in the query.
+   * If record index is not available, it returns empty list for record filters and record keys
+   * @param queryFilters The queries that need to be filtered.
+   * @return Tuple of List of filtered queries and list of record key literals that need to be matched
+   */
+  protected def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
+    if (!isIndexAvailable) {
+      (List.empty, List.empty)
+    } else {
+      var recordKeyQueries: List[Expression] = List.empty
+      var recordKeys: List[String] = List.empty
+      for (query <- queryFilters) {
+        val recordKeyOpt = getRecordKeyConfig
+        RecordLevelIndexSupport.filterQueryWithRecordKey(query, recordKeyOpt).foreach({
+          case (exp: Expression, recKeys: List[String]) =>
+            recordKeys = recordKeys ++ recKeys
+            recordKeyQueries = recordKeyQueries :+ exp
+        })
+      }
+
+      Tuple2.apply(recordKeyQueries, recordKeys)
+    }
+  }
+
+  /**
+   * Returns the configured record key for the table if it is a simple record key else returns empty option.
+   */
+  private def getRecordKeyConfig: Option[String] = {
+    val recordKeysOpt: org.apache.hudi.common.util.Option[Array[String]] = metaClient.getTableConfig.getRecordKeyFields
+    val recordKeyOpt = recordKeysOpt.map[String](JFunction.toJavaFunction[Array[String], String](arr =>
+      if (arr.length == 1) {
+        arr(0)
+      } else {
+        null
+      }))
+    Option.apply(recordKeyOpt.orElse(null))
   }
 
 }

@@ -27,14 +27,13 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -74,11 +73,11 @@ import java.util.stream.StreamSupport;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.io.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
-import static org.apache.hudi.io.hadoop.HoodieHFileConfig.HFILE_COMPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -92,7 +91,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   // Number of records in HFile fixtures for compatibility tests
   protected static final int NUM_RECORDS_FIXTURE = 50;
 
-  protected abstract HoodieAvroHFileReaderImplBase createHFileReader(StorageConfiguration<?> conf,
+  protected abstract HoodieAvroHFileReaderImplBase createHFileReader(HoodieStorage storage,
                                                                      byte[] content) throws IOException;
 
   protected abstract void verifyHFileReader(byte[] content,
@@ -114,7 +113,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   protected HoodieAvroHFileWriter createWriter(
       Schema avroSchema, boolean populateMetaFields) throws Exception {
     String instantTime = "000";
-    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
     TaskContextSupplier mockTaskContextSupplier = Mockito.mock(TaskContextSupplier.class);
@@ -123,7 +122,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     when(partitionSupplier.get()).thenReturn(10);
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), conf, HoodieStorageConfig.newBuilder().fromProperties(props).build(), avroSchema,
+        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), avroSchema,
         mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
   }
 
@@ -133,8 +132,8 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   }
 
   @Override
-  protected void verifyMetadata(StorageConfiguration<?> conf) throws IOException {
-    try (HoodieAvroFileReader reader = createReader(conf)) {
+  protected void verifyMetadata(HoodieStorage storage) throws IOException {
+    try (HoodieAvroFileReader reader = createReader(storage)) {
       assertEquals(NUM_RECORDS, reader.getTotalRecords());
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -142,8 +141,8 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   }
 
   @Override
-  protected void verifySchema(StorageConfiguration<?> conf, String schemaPath) throws IOException {
-    try (HoodieAvroFileReader reader = createReader(conf)) {
+  protected void verifySchema(HoodieStorage storage, String schemaPath) throws IOException {
+    try (HoodieAvroFileReader reader = createReader(storage)) {
       assertEquals(
           getSchemaFromResource(TestHoodieHBaseHFileReaderWriter.class, schemaPath),
           reader.getSchema());
@@ -180,9 +179,9 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     }
     writer.close();
 
-    StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     HoodieAvroHFileReaderImplBase hoodieHFileReader =
-        (HoodieAvroHFileReaderImplBase) createReader(conf);
+        (HoodieAvroHFileReaderImplBase) createReader(storage);
     List<IndexedRecord> records = HoodieAvroHFileReaderImplBase.readAllRecords(hoodieHFileReader);
     assertEquals(new ArrayList<>(recordMap.values()), records);
 
@@ -198,7 +197,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
       List<GenericRecord> expectedRecords =
           rowsList.stream().map(recordMap::get).collect(Collectors.toList());
 
-      hoodieHFileReader = (HoodieAvroHFileReaderImplBase) createReader(conf);
+      hoodieHFileReader = (HoodieAvroHFileReaderImplBase) createReader(storage);
       List<GenericRecord> result =
           HoodieAvroHFileReaderImplBase.readRecords(hoodieHFileReader, rowsList).stream()
               .map(r -> (GenericRecord) r).collect(Collectors.toList());
@@ -226,12 +225,11 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   @Test
   public void testReadHFileFormatRecords() throws Exception {
     writeFileWithSimpleSchema();
-    HoodieStorage storage = HoodieStorageUtils.getStorage(getFilePath(), HadoopFSUtils.getStorageConf(new Configuration()));
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     byte[] content = FileIOUtils.readAsByteArray(
         storage.open(getFilePath()), (int) storage.getPathInfo(getFilePath()).getLength());
     // Reading byte array in HFile format, without actual file path
-    StorageConfiguration<?> storageConf = storage.getConf();
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storageConf, content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
@@ -243,7 +241,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   public void testReaderGetRecordIterator() throws Exception {
     writeFileWithSimpleSchema();
     try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HadoopFSUtils.getStorageConf(new Configuration()))) {
+        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
       List<String> keys =
           IntStream.concat(IntStream.range(40, NUM_RECORDS * 2), IntStream.range(10, 20))
               .mapToObj(i -> "key" + String.format("%02d", i)).collect(Collectors.toList());
@@ -271,7 +269,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   public void testReaderGetRecordIteratorByKeys() throws Exception {
     writeFileWithSimpleSchema();
     try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HadoopFSUtils.getStorageConf(new Configuration()))) {
+        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
 
@@ -315,7 +313,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
   public void testReaderGetRecordIteratorByKeyPrefixes() throws Exception {
     writeFileWithSimpleSchema();
     try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase)
-        createReader(HadoopFSUtils.getStorageConf(new Configuration()))) {
+        createReader(HoodieTestUtils.getStorage(getFilePath()))) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
 
@@ -455,8 +453,8 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     verifyHFileReader(
         content, hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
 
-    StorageConfiguration storageConf = HadoopFSUtils.getStorageConf(fs.getConf());
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storageConf, content)) {
+    HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());
@@ -466,7 +464,7 @@ public abstract class TestHoodieHFileReaderWriterBase extends TestHoodieReaderWr
     content = readHFileFromResources(complexHFile);
     verifyHFileReader(
         content, hfilePrefix, true, HFILE_COMPARATOR.getClass(), NUM_RECORDS_FIXTURE);
-    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storageConf, content)) {
+    try (HoodieAvroHFileReaderImplBase hfileReader = createHFileReader(storage, content)) {
       Schema avroSchema =
           getSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchemaWithUDT.avsc");
       assertEquals(NUM_RECORDS_FIXTURE, hfileReader.getTotalRecords());

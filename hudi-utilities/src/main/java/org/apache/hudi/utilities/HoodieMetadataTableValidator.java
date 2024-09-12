@@ -62,6 +62,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -77,7 +78,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -258,7 +258,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @return the {@link TypedProperties} instance.
    */
   private TypedProperties readConfigFromFileSystem(JavaSparkContext jsc, Config cfg) {
-    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new StoragePath(cfg.propsFilePath), cfg.configs)
+    return UtilHelpers.readConfig(jsc.hadoopConfiguration(), new Path(cfg.propsFilePath), cfg.configs)
         .getProps(true);
   }
 
@@ -281,6 +281,9 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
+
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    public Integer validateLastNFileSlices = null;
 
     @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
     public boolean validateAllColumnStats = false;
@@ -347,6 +350,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-latest-file-slices " + validateLatestFileSlices + ", \n"
           + "   --validate-latest-base-files " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
+          + "   --validate-last-n-file-slices " + validateLastNFileSlices + ", \n"
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
@@ -482,7 +486,7 @@ public class HoodieMetadataTableValidator implements Serializable {
   public boolean doMetadataTableValidation() {
     boolean finalResult = true;
     metaClient.reloadActiveTimeline();
-    String basePath = metaClient.getBasePath();
+    StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
     // check metadata table is available to read.
@@ -616,13 +620,13 @@ public class HoodieMetadataTableValidator implements Serializable {
    * Compare the listing partitions result between metadata table and fileSystem.
    */
   @VisibleForTesting
-  List<String> validatePartitions(HoodieSparkEngineContext engineContext, String basePath, HoodieTableMetaClient metaClient) {
+  List<String> validatePartitions(HoodieSparkEngineContext engineContext, StoragePath basePath, HoodieTableMetaClient metaClient) {
     // compare partitions
     HoodieTimeline completedTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     List<String> allPartitionPathsFromFS = getPartitionsFromFileSystem(engineContext, basePath, metaClient.getStorage(),
         completedTimeline);
 
-    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath);
+    List<String> allPartitionPathsMeta = getPartitionsFromMDT(engineContext, basePath, metaClient.getStorage());
 
     Collections.sort(allPartitionPathsFromFS);
     Collections.sort(allPartitionPathsMeta);
@@ -668,21 +672,22 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   @VisibleForTesting
-  Option<String> getPartitionCreationInstant(HoodieStorage storage, String basePath, String partition) {
+  Option<String> getPartitionCreationInstant(HoodieStorage storage, StoragePath basePath, String partition) {
     HoodiePartitionMetadata hoodiePartitionMetadata =
         new HoodiePartitionMetadata(storage, FSUtils.constructAbsolutePath(basePath, partition));
     return hoodiePartitionMetadata.readPartitionCreatedCommitTime();
   }
 
   @VisibleForTesting
-   List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, String basePath) {
-    return FSUtils.getAllPartitionPaths(engineContext, basePath, true);
+  List<String> getPartitionsFromMDT(HoodieEngineContext engineContext, StoragePath basePath,
+                                    HoodieStorage storage) {
+    return FSUtils.getAllPartitionPaths(engineContext, storage, basePath, true);
   }
 
   @VisibleForTesting
-  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, String basePath,
+  List<String> getPartitionsFromFileSystem(HoodieEngineContext engineContext, StoragePath basePath,
                                            HoodieStorage storage, HoodieTimeline completedTimeline) {
-    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, basePath, false);
+    List<String> allPartitionPathsFromFS = FSUtils.getAllPartitionPaths(engineContext, storage, basePath, false);
 
     // ignore partitions created by uncommitted ingestion.
     return allPartitionPathsFromFS.stream().parallel().filter(part -> {
@@ -780,6 +785,17 @@ public class HoodieMetadataTableValidator implements Serializable {
           .getSortedAllFileGroupList(partitionPath).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
+    }
+    if (cfg.validateLastNFileSlices != null) {
+      int lastNFileSlices = cfg.validateLastNFileSlices;
+      int allFileSlicesFromFSCount = allFileSlicesFromFS.size();
+      if (allFileSlicesFromFSCount > lastNFileSlices) {
+        allFileSlicesFromFS = allFileSlicesFromFS.subList(allFileSlicesFromFSCount - lastNFileSlices, allFileSlicesFromFSCount);
+      }
+      int allFileSlicesFromMetaCount = allFileSlicesFromMeta.size();
+      if (allFileSlicesFromMetaCount > lastNFileSlices) {
+        allFileSlicesFromMeta = allFileSlicesFromMeta.subList(allFileSlicesFromMetaCount - lastNFileSlices, allFileSlicesFromMetaCount);
+      }
     }
 
     LOG.debug("All file slices from metadata: {}. For partitions {}", allFileSlicesFromMeta, partitionPath);
@@ -905,7 +921,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateRecordIndexCount(HoodieSparkEngineContext sparkEngineContext,
                                         HoodieTableMetaClient metaClient) {
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     long countKeyFromTable = sparkEngineContext.getSqlContext().read().format("hudi")
@@ -932,7 +948,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateRecordIndexContent(HoodieSparkEngineContext sparkEngineContext,
                                           HoodieTableMetaClient metaClient) {
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
         .filterCompletedInstants().lastInstant().get().getTimestamp();
     JavaPairRDD<String, Pair<String, String>> keyToLocationOnFsRdd =
@@ -1036,6 +1052,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                       String basePath,
                                                                       String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
         .load(getMetadataTableBasePath(basePath))
         .filter("type = 5")
         .select(functions.col("key"),
@@ -1056,18 +1073,11 @@ public class HoodieMetadataTableValidator implements Serializable {
               row.getInt(row.fieldIndex("fileIndex")),
               row.getString(row.fieldIndex("fileId")),
               row.getLong(row.fieldIndex("instantTime")));
-          // handle false positive case. a commit was pending when FS based locations were fetched, but committed when MDT was polled.
-          if (HoodieTimeline.compareTimestamps(location.getInstantTime(), GREATER_THAN, latestCompletedCommit)) {
-            return new Tuple2<>(row, Option.empty());
-          } else {
-            return new Tuple2<>(row, Option.of(location));
-          }
+          return new Tuple2<>(row, Option.of(location));
         }).filter(tuple2 -> tuple2._2.isPresent()) // filter the false positives
-        .mapToPair(tuple2 -> {
-          Tuple2<Row, Option<HoodieRecordGlobalLocation>> rowAndLocation = (Tuple2<Row, Option<HoodieRecordGlobalLocation>>) tuple2;
-          return new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
-              Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId()));
-        }).cache();
+        .mapToPair(rowAndLocation -> new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
+            Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId())))
+        .cache();
   }
 
   private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,
@@ -1131,6 +1141,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
             || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())
             || !Objects.equals(fileSlice1.getBaseFile(), fileSlice2.getBaseFile())) {
+          mismatch = true;
+          break;
+        }
+        // test for log files equality
+        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
           mismatch = true;
           break;
         }
@@ -1202,7 +1217,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return false;
     }
 
-    String basePath = metaClient.getBasePathV2().toString();
+    String basePath = metaClient.getBasePath().toString();
     HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline();
     HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
@@ -1392,7 +1407,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .build();
       this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
           metaClient, metadataConfig);
-      this.tableMetadata = HoodieTableMetadata.create(engineContext, metadataConfig, metaClient.getBasePathV2().toString());
+      this.tableMetadata = HoodieTableMetadata.create(
+          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
       }
@@ -1437,11 +1453,13 @@ public class HoodieMetadataTableValidator implements Serializable {
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       } else {
+        FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.PARQUET);
         return baseFileNameList.stream().flatMap(filename ->
-                FileFormatUtils.getInstance(HoodieFileFormat.PARQUET).readColumnStatsFromMetadata(
-                    metaClient.getStorageConf(),
-                    new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath), filename),
-                    allColumnNameList).stream())
+                formatUtils.readColumnStatsFromMetadata(
+                        metaClient.getStorage(),
+                        new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
+                        allColumnNameList).stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
             .collect(Collectors.toList());
       }
@@ -1476,18 +1494,18 @@ public class HoodieMetadataTableValidator implements Serializable {
         return schemaResolver.getTableAvroSchema().getFields().stream()
             .map(Schema.Field::name).collect(Collectors.toList());
       } catch (Exception e) {
-        throw new HoodieException("Failed to get all column names for " + metaClient.getBasePathV2());
+        throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());
       }
     }
 
     private Option<BloomFilterData> readBloomFilterFromFile(String partitionPath, String filename) {
       StoragePath path = new StoragePath(
-          FSUtils.constructAbsolutePath(metaClient.getBasePathV2(), partitionPath).toString(), filename);
+          FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath).toString(), filename);
       BloomFilter bloomFilter;
       HoodieConfig hoodieConfig = new HoodieConfig();
       hoodieConfig.setValue(HoodieReaderConfig.USE_NATIVE_HFILE_READER,
           Boolean.toString(ConfigUtils.getBooleanWithAltKeys(props, HoodieReaderConfig.USE_NATIVE_HFILE_READER)));
-      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorageConf())
+      try (HoodieFileReader fileReader = getHoodieSparkIOFactory(metaClient.getStorage())
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(hoodieConfig, path)) {
         bloomFilter = fileReader.readBloomFilter();

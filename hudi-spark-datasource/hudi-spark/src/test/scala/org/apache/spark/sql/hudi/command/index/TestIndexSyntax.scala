@@ -20,6 +20,7 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -29,7 +30,7 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 class TestIndexSyntax extends HoodieSparkSqlTestBase {
 
   test("Test Create/Drop/Show/Refresh Index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val databaseName = "default"

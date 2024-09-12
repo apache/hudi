@@ -38,8 +38,9 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-import scala.collection.mutable
+
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with ProcedureBuilder with Logging {
   private val PARAMETERS = Array[ProcedureParameter](
@@ -82,7 +83,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val allFileSlices: Set[FileSlice] = {
       if (partitionsSeq.isEmpty) {
         val engineCtx = new HoodieSparkEngineContext(jsc)
-        val metaTable = HoodieTableMetadata.create(engineCtx, metadataConfig, basePath)
+        val metaTable = HoodieTableMetadata.create(engineCtx, metaClient.getStorage, metadataConfig, basePath)
         metaTable.getAllPartitionPaths
           .asScala
           .flatMap(path => fsView.getLatestFileSlices(path).iterator().asScala)

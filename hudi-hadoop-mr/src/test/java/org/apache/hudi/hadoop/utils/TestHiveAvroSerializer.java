@@ -18,11 +18,11 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.avro.generic.GenericArray;
 import org.apache.hudi.avro.HoodieAvroUtils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;

@@ -17,26 +17,26 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.cdc.HoodieCDCUtils
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils
+import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, IncrementalRelation, MergeOnReadIncrementalRelation, SparkAdapterSupport}
-
+import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.streaming.{Offset, Source}
 import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{DataFrame, SQLContext}
 
 /**
   * The Struct Stream Source for Hudi to consume the data by streaming job.
@@ -58,7 +58,7 @@ class HoodieStreamSource(
 
   private lazy val tablePath: StoragePath = {
     val path = new StoragePath(parameters.getOrElse("path", "Missing 'path' option"))
-    val fs = HoodieStorageUtils.getStorage(path, storageConf)
+    val fs = new HoodieHadoopStorage(path, storageConf)
     TablePathUtils.getTablePath(fs, path).get()
   }
 

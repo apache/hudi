@@ -36,7 +36,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -98,9 +97,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = new TransactionManager(config, table.getMetaClient().getStorage());
+    this.txnManager = new TransactionManager(config, table.getStorage());
     if (config.getMetadataConfig().isMetricsEnabled()) {
-      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), context.getStorageConf()));
+      this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
     } else {
       this.metrics = Option.empty();
     }
@@ -156,9 +155,9 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
           LOG.info("Total remaining instants to index: " + instantsToCatchup.size());
 
           // reconcile with metadata table timeline
-          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePathV2().toString());
+          String metadataBasePath = getMetadataTableBasePath(table.getMetaClient().getBasePath().toString());
           HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-              .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+              .setConf(storageConf.newInstance())
               .setBasePath(metadataBasePath).build();
           Set<String> metadataCompletedTimestamps = getCompletedArchivedAndActiveInstantsAfter(indexUptoInstant, metadataMetaClient).stream()
               .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
@@ -215,13 +214,13 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
     });
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS_INFLIGHT.key(), String.join(",", inflightPartitions));
     table.getMetaClient().getTableConfig().setValue(TABLE_METADATA_PARTITIONS.key(), String.join(",", completedPartitions));
-    HoodieTableConfig.update(table.getMetaClient().getStorage(),
+    HoodieTableConfig.update(table.getStorage(),
         table.getMetaClient().getMetaPath(), table.getMetaClient().getTableConfig().getProps());
 
     // delete metadata partition
     requestedPartitions.forEach(partition -> {
-      if (metadataPartitionExists(table.getMetaClient().getBasePathV2().toString(), context, partition)) {
-        deleteMetadataPartition(table.getMetaClient().getBasePathV2().toString(), context, partition);
+      if (metadataPartitionExists(table.getMetaClient().getBasePath(), context, partition)) {
+        deleteMetadataPartition(table.getMetaClient().getBasePath(), context, partition);
       }
     });
 

@@ -26,7 +26,6 @@ import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -35,13 +34,13 @@ import java.io.IOException;
 
 public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
 
-  public HoodieAvroFileReaderFactory(StorageConfiguration<?> storageConf) {
-    super(storageConf);
+  public HoodieAvroFileReaderFactory(HoodieStorage storage) {
+    super(storage);
   }
 
   @Override
   protected HoodieFileReader newParquetFileReader(StoragePath path) {
-    return new HoodieAvroParquetReader(storageConf, path);
+    return new HoodieAvroParquetReader(storage, path);
   }
 
   @Override
@@ -49,12 +48,12 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 StoragePath path,
                                                 Option<Schema> schemaOption) throws IOException {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
-      return new HoodieNativeAvroHFileReader(storageConf, path, schemaOption);
+      return new HoodieNativeAvroHFileReader(storage, path, schemaOption);
     }
     if (schemaOption.isPresent()) {
-      return new HoodieHBaseAvroHFileReader(storageConf, path, schemaOption);
+      return new HoodieHBaseAvroHFileReader(storage.getConf(), path, schemaOption);
     }
-    return new HoodieHBaseAvroHFileReader(storageConf, path);
+    return new HoodieHBaseAvroHFileReader(storage.getConf(), path);
   }
 
   @Override
@@ -64,14 +63,14 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 byte[] content,
                                                 Option<Schema> schemaOption) throws IOException {
     if (isUseNativeHFileReaderEnabled(hoodieConfig)) {
-      return new HoodieNativeAvroHFileReader(storageConf, content, schemaOption);
+      return new HoodieNativeAvroHFileReader(this.storage, content, schemaOption);
     }
-    return new HoodieHBaseAvroHFileReader(storageConf, path, storage, content, schemaOption);
+    return new HoodieHBaseAvroHFileReader(this.storage.getConf(), path, storage, content, schemaOption);
   }
 
   @Override
   protected HoodieFileReader newOrcFileReader(StoragePath path) {
-    return new HoodieAvroOrcReader(storageConf, path);
+    return new HoodieAvroOrcReader(storage, path);
   }
 
   @Override

@@ -37,6 +37,7 @@ class CleanTask extends TableServiceTask {
     HoodieCleaner.Config cleanConfig = new HoodieCleaner.Config();
     cleanConfig.basePath = basePath;
     UtilHelpers.retry(retry, () -> {
+      // HoodieWriteClient within HoodieCleaner is closed internally. not closing HoodieCleaner here is not leaking any resources.
       new HoodieCleaner(cleanConfig, jsc, props).run();
       return 0;
     }, "Clean Failed");

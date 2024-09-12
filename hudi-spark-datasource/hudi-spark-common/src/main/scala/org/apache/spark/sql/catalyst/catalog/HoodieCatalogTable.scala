@@ -17,31 +17,31 @@
 
 package org.apache.spark.sql.catalyst.catalog
 
+import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
 import org.apache.hudi.DataSourceWriteOptions.OPERATION
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
 import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-import org.apache.hudi.{AvroConversionUtils, DataSourceOptionsHelper}
-
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieOptionConfig._
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils._
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util.Locale
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -172,7 +172,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
   def getPartitionPaths: Seq[String] = {
     val droppedPartitions = TimelineUtils.getDroppedPartitions(metaClient, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
 
-    getAllPartitionPaths(spark, table)
+    getAllPartitionPaths(spark, table, metaClient.getStorage)
       .filter(!droppedPartitions.contains(_))
   }
 

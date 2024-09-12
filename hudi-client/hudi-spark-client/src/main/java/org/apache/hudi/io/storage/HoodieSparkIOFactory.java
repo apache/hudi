@@ -20,25 +20,26 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
 
 /**
  * Creates readers and writers for SPARK and AVRO record payloads
  */
 public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
 
-  public HoodieSparkIOFactory(StorageConfiguration<?> storageConf) {
-    super(storageConf);
+  public HoodieSparkIOFactory(HoodieStorage storage) {
+    super(storage);
   }
 
-  public static HoodieSparkIOFactory getHoodieSparkIOFactory(StorageConfiguration<?> storageConf) {
-    return new HoodieSparkIOFactory(storageConf);
+  public static HoodieSparkIOFactory getHoodieSparkIOFactory(HoodieStorage storage) {
+    return new HoodieSparkIOFactory(storage);
   }
 
   @Override
   public HoodieFileReaderFactory getReaderFactory(HoodieRecord.HoodieRecordType recordType) {
     if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
-      return new HoodieSparkFileReaderFactory(storageConf);
+      return new HoodieSparkFileReaderFactory(storage);
     }
     return super.getReaderFactory(recordType);
   }
@@ -46,7 +47,7 @@ public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
   @Override
   public HoodieFileWriterFactory getWriterFactory(HoodieRecord.HoodieRecordType recordType) {
     if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
-      return new HoodieSparkFileWriterFactory(storageConf);
+      return new HoodieSparkFileWriterFactory(storage);
     }
     return super.getWriterFactory(recordType);
   }

@@ -61,6 +61,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.fs.FSUtils.LOG_FILE_PATTERN;
+
 /**
  * Utility functions related to accessing the file storage on Hadoop.
  */
@@ -84,12 +86,20 @@ public class HadoopFSUtils {
     return getStorageConf(conf, false);
   }
 
+  public static StorageConfiguration<Configuration> getStorageConf() {
+    return getStorageConf(prepareHadoopConf(new Configuration()), false);
+  }
+
   public static StorageConfiguration<Configuration> getStorageConfWithCopy(Configuration conf) {
     return getStorageConf(conf, true);
   }
 
   public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf) {
     return getFs(new Path(pathStr), storageConf);
+  }
+
+  public static <T> FileSystem getFs(String pathStr, StorageConfiguration<T> storageConf, boolean newCopy) {
+    return getFs(new Path(pathStr), storageConf, newCopy);
   }
 
   public static <T> FileSystem getFs(Path path, StorageConfiguration<T> storageConf) {
@@ -167,6 +177,17 @@ public class HadoopFSUtils {
         fileStatus.getReplication(),
         fileStatus.getBlockSize(),
         fileStatus.getModificationTime());
+  }
+
+  public static StoragePathInfo convertToStoragePathInfo(FileStatus fileStatus, String[] locations) {
+    return new StoragePathInfo(
+        convertToStoragePath(fileStatus.getPath()),
+        fileStatus.getLen(),
+        fileStatus.isDirectory(),
+        fileStatus.getReplication(),
+        fileStatus.getBlockSize(),
+        fileStatus.getModificationTime(),
+        locations);
   }
 
   /**
@@ -377,11 +398,22 @@ public class HadoopFSUtils {
    * the file name.
    */
   public static String getFileIdFromLogPath(Path path) {
-    Matcher matcher = FSUtils.LOG_FILE_PATTERN.matcher(path.getName());
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
     if (!matcher.find()) {
       throw new InvalidHoodiePathException(path.toString(), "LogFile");
     }
     return matcher.group(1);
+  }
+
+  /**
+   * Get the second part of the file name in the log file. That will be the delta commit time.
+   */
+  public static String getDeltaCommitTimeFromLogPath(Path path) {
+    Matcher matcher = LOG_FILE_PATTERN.matcher(path.getName());
+    if (!matcher.find()) {
+      throw new InvalidHoodiePathException(path.toString(), "LogFile");
+    }
+    return matcher.group(2);
   }
 
   /**

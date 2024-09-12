@@ -23,11 +23,10 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
@@ -58,7 +57,8 @@ public class ConsistentHashingUpdateStrategyUtils {
   public static Map<String, Pair<String, ConsistentBucketIdentifier>> constructPartitionToIdentifier(Set<String> partitions, HoodieTable table) {
     // Read all pending/ongoing clustering plans
     List<Pair<HoodieInstant, HoodieClusteringPlan>> instantPlanPairs =
-        table.getMetaClient().getActiveTimeline().filterInflightsAndRequested().filter(instant -> instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)).getInstantsAsStream()
+        table.getMetaClient().getActiveTimeline()
+            .filterPendingReplaceOrClusteringTimeline().getInstantsAsStream()
             .map(instant -> ClusteringUtils.getClusteringPlan(table.getMetaClient(), instant))
             .flatMap(o -> o.isPresent() ? Stream.of(o.get()) : Stream.empty())
             .collect(Collectors.toList());

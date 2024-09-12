@@ -201,7 +201,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   }
 
   @Override
-  public void updateTableSchema(String tableName, MessageType newSchema) {
+  public void updateTableSchema(String tableName, MessageType newSchema, SchemaDifference schemaDiff) {
     ddlExecutor.updateTableDefinition(tableName, newSchema);
   }
 
@@ -244,6 +244,36 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public String generatePushDownFilter(List<String> writtenPartitions, List<FieldSchema> partitionFields) {
     return new PartitionFilterGenerator().generatePushDownFilter(writtenPartitions, partitionFields, config);
+  }
+
+  @Override
+  public void createOrReplaceTable(String tableName,
+                                   MessageType storageSchema,
+                                   String inputFormatClass,
+                                   String outputFormatClass,
+                                   String serdeClass,
+                                   Map<String, String> serdeProperties,
+                                   Map<String, String> tableProperties) {
+
+    if (!tableExists(tableName)) {
+      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+      return;
+    }
+    try {
+      // create temp table
+      String tempTableName = generateTempTableName(tableName);
+      createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
+
+      // if create table is successful, drop the actual table
+      // and rename temp table to actual table
+      dropTable(tableName);
+
+      Table table = client.getTable(databaseName, tempTableName);
+      table.setTableName(tableName);
+      client.alter_table(databaseName, tempTableName, table);
+    } catch (Exception ex) {
+      throw new HoodieHiveSyncException("failed to create table " + tableId(databaseName, tableName), ex);
+    }
   }
 
   @Override
@@ -388,7 +418,9 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         SerDeInfo serdeInfo = sd.getSerdeInfo();
         serdeInfo.putToParameters(ConfigUtils.TABLE_SERDE_PATH, basePath);
         table.putToParameters(HOODIE_LAST_COMMIT_TIME_SYNC, lastCommitSynced.get());
-        table.putToParameters(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
+        if (lastCommitCompletionSynced.isPresent()) {
+          table.putToParameters(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCommitCompletionSynced.get());
+        }
         client.alter_table(databaseName, tableName, table);
       } catch (Exception e) {
         throw new HoodieHiveSyncException("Failed to get update last commit time synced to " + lastCommitSynced, e);
@@ -446,5 +478,25 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @VisibleForTesting
   StorageDescriptor getMetastoreStorageDescriptor(String tableName) throws TException {
     return client.getTable(databaseName, tableName).getSd();
+  }
+
+  @Override
+  public void dropTable(String tableName) {
+    try {
+      client.dropTable(databaseName, tableName);
+      LOG.info("Successfully deleted table in Hive: {}.{}", databaseName, tableName);
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to delete the table " + tableId(databaseName, tableName), e);
+    }
+  }
+
+  @Override
+  public String getTableLocation(String tableName) {
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      return table.getSd().getLocation();
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
+    }
   }
 }

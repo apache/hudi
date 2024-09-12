@@ -30,6 +30,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieOrcConfig;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -77,15 +78,15 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
 
   @Override
   protected HoodieAvroFileReader createReader(
-      StorageConfiguration<?> conf) throws Exception {
-    return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(conf).getReaderFactory(HoodieRecordType.AVRO)
+      HoodieStorage storage) throws Exception {
+    return (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, getFilePath());
   }
 
   @Override
-  protected void verifyMetadata(StorageConfiguration<?> conf) throws IOException {
+  protected void verifyMetadata(HoodieStorage storage) throws IOException {
     Reader orcReader = OrcFile.createReader(
-        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)));
+        new Path(getFilePath().toUri()), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)));
     assertEquals(4, orcReader.getMetadataKeys().size());
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
     assertTrue(orcReader.getMetadataKeys().contains(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
@@ -96,9 +97,9 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
   }
 
   @Override
-  protected void verifySchema(StorageConfiguration<?> conf, String schemaPath) throws IOException {
+  protected void verifySchema(HoodieStorage storage, String schemaPath) throws IOException {
     Reader orcReader = OrcFile.createReader(
-        new Path(getFilePath().toUri()), OrcFile.readerOptions(conf.unwrapAs(Configuration.class)));
+        new Path(getFilePath().toUri()), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)));
     if ("/exampleSchema.avsc".equals(schemaPath)) {
       assertEquals("struct<_row_key:string,time:string,number:int>",
           orcReader.getSchema().toString());

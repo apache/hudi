@@ -28,7 +28,7 @@ import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.io.BinaryDecoder;
@@ -113,7 +113,7 @@ public class HoodieDeleteBlock extends HoodieLogBlock {
   }
 
   @Override
-  public byte[] getContentBytes(StorageConfiguration<?> storageConf) throws IOException {
+  public byte[] getContentBytes(HoodieStorage storage) throws IOException {
     Option<byte[]> content = getContent();
 
     // In case this method is called before realizing keys from content

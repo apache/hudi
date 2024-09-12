@@ -39,10 +39,10 @@ import scala.util.Right;
 
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_OFFSET_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
-import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
 
 /**
  * Convert a variety of datum into Avro GenericRecords. Has a bunch of lazy fields to circumvent issues around
@@ -117,10 +117,11 @@ public class AvroConvertor implements Serializable {
       initJsonConvertor();
       return jsonConverter.convert(json, schema);
     } catch (Exception e) {
+      String errorMessage = "Failed to convert JSON string to Avro record: ";
       if (json != null) {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
+        throw new HoodieSchemaException(errorMessage + json + "; schema: " + schemaStr, e);
       } else {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
+        throw new HoodieSchemaException(errorMessage + "JSON string was null.", e);
       }
     }
   }

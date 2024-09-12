@@ -32,6 +32,8 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -58,16 +60,19 @@ import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   private final StoragePath path;
-  private final StorageConfiguration<?> conf;
+  private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private Option<Schema> fileSchema;
 
-  public HoodieAvroParquetReader(StorageConfiguration<?> storageConf, StoragePath path) {
+  public HoodieAvroParquetReader(HoodieStorage storage, StoragePath path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
     // by the Reader (for proper config propagation to Parquet components)
-    this.conf = tryOverrideDefaultConfigs(storageConf.newInstance());
+    this.storage = storage.newInstance(path, tryOverrideDefaultConfigs(storage.getConf().newInstance()));
     this.path = path;
-    this.parquetUtils = FileFormatUtils.getInstance(HoodieFileFormat.PARQUET);
+    this.parquetUtils = HoodieIOFactory.getIOFactory(storage)
+        .getFileFormatUtils(HoodieFileFormat.PARQUET);
+    this.fileSchema = Option.empty();
   }
 
   @Override
@@ -81,17 +86,17 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    return parquetUtils.readMinMaxRecordKeys(conf, path);
+    return parquetUtils.readMinMaxRecordKeys(storage, path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    return parquetUtils.readBloomFilterFromMetadata(conf, path);
+    return parquetUtils.readBloomFilterFromMetadata(storage, path);
   }
 
   @Override
   public Set<Pair<String, Long>> filterRowKeys(Set<String> candidateRowKeys) {
-    return parquetUtils.filterRowKeys(conf, path, candidateRowKeys);
+    return parquetUtils.filterRowKeys(storage, path, candidateRowKeys);
   }
 
   @Override
@@ -106,7 +111,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public Schema getSchema() {
-    return parquetUtils.readAvroSchema(conf, path);
+    if (fileSchema.isEmpty()) {
+      fileSchema = Option.ofNullable(parquetUtils.readAvroSchema(storage, path));
+    }
+    return fileSchema.get();
   }
 
   @Override
@@ -116,7 +124,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   public long getTotalRecords() {
-    return parquetUtils.getRowCount(conf, path);
+    return parquetUtils.getRowCount(storage, path);
   }
 
   private static StorageConfiguration<?> tryOverrideDefaultConfigs(StorageConfiguration<?> conf) {
@@ -163,17 +171,25 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
-    Configuration hadoopConf = conf.unwrapAs(Configuration.class);
-    if (!requestedSchema.isPresent()) {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
-      AvroReadSupport.setRequestedProjection(hadoopConf, schema);
+    Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
+    Schema intendedReadSchema = requestedSchema.isPresent() ? requestedSchema.get() : schema;
+    Option<Schema> promotedSchema = Option.empty();
+    if (HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(getSchema(), intendedReadSchema)) {
+      AvroReadSupport.setAvroReadSchema(hadoopConf, getSchema());
+      AvroReadSupport.setRequestedProjection(hadoopConf, getSchema());
+      promotedSchema = Option.of(intendedReadSchema);
     } else {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, requestedSchema.get());
-      AvroReadSupport.setRequestedProjection(hadoopConf, requestedSchema.get());
+      AvroReadSupport.setAvroReadSchema(hadoopConf, intendedReadSchema);
+      AvroReadSupport.setRequestedProjection(hadoopConf, intendedReadSchema);
     }
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf).build();
-    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(hadoopConf)
+            .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
+            .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
+            .build();
+    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = promotedSchema.isPresent()
+        ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get())
+        : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }

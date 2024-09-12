@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Timer;
@@ -81,7 +81,7 @@ public class HoodieMetrics {
   public String commitTimerName = null;
   public String logCompactionTimerName = null;
   public String deltaCommitTimerName = null;
-  public String replaceCommitTimerName = null;
+  public String clusterCommitTimerName = null;
   public String finalizeTimerName = null;
   public String compactionTimerName = null;
   public String indexTimerName = null;
@@ -110,17 +110,17 @@ public class HoodieMetrics {
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
 
-  public HoodieMetrics(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
+  public HoodieMetrics(HoodieWriteConfig config, HoodieStorage storage) {
     this.config = config;
     this.tableName = config.getTableName();
     if (config.isMetricsOn()) {
-      metrics = Metrics.getInstance(config.getMetricsConfig(), storageConf);
+      metrics = Metrics.getInstance(config.getMetricsConfig(), storage);
       this.rollbackTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.ROLLBACK_ACTION);
       this.cleanTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLEAN_ACTION);
       this.archiveTimerName = getMetricsName(TIMER_ACTION, ARCHIVE_ACTION);
       this.commitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMMIT_ACTION);
       this.deltaCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION);
-      this.replaceCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      this.clusterCommitTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.CLUSTERING_ACTION);
       this.finalizeTimerName = getMetricsName(TIMER_ACTION, FINALIZE_ACTION);
       this.compactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.COMPACTION_ACTION);
       this.logCompactionTimerName = getMetricsName(TIMER_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
@@ -165,7 +165,7 @@ public class HoodieMetrics {
 
   public Timer.Context getClusteringCtx() {
     if (config.isMetricsOn() && clusteringTimer == null) {
-      clusteringTimer = createTimer(replaceCommitTimerName);
+      clusteringTimer = createTimer(clusterCommitTimerName);
     }
     return clusteringTimer == null ? null : clusteringTimer.time();
   }
@@ -371,7 +371,7 @@ public class HoodieMetrics {
   }
 
   public void updateClusteringFileCreationMetrics(long durationInMs) {
-    reportMetrics(HoodieTimeline.REPLACE_COMMIT_ACTION, "fileCreationTime", durationInMs);
+    reportMetrics(HoodieTimeline.CLUSTERING_ACTION, "fileCreationTime", durationInMs);
   }
 
   /**

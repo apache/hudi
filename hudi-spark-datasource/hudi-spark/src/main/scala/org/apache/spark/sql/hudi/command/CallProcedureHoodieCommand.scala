@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.hudi.command.procedures.{Procedure, ProcedureArgs}
 import org.apache.spark.sql.{Row, SparkSession}

@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -43,6 +44,7 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
+import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -88,6 +90,24 @@ public class TestAverageRecordSizeUtils {
     commitsTimeline.setInstants(instants);
 
     assertEquals(expectedSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig));
+  }
+
+  @Test
+  public void testErrorHandling() {
+    int recordSize = 10000;
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withProps(Collections.singletonMap(COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.key(), String.valueOf(recordSize)))
+        .build(false);
+    HoodieDefaultTimeline commitsTimeline = new HoodieDefaultTimeline();
+    List<HoodieInstant> instants = Collections.singletonList(
+        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "1"));
+
+    when(mockTimeline.getInstants()).thenReturn(instants);
+    when(mockTimeline.getReverseOrderedInstants()).then(i -> instants.stream());
+    // Simulate a case where the instant details are absent
+    commitsTimeline.setInstants(new ArrayList<>());
+
+    assertEquals(recordSize, AverageRecordSizeUtils.averageBytesPerRecord(mockTimeline, writeConfig));
   }
 
   private static String getBaseFileName(String instantTime) {

@@ -44,7 +44,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -483,7 +482,7 @@ public class SparkMain {
                                  String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
-        : readConfig(jsc.hadoopConfiguration(), new StoragePath(propsFilePath), configs).getProps(true);
+        : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 

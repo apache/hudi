@@ -74,7 +74,8 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   private static final SparkHoodieBloomIndexHelper SINGLETON_INSTANCE =
       new SparkHoodieBloomIndexHelper();
 
-  private SparkHoodieBloomIndexHelper() {}
+  private SparkHoodieBloomIndexHelper() {
+  }
 
   public static SparkHoodieBloomIndexHelper getInstance() {
     return SINGLETON_INSTANCE;
@@ -88,7 +89,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
       Map<String, List<BloomIndexFileInfo>> partitionToFileInfo,
       Map<String, Long> recordsPerPartition) {
 
-    int inputParallelism = HoodieJavaPairRDD.getJavaPairRDD(partitionRecordKeyPairs).getNumPartitions();
+    int inputParallelism = partitionRecordKeyPairs.deduceNumPartitions();
     int configuredBloomIndexParallelism = config.getBloomIndexParallelism();
 
     // NOTE: Target parallelism could be overridden by the config
@@ -214,7 +215,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     try {
       List<String> fullPartitionPaths = partitionPaths.stream()
           .map(partitionPath ->
-              String.format("%s/%s", hoodieTable.getMetaClient().getBasePathV2(), partitionPath))
+              String.format("%s/%s", hoodieTable.getMetaClient().getBasePath(), partitionPath))
           .collect(Collectors.toList());
 
       List<StoragePathInfo> allFiles =

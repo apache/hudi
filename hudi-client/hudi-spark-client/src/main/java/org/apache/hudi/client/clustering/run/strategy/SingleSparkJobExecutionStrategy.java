@@ -147,7 +147,8 @@ public abstract class SingleSparkJobExecutionStrategy<T>
       Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
       Iterable<HoodieRecord<T>> indexedRecords = () -> {
         try {
-          HoodieFileReader baseFileReader = getHoodieSparkIOFactory(getHoodieTable().getStorageConf()).getReaderFactory(recordType)
+          HoodieFileReader baseFileReader = getHoodieSparkIOFactory(getHoodieTable().getStorage())
+              .getReaderFactory(recordType)
               .getFileReader(writeConfig, new StoragePath(clusteringOp.getDataFilePath()));
           Option<BaseKeyGenerator> keyGeneratorOp = HoodieSparkKeyGeneratorFactory.createBaseKeyGenerator(writeConfig);
           // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific

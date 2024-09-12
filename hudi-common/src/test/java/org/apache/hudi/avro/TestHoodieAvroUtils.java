@@ -28,7 +28,11 @@ import org.apache.hudi.avro.model.IntWrapper;
 import org.apache.hudi.avro.model.LongWrapper;
 import org.apache.hudi.avro.model.StringWrapper;
 import org.apache.hudi.avro.model.TimestampMicrosWrapper;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -50,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -60,6 +65,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -74,6 +80,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.sanitizeName;
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -191,7 +198,7 @@ public class TestHoodieAvroUtils {
 
   @Test
   public void testDefaultValue() {
-    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EVOLVED_SCHEMA));
+    GenericRecord rec = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
     rec.put("_row_key", "key1");
     rec.put("non_pii_col", "val1");
     rec.put("pii_col", "val2");
@@ -574,6 +581,50 @@ public class TestHoodieAvroUtils {
     }
   }
 
+  @Test
+  public void testConvertingGenericDataCompare() {
+    Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES);
+    // create two records with same values
+    GenericRecord record1 = new GenericData.Record(schema);
+    record1.put("booleanField", true);
+    record1.put("intField", 698);
+    record1.put("longField", 192485030493L);
+    record1.put("floatField", 18.125f);
+    record1.put("doubleField", 94385932.342104);
+    record1.put("bytesField", new byte[] {1, 20, 0, 60, 2, 108});
+    record1.put("stringField", "abcdefghijk");
+    record1.put("decimalField", getUTF8Bytes("9213032.4966"));
+    record1.put("timeMillisField", 57996136);
+    record1.put("timeMicrosField", 57996136930L);
+    record1.put("timestampMillisField", 1690828731156L);
+    record1.put("timestampMicrosField", 1690828731156982L);
+    record1.put("localTimestampMillisField", 1690828731156L);
+    record1.put("localTimestampMicrosField", 1690828731156982L);
+
+    GenericRecord record2 = new GenericData.Record(schema);
+    record2.put("booleanField", true);
+    record2.put("intField", 698);
+    record2.put("longField", 192485030493L);
+    record2.put("floatField", 18.125f);
+    record2.put("doubleField", 94385932.342104);
+    record2.put("bytesField", new byte[] {1, 20, 0, 60, 2, 108});
+    record2.put("stringField", "abcdefghijk");
+    record2.put("decimalField", getUTF8Bytes("9213032.4966"));
+    record2.put("timeMillisField", 57996136);
+    record2.put("timeMicrosField", 57996136930L);
+    record2.put("timestampMillisField", 1690828731156L);
+    record2.put("timestampMicrosField", 1690828731156982L);
+    record2.put("localTimestampMillisField", 1690828731156L);
+    record2.put("localTimestampMicrosField", 1690828731156982L);
+
+    // get schema of each field in SCHEMA_WITH_AVRO_TYPES
+    List<Schema> fieldSchemas = schema.getFields().stream().map(Schema.Field::schema).collect(Collectors.toList());
+    // compare each field in SCHEMA_WITH_AVRO_TYPES
+    for (int i = 0; i < fieldSchemas.size(); i++) {
+      assertEquals(0, ConvertingGenericData.INSTANCE.compare(record1.get(i), record2.get(i), fieldSchemas.get(i)));
+    }
+  }
+
   public static Stream<Arguments> javaValueParams() {
     Object[][] data =
         new Object[][] {
@@ -651,5 +702,33 @@ public class TestHoodieAvroUtils {
     record.put("timestamp", "foo");
     String jsonString = HoodieAvroUtils.safeAvroToJsonString(record);
     assertEquals("{\"timestamp\": \"foo\", \"_row_key\": \"key\", \"non_pii_col\": \"val1\", \"pii_col\": \"val2\"}", jsonString);
+  }
+
+  @Test
+  void testCreateFullName() {
+    String result = HoodieAvroUtils.createFullName(new ArrayDeque<>(Arrays.asList("a", "b", "c")));
+    String resultSingle = HoodieAvroUtils.createFullName(new ArrayDeque<>(Collections.singletonList("a")));
+    assertEquals("c.b.a", result);
+    assertEquals("a", resultSingle);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testGetSortColumnValuesWithPartitionPathAndRecordKey(boolean suffixRecordKey) {
+    Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("non_pii_col", "val1");
+    record.put("pii_col", "val2");
+    record.put("timestamp", 3.5);
+    HoodieRecordPayload avroPayload = new RewriteAvroPayload(record);
+    HoodieAvroRecord avroRecord = new HoodieAvroRecord(new HoodieKey("record1", "partition1"), avroPayload);
+
+    String[] userSortColumns = new String[] {"non_pii_col", "timestamp"};
+    Object[] sortColumnValues = HoodieAvroUtils.getSortColumnValuesWithPartitionPathAndRecordKey(avroRecord, userSortColumns, Schema.parse(EXAMPLE_SCHEMA), suffixRecordKey, true);
+    if (suffixRecordKey) {
+      assertArrayEquals(new Object[] {"partition1", "val1", 3.5, "record1"}, sortColumnValues);
+    } else {
+      assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
+    }
   }
 }

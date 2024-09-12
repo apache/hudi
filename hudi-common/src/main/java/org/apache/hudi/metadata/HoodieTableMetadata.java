@@ -31,8 +31,12 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -47,6 +51,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Interface that supports querying various pieces of metadata about a hudi table.
  */
 public interface HoodieTableMetadata extends Serializable, AutoCloseable {
+
+  Logger LOG = LoggerFactory.getLogger(HoodieTableMetadata.class);
 
   // Table name suffix
   String METADATA_TABLE_NAME_SUFFIX = "_metadata";
@@ -111,33 +117,46 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
     return basePath.endsWith(HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH);
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath) {
-    return create(engineContext, metadataConfig, datasetBasePath, false);
+  static boolean isMetadataTable(StoragePath basePath) {
+    return isMetadataTable(basePath.toString());
   }
 
-  static HoodieTableMetadata create(HoodieEngineContext engineContext, HoodieMetadataConfig metadataConfig, String datasetBasePath, boolean reuse) {
+  static HoodieTableMetadata create(HoodieEngineContext engineContext,
+                                    HoodieStorage storage,
+                                    HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath) {
+    return create(engineContext, storage, metadataConfig, datasetBasePath, false);
+  }
+
+  static HoodieTableMetadata create(HoodieEngineContext engineContext,
+                                    HoodieStorage storage,
+                                    HoodieMetadataConfig metadataConfig,
+                                    String datasetBasePath,
+                                    boolean reuse) {
     if (metadataConfig.isEnabled()) {
-      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
+      HoodieBackedTableMetadata metadata = createHoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
       // If the MDT is not initialized then we fallback to FSBackedTableMetadata
       if (metadata.isMetadataTableInitialized()) {
         return metadata;
       }
+      LOG.warn("Falling back to FileSystemBackedTableMetadata as metadata table is not initialized");
     }
-
-    return createFSBackedTableMetadata(engineContext, datasetBasePath);
+    return createFSBackedTableMetadata(engineContext, storage, datasetBasePath);
   }
 
   static FileSystemBackedTableMetadata createFSBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieStorage storage,
                                                                    String datasetBasePath) {
     return new FileSystemBackedTableMetadata(
-        engineContext, engineContext.getStorageConf().newInstance(), datasetBasePath);
+        engineContext, storage, datasetBasePath);
   }
 
   static HoodieBackedTableMetadata createHoodieBackedTableMetadata(HoodieEngineContext engineContext,
+                                                                   HoodieStorage storage,
                                                                    HoodieMetadataConfig metadataConfig,
                                                                    String datasetBasePath,
                                                                    boolean reuse) {
-    return new HoodieBackedTableMetadata(engineContext, metadataConfig, datasetBasePath, reuse);
+    return new HoodieBackedTableMetadata(engineContext, storage, metadataConfig, datasetBasePath, reuse);
   }
 
   /**
@@ -212,6 +231,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    * Records that are not found are ignored and won't be part of map object that is returned.
    */
   Map<String, List<HoodieRecordGlobalLocation>> readRecordIndex(List<String> recordKeys);
+
+  /**
+   * Returns the location of records which the provided secondary keys maps to.
+   * Records that are not found are ignored and won't be part of map object that is returned.
+   */
+  Map<String, List<HoodieRecordGlobalLocation>> readSecondaryIndex(List<String> secondaryKeys, String partitionName);
 
   /**
    * Fetch records by key prefixes. Key prefix passed is expected to match the same prefix as stored in Metadata table partitions. For eg, in case of col stats partition,

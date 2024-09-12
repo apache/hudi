@@ -18,6 +18,7 @@
 package org.apache.spark.hudi.benchmark
 
 import org.apache.hudi.common.util.StringUtils.getUTF8Bytes
+
 import org.apache.spark.util.Utils
 
 import java.io.{File, FileOutputStream, OutputStream}

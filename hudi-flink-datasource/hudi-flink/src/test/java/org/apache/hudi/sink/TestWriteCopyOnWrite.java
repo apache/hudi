@@ -38,6 +38,7 @@ import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -52,9 +53,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 public class TestWriteCopyOnWrite extends TestWriteBase {
 
-  @Test
-  public void testCheckpoint() throws Exception {
-    preparePipeline()
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCheckpoint(boolean allowEmptyCommit) throws Exception {
+    // reset the config option
+    conf.setBoolean(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), allowEmptyCommit);
+    preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
         // no checkpoint, so the coordinator does not accept any events
         .emptyEventBuffer()

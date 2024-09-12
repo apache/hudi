@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.avro.AvroSchemaUtils.{checkSchemaCompatible, checkValidEvolution, isCompatibleProjectionOf, isSchemaCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.removeMetadataFields
-import org.apache.hudi.common.config.{HoodieConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -34,6 +34,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
 import org.apache.avro.Schema
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -93,14 +94,14 @@ object HoodieSchemaUtils {
         // in the table's one we want to proceed aligning nullability constraints w/ the table's schema
         // Also, we promote types to the latest table schema if possible.
         val shouldCanonicalizeSchema = opts.getOrElse(CANONICALIZE_SCHEMA.key, CANONICALIZE_SCHEMA.defaultValue.toString).toBoolean
+        val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
+          DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts)
+          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
           AvroInternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
 
-        val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
-          DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         if (shouldReconcileSchema) {
           deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
         } else {
@@ -133,7 +134,7 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema)
+        AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, latestTableSchema, setNullForMissingColumns)
       } else {
         canonicalizedSourceSchema
       }
@@ -163,7 +164,9 @@ object HoodieSchemaUtils {
     internalSchemaOpt match {
       case Some(internalSchema) =>
         // Apply schema evolution, by auto-merging write schema and read schema
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema)
+        val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
+          HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
+        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema, internalSchema, setNullForMissingColumns)
         val evolvedSchema = AvroInternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields().asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromInternalSchema) HoodieAvroUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
@@ -212,8 +215,9 @@ object HoodieSchemaUtils {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String]): Schema = {
-    reconcileSchemaRequirements(sourceSchema, latestTableSchema)
+  private def canonicalizeSchema(sourceSchema: Schema, latestTableSchema: Schema, opts : Map[String, String],
+                                 shouldReorderColumns: Boolean): Schema = {
+    reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
 
 
@@ -239,6 +243,27 @@ object HoodieSchemaUtils {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
       (newSchema, isSchemaCompatible(tableSchema, newSchema))
+    }
+  }
+
+  /**
+   * Check if the partition schema fields order matches the table schema fields order.
+   *
+   * @param tableSchema      The table schema
+   * @param partitionFields  The partition fields
+   */
+  def checkPartitionSchemaOrder(tableSchema: StructType, partitionFields: Seq[String]): Unit = {
+    val tableSchemaFields = tableSchema.fields.map(_.name)
+    // It is not allowed to specify partition columns when the table schema is not defined.
+    // https://spark.apache.org/docs/latest/sql-error-conditions.html#specify_partition_is_not_allowed
+    if (tableSchemaFields.isEmpty && partitionFields.nonEmpty) {
+      throw new IllegalArgumentException("It is not allowed to specify partition columns when the table schema is not defined.")
+    }
+    // Filter the table schema fields to get the partition field names in order
+    val tableSchemaPartitionFields = tableSchemaFields.filter(partitionFields.contains).toSeq
+    if (tableSchemaPartitionFields != partitionFields) {
+      throw new IllegalArgumentException(s"Partition schema fields order does not match the table schema fields order," +
+        s" tableSchemaFields: $tableSchemaPartitionFields, partitionFields: $partitionFields.")
     }
   }
 }

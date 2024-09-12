@@ -125,6 +125,8 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
+          val precombine = config.getString(PRECOMBINE_FIELD)
+          val precombineEmpty = StringUtils.isNullOrEmpty(precombine)
 
           // handle dropping partition columns
           it.map { avroRec =>

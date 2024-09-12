@@ -162,26 +162,24 @@ public class RowDataToAvroConverters {
       case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
         int precision = DataTypeUtils.precision(type);
         if (precision <= 3) {
-          converter =
-            new RowDataToAvroConverter() {
-              private static final long serialVersionUID = 1L;
+          converter = new RowDataToAvroConverter() {
+            private static final long serialVersionUID = 1L;
 
-              @Override
-              public Object convert(Schema schema, Object object) {
+            @Override
+            public Object convert(Schema schema, Object object) {
                 return ((TimestampData) object).toInstant().toEpochMilli();
               }
           };
         } else if (precision <= 6) {
-          converter =
-              new RowDataToAvroConverter() {
-                private static final long serialVersionUID = 1L;
+          converter = new RowDataToAvroConverter() {
+            private static final long serialVersionUID = 1L;
 
-                @Override
-                public Object convert(Schema schema, Object object) {
-                  Instant instant = ((TimestampData) object).toInstant();
-                  return  Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
-                }
-            };
+            @Override
+            public Object convert(Schema schema, Object object) {
+              Instant instant = ((TimestampData) object).toInstant();
+              return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1000_000), instant.getNano() / 1000);
+            }
+          };
         } else {
           throw new UnsupportedOperationException("Unsupported timestamp precision: " + precision);
         }

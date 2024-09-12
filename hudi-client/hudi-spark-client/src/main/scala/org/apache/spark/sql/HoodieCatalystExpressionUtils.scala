@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.SparkAdapterSupport
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder

@@ -43,7 +43,7 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathFilter}
+import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
@@ -177,7 +177,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH + "'").count() > 0)
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH + "'").count() > 0)
     assertTrue(snapshot0.filter("_hoodie_partition_path = '" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH + "'").count() > 0)
-    val storage = HoodieStorageUtils.getStorage(new StoragePath(basePath), HoodieTestUtils.getDefaultStorageConf)
+    val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH)))
     assertTrue(storage.exists(new StoragePath(basePath + "/" + HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)))
@@ -202,7 +202,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     snapshot1.cache()
     assertEquals(300, snapshot1.count())
 
-    var partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    var partitionPaths = FSUtils.getAllPartitionPaths(
+      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
     assertTrue(partitionPaths.contains("100/rider-123"))
     assertTrue(partitionPaths.contains("200/rider-456"))
 
@@ -225,7 +226,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    partitionPaths = FSUtils.getAllPartitionPaths(new HoodieSparkEngineContext(jsc), HoodieMetadataConfig.newBuilder().build(), basePath)
+    partitionPaths = FSUtils.getAllPartitionPaths(
+      new HoodieSparkEngineContext(jsc), storage, HoodieMetadataConfig.newBuilder().build(), basePath)
     assertEquals(partitionPaths.size(), 1)
     assertEquals(partitionPaths.get(0), "")
   }
@@ -558,14 +560,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
-    } else {
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    }
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -1492,15 +1488,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assert(firstDF.count() == 2)
 
-    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    val expectedValues = if (useGlobbing || !enableFileIndex) {
-      Seq("2018-09-23", "2018-09-24")
-    } else {
-      Seq("2018/09/23", "2018/09/24")
-    }
+    assertEquals(
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+    )
 
-    assertEquals(expectedValues, firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq)
     assertEquals(
       Seq("2018/09/23", "2018/09/24"),
       firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
@@ -1770,7 +1762,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.DefaultSparkRecordMerger"
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 
@@ -1855,7 +1847,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         // Last instant is clustering
         assertTrue(TimelineUtils.getCommitMetadata(lastInstant, metaClient.getActiveTimeline)
           .getOperationType.equals(WriteOperationType.CLUSTER))
-        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, lastInstant))
+        assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline, new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, lastInstant.getTimestamp)))
         lastClustering = lastInstant
         assertEquals(
           lastClustering,

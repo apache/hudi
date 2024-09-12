@@ -56,6 +56,8 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.storage.HoodieStorageUtils.DEFAULT_URI;
+
 /**
  * A utility class for testing.
  */
@@ -76,6 +78,10 @@ public class HoodieTestUtils {
   public static StorageConfiguration<Configuration> getDefaultStorageConfWithDefaults() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
         new Class<?>[] {Boolean.class}, true);
+  }
+
+  public static HoodieStorage getDefaultStorage() {
+    return getStorage(DEFAULT_URI);
   }
 
   public static HoodieStorage getStorage(String path) {
@@ -182,6 +188,10 @@ public class HoodieTestUtils {
             .setTableType(tableType)
             .setPayloadClass(HoodieAvroPayload.class);
 
+    if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()) != null) {
+      builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
+    }
+
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
         && !properties.containsKey("hoodie.datasource.write.partitionpath.field")) {
@@ -213,6 +223,12 @@ public class HoodieTestUtils {
                                                        String basePath) {
     return HoodieTableMetaClient.builder()
         .setConf(storageConf).setBasePath(basePath).build();
+  }
+
+  public static HoodieTableMetaClient createMetaClient(StorageConfiguration<?> storageConf,
+                                                       StoragePath basePath) {
+    return HoodieTableMetaClient.builder()
+            .setConf(storageConf).setBasePath(basePath).build();
   }
 
   /**

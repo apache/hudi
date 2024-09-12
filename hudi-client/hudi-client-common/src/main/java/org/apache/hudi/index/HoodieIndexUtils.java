@@ -34,7 +34,6 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.MetadataValues;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -46,8 +45,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
-import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -103,14 +101,14 @@ public class HoodieIndexUtils {
    * @return the list of {@link FileSlice}
    */
   public static List<FileSlice> getLatestFileSlicesForPartition(
-          final String partition,
-          final HoodieTable hoodieTable) {
+      final String partition,
+      final HoodieTable hoodieTable) {
     Option<HoodieInstant> latestCommitTime = hoodieTable.getMetaClient().getCommitsTimeline()
-            .filterCompletedInstants().lastInstant();
+        .filterCompletedInstants().lastInstant();
     if (latestCommitTime.isPresent()) {
       return hoodieTable.getHoodieView()
-              .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
-              .collect(toList());
+          .getLatestFileSlicesBeforeOrOn(partition, latestCommitTime.get().getTimestamp(), true)
+          .collect(toList());
     }
     return Collections.emptyList();
   }
@@ -176,14 +174,15 @@ public class HoodieIndexUtils {
    *
    * @param filePath            - File to filter keys from
    * @param candidateRecordKeys - Candidate keys to filter
+   * @param storage
    * @return List of pairs of candidate keys and positions that are available in the file
    */
   public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
                                                             List<String> candidateRecordKeys,
-                                                            StorageConfiguration<?> configuration) throws HoodieIndexException {
+                                                            HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
     List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(configuration)
+    try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
@@ -205,14 +204,14 @@ public class HoodieIndexUtils {
 
   /**
    * Check if the given commit timestamp is valid for the timeline.
-   *
+   * <p>
    * The commit timestamp is considered to be valid if:
-   *   1. the commit timestamp is present in the timeline, or
-   *   2. the commit timestamp is less than the first commit timestamp in the timeline
+   * 1. the commit timestamp is present in the timeline, or
+   * 2. the commit timestamp is less than the first commit timestamp in the timeline
    *
-   * @param commitTimeline  The timeline
-   * @param commitTs        The commit timestamp to check
-   * @return                true if the commit timestamp is valid for the timeline
+   * @param commitTimeline The timeline
+   * @param commitTs       The commit timestamp to check
+   * @return true if the commit timestamp is valid for the timeline
    */
   public static boolean checkIfValidCommit(HoodieTimeline commitTimeline, String commitTs) {
     return !commitTimeline.empty() && commitTimeline.containsOrBeforeTimelineStarts(commitTs);
@@ -234,7 +233,7 @@ public class HoodieIndexUtils {
    * @return {@link HoodieRecord}s that have the current location being set.
    */
   private static <R> HoodieData<HoodieRecord<R>> getExistingRecords(
-      HoodieData<HoodieRecordGlobalLocation> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
+      HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
         .getCommitsTimeline()
@@ -242,7 +241,7 @@ public class HoodieIndexUtils {
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()))
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()))
         .getMergedRecords().iterator());
   }
 
@@ -289,12 +288,9 @@ public class HoodieIndexUtils {
     // the tagging partitions and locations
     // NOTE: The incoming records may only differ in record position, however, for the purpose of
     //       merging in case of partition updates, it is safe to ignore the record positions.
-    HoodieData<HoodieRecordGlobalLocation> globalLocations = incomingRecordsAndLocations
+    HoodieData<Pair<String, String>> globalLocations = incomingRecordsAndLocations
         .filter(p -> p.getRight().isPresent())
-        .map(p -> new HoodieRecordGlobalLocation(
-            p.getRight().get().getPartitionPath(),
-            p.getRight().get().getInstantTime(),
-            p.getRight().get().getFileId()))
+        .map(p -> Pair.of(p.getRight().get().getPartitionPath(), p.getRight().get().getFileId()))
         .distinct(config.getGlobalIndexReconcileParallelism());
     // merged existing records with current locations being set
     HoodieData<HoodieRecord<R>> existingRecords = getExistingRecords(globalLocations, config, hoodieTable);
@@ -388,19 +384,5 @@ public class HoodieIndexUtils {
       default:
         throw new HoodieIndexException("Unsupported record type: " + recordType);
     }
-  }
-
-  /**
-   * Get the partition name from the metadata partition type.
-   * NOTE: For certain types of metadata partition, such as functional index and secondary index,
-   * partition path defined enum is just the prefix to denote the type of metadata partition.
-   * The actual partition name is contained in the index definition.
-   */
-  public static String getPartitionNameFromPartitionType(MetadataPartitionType partitionType, HoodieTableMetaClient metaClient, String indexName) {
-    if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(partitionType)) {
-      checkArgument(metaClient.getFunctionalIndexMetadata().isPresent(), "Index definition is not present");
-      return metaClient.getFunctionalIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
-    }
-    return partitionType.getPartitionPath();
   }
 }

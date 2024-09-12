@@ -69,7 +69,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
     try {
       // Get all the commits on the timeline after the provided commit time
       // rollback pending clustering instants first before other instants (See HUDI-3362)
-      List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceTimeline()
+      List<HoodieInstant> pendingClusteringInstantsToRollback = table.getActiveTimeline().filterPendingReplaceOrClusteringTimeline()
               // filter only clustering related replacecommits (Not insert_overwrite related commits)
               .filter(instant -> ClusteringUtils.isClusteringInstant(table.getActiveTimeline(), instant))
               .getReverseOrderedInstants()

@@ -88,11 +88,16 @@ public abstract class AbstractRealtimeRecordReader {
     try {
       metaClient = HoodieTableMetaClient.builder()
           .setConf(HadoopFSUtils.getStorageConfWithCopy(jobConf)).setBasePath(split.getBasePath()).build();
+      payloadProps.putAll(metaClient.getTableConfig().getProps(true));
       if (metaClient.getTableConfig().getPreCombineField() != null) {
         this.payloadProps.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, metaClient.getTableConfig().getPreCombineField());
       }
       this.usesCustomPayload = usesCustomPayload(metaClient);
       LOG.info("usesCustomPayload ==> " + this.usesCustomPayload);
+
+      // get timestamp columns
+      supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
+
       schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
       if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
         schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
@@ -163,9 +168,6 @@ public abstract class AbstractRealtimeRecordReader {
     readerSchema = HoodieRealtimeRecordReaderUtils.generateProjectionSchema(writerSchema, schemaFieldsMap, projectionFields);
     LOG.info(String.format("About to read compacted logs %s for base split %s, projecting cols %s",
         split.getDeltaLogPaths(), split.getPath(), projectionFields));
-
-    // get timestamp columns
-    supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
   }
 
   public Schema constructHiveOrderedSchema(Schema writerSchema, Map<String, Field> schemaFieldsMap, String hiveColumnString) {

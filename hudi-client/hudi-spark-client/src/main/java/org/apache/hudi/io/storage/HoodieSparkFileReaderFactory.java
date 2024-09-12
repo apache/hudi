@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -31,21 +31,21 @@ import java.io.IOException;
 
 public class HoodieSparkFileReaderFactory extends HoodieFileReaderFactory {
 
-  public HoodieSparkFileReaderFactory(StorageConfiguration<?> storageConf) {
-    super(storageConf);
+  public HoodieSparkFileReaderFactory(HoodieStorage storage) {
+    super(storage);
   }
 
   @Override
   public HoodieFileReader newParquetFileReader(StoragePath path) {
-    storageConf.setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
-    storageConf.setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
-    storageConf.setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
+    storage.getConf().setIfUnset(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.PARQUET_BINARY_AS_STRING().defaultValueString());
+    storage.getConf().setIfUnset(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.PARQUET_INT96_AS_TIMESTAMP().defaultValueString());
+    storage.getConf().setIfUnset(SQLConf.CASE_SENSITIVE().key(), SQLConf.CASE_SENSITIVE().defaultValueString());
     // Using string value of this conf to preserve compatibility across spark versions.
-    storageConf.setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
+    storage.getConf().setIfUnset("spark.sql.legacy.parquet.nanosAsLong", "false");
     // This is a required config since Spark 3.4.0: SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED
     // Using string value of this conf to preserve compatibility across spark versions.
-    storageConf.setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
-    return new HoodieSparkParquetReader(storageConf, path);
+    storage.getConf().setIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", "true");
+    return new HoodieSparkParquetReader(storage, path);
   }
 
   @Override

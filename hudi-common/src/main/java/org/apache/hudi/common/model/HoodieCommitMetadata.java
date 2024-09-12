@@ -23,14 +23,11 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -174,11 +170,11 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit.
    *
-   * @param storageConf storage configuration.
+   * @param storage     {@link HoodieStorage} instance.
    * @param basePath    The base path
    * @return the file full path to file status mapping
    */
-  public Map<String, StoragePathInfo> getFullPathToInfo(StorageConfiguration<?> storageConf,
+  public Map<String, StoragePathInfo> getFullPathToInfo(HoodieStorage storage,
                                                         String basePath) {
     Map<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
@@ -188,8 +184,7 @@ public class HoodieCommitMetadata implements Serializable {
         StoragePath fullPath = relativeFilePath != null
             ? FSUtils.constructAbsolutePath(basePath, relativeFilePath) : null;
         if (fullPath != null) {
-          long blockSize =
-              HoodieStorageUtils.getStorage(fullPath.toString(), storageConf).getDefaultBlockSize(fullPath);
+          long blockSize = storage.getDefaultBlockSize(fullPath);
           StoragePathInfo pathInfo = new StoragePathInfo(
               fullPath, stat.getFileSizeInBytes(), false, (short) 0, blockSize, 0);
           fullPathToInfoMap.put(fullPath.getName(), pathInfo);
@@ -204,16 +199,14 @@ public class HoodieCommitMetadata implements Serializable {
    * been touched multiple times in the given commits, the return value will keep the one
    * from the latest commit by file group ID.
    *
-   * <p>Note: different with {@link #getFullPathToInfo(StorageConfiguration, String)},
+   * <p>Note: different with {@link #getFullPathToInfo(HoodieStorage, String)},
    * only the latest commit file for a file group is returned,
    * this is an optimization for COPY_ON_WRITE table to eliminate legacy files for filesystem view.
    *
-   * @param storageConf storage configuration.
    * @param basePath    The base path
    * @return the file ID to file status mapping
    */
-  public Map<String, StoragePathInfo> getFileIdToInfo(StorageConfiguration<?> storageConf,
-                                                      String basePath) {
+  public Map<String, StoragePathInfo> getFileIdToInfo(String basePath) {
     Map<String, StoragePathInfo> fileIdToInfoMap = new HashMap<>();
     for (List<HoodieWriteStat> stats : getPartitionToWriteStats().values()) {
       // Iterate through all the written files.
@@ -252,30 +245,16 @@ public class HoodieCommitMetadata implements Serializable {
    * parse the bytes of deltacommit, and get the base file and the log files belonging to this
    * provided file group.
    */
-  // TODO: refactor this method to avoid doing the json tree walking (HUDI-4822).
   public static Option<Pair<String, List<String>>> getFileSliceForFileGroupFromDeltaCommit(byte[] bytes, HoodieFileGroupId fileGroupId) {
     try {
-      String jsonStr = fromUTF8Bytes(
-          convertCommitMetadataToJsonBytes(deserializeCommitMetadata(bytes), org.apache.hudi.avro.model.HoodieCommitMetadata.class));
-      if (jsonStr.isEmpty()) {
-        return Option.empty();
-      }
-      JsonNode ptToWriteStatsMap = JsonUtils.getObjectMapper().readTree(jsonStr).get("partitionToWriteStats");
-      Iterator<Map.Entry<String, JsonNode>> pts = ptToWriteStatsMap.fields();
-      while (pts.hasNext()) {
-        Map.Entry<String, JsonNode> ptToWriteStats = pts.next();
-        if (ptToWriteStats.getValue().isArray()) {
-          for (JsonNode writeStat : ptToWriteStats.getValue()) {
-            HoodieFileGroupId fgId = new HoodieFileGroupId(ptToWriteStats.getKey(), writeStat.get("fileId").asText());
-            if (fgId.equals(fileGroupId)) {
-              String baseFile = writeStat.get("baseFile").asText();
-              ArrayNode logFilesNode = (ArrayNode) writeStat.get("logFiles");
-              List<String> logFiles = new ArrayList<>();
-              for (JsonNode logFile : logFilesNode) {
-                logFiles.add(logFile.asText());
-              }
-              return Option.of(Pair.of(baseFile, logFiles));
-            }
+      org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = deserializeCommitMetadata(bytes);
+      Map<String,List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap =
+              commitMetadata.getPartitionToWriteStats();
+      for (Map.Entry<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStat: partitionToWriteStatsMap.entrySet()) {
+        for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: partitionToWriteStat.getValue()) {
+          HoodieFileGroupId fgId = new HoodieFileGroupId(partitionToWriteStat.getKey(), writeStat.getFileId());
+          if (fgId.equals(fileGroupId)) {
+            return Option.of(Pair.of(writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile(), writeStat.getLogFiles()));
           }
         }
       }

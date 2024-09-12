@@ -26,7 +26,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -39,24 +39,24 @@ import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 
 public class HoodieFileWriterFactory {
-  protected final StorageConfiguration<?> storageConf;
+  protected final HoodieStorage storage;
 
-  public HoodieFileWriterFactory(StorageConfiguration<?> storageConf) {
-    this.storageConf = storageConf;
+  public HoodieFileWriterFactory(HoodieStorage storage) {
+    this.storage = storage;
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(
-      String instantTime, StoragePath path, StorageConfiguration<?> conf, HoodieConfig config, Schema schema,
+      String instantTime, StoragePath path, HoodieStorage storage, HoodieConfig config, Schema schema,
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
-    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(conf).getWriterFactory(recordType);
+    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
     return factory.getFileWriterByFormat(extension, instantTime, path, config, schema, taskContextSupplier);
   }
 
   public static <T, I, K, O> HoodieFileWriter getFileWriter(HoodieFileFormat format, OutputStream outputStream,
-                                                            StorageConfiguration<?> conf, HoodieConfig config, Schema schema, HoodieRecordType recordType)
+                                                            HoodieStorage storage, HoodieConfig config, Schema schema, HoodieRecordType recordType)
       throws IOException {
-    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(conf).getWriterFactory(recordType);
+    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(recordType);
     return factory.getFileWriterByFormat(format, outputStream, config, schema);
   }
 

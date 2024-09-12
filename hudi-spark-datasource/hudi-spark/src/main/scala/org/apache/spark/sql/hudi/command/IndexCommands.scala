@@ -34,6 +34,7 @@ import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.getTableLocation
 import org.apache.spark.sql.{Row, SparkSession}
 
 import java.util
+
 import scala.collection.JavaConverters.{collectionAsScalaIterableConverter, mapAsJavaMapConverter}
 
 case class CreateIndexCommand(table: CatalogTable,
@@ -50,7 +51,7 @@ case class CreateIndexCommand(table: CatalogTable,
       new util.LinkedHashMap[String, java.util.Map[String, String]]()
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
-    if (options.contains("func")) {
+    if (options.contains("func") || indexType.equals("secondary_index")) {
       HoodieSparkFunctionalIndexClient.getInstance(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, options.asJava)
     } else {

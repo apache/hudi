@@ -29,7 +29,6 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlCon
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSource, HoodieBaseRelation, HoodieSparkUtils, HoodieUnsafeRDD}
 
 import org.apache.avro.Schema
-import org.apache.calcite.runtime.SqlFunctions.abs
 import org.apache.parquet.hadoop.util.counters.BenchmarkCounter
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
@@ -37,9 +36,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{Disabled, Tag, Test}
+import org.junit.jupiter.api.{Tag, Test}
 
 import scala.collection.JavaConverters._
+import scala.math.abs
 
 @Tag("functional")
 class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with Logging {
@@ -60,7 +60,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
   def testBaseFileOnlyViewRelation(): Unit = {
     val tablePath = s"$basePath/cow"

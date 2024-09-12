@@ -82,7 +82,7 @@ public class ExportCommand {
       @ShellOption(value = {"--localFolder"}, help = "Local Folder to export to") String localFolder)
       throws Exception {
 
-    final String basePath = HoodieCLI.getTableMetaClient().getBasePath();
+    final StoragePath basePath = HoodieCLI.getTableMetaClient().getBasePath();
     final StoragePath archivePath = new StoragePath(HoodieCLI.getTableMetaClient().getArchivePath());
     final Set<String> actionSet = new HashSet<String>(Arrays.asList(filter.split(",")));
     int numExports = limit == -1 ? Integer.MAX_VALUE : limit;

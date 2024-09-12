@@ -48,19 +48,10 @@ private[hudi] trait SparkVersionsSupport {
 
   def isSpark2: Boolean = getSparkVersion.startsWith("2.")
   def isSpark3: Boolean = getSparkVersion.startsWith("3.")
-  def isSpark3_0: Boolean = getSparkVersion.startsWith("3.0")
-  def isSpark3_1: Boolean = getSparkVersion.startsWith("3.1")
-  def isSpark3_2: Boolean = getSparkVersion.startsWith("3.2")
   def isSpark3_3: Boolean = getSparkVersion.startsWith("3.3")
   def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")
   def isSpark3_5: Boolean = getSparkVersion.startsWith("3.5")
 
-  def gteqSpark3_0: Boolean = getSparkVersion >= "3.0"
-  def gteqSpark3_1: Boolean = getSparkVersion >= "3.1"
-  def gteqSpark3_1_3: Boolean = getSparkVersion >= "3.1.3"
-  def gteqSpark3_2: Boolean = getSparkVersion >= "3.2"
-  def gteqSpark3_2_1: Boolean = getSparkVersion >= "3.2.1"
-  def gteqSpark3_2_2: Boolean = getSparkVersion >= "3.2.2"
   def gteqSpark3_3: Boolean = getSparkVersion >= "3.3"
   def gteqSpark3_3_2: Boolean = getSparkVersion >= "3.3.2"
   def gteqSpark3_4: Boolean = getSparkVersion >= "3.4"
@@ -108,7 +99,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     //       Additionally, we have to explicitly wrap around resulting [[RDD]] into the one
     //       injecting [[SQLConf]], which by default isn't propagated by Spark to the executor(s).
     //       [[SQLConf]] is required by [[AvroSerializer]]
-    injectSQLConf(df.queryExecution.toRdd.mapPartitions { rows =>
+    injectSQLConf(df.queryExecution.toRdd.mapPartitions (rows => {
       if (rows.isEmpty) {
         Iterator.empty
       } else {
@@ -126,7 +117,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
         rows.map { ir => transform(convert(ir)) }
       }
-    }, SQLConf.get)
+    }, preservesPartitioning = true), SQLConf.get)
   }
 
   def injectSQLConf[T: ClassTag](rdd: RDD[T], conf: SQLConf): RDD[T] =

@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.hadoop.conf.Configuration;
@@ -51,7 +50,7 @@ public class HoodieDeltaStreamer extends HoodieStreamer {
                              JavaSparkContext jssc,
                              FileSystem fs,
                              Configuration conf) throws IOException {
-    super(cfg, jssc, new HoodieHadoopStorage(fs), conf);
+    super(cfg, jssc, fs, conf);
   }
 
   public HoodieDeltaStreamer(Config cfg,
@@ -59,7 +58,7 @@ public class HoodieDeltaStreamer extends HoodieStreamer {
                              FileSystem fs,
                              Configuration conf,
                              Option<TypedProperties> propsOverride) throws IOException {
-    super(cfg, jssc, new HoodieHadoopStorage(fs), conf, propsOverride);
+    super(cfg, jssc, fs, conf, propsOverride);
   }
 
   @Deprecated

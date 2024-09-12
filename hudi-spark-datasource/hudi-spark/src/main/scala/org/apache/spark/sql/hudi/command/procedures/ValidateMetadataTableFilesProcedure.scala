@@ -21,7 +21,6 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 
@@ -64,7 +63,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
     val metaClient = createMetaClient(jsc, basePath)
     val config = HoodieMetadataConfig.newBuilder.enable(true).build
     val metadataReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf),
-      config, basePath)
+      metaClient.getStorage, config, basePath)
 
     if (!metadataReader.enabled) {
       throw new HoodieException(s"Metadata Table not enabled/initialized.")
@@ -72,7 +71,7 @@ class ValidateMetadataTableFilesProcedure() extends BaseProcedure with Procedure
 
     val fsConfig = HoodieMetadataConfig.newBuilder.enable(false).build
     val fsMetaReader = new HoodieBackedTableMetadata(new HoodieLocalEngineContext(metaClient.getStorageConf),
-      fsConfig, basePath)
+      metaClient.getStorage, fsConfig, basePath)
 
     val timer = HoodieTimer.start
     val metadataPartitions = metadataReader.getAllPartitionPaths

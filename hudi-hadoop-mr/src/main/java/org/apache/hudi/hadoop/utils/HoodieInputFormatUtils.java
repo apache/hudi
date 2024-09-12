@@ -18,7 +18,9 @@
 
 package org.apache.hudi.hadoop.utils;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -33,6 +35,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
@@ -44,15 +47,20 @@ import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
+import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
 import org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat;
 import org.apache.hadoop.hive.ql.io.orc.OrcSerde;
@@ -60,6 +68,8 @@ import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.InputSplit;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.slf4j.Logger;
@@ -250,7 +260,7 @@ public class HoodieInputFormatUtils {
       return Option.empty();
     }
     String incrementalInputPaths = partitionsToList.stream()
-        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath() : tableMetaClient.getBasePath() + StoragePath.SEPARATOR + s)
+        .map(s -> StringUtils.isNullOrEmpty(s) ? tableMetaClient.getBasePath().toString() : tableMetaClient.getBasePath() + StoragePath.SEPARATOR + s)
         .filter(s -> {
           /*
            * Ensure to return only results from the original input path that has incremental changes
@@ -449,9 +459,9 @@ public class HoodieInputFormatUtils {
         // with "."
         continue;
       }
-      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath()))) {
+      if ((metadata == null) || (!inputPath.toString().contains(metadata.getBasePath().toString()))) {
         for (HoodieTableMetaClient metaClient : metaClientList) {
-          if (inputPath.toString().contains(metaClient.getBasePath())) {
+          if (inputPath.toString().contains(metaClient.getBasePath().toString())) {
             metadata = metaClient;
             if (!grouped.containsKey(metadata)) {
               grouped.put(metadata, new ArrayList<>());
@@ -473,7 +483,7 @@ public class HoodieInputFormatUtils {
     metaClientList.forEach(metaClient -> grouped.put(metaClient, new ArrayList<>()));
     for (Path path : snapshotPaths) {
       // Find meta client associated with the input path
-      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath()))
+      metaClientList.stream().filter(metaClient -> path.toString().contains(metaClient.getBasePath().toString()))
           .forEach(metaClient -> grouped.get(metaClient).add(path));
     }
     return grouped;
@@ -524,10 +534,10 @@ public class HoodieInputFormatUtils {
                                                                   List<HoodieCommitMetadata> metadataList) {
     // TODO: Use HoodieMetaTable to extract affected file directly.
     HashMap<String, StoragePathInfo> fullPathToInfoMap = new HashMap<>();
+    HoodieStorage storage = new HoodieHadoopStorage(basePath, HadoopFSUtils.getStorageConf(hadoopConf));
     // Iterate through the given commits.
     for (HoodieCommitMetadata metadata : metadataList) {
-      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(
-          HadoopFSUtils.getStorageConf(hadoopConf), basePath.toString()));
+      fullPathToInfoMap.putAll(metadata.getFullPathToInfo(storage, basePath.toString()));
     }
     return new ArrayList<>(fullPathToInfoMap.values());
   }
@@ -538,5 +548,32 @@ public class HoodieInputFormatUtils {
     } catch (IOException e) {
       throw new HoodieIOException(String.format("Failed to create instance of %s", HoodieRealtimeFileSplit.class.getName()), e);
     }
+  }
+
+  public static List<String> getPartitionFieldNames(JobConf jobConf) {
+    String partitionFields = jobConf.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
+    return partitionFields.isEmpty() ? new ArrayList<>() : Arrays.stream(partitionFields.split("/")).collect(Collectors.toList());
+  }
+
+  public static String getTableBasePath(InputSplit split, JobConf jobConf) throws IOException {
+    if (split instanceof RealtimeSplit) {
+      RealtimeSplit realtimeSplit = (RealtimeSplit) split;
+      return realtimeSplit.getBasePath();
+    } else {
+      Path inputPath = ((FileSplit) split).getPath();
+      FileSystem fs = inputPath.getFileSystem(jobConf);
+      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
+      return tablePath.get().toString();
+    }
+  }
+
+  /**
+   * `schema.on.read` and skip merge not implemented
+   */
+  public static boolean shouldUseFilegroupReader(final JobConf jobConf) {
+    return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
+        && !jobConf.getBoolean(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP, false);
   }
 }

@@ -36,8 +36,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -121,6 +121,8 @@ public class LegacyArchivedMetaEntryReader {
       case HoodieTimeline.LOG_COMPACTION_ACTION:
         return Option.of("hoodieCompactionPlan");
       case HoodieTimeline.REPLACE_COMMIT_ACTION:
+        return Option.of("hoodieReplaceCommitMetadata");
+      case HoodieTimeline.CLUSTERING_ACTION:
         return Option.of("hoodieReplaceCommitMetadata");
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");

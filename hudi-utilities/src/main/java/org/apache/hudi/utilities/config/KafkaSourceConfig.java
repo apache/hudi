@@ -41,15 +41,25 @@ import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
     description = "Configurations controlling the behavior of Kafka source in Hudi Streamer.")
 public class KafkaSourceConfig extends HoodieConfig {
 
+  public static final String KAFKA_CHECKPOINT_TYPE_STRING = "string";
+  public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
+  public static final String KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET = "single_offset";
+
   private static final String PREFIX = STREAMER_CONFIG_PREFIX + "source.kafka.";
   private static final String OLD_PREFIX = DELTA_STREAMER_CONFIG_PREFIX + "source.kafka.";
 
   public static final ConfigProperty<String> KAFKA_CHECKPOINT_TYPE = ConfigProperty
       .key(PREFIX + "checkpoint.type")
-      .defaultValue("string")
+      .defaultValue(KAFKA_CHECKPOINT_TYPE_STRING)
       .withAlternatives(OLD_PREFIX + "checkpoint.type")
       .markAdvanced()
-      .withDocumentation("Kafka checkpoint type.");
+      .withDocumentation("Kafka checkpoint type. Value must be one of the following: "
+          + KAFKA_CHECKPOINT_TYPE_STRING + ", " + KAFKA_CHECKPOINT_TYPE_TIMESTAMP + ", " + KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET
+          + ". Default type is " + KAFKA_CHECKPOINT_TYPE_STRING + ". "
+          + "For type " + KAFKA_CHECKPOINT_TYPE_STRING + ", checkpoint should be provided as: topicName,0:offset0,1:offset1,2:offset2. "
+          + "For type " + KAFKA_CHECKPOINT_TYPE_TIMESTAMP + ", checkpoint should be provided as long value of desired timestamp. "
+          + "For type " + KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET + ", we assume that topic consists of a single partition, "
+          + "so checkpoint should be provided as long value of desired offset.");
 
   public static final ConfigProperty<String> KAFKA_AVRO_VALUE_DESERIALIZER_CLASS = ConfigProperty
       .key(PREFIX + "value.deserializer.class")
@@ -66,7 +76,7 @@ public class KafkaSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Schema to deserialize the records.");
 
-
+  @Deprecated
   public static final ConfigProperty<Long> KAFKA_FETCH_PARTITION_TIME_OUT = ConfigProperty
       .key(PREFIX + "fetch_partition.time.out")
       .defaultValue(300 * 1000L)
@@ -127,6 +137,35 @@ public class KafkaSourceConfig extends HoodieConfig {
       .defaultValue(ByteArrayDeserializer.class.getName())
       .sinceVersion("0.15.0")
       .withDocumentation("Kafka Proto Payload Deserializer Class");
+
+  public static final ConfigProperty<Long> INITIAL_RETRY_INTERVAL_MS = ConfigProperty
+      .key(PREFIX + "retry.initial_interval_ms")
+      .defaultValue(100L)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Amount of time (in ms) to wait, before retry to do operations on KafkaConsumer.");
+
+  public static final ConfigProperty<Long> MAX_RETRY_INTERVAL_MS = ConfigProperty
+      .key(PREFIX + "retry.max_interval_ms")
+      .defaultValue(2000L)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum amount of time (in ms), to wait for next retry.");
+
+  public static final ConfigProperty<Integer> MAX_RETRY_COUNT = ConfigProperty
+      .key(PREFIX + "retry.max_count")
+      .defaultValue(4)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Maximum number of retry actions to perform, with exponential backoff.");
+
+  public static final ConfigProperty<String> RETRY_EXCEPTIONS = ConfigProperty
+      .key(PREFIX + "retry.exceptions")
+      .defaultValue("")
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
+          + "Default is empty which means retry all the IOException and RuntimeException from KafkaConsumer");
 
   /**
    * Kafka reset offset strategies.

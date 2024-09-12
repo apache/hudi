@@ -88,6 +88,9 @@ public class HoodieSparkKeyGeneratorFactory {
         //Need to prevent overwriting the keygen for spark sql merge into because we need to extract
         //the recordkey from the meta cols if it exists. Sql keygen will use pkless keygen if needed.
         && !props.getBoolean(SPARK_SQL_MERGE_INTO_PREPPED_KEY, false);
+    if (autoRecordKeyGen) {
+      props.remove(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+    }
     KeyGenerator keyGenerator = (KeyGenerator) ReflectionUtils.loadClass(keyGeneratorClass, props);
     if (autoRecordKeyGen) {
       return new AutoRecordGenWrapperKeyGenerator(props, (BuiltinKeyGenerator) keyGenerator);

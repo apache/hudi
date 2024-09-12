@@ -23,8 +23,10 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
+import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -117,8 +119,8 @@ public class TestHoodieTableSource {
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
     HoodieTableSource tableSource = new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(tempFile.getPath()),
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(tempFile.getPath()),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);
@@ -334,8 +336,8 @@ public class TestHoodieTableSource {
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
     return new HoodieTableSource(
-        TestConfigurations.TABLE_SCHEMA,
-        new Path(conf.getString(FlinkOptions.PATH)),
+        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        new StoragePath(conf.getString(FlinkOptions.PATH)),
         Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
         conf);

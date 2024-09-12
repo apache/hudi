@@ -98,6 +98,10 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       spark.sql(s"delete from $tableName where year = $partitionVal")
       val cnt = spark.sql(s"select * from $tableName where year = $partitionVal").count()
       assertResult(0)(cnt)
+
+      // check that schema evolution is enabled (from hudi-defaults.conf),
+      // so no exception is thrown on alter table change column type
+      spark.sql(s"alter table $tableName change column price price string")
     }
   }
 

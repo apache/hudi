@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.internal.SQLConf
@@ -231,4 +232,11 @@ trait SparkAdapter extends Serializable {
                               sqlConf: SQLConf,
                               options: Map[String, String],
                               hadoopConf: Configuration): SparkParquetReader
+
+  /**
+   * use new qe execute
+   */
+  def sqlExecutionWithNewExecutionId[T](sparkSession: SparkSession,
+                                        queryExecution: QueryExecution,
+                                        name: Option[String] = None)(body: => T): T
 }

@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -158,6 +159,7 @@ public class LSMTimeline {
         LOG.warn("Error reading version file {}", versionFilePath, e);
       }
     }
+
     return allSnapshotVersions(metaClient).stream().max(Integer::compareTo).orElse(-1);
   }
 
@@ -165,6 +167,10 @@ public class LSMTimeline {
    * Returns all the valid snapshot versions.
    */
   public static List<Integer> allSnapshotVersions(HoodieTableMetaClient metaClient) throws IOException {
+    StoragePath archivedFolderPath = new StoragePath(metaClient.getArchivePath());
+    if (!metaClient.getStorage().exists(archivedFolderPath)) {
+      return Collections.emptyList();
+    }
     return metaClient.getStorage().listDirectEntries(new StoragePath(metaClient.getArchivePath()),
             getManifestFilePathFilter())
         .stream()
