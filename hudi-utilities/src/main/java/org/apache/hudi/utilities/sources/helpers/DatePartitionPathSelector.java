@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
@@ -137,7 +138,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     List<FileStatus> eligibleFiles = context.flatMap(prunedPartitionPaths,
         path -> {
-          FileSystem fs = new Path(path).getFileSystem(storageConf.unwrap());
+          FileSystem fs = HadoopFSUtils.getFs(path, storageConf);
           return listEligibleFiles(fs, new Path(path), lastCheckpointTime).stream();
         }, partitionsListParallelism);
     // sort them by modification time ascending.
@@ -187,7 +188,7 @@ public class DatePartitionPathSelector extends DFSPathSelector {
     for (int i = 0; i < datePartitionDepth; i++) {
       partitionPaths = context.flatMap(partitionPaths, path -> {
         Path subDir = new Path(path);
-        FileSystem fileSystem = subDir.getFileSystem(storageConf.unwrap());
+        FileSystem fileSystem = HadoopFSUtils.getFs(subDir, storageConf);
         // skip files/dirs whose names start with (_, ., etc)
         FileStatus[] statuses = fileSystem.listStatus(subDir,
             file -> IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
