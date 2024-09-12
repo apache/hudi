@@ -165,8 +165,8 @@ public class DFSPathSelector implements Serializable {
   }
 
   protected List<StoragePathInfo> listEligibleFiles(HoodieStorage storage,
-                                               StoragePath path,
-                                               long lastCheckpointTime) throws IOException {
+                                                    StoragePath path,
+                                                    long lastCheckpointTime) throws IOException {
     return listEligibleFiles(storage, path, lastCheckpointTime, new HashSet<>());
   }
 
@@ -174,9 +174,9 @@ public class DFSPathSelector implements Serializable {
    * List files recursively, filter out illegible files/directories while doing so.
    */
   protected List<StoragePathInfo> listEligibleFiles(HoodieStorage storage,
-                                               StoragePath path,
-                                               long lastCheckpointTime,
-                                               Set<StoragePathInfo> visited) throws IOException {
+                                                    StoragePath path,
+                                                    long lastCheckpointTime,
+                                                    Set<StoragePathInfo> visited) throws IOException {
     // skip files/dirs whose names start with (_, ., etc)
     List<StoragePathInfo> pathInfos = storage.listDirectEntries(path, file ->
         IGNORE_FILEPREFIX_LIST.stream().noneMatch(pfx -> file.getName().startsWith(pfx)));
