@@ -526,7 +526,7 @@ object HoodieFileIndex extends Logging {
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PRECOMBINE_FIELD.key, Option(tableConfig.getPreCombineField).getOrElse(""))
-      properties.setProperty(PARTITIONPATH_FIELD.key, tableConfig.getPartitionFields.orElse(Array.apply("")).mkString(","))
+      properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
     }
 
     properties

@@ -1013,8 +1013,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRawRecordKeyFieldProp != null) {
       missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRawRecordKeyFieldProp)
     }
-    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
-      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).isPresent) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).get())
     }
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
