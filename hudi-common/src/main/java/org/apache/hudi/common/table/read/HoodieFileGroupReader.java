@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -109,7 +110,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setRecordMerger(this.recordMerger);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
-    boolean isSkipMerge = props.getString(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.MERGE_TYPE.key()).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
     if (readerContext.getHasLogFiles() && start != 0) {
