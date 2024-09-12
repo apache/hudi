@@ -26,16 +26,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +48,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -93,10 +92,9 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
-      metaClient.reloadActiveTimeline();
       StoragePath basePath = metaClient.getBasePath();
       HoodieTableMetaClient mdtMetaClient = createMetadataTableMetaClient(context, basePath);
-      // Delete unused metadata partitions.
+      // Delete unsupported metadata partitions in table version 7.
       downgradeMetadataPartitions(context, metaClient.getStorage(), mdtMetaClient, tablePropsToAdd);
     }
 
@@ -125,7 +123,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         context,
         hoodieStorage,
         mdtMetaClient.getBasePath(),
-        true);
+        false);
 
     // Delete partitions.
     List<String> validPartitionPaths = deleteMetadataPartition(context, mdtMetaClient, metadataPartitions);
@@ -140,9 +138,9 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     List<String> validPartitionPaths = new ArrayList<>();
 
     for (String partitionPath : metadataPartitions) {
-      if (partitionPath.equals(FUNCTIONAL_INDEX.getPartitionPath())
-          || partitionPath.equals(SECONDARY_INDEX.getPartitionPath())
-          || partitionPath.equals(PARTITION_STATS.getPartitionPath())) {
+      if (FUNCTIONAL_INDEX == fromPartitionPath(partitionPath)
+          || SECONDARY_INDEX == fromPartitionPath(partitionPath)
+          || PARTITION_STATS == fromPartitionPath(partitionPath)) {
         HoodieTableMetadataUtil.deleteMetadataTablePartition(
             mdtMetaClient, context, partitionPath, true);
       } else {
@@ -155,12 +153,8 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   private static HoodieTableMetaClient createMetadataTableMetaClient(HoodieEngineContext context,
                                                                      StoragePath basePath) {
     return HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(
-            (Configuration) context.getStorageConf().unwrap()))
-        .setBasePath(
-            new Path(basePath.toString(),
-                HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
-        .setLoadActiveTimelineOnLoad(true)
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
         .build();
   }
 }

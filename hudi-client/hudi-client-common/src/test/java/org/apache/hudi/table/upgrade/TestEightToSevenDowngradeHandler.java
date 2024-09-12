@@ -25,22 +25,26 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
 import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
@@ -53,13 +57,15 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TestEightToSevenDowngradeHandler {
+  @TempDir
+  private File baseDir;
+
   private static final List<String> SAMPLE_METADATA_PATHS = Arrays.asList(
       FUNCTIONAL_INDEX.getPartitionPath(),
       SECONDARY_INDEX.getPartitionPath(),
       PARTITION_STATS.getPartitionPath(),
-      "metadata_path1",
-      "metadata_path2");
-
+      FILES.getPartitionPath(),
+      COLUMN_STATS.getPartitionPath());
   @Mock
   HoodieTableMetaClient mdtMetaClient;
   @Mock
@@ -84,27 +90,28 @@ class TestEightToSevenDowngradeHandler {
               mdtMetaClient, context, PARTITION_STATS.getPartitionPath(), true),
           times(1));
 
-      assertArrayEquals(new String[]{"metadata_path1", "metadata_path2"}, leftPartitionPaths.toArray());
+      assertArrayEquals(new String[]{"files", "column_stats"}, leftPartitionPaths.toArray());
     }
   }
 
   @Test
   void testDowngradeMetadataPartitions() {
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage("any_path", new Configuration(false));
-    StoragePath basePath = new StoragePath("file:///base_path/.hoodie/metadata/.hoodie");
+    String baseTablePath = baseDir.toString();
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
+    StoragePath basePath = new StoragePath(baseTablePath + "/.hoodie/metadata/.hoodie");
     when(mdtMetaClient.getBasePath()).thenReturn(basePath);
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
          MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
       mockedFSUtils
-          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, basePath, true))
+          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, basePath, false))
           .thenReturn(SAMPLE_METADATA_PATHS);
 
       EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, mdtMetaClient, tablePropsToAdd);
 
       assertTrue(tablePropsToAdd.containsKey(TABLE_METADATA_PARTITIONS));
-      assertEquals("metadata_path1,metadata_path2", tablePropsToAdd.get(TABLE_METADATA_PARTITIONS));
+      assertEquals("files,column_stats", tablePropsToAdd.get(TABLE_METADATA_PARTITIONS));
     }
   }
 }
