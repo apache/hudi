@@ -125,6 +125,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
+    if (HoodieSparkUtils.gteqSpark3_3()) {
+      sparkSession.conf().set("spark.sql.parquet.enableNestedColumnVectorizedReader", "false");
+    }
   }
 
   @AfterEach
