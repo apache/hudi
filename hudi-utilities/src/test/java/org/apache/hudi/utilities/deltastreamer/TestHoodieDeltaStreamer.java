@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import joptsimple.internal.Strings;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkRecordMerger;
@@ -1645,21 +1646,55 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
+  private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
+    return Stream.of(
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.AVRO, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.AVRO, "COPY_ON_WRITE", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.SPARK, "MERGE_ON_READ", "timestamp"),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", Strings.EMPTY),
+        Arguments.of(HoodieRecordType.SPARK, "COPY_ON_WRITE", "timestamp"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getArgumentsForFilterDupesWithPrecombineTest")
+  public void testFilterDupesWithPrecombine(
+      HoodieRecordType recordType, String tableType, String sourceOrderingField) throws Exception {
+    String tableBasePath = basePath + "/test_dupes_tables_with_precombine";
+    HoodieDeltaStreamer.Config cfg =
+        TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
+    cfg.tableType = tableType;
+    cfg.filterDupes = true;
+    cfg.sourceOrderingField = Strings.EMPTY;
+    addRecordMerger(recordType, cfg.configs);
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
+
+    // Generate the same 1000 records + 1000 new ones
+    // We use TestDataSource to assist w/ generating input data. for every subquent batches, it produces 50% inserts and 50% updates.
+    runDeltaSync(cfg, true, 2000, WriteOperationType.INSERT);
+    assertRecordCount(2000, tableBasePath, sqlContext); // if filter dupes is not enabled, we should be expecting 3000 records here.
+    TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
+
+    UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
   @Test
   public void testFilterDupes() throws Exception {
     String tableBasePath = basePath + "/test_dupes_table";
 
-    // Initial bulk insert
+    // Initial bulk insert of 1000 records
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, WriteOperationType.BULK_INSERT);
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
     // Generate the same 1000 records + 1000 new ones for upsert
-    cfg.filterDupes = true;
-    cfg.sourceLimit = 2000;
-    cfg.operation = WriteOperationType.INSERT;
-    new HoodieDeltaStreamer(cfg, jsc).sync();
+    runDeltaSync(cfg, true, 2000, WriteOperationType.INSERT);
     assertRecordCount(2000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
     // 1000 records for commit 00000 & 1000 for commit 00001
@@ -1670,23 +1705,35 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Test with empty commits
     HoodieTableMetaClient mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant lastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+    HoodieTableMetaClient mClient =
+        HoodieTableMetaClient
+            .builder()
+            .setConf(jsc.hadoopConfiguration())
+            .setBasePath(tableBasePath)
+            .setLoadActiveTimelineOnLoad(true)
+            .build();
+    HoodieInstant lastFinished =
+        mClient
+            .getCommitsTimeline()
+            .filterCompletedInstants()
+            .lastInstant()
+            .get();
     HoodieDeltaStreamer.Config cfg2 = TestHelpers.makeDropAllConfig(tableBasePath, WriteOperationType.UPSERT);
-    addRecordMerger(HoodieRecordType.AVRO, cfg2.configs);
-    cfg2.filterDupes = false;
-    cfg2.sourceLimit = 2000;
-    cfg2.operation = WriteOperationType.UPSERT;
-    cfg2.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
-    HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg2, jsc);
-    ds2.sync();
+    addRecordMerger(recordType, cfg2.configs);
+    runDeltaSync(cfg2, false, 2000, WriteOperationType.UPSERT);
     mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
     assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), HoodieTimeline.GREATER_THAN, lastFinished.getTimestamp()
     ));
+    assertTrue(
+        HoodieTimeline.compareTimestamps(
+            newLastFinished.getTimestamp(),
+            HoodieTimeline.GREATER_THAN,
+            lastFinished.getTimestamp()));
 
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
         .fromBytes(mClient.getActiveTimeline().getInstantDetails(newLastFinished).get(), HoodieCommitMetadata.class);
-    System.out.println("New Commit Metadata=" + commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
     // Try UPSERT with filterDupes true. Expect exception
@@ -1697,7 +1744,17 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     } catch (IllegalArgumentException e) {
       assertTrue(e.getMessage().contains("'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed."));
     }
+
+    runDeltaSync(cfg2, true, 2000, WriteOperationType.INSERT);
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
+  }
+
+  private void runDeltaSync(
+      HoodieDeltaStreamer.Config cfg, boolean filterDupes, int numberOfRecords, WriteOperationType operationType) throws Exception {
+    cfg.filterDupes = filterDupes;
+    cfg.sourceLimit = numberOfRecords;
+    cfg.operation = operationType;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
   }
 
   @Test

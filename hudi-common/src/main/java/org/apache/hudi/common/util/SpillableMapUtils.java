@@ -31,6 +31,7 @@ import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.Strings;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -164,7 +165,7 @@ public class SpillableMapUtils {
    * @return the preCombine field value or 0 if the field does not exist in the avro schema
    */
   private static Object getPreCombineVal(GenericRecord rec, String preCombineField) {
-    if (preCombineField == null) {
+    if (Strings.isNullOrEmpty(preCombineField)) {
       return 0;
     }
     Schema.Field field = rec.getSchema().getField(preCombineField);

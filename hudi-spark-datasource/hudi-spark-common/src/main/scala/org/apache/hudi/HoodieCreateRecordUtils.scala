@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -75,6 +76,7 @@ object HoodieCreateRecordUtils {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
     val autoGenerateRecordKeys: Boolean = !parameters.asJava.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+    val isPrecombinePresent = !StringUtils.isNullOrEmpty(config.getString(PRECOMBINE_FIELD))
 
     var shouldCombine = false
     if (preppedWriteOperation && !preppedSparkSqlWrites && !preppedSparkSqlMergeInto) {// prepped pk less via spark-ds
@@ -140,7 +142,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine) {
+            val hoodieRecord = if (shouldCombine && isPrecombinePresent) {
               val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
