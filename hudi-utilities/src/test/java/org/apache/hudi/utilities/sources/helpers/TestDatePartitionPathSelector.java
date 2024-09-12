@@ -24,7 +24,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -217,7 +216,7 @@ public class TestDatePartitionPathSelector extends HoodieSparkClientTestHarness 
     createDatePartitionsWithFiles(leafDirs, isHiveStylePartition, dateFormat);
 
     List<String> paths = pathSelector.pruneDatePartitionPaths(
-        context, (FileSystem) storage.getFileSystem(), root.toString(), LocalDate.parse(currentDate));
+        context, storage, root.toString(), LocalDate.parse(currentDate));
     assertEquals(expectedNumFiles, paths.size());
   }
 }
