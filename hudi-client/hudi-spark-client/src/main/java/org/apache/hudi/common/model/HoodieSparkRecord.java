@@ -56,6 +56,7 @@ import scala.Function1;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
+import static org.apache.spark.sql.types.DataTypes.ByteType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
@@ -244,7 +245,8 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
 
     // Use metadata filed to decide.
     Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
-    if (operationField != null && "D".equals(data.get(operationField.pos(), StringType))) {
+    if (null != operationField
+        && HoodieOperation.isDeleteRecord((Byte) data.get(operationField.pos(), ByteType))) {
       return true;
     }
 
