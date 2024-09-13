@@ -256,6 +256,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       }, table.getPreExecuteRunnable());
 
       executor.execute();
+      // close base record iterator
+      recordIterator.close();
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
