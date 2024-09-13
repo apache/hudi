@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
+import org.apache.avro.Schema;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
@@ -54,6 +55,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
 import static org.apache.hudi.config.HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS;
 import static org.apache.spark.sql.SaveMode.Append;
@@ -422,10 +424,18 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
 
   private Dataset<Row> updateTripType(Dataset<Row> rowToMod, String value) {
     rowToMod.createOrReplaceTempView("rowToMod");
-    return sparkSession.sqlContext().createDataFrame(sparkSession.sql("select _hoodie_is_deleted, _row_key, "
-        + "begin_lat, begin_lon, current_date, current_ts, distance_in_meters, driver, end_lat, end_lon, fare, height, "
-        + "nation, partition, partition_path, rider, seconds_since_epoch, timestamp, tip_history, '" + value
-        + "' as trip_type, weight from rowToMod").rdd(), rowToMod.schema());
+    List<String> fieldNameList = AVRO_SCHEMA.getFields().stream()
+        .map(Schema.Field::name)
+        .filter(name ->
+            !"trip_type".equals(name) && !"weight".equals(name) && !"city_to_state".equals(name))
+        .collect(Collectors.toList());
+    fieldNameList.add("partition");
+    String fieldNamesInSQL = fieldNameList.stream().sorted().collect(Collectors.joining(", "));
+
+    return sparkSession.sqlContext().createDataFrame(
+        sparkSession.sql("select " + fieldNamesInSQL + ", '"
+            + value + "' as trip_type, weight from rowToMod").rdd(),
+        rowToMod.schema());
   }
 
   /**
