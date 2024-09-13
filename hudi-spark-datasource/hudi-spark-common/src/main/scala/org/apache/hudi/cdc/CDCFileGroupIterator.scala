@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.util.JavaScalaUtils.JavaOptional
 import org.apache.hudi.{AvroConversionUtils, AvroProjection, HoodieMergeOnReadFileSplit, HoodieTableSchema, HoodieTableState, LogFileIterator, RecordMergingFileIterator, SparkAdapterSupport}
 
 import org.apache.avro.Schema
@@ -108,7 +109,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       recordKeyField,
       preCombineFieldOpt,
       usesVirtualKeys = !populateMetaFields,
-      metaClient.getTableConfig.getPayloadClass,
+      metaClient.getTableConfig.getPayloadClass.toScala,
       metadataConfig,
       // TODO support CDC with spark record
       recordMergerImpls = List(classOf[HoodieAvroRecordMerger].getName),

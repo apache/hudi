@@ -164,8 +164,11 @@ object MergeOnReadSnapshotRelation extends SparkAdapterSupport {
     classOf[OverwriteWithLatestAvroPayload]
   ).map(_.getName).toSet
 
-  def isProjectionCompatible(tableState: HoodieTableState): Boolean =
-    projectionCompatiblePayloadClasses.contains(tableState.recordPayloadClassName)
+  def isProjectionCompatible(tableState: HoodieTableState): Boolean = tableState.recordPayloadClassName match {
+    case Some(payloadClassName) => projectionCompatiblePayloadClasses.contains(payloadClassName)
+    case None => true
+  }
+
 
   def createPartitionedFile(partitionValues: InternalRow,
                             filePath: StoragePath,

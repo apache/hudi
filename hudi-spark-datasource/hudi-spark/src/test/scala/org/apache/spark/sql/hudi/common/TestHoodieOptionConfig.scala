@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecordMerger, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.spark.sql.hudi.HoodieOptionConfig
@@ -39,14 +40,14 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
     assertTrue(with1("type") == "cow")
     assertTrue(with1("payloadClass") == classOf[DefaultHoodieRecordPayload].getName)
     assertTrue(with1("recordMergerStrategy") == HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-    assertTrue(with1("payloadType") == DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue)
+    assertTrue(with1("mergeMode") == HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue)
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",
       "type" -> "mor",
       "payloadClass" -> classOf[OverwriteWithLatestAvroPayload].getName,
       "recordMergerStrategy" -> HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID,
-      "payloadType" -> DataSourceWriteOptions.PAYLOAD_TYPE.defaultValue
+      "mergeMode" -> HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue
     )
     val with2 = HoodieOptionConfig.withDefaultSqlOptions(ops2)
     assertTrue(ops2 == with2)

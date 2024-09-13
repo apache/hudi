@@ -78,9 +78,14 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
 import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -1017,6 +1022,13 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setPayloadClassName(Option<String> payloadClassName) {
+      if (payloadClassName.isPresent()) {
+        return this.setPayloadClassName(payloadClassName.get());
+      }
+      return this;
+    }
+
     public PropertyBuilder setPayloadType(String payloadType) {
       this.payloadType = payloadType;
       return this;
@@ -1193,8 +1205,6 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
-      } else if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_TYPE)) {
-        setPayloadClassName(RecordPayloadType.valueOf(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_TYPE)).getClassName());
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
         setRecordMergerStrategy(
@@ -1294,22 +1304,28 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
       tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
 
-      if (tableType == HoodieTableType.MERGE_ON_READ) {
-        if (null != payloadClassName) {
-          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
-        } else if (null != payloadType) {
-          tableConfig.setValue(HoodieTableConfig.PAYLOAD_TYPE, payloadType);
+      if (null != payloadClassName) {
+        checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
+        tableConfig.setValue(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+        tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
+        if (null == recordMergerStrategy) {
+          tableConfig.setValue(RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+        } else {
+          tableConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
         }
+      } else {
         if (recordMergerStrategy != null) {
-          tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
-        }
-        inferRecordMergeMode();
-        validateMergeConfigs();
-        if (recordMergeMode != null) {
+          if (recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+            tableConfig.setValue(RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
+          } else if (recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
+            tableConfig.setValue(RECORD_MERGE_MODE, OVERWRITE_WITH_LATEST.name());
+          } else {
+            tableConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
+            tableConfig.setValue(RECORD_MERGE_MODE, CUSTOM.name());
+          }
+        } else {
+          checkArgument(recordMergeMode != RecordMergeMode.CUSTOM, "Record merge strategy must be set if merge mode is custom");
           tableConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-        }
-        if (recordMergerStrategy != null) {
-          tableConfig.setValue(HoodieTableConfig.RECORD_MERGER_STRATEGY, recordMergerStrategy);
         }
       }
 
@@ -1426,7 +1442,7 @@ public class HoodieTableMetaClient implements Serializable {
               recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
               recordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
             } else if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
-              recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+              recordMergeMode = EVENT_TIME_ORDERING;
               recordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
             } else {
               recordMergeMode = RecordMergeMode.CUSTOM;
@@ -1436,7 +1452,7 @@ public class HoodieTableMetaClient implements Serializable {
               recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
               recordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
             } else if (payloadType.equals(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())) {
-              recordMergeMode = RecordMergeMode.EVENT_TIME_ORDERING;
+              recordMergeMode = EVENT_TIME_ORDERING;
               recordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
             } else {
               recordMergeMode = RecordMergeMode.CUSTOM;

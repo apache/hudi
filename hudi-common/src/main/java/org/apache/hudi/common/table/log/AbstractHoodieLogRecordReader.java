@@ -96,7 +96,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private final String latestInstantTime;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
-  private final String payloadClassFQN;
+  private final Option<String> payloadClassFQN;
   // Record's key/partition-path fields
   private final String recordKeyField;
   private final Option<String> partitionPathFieldOpt;
@@ -682,7 +682,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return totalLogBlocks.get();
   }
 
-  protected String getPayloadClassFQN() {
+  protected Option<String> getPayloadClassFQN() {
     return payloadClassFQN;
   }
 

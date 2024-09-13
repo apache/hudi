@@ -191,7 +191,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) throws IOException {
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema, props).get();
-    String payloadClass = ConfigUtils.getPayloadClass(props);
+    String payloadClass = ConfigUtils.getPayloadClass(props).get();
     String preCombineField = ConfigUtils.getOrderingField(props);
     return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }

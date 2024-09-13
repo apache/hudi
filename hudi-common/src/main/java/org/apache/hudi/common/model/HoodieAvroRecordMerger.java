@@ -39,7 +39,7 @@ public class HoodieAvroRecordMerger implements HoodieRecordMerger, OperationMode
 
   @Override
   public String getMergingStrategy() {
-    return HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+    return HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
   }
 
   @Override

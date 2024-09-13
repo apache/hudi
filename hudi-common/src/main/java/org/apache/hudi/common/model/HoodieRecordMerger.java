@@ -48,6 +48,8 @@ public interface HoodieRecordMerger extends Serializable {
 
   String OVERWRITE_MERGER_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
 
+  String PAYLOAD_BASED_MERGER_STRATEGY_UUDID = "8375dc0b-45c0-44fe-a23c-d0d032d40783";
+
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
    * It'd be associative operation: f(a, f(b, c)) = f(f(a, b), c) (which we can translate as having 3 versions A, B, C

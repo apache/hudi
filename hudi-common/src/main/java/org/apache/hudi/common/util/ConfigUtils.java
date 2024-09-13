@@ -90,7 +90,7 @@ public class ConfigUtils {
   /**
    * Get payload class.
    */
-  public static String getPayloadClass(Properties properties) {
+  public static Option<String> getPayloadClass(Properties properties) {
     return RecordPayloadType.getPayloadClassName(new HoodieConfig(properties));
   }
 

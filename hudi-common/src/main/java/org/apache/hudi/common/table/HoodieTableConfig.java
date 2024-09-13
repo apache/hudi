@@ -27,10 +27,8 @@ import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.RecordPayloadType;
@@ -186,31 +184,15 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
       .key("hoodie.compaction.payload.class")
-      .defaultValue(DefaultHoodieRecordPayload.class.getName())
+      .noDefaultValue()
       .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
-  public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
-      .key("hoodie.compaction.payload.type")
-      .defaultValue(RecordPayloadType.HOODIE_AVRO_DEFAULT.name())
-      .sinceVersion("1.0.0")
-      .withDocumentation(RecordPayloadType.class);
-
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
-      .key("hoodie.compaction.record.merger.strategy")
-      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
-      .withInferFunction(cfg -> {
-        switch (RecordMergeMode.valueOf(cfg.getStringOrDefault(RECORD_MERGE_MODE))) {
-          case EVENT_TIME_ORDERING:
-            return Option.of(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
-          case OVERWRITE_WITH_LATEST:
-            return Option.of(HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID);
-          case CUSTOM:
-          default:
-            return Option.empty();
-        }
-      })
+      .key("hoodie.record.merge.custom.strategy")
+      .noDefaultValue()
+      .withAlternatives("hoodie.compaction.record.merger.strategy")
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
 
@@ -341,11 +323,6 @@ public class HoodieTableConfig extends HoodieConfig {
       if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
           && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
-        needStore = true;
-      }
-      if (contains(PAYLOAD_TYPE) && payloadClassName != null
-          && !payloadClassName.equals(RecordPayloadType.valueOf(getString(PAYLOAD_TYPE)).getClassName())) {
-        setValue(PAYLOAD_TYPE, RecordPayloadType.fromClassName(payloadClassName).name());
         needStore = true;
       }
       if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
@@ -483,10 +460,6 @@ public class HoodieTableConfig extends HoodieConfig {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
       hoodieConfig.setDefaultValue(TYPE);
-      if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
-        hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
-      }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
       if (!hoodieConfig.contains(TIMELINE_LAYOUT_VERSION)) {
         // Use latest Version as default unless forced by client
@@ -619,7 +592,7 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public String getPayloadClass() {
+  public Option<String> getPayloadClass() {
     return RecordPayloadType.getPayloadClassName(this);
   }
 

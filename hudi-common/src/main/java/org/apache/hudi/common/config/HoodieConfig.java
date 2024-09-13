@@ -149,6 +149,11 @@ public class HoodieConfig implements Serializable {
     return rawValue.map(Object::toString).orElse(null);
   }
 
+  public <T> Option<String> getStringOpt(ConfigProperty<T> configProperty) {
+    Option<Object> rawValue = getRawValue(configProperty);
+    return rawValue.map(Object::toString);
+  }
+
   public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty) {
     return getSplitStrings(configProperty, ",");
   }
