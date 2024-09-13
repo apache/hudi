@@ -163,7 +163,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .defaultValue("org.apache.hudi.DefaultSparkRecordMerger")
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
