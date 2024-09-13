@@ -38,17 +38,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
-import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.PARTITION_STATS;
-import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
+import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -57,6 +59,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
+  private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
+
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -126,28 +130,27 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         false);
 
     // Delete partitions.
-    List<String> validPartitionPaths = deleteMetadataPartition(context, mdtMetaClient, metadataPartitions);
+    List<String> validPartitionPaths =
+        deleteMetadataPartition(context, mdtMetaClient, metadataPartitions);
 
     // Clean the configuration.
-    tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
+    tablePropsToAdd.put(
+        TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
   }
 
   static List<String> deleteMetadataPartition(HoodieEngineContext context,
                                               HoodieTableMetaClient mdtMetaClient,
                                               List<String> metadataPartitions) {
-    List<String> validPartitionPaths = new ArrayList<>();
+    metadataPartitions.stream()
+        .filter(metadataPath -> !SUPPORTED_METADATA_PARTITION_PATHS.contains(metadataPath))
+        .forEach(metadataPath ->
+            HoodieTableMetadataUtil.deleteMetadataTablePartition(
+                mdtMetaClient, context, metadataPath, true)
+        );
 
-    for (String partitionPath : metadataPartitions) {
-      if (FUNCTIONAL_INDEX == fromPartitionPath(partitionPath)
-          || SECONDARY_INDEX == fromPartitionPath(partitionPath)
-          || PARTITION_STATS == fromPartitionPath(partitionPath)) {
-        HoodieTableMetadataUtil.deleteMetadataTablePartition(
-            mdtMetaClient, context, partitionPath, true);
-      } else {
-        validPartitionPaths.add(partitionPath);
-      }
-    }
-    return validPartitionPaths;
+    return metadataPartitions.stream()
+        .filter(SUPPORTED_METADATA_PARTITION_PATHS::contains)
+        .collect(Collectors.toList());
   }
 
   private static HoodieTableMetaClient createMetadataTableMetaClient(HoodieEngineContext context,
@@ -156,5 +159,15 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         .setConf(context.getStorageConf().newInstance())
         .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
         .build();
+  }
+
+  private static Set<String> getSupportedMetadataPartitionPaths() {
+    Set<String> supportedPartitionPaths = new HashSet<>();
+    supportedPartitionPaths.add(BLOOM_FILTERS.getPartitionPath());
+    supportedPartitionPaths.add(COLUMN_STATS.getPartitionPath());
+    supportedPartitionPaths.add(FILES.getPartitionPath());
+    supportedPartitionPaths.add(RECORD_INDEX.getPartitionPath());
+
+    return supportedPartitionPaths;
   }
 }
