@@ -53,19 +53,23 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -367,8 +371,51 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @Test
+  public void testPartitionPruningInHoodieIncrSource()
+      throws IOException {
+    this.tableType = MERGE_ON_READ;
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
+        .withCompactionConfig(
+            HoodieCompactionConfig.newBuilder()
+                .withScheduleInlineCompaction(true)
+                .withMaxNumDeltaCommitsBeforeCompaction(1)
+                .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+    List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "100", DEFAULT_PARTITION_PATHS[0]));
+      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "200", DEFAULT_PARTITION_PATHS[1]));
+      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "300", DEFAULT_PARTITION_PATHS[2]));
+      // Go over all possible test cases to assert behaviour.
+      getArgsForPartitionPruningInHoodieIncrSource().forEach(argumentsStream -> {
+        Object[] arguments = argumentsStream.get();
+        String checkpointToPullFromHoodieInstant = (String) arguments[0];
+        int maxRowsPerSnapshotBatch = (int) arguments[1];
+        String expectedCheckpointHoodieInstant = (String) arguments[2];
+        int expectedCount = (int) arguments[3];
+        int expectedRDDPartitions = (int) arguments[4];
+
+        TypedProperties extraProps = new TypedProperties();
+        extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(maxRowsPerSnapshotBatch));
+        readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+            Option.ofNullable(checkpointToPullFromHoodieInstant),
+            expectedCount,
+            expectedCheckpointHoodieInstant,
+            Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+            extraProps,
+            Option.ofNullable(expectedRDDPartitions)
+        );
+      });
+    }
+  }
+
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
-                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt, TypedProperties extraProps) {
+                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt, TypedProperties extraProps, Option<Integer> expectedRDDPartitions) {
 
     Properties properties = new Properties();
     properties.setProperty("hoodie.streamer.source.hoodieincr.path", basePath());
@@ -388,8 +435,14 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       assertFalse(batchCheckPoint.getKey().isPresent());
     } else {
       assertEquals(expectedCount, batchCheckPoint.getKey().get().count());
+      expectedRDDPartitions.ifPresent(rddPartitions -> assertEquals(rddPartitions, batchCheckPoint.getKey().get().rdd().getNumPartitions()));
     }
     assertEquals(expectedCheckpoint, batchCheckPoint.getRight());
+  }
+
+  private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull, int expectedCount,
+                             String expectedCheckpoint, Option<String> snapshotCheckPointImplClassOpt, TypedProperties extraProps) {
+    readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, snapshotCheckPointImplClassOpt, extraProps, Option.empty());
   }
 
   private void readAndAssert(IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy, Option<String> checkpointToPull,
@@ -413,11 +466,37 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     return Pair.of(commit, records);
   }
 
+  private Pair<String, List<HoodieRecord>> writeRecordsForPartition(SparkRDDWriteClient writeClient,
+                                                                    WriteOperationType writeOperationType,
+                                                                    String commit,
+                                                                    String partitionPath) {
+    writeClient.startCommitWithTime(commit);
+    List<HoodieRecord> records = dataGen.generateInsertsForPartition(commit, 100, partitionPath);
+    JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
+        ? writeClient.bulkInsert(jsc().parallelize(records, 1), commit)
+        : writeClient.upsert(jsc().parallelize(records, 1), commit);
+    List<WriteStatus> statuses = result.collect();
+    assertNoWriteErrors(statuses);
+    return Pair.of(commit, records);
+  }
+
   private HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .forTable(metaClient.getTableConfig().getTableName());
+  }
+
+  private static Stream<Arguments> getArgsForPartitionPruningInHoodieIncrSource() {
+    // Arguments are in order -> checkpointToPullFromHoodieInstant, maxRowsPerSnapshotBatch, expectedCheckpointHoodieInstant, expectedCount, expectedFileParallelism.
+    return Stream.of(
+        Arguments.of(null, 1, "100", 100, 1),
+        Arguments.of(null, 101, "200", 200, 3),
+        Arguments.of(null, 10001, "300", 300, 3),
+        Arguments.of("100", 101, "300", 200, 2),
+        Arguments.of("200", 101, "300", 100, 1),
+        Arguments.of("300", 101, "300", 0, 0)
+    );
   }
 
   private static class DummySchemaProvider extends SchemaProvider {
