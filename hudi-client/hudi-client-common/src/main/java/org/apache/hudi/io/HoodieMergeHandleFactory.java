@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.sort.merge.HoodieSortMergeJoinMergeHandle;
+import org.apache.hudi.io.sort.merge.HoodieSortMergeJoinMergeHandleWithChangeLog;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
@@ -115,7 +117,11 @@ public class HoodieMergeHandleFactory {
       HoodieBaseFile dataFileToBeMerged,
       TaskContextSupplier taskContextSupplier,
       Option<BaseKeyGenerator> keyGeneratorOpt) {
-    LOG.info("Get sortedUnmergeUpdateHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
+    LOG.info("Get SortMergeJoinMergeHandle for fileId {} and partitionPath {} at commit {}", fileId, partitionPath, instantTime);
+    if (table.getMetaClient().getTableConfig().isCDCEnabled() && writeConfig.isYieldingPureLogForMor()) {
+      return new HoodieSortMergeJoinMergeHandleWithChangeLog<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, dataFileToBeMerged,
+          taskContextSupplier, keyGeneratorOpt);
+    }
     return new HoodieSortMergeJoinMergeHandle<>(writeConfig, instantTime, table, recordItr, partitionPath, fileId, dataFileToBeMerged,
         taskContextSupplier, keyGeneratorOpt);
   }

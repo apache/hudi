@@ -16,13 +16,14 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.io;
+package org.apache.hudi.io.sort.merge;
 
 import org.apache.hudi.avro.HoodieFileFooterSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.table.HoodieTable;
 
 import org.slf4j.Logger;
