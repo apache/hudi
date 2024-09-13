@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
+import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProviderBase;
+import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -125,17 +125,17 @@ public class TestZookeeperBasedLockProvider {
 
   public static Stream<Object> testDimensions() {
     return Stream.of(
-        Arguments.of(zkConfWithTableBasePathTableName, BaseZookeeperBasedLockProvider.class),
+        Arguments.of(zkConfWithTableBasePathTableName, ZookeeperBasedImplicitBasePathLockProvider.class),
         Arguments.of(zkConfWithZkBasePathAndLockKeyLock, ZookeeperBasedLockProvider.class),
         // Even if we have base path set, nothing would break.
-        Arguments.of(zkConfWithZkBasePathLockKeyTableInfo, BaseZookeeperBasedLockProvider.class)
+        Arguments.of(zkConfWithZkBasePathLockKeyTableInfo, ZookeeperBasedImplicitBasePathLockProvider.class)
     );
   }
 
   @ParameterizedTest
   @MethodSource("testDimensions")
   void testAcquireLock(LockConfiguration lockConfig, Class<?> lockProviderClass) {
-    ZookeeperBasedLockProviderBase zookeeperLP = (ZookeeperBasedLockProviderBase) ReflectionUtils.loadClass(
+    BaseZookeeperBasedLockProvider zookeeperLP = (BaseZookeeperBasedLockProvider) ReflectionUtils.loadClass(
         lockProviderClass.getName(),
         new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
         new Object[] {lockConfig, null});
@@ -146,7 +146,7 @@ public class TestZookeeperBasedLockProvider {
 
   public static Stream<Object> testBadDimensions() {
     return Stream.of(
-        Arguments.of(zkConfNoTableBasePathTableName, BaseZookeeperBasedLockProvider.class),
+        Arguments.of(zkConfNoTableBasePathTableName, ZookeeperBasedImplicitBasePathLockProvider.class),
         Arguments.of(zkConfWithTableBasePathTableName, ZookeeperBasedLockProvider.class)
     );
   }

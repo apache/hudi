@@ -35,7 +35,7 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_K
  * "hoodie.write.lock.zookeeper.lock_key" to be set.
  */
 @NotThreadSafe
-public class ZookeeperBasedLockProvider extends ZookeeperBasedLockProviderBase {
+public class ZookeeperBasedLockProvider extends BaseZookeeperBasedLockProvider {
 
   public ZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     super(lockConfiguration, conf);

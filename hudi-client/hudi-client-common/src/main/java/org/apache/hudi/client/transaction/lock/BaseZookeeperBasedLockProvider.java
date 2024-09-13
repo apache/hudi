@@ -18,53 +18,179 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.lock.LockState;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.hash.HashID;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
+
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.curator.retry.BoundedExponentialBackoffRetry;
+import org.apache.zookeeper.KeeperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
-import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
+import java.io.Serializable;
+import java.util.concurrent.TimeUnit;
+
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_CONNECTION_TIMEOUT_MS;
+import static org.apache.hudi.common.config.LockConfiguration.DEFAULT_ZK_SESSION_TIMEOUT_MS;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
+import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
  * using zookeeper. Users need to have a Zookeeper cluster deployed to be able to use this lock.
- *
- * This class derives the zookeeper base path from the hudi table base path (hoodie.base.path) and
- * table name (hoodie.table.name), with lock key set to a hard-coded value.
  */
 @NotThreadSafe
-public class BaseZookeeperBasedLockProvider extends ZookeeperBasedLockProviderBase {
+public abstract class BaseZookeeperBasedLockProvider implements LockProvider<InterProcessMutex>, Serializable {
 
-  public static final String LOCK_KEY = "lock_key";
+  private static final Logger LOG = LoggerFactory.getLogger(BaseZookeeperBasedLockProvider.class);
 
-  public static String getLockBasePath(String hudiTableBasePath, String hudiTableName) {
-    // Ensure consistent format for S3 URI.
-    String hashPart = '-' + HashID.generateXXHashAsString(s3aToS3(hudiTableBasePath), HashID.Size.BITS_64);
-    String folderName = concatenateWithThreshold(hudiTableName, hashPart, MAX_ZK_BASE_PATH_NUM_BYTES);
-    return "/tmp/" + folderName;
-  }
+  private final transient CuratorFramework curatorFrameworkClient;
+  private volatile InterProcessMutex lock = null;
+  protected final LockConfiguration lockConfiguration;
+  protected final String zkBasePath;
+  protected final String lockKey;
+
+  public static final int MAX_ZK_BASE_PATH_NUM_BYTES = 4096;
 
   public BaseZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
-    super(lockConfiguration, conf);
+    checkRequiredProps(lockConfiguration);
+    this.lockConfiguration = lockConfiguration;
+    zkBasePath = getZkBasePath(lockConfiguration);
+    lockKey = getLockKey(lockConfiguration);
+    this.curatorFrameworkClient = CuratorFrameworkFactory.builder()
+        .connectString(lockConfiguration.getConfig().getString(ZK_CONNECT_URL_PROP_KEY))
+        .retryPolicy(new BoundedExponentialBackoffRetry(lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY),
+            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_RETRY_MAX_WAIT_TIME_IN_MILLIS_PROP_KEY),
+            lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY)))
+        .sessionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_SESSION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_SESSION_TIMEOUT_MS))
+        .connectionTimeoutMs(lockConfiguration.getConfig().getInteger(ZK_CONNECTION_TIMEOUT_MS_PROP_KEY, DEFAULT_ZK_CONNECTION_TIMEOUT_MS))
+        .build();
+    this.curatorFrameworkClient.start();
+    createPathIfNotExists();
+  }
+
+  protected abstract String getZkBasePath(LockConfiguration lockConfiguration);
+
+  protected abstract String getLockKey(LockConfiguration lockConfiguration);
+
+  protected String generateLogSuffixString() {
+    return StringUtils.join("ZkBasePath = ", zkBasePath, ", lock key = ", lockKey);
+  }
+
+  protected String getLockPath() {
+    return zkBasePath + '/' + lockKey;
+  }
+
+  private void createPathIfNotExists() {
+    try {
+      String lockPath = getLockPath();
+      LOG.info(String.format("Creating zookeeper path %s if not exists", lockPath));
+      String[] parts = lockPath.split("/");
+      StringBuilder currentPath = new StringBuilder();
+      for (String part : parts) {
+        if (!part.isEmpty()) {
+          currentPath.append("/").append(part);
+          createNodeIfNotExists(currentPath.toString());
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("Failed to create ZooKeeper path: " + e.getMessage());
+      throw new HoodieLockException("Failed to initialize ZooKeeper path", e);
+    }
+  }
+
+  private void createNodeIfNotExists(String path) throws Exception {
+    if (this.curatorFrameworkClient.checkExists().forPath(path) == null) {
+      try {
+        this.curatorFrameworkClient.create().forPath(path);
+      } catch (KeeperException e) {
+        if (e.code() != KeeperException.Code.NODEEXISTS) {
+          throw new HoodieLockException("Failed to create zookeeper node", e);
+        }
+      }
+    }
   }
 
   @Override
-  protected String getZkBasePath(LockConfiguration lockConfiguration) {
-    String hudiTableBasePath = lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key());
-    String hudiTableName = lockConfiguration.getConfig().getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
-    ValidationUtils.checkArgument(hudiTableBasePath != null);
-    ValidationUtils.checkArgument(hudiTableName != null);
-    return getLockBasePath(hudiTableBasePath, hudiTableName);
+  public boolean tryLock(long time, TimeUnit unit) {
+    LOG.info(generateLogStatement(LockState.ACQUIRING, generateLogSuffixString()));
+    try {
+      acquireLock(time, unit);
+      LOG.info(generateLogStatement(LockState.ACQUIRED, generateLogSuffixString()));
+    } catch (HoodieLockException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()), e);
+    }
+    return lock != null && lock.isAcquiredInThisProcess();
   }
 
   @Override
-  protected String getLockKey(LockConfiguration lockConfiguration) {
-    return LOCK_KEY;
+  public void unlock() {
+    try {
+      LOG.info(generateLogStatement(LockState.RELEASING, generateLogSuffixString()));
+      if (lock == null || !lock.isAcquiredInThisProcess()) {
+        return;
+      }
+      lock.release();
+      lock = null;
+      LOG.info(generateLogStatement(LockState.RELEASED, generateLogSuffixString()));
+    } catch (Exception e) {
+      throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()), e);
+    }
+  }
+
+  @Override
+  public void close() {
+    try {
+      if (lock != null) {
+        lock.release();
+        lock = null;
+      }
+      this.curatorFrameworkClient.close();
+    } catch (Exception e) {
+      LOG.error(generateLogStatement(LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+    }
+  }
+
+  @Override
+  public InterProcessMutex getLock() {
+    return this.lock;
+  }
+
+  private void acquireLock(long time, TimeUnit unit) throws Exception {
+    ValidationUtils.checkArgument(this.lock == null, generateLogStatement(LockState.ALREADY_ACQUIRED, generateLogSuffixString()));
+    InterProcessMutex newLock = new InterProcessMutex(
+        this.curatorFrameworkClient, getLockPath());
+    boolean acquired = newLock.acquire(time, unit);
+    if (!acquired) {
+      throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));
+    }
+    if (newLock.isAcquiredInThisProcess()) {
+      lock = newLock;
+    } else {
+      throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));
+    }
+  }
+
+  private void checkRequiredProps(final LockConfiguration config) {
+    ValidationUtils.checkArgument(config.getConfig().getString(ZK_CONNECT_URL_PROP_KEY) != null);
+  }
+
+  protected String generateLogStatement(LockState state, String suffix) {
+    return StringUtils.join(state.name(), " lock at", suffix);
   }
 }
