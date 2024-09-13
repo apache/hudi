@@ -76,8 +76,11 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
       return partitionPathFields.stream().map(field -> {
-        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
-        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight();
+        Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionAndType = getPartitionFieldAndKeyType(field);
+        if (partitionAndType.getRight().isEmpty()) {
+          throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+        }
+        CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight().get();
         String partitionPathField = partitionAndType.getLeft();
         switch (keyType) {
           case SIMPLE:
@@ -99,10 +102,10 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
-      return partitionPathFields.stream().map(field -> {
-        Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionAndType = getPartitionFieldAndKeyType(field);
-        return partitionAndType.getRight();
-      }).collect(Collectors.toList());
+      return partitionPathFields.stream().map(field -> getPartitionFieldAndKeyType(field).getRight())
+          .filter(Option::isPresent)
+          .map(Option::get)
+          .collect(Collectors.toList());
     }
   }
 
@@ -112,18 +115,19 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     } else {
       return partitionPathFields.stream()
           .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
-          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().equals(PartitionKeyType.TIMESTAMP))
+          .filter(fieldAndKeyType -> fieldAndKeyType.getRight().isPresent() && fieldAndKeyType.getRight().get().equals(PartitionKeyType.TIMESTAMP))
           .map(Pair::getLeft)
           .collect(Collectors.toList());
     }
   }
 
-  public static Pair<String, PartitionKeyType> getPartitionFieldAndKeyType(String field) {
+  public static Pair<String, Option<PartitionKeyType>> getPartitionFieldAndKeyType(String field) {
     String[] fieldWithType = field.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
-    if (fieldWithType.length != 2) {
-      throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+    if (fieldWithType.length == 2) {
+      return Pair.of(fieldWithType[0], Option.of(PartitionKeyType.valueOf(fieldWithType[1].toUpperCase())));
+    } else {
+      return Pair.of(fieldWithType[0], Option.empty());
     }
-    return Pair.of(fieldWithType[0], PartitionKeyType.valueOf(fieldWithType[1].toUpperCase()));
   }
 
   @Override

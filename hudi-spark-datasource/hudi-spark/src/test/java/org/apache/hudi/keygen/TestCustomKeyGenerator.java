@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -178,8 +179,8 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     List<String> partitionFields = Arrays.asList("random:simple", "ts_ms:timestamp");
     Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields).toArray();
     assertArrayEquals(new CustomAvroKeyGenerator.PartitionKeyType[] {CustomAvroKeyGenerator.PartitionKeyType.SIMPLE, CustomAvroKeyGenerator.PartitionKeyType.TIMESTAMP}, partitionTypes);
-    Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionFieldAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType("random:simple");
-    assertEquals(Pair.of("random", CustomAvroKeyGenerator.PartitionKeyType.SIMPLE), partitionFieldAndType);
+    Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionFieldAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType("random:simple");
+    assertEquals(Pair.of("random", Option.of(CustomAvroKeyGenerator.PartitionKeyType.SIMPLE)), partitionFieldAndType);
   }
 
   public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {

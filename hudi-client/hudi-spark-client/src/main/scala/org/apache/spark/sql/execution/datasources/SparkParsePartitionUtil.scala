@@ -74,11 +74,11 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
         keyGeneratorPartitionFields.map(field => CustomAvroKeyGenerator.getPartitionFieldAndKeyType(field))
           .map(pair => {
             val partitionField = pair.getLeft
-            val partitionKeyType = pair.getRight
-            partitionKeyType match {
+            val partitionKeyTypeOpt = pair.getRight
+            partitionKeyTypeOpt.map[StructField] {
               case PartitionKeyType.SIMPLE => nameFieldMap.getOrElse(partitionField, null)
               case PartitionKeyType.TIMESTAMP => if (shouldUseStringTypeForTimestampPartitionKeyType) StructField(partitionField, StringType) else nameFieldMap.getOrElse(partitionField, null)
-            }
+            }.orElse(nameFieldMap.getOrElse(partitionField, null))
           })
           .filter(structField => structField != null)
           .array
