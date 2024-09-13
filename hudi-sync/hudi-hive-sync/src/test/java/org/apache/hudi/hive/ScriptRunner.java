@@ -29,7 +29,6 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-
 /**
  * This class was borrowed from Iceberg: <a href="https://github.com/apache/iceberg/blob/main/hive-metastore/src/test/java/org/apache/iceberg/hive/ScriptRunner.java">...</a>
  * Tool to run database scripts */
