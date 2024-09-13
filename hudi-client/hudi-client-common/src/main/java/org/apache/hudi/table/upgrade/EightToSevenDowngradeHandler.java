@@ -61,7 +61,6 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
-
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     final HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
