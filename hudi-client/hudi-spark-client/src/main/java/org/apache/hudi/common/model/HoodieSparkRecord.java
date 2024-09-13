@@ -246,7 +246,7 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     // Use metadata filed to decide.
     Schema.Field operationField = recordSchema.getField(OPERATION_METADATA_FIELD);
     if (null != operationField
-        && HoodieOperation.isDeleteRecord((Byte) data.get(operationField.pos(), ByteType))) {
+        && HoodieOperation.isDeleteRecord((String) data.get(operationField.pos(), StringType))) {
       return true;
     }
 

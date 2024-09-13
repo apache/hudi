@@ -123,7 +123,7 @@ public enum HoodieOperation {
     return operation == DELETE;
   }
 
-  public static boolean isDeleteRecord(Byte value) {
-    return isDelete(fromValue(value));
+  public static boolean isDeleteRecord(String name) {
+    return isDelete(fromName(name));
   }
 }
