@@ -132,7 +132,8 @@ public class ParquetUtils extends FileFormatUtils {
                                                               Path filePath, Set<String> filter,
                                                               Schema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
-    if (filter != null && !filter.isEmpty()) {
+    boolean hasFilter = filter != null && !filter.isEmpty();
+    if (hasFilter) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
@@ -148,6 +149,10 @@ public class ParquetUtils extends FileFormatUtils {
           String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(Pair.of(recordKey, rowPosition));
+            if (hasFilter && filter.size() == rowKeys.size()) {
+              // if we've found all the keys we're looking for, exit early
+              break;
+            }
           }
           obj = reader.read();
           rowPosition++;

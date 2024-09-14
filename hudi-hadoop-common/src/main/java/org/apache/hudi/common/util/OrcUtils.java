@@ -217,6 +217,10 @@ public class OrcUtils extends FileFormatUtils {
             String rowKey = rowKeys.toString(i);
             if (filter.isEmpty() || filter.contains(rowKey)) {
               filteredRowKeys.add(Pair.of(rowKey, rowPosition));
+              if (!filter.isEmpty() && filter.size() == filteredRowKeys.size()) {
+                // if we've found all the keys we're looking for, exit early
+                break;
+              }
             }
             rowPosition++;
           }
