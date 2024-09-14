@@ -394,7 +394,7 @@ public class StreamSync implements Serializable, Closeable {
         .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
         .setBasePath(cfg.targetBasePath)
         .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergerStrategy(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieWriteConfig.RECORD_MERGER_STRATEGY.defaultValue()))
+        .setRecordMergerStrategy(null)
         .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
         .build();
   }
