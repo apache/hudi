@@ -22,6 +22,8 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.IOException;
 
@@ -31,15 +33,16 @@ import static org.apache.hudi.io.HoodieReadHandle.createNewFileReader;
  * Extract range information for a given file slice.
  */
 public class HoodieRangeInfoHandle {
-  private final HoodieStorage hoodieStorage;
+  private final StorageConfiguration<?> storageConfig;
   private final HoodieWriteConfig writeConfig;
 
-  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieStorage hoodieStorage) {
+  public HoodieRangeInfoHandle(HoodieWriteConfig config, StorageConfiguration<?> storageConfig) {
     this.writeConfig = config;
-    this.hoodieStorage = hoodieStorage;
+    this.storageConfig = storageConfig;
   }
 
   public String[] getMinMaxKeys(HoodieBaseFile baseFile) throws IOException {
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(baseFile.getStoragePath(), storageConfig);
     try (HoodieFileReader reader = createNewFileReader(hoodieStorage, writeConfig, baseFile)) {
       return reader.readMinMaxRecordKeys();
     }
