@@ -116,8 +116,11 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
     if (this.curatorFrameworkClient.checkExists().forPath(path) == null) {
       try {
         this.curatorFrameworkClient.create().forPath(path);
+        // to avoid failure due to synchronous calls.
       } catch (KeeperException e) {
-        if (e.code() != KeeperException.Code.NODEEXISTS) {
+        if (e.code() == KeeperException.Code.NODEEXISTS) {
+          LOG.debug(String.format("Node already exist for path = %s", path));
+        } else {
           throw new HoodieLockException("Failed to create zookeeper node", e);
         }
       }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -56,8 +57,8 @@ public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBas
 
   @Override
   protected String getZkBasePath(LockConfiguration lockConfiguration) {
-    String hudiTableBasePath = lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key());
-    String hudiTableName = lockConfiguration.getConfig().getString(HoodieTableConfig.HOODIE_TABLE_NAME_KEY);
+    String hudiTableBasePath = ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), HoodieCommonConfig.BASE_PATH);
+    String hudiTableName = ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), HoodieTableConfig.NAME);
     ValidationUtils.checkArgument(hudiTableBasePath != null);
     ValidationUtils.checkArgument(hudiTableName != null);
     return getLockBasePath(hudiTableBasePath, hudiTableName);

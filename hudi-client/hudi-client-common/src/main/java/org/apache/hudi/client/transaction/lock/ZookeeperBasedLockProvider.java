@@ -20,6 +20,7 @@ package org.apache.hudi.client.transaction.lock;
 
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -27,6 +28,8 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import static org.apache.hudi.common.config.LockConfiguration.ZK_BASE_PATH_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
+import static org.apache.hudi.config.HoodieLockConfig.ZK_BASE_PATH;
+import static org.apache.hudi.config.HoodieLockConfig.ZK_LOCK_KEY;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
@@ -43,13 +46,13 @@ public class ZookeeperBasedLockProvider extends BaseZookeeperBasedLockProvider {
 
   @Override
   protected String getZkBasePath(LockConfiguration lockConfiguration) {
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_BASE_PATH_PROP_KEY) != null);
+    ValidationUtils.checkArgument(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_BASE_PATH) != null);
     return lockConfiguration.getConfig().getString(ZK_BASE_PATH_PROP_KEY);
   }
 
   @Override
   protected String getLockKey(LockConfiguration lockConfiguration) {
-    ValidationUtils.checkArgument(lockConfiguration.getConfig().getString(ZK_LOCK_KEY_PROP_KEY) != null);
+    ValidationUtils.checkArgument(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_LOCK_KEY) != null);
     return this.lockConfiguration.getConfig().getString(ZK_LOCK_KEY_PROP_KEY);
   }
 }
