@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.Iterator;
 
@@ -39,21 +41,29 @@ public class HoodieKeyLocationFetchHandle {
 
   private final Pair<String, HoodieBaseFile> partitionPathBaseFilePair;
   private final Option<BaseKeyGenerator> keyGeneratorOpt;
-  private final HoodieStorage storage;
+  private final StorageConfiguration<?> storageConfig;
+  private transient HoodieStorage storage;
 
-  public HoodieKeyLocationFetchHandle(HoodieStorage storage, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public HoodieKeyLocationFetchHandle(StorageConfiguration<?> storageConfig, Pair<String, HoodieBaseFile> partitionPathBaseFilePair, Option<BaseKeyGenerator> keyGeneratorOpt) {
     this.partitionPathBaseFilePair = partitionPathBaseFilePair;
     this.keyGeneratorOpt = keyGeneratorOpt;
-    this.storage = storage;
+    this.storageConfig = storageConfig;
+  }
+
+  private HoodieStorage getStorage() {
+    if (storage == null) {
+      storage = HoodieStorageUtils.getStorage(partitionPathBaseFilePair.getRight().getStoragePath(), storageConfig);
+    }
+    return storage;
   }
 
   private Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieBaseFile baseFile) {
-    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage)
+    FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(getStorage())
         .getFileFormatUtils(baseFile.getStoragePath());
     if (keyGeneratorOpt.isPresent()) {
-      return fileFormatUtils.fetchRecordKeysWithPositions(storage, baseFile.getStoragePath(), keyGeneratorOpt);
+      return fileFormatUtils.fetchRecordKeysWithPositions(getStorage(), baseFile.getStoragePath(), keyGeneratorOpt);
     } else {
-      return fileFormatUtils.fetchRecordKeysWithPositions(storage, baseFile.getStoragePath());
+      return fileFormatUtils.fetchRecordKeysWithPositions(getStorage(), baseFile.getStoragePath());
     }
   }
 
