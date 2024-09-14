@@ -41,6 +41,7 @@ import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -83,6 +84,7 @@ class TestAwsGlueSyncTool {
     try (MockedStatic<GlueAsyncClient> mockedStatic = mockStatic(GlueAsyncClient.class)) {
       GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
       mockedStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+      when(builder.credentialsProvider(any())).thenReturn(builder);
       GlueAsyncClient mockClient = mock(GlueAsyncClient.class);
       when(builder.build()).thenReturn(mockClient);
       HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(

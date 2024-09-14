@@ -122,6 +122,13 @@ See https://github.com/GoogleCloudPlatform/cloud-opensource-java/wiki/The-Google
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-common</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+      <type>test-jar</type>
+    </dependency>
     <!-- Kryo -->
     <dependency>
       <groupId>com.esotericsoftware</groupId>
