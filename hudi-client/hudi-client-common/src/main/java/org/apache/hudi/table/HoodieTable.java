@@ -128,30 +128,22 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   protected final HoodieWriteConfig config;
   protected final HoodieTableMetaClient metaClient;
-  protected final HoodieIndex<?, ?> index;
+  private transient HoodieIndex<?, ?> index;
   private final StorageConfiguration<?> storageConf;
   protected final TaskContextSupplier taskContextSupplier;
-  private final HoodieTableMetadata metadata;
-  private final HoodieStorageLayout storageLayout;
+  private transient HoodieTableMetadata metadata;
+  private transient HoodieStorageLayout storageLayout;
   private final boolean isMetadataTable;
 
   private transient FileSystemViewManager viewManager;
-  protected final transient HoodieEngineContext context;
+  private final transient HoodieEngineContext context;
 
   protected HoodieTable(HoodieWriteConfig config, HoodieEngineContext context, HoodieTableMetaClient metaClient) {
     this.config = config;
     this.storageConf = context.getStorageConf();
     this.context = context;
     this.isMetadataTable = HoodieTableMetadata.isMetadataTable(config.getBasePath());
-
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
-        .build();
-    this.metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
-
-    this.viewManager = getViewManager();
     this.metaClient = metaClient;
-    this.index = getIndex(config, context);
-    this.storageLayout = getStorageLayout(config);
     this.taskContextSupplier = context.getTaskContextSupplier();
   }
 
@@ -167,7 +159,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   private synchronized FileSystemViewManager getViewManager() {
     if (null == viewManager) {
-      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> metadata);
+      viewManager = FileSystemViewManager.createViewManager(getContext(), config.getViewStorageConfig(), config.getCommonConfig(), unused -> getMetadataTable());
     }
     return viewManager;
   }
@@ -421,10 +413,16 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * Return the index.
    */
   public HoodieIndex<?, ?> getIndex() {
+    if (index == null) {
+      index = getIndex(config, context);
+    }
     return index;
   }
 
   public HoodieStorageLayout getStorageLayout() {
+    if (storageLayout == null) {
+      storageLayout = getStorageLayout(config);
+    }
     return storageLayout;
   }
 
@@ -1073,7 +1071,12 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public HoodieTableMetadata getMetadataTable() {
-    return this.metadata;
+    if (metadata == null) {
+      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(config.getMetadataConfig().getProps())
+          .build();
+      metadata = HoodieTableMetadata.create(context, metaClient.getStorage(), metadataConfig, config.getBasePath());
+    }
+    return metadata;
   }
 
   /**
