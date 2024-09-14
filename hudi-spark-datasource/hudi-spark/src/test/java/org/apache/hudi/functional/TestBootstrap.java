@@ -177,7 +177,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     String filePath =
         HadoopFSUtils.toPath(
             BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
-                    (FileSystem) metaClient.getStorage().getFileSystem(),
+                    metaClient.getStorage(),
                     srcPath, context).stream().findAny().map(p -> p.getValue().stream().findAny())
                 .orElse(null).get().getPath()).toString();
     HoodieAvroParquetReader parquetReader =
@@ -286,7 +286,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     metaClient.reloadActiveTimeline();
     assertEquals(0, metaClient.getCommitsTimeline().countInstants());
     assertEquals(0L, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
-            (FileSystem) metaClient.getStorage().getFileSystem(), basePath, context)
+            metaClient.getStorage(), basePath, context)
         .stream().mapToLong(f -> f.getValue().size()).sum());
 
     BootstrapIndex index = BootstrapIndex.getBootstrapIndex(metaClient);
@@ -314,7 +314,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSPath);
     JavaRDD<HoodieRecord> updateBatch =
         generateInputBatch(jsc, BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
-                (FileSystem) metaClient.getStorage().getFileSystem(), updateSPath, context),
+                metaClient.getStorage(), updateSPath, context),
                 schema);
     String newInstantTs = client.startCommit();
     client.upsert(updateBatch, newInstantTs);
@@ -389,7 +389,7 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     if (checkNumRawFiles) {
       List<HoodieFileStatus> files =
           BootstrapUtils.getAllLeafFoldersWithFiles(getConfig().getBaseFileFormat(),
-              (FileSystem) metaClient.getStorage().getFileSystem(),
+              metaClient.getStorage(),
           bootstrapBasePath, context).stream().flatMap(x -> x.getValue().stream()).collect(Collectors.toList());
       assertEquals(files.size() * numVersions,
           sqlContext.sql("select distinct _hoodie_file_name from bootstrapped").count());

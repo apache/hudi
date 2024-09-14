@@ -18,6 +18,7 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -32,10 +33,10 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -124,18 +125,22 @@ public class TestBulkInsertInternalPartitionerForRows extends HoodieSparkClientT
         populateMetaFields);
   }
 
-  @Test
-  public void testCustomColumnSortPartitionerWithRows() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testCustomColumnSortPartitionerWithRows(boolean suffixRecordKey) {
     Dataset<Row> records = generateTestRecords();
-    String sortColumnString = records.columns()[5];
+    String sortColumnString = records.columns()[6];
     String[] sortColumns = sortColumnString.split(",");
     Comparator<Row> comparator = getCustomColumnComparator(sortColumns);
 
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(HoodieWriteConfig.BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS.key(), String.valueOf(suffixRecordKey));
     HoodieWriteConfig config = HoodieWriteConfig
         .newBuilder()
         .withPath("/")
         .withUserDefinedBulkInsertPartitionerClass(RowCustomColumnsSortPartitioner.class.getName())
         .withUserDefinedBulkInsertPartitionerSortColumns(sortColumnString)
+        .withProperties(properties)
         .build();
 
     testBulkInsertInternalPartitioner(new RowCustomColumnsSortPartitioner(sortColumns, config),

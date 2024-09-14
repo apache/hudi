@@ -56,12 +56,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -329,9 +327,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private String makeFilePath(HoodieLogFile logFile) {
-    return partitionPath.length() == 0
-        ? new Path(logFile.getFileName()).toString()
-        : new Path(partitionPath, logFile.getFileName()).toString();
+    return partitionPath.isEmpty()
+        ? new StoragePath(logFile.getFileName()).toString()
+        : new StoragePath(partitionPath, logFile.getFileName()).toString();
   }
 
   private void resetWriteCounts() {
@@ -525,7 +523,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       // TODO we can actually deduce file size purely from AppendResult (based on offset and size
       //      of the appended block)
       for (WriteStatus status : statuses) {
-        long logFileSize = HadoopFSUtils.getFileSize(fs, new Path(config.getBasePath(), status.getStat().getPath()));
+        long logFileSize = storage.getPathInfo(
+            new StoragePath(config.getBasePath(), status.getStat().getPath()))
+            .getLength();
         status.getStat().setFileSizeInBytes(logFileSize);
       }
 

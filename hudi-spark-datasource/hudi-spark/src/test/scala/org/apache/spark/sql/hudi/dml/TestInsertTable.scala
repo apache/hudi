@@ -192,160 +192,166 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into with static partition") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create a partitioned table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  dt string,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | tblproperties (primaryKey = 'id')
-           | partitioned by (dt)
-           | location '${tmp.getCanonicalPath}'
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-      // Insert into static partition
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt = '2021-01-05')
-           | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+        // Insert into static partition
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2021-01-05')
+             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
               """.stripMargin)
 
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt = '2021-01-06')
-           | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '2021-01-06')
+             | select 20 as price, 2000 as ts, 2 as id, 'a2' as name
               """.stripMargin)
-      // should not mess with the original order after write the out-of-order data.
-      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
-      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
-      assert(schema.getFieldIndex("id").contains(0))
-      assert(schema.getFieldIndex("price").contains(2))
+        // should not mess with the original order after write the out-of-order data.
+        val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+        val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+        assert(schema.getFieldIndex("id").contains(0))
+        assert(schema.getFieldIndex("price").contains(2))
 
-      // Note: Do not write the field alias, the partition field must be placed last.
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | select 3, 'a3', 30, 3000, '2021-01-07'
+        // Note: Do not write the field alias, the partition field must be placed last.
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 3, 'a3', 30, 3000, '2021-01-07'
         """.stripMargin)
 
-      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-        Seq(3, "a3", 30.0, 3000, "2021-01-07")
-      )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+      }
     }
   }
 
   test("Test Insert Into with dynamic partition") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create a partitioned table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  dt string,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | tblproperties (primaryKey = 'id')
-           | partitioned by (dt)
-           | location '${tmp.getCanonicalPath}'
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
        """.stripMargin)
 
-      // Insert into dynamic partition
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt)
-           | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
+        // Insert into dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt)
+             | select 1 as id, '2021-01-05' as dt, 'a1' as name, 10 as price, 1000 as ts
         """.stripMargin)
-      // should not mess with the original order after write the out-of-order data.
-      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
-      val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
-      assert(schema.getFieldIndex("id").contains(0))
-      assert(schema.getFieldIndex("price").contains(2))
+        // should not mess with the original order after write the out-of-order data.
+        val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+        val schema = HoodieSqlCommonUtils.getTableSqlSchema(metaClient).get
+        assert(schema.getFieldIndex("id").contains(0))
+        assert(schema.getFieldIndex("price").contains(2))
 
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '2021-01-06' as dt
-        """.stripMargin)
-
-      // Note: Do not write the field alias, the partition field must be placed last.
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | select 3, 'a3', 30, 3000, '2021-01-07'
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '2021-01-06' as dt
         """.stripMargin)
 
-      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-        Seq(3, "a3", 30.0, 3000, "2021-01-07")
-      )
+        // Note: Do not write the field alias, the partition field must be placed last.
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 3, 'a3', 30, 3000, '2021-01-07'
+        """.stripMargin)
+
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+      }
     }
   }
 
   test("Test Insert Into with multi partition") {
-    withRecordType()(withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create a partitioned table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  dt string,
-           |  name string,
-           |  price double,
-           |  ht string,
-           |  ts long
-           |) using hudi
-           | tblproperties (primaryKey = 'id')
-           | partitioned by (dt, ht)
-           | location '${tmp.getCanonicalPath}'
+    Seq("cow", "mor").foreach { tableType =>
+      withRecordType()(withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ht string,
+             |  ts long
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = '$tableType')
+             | partitioned by (dt, ht)
+             | location '${tmp.getCanonicalPath}'
        """.stripMargin)
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt, ht)
-           | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt, ht)
+             | select 1 as id, 'a1' as name, 10 as price,'20210101' as dt, 1000 as ts, '01' as ht
               """.stripMargin)
 
-      // Insert into static partition and dynamic partition
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt = '20210102', ht)
-           | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
+        // Insert into static partition and dynamic partition
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt = '20210102', ht)
+             | select 2 as id, 'a2' as name, 20 as price, 2000 as ts, '02' as ht
               """.stripMargin)
 
-      spark.sql(
-        s"""
-           | insert into $tableName partition(dt, ht = '03')
-           | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
+        spark.sql(
+          s"""
+             | insert into $tableName partition(dt, ht = '03')
+             | select 3 as id, 'a3' as name, 30 as price, 3000 as ts, '20210103' as dt
               """.stripMargin)
 
-      // Note: Do not write the field alias, the partition field must be placed last.
-      spark.sql(
-        s"""
-           | insert into $tableName
-           | select 4, 'a4', 40, 4000, '20210104', '04'
+        // Note: Do not write the field alias, the partition field must be placed last.
+        spark.sql(
+          s"""
+             | insert into $tableName
+             | select 4, 'a4', 40, 4000, '20210104', '04'
         """.stripMargin)
 
-      checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "20210101", "01"),
-        Seq(2, "a2", 20.0, 2000, "20210102", "02"),
-        Seq(3, "a3", 30.0, 3000, "20210103", "03"),
-        Seq(4, "a4", 40.0, 4000, "20210104", "04")
-      )
-    })
+        checkAnswer(s"select id, name, price, ts, dt, ht from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "20210101", "01"),
+          Seq(2, "a2", 20.0, 2000, "20210102", "02"),
+          Seq(3, "a3", 30.0, 3000, "20210103", "03"),
+          Seq(4, "a4", 40.0, 4000, "20210104", "04")
+        )
+      })
+    }
   }
 
-  test("Test Insert Into None Partitioned Table") {
+  test("Test Insert Into Non Partitioned Table") {
    withRecordType(Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK), Map(HoodieRecordType.SPARK ->
      // SparkMerger should use "HoodieSparkValidateDuplicateKeyRecordMerger"
      // with "hoodie.sql.insert.mode=strict"
@@ -851,7 +857,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
 
-  test("Test Insert timestamp when 'spark.sql.datetime.java8API.enabled' enables") {
+  test("Test Insert timestamp when 'spark.sql.datetime.java8API.enabled' enabled") {
     withRecordType() {
       withSQLConf("spark.sql.datetime.java8API.enabled" -> "true") {
         val tableName = generateTableName
@@ -1291,64 +1297,70 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test combine before insert") {
-    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.merge.allow.duplicate.on.inserts" -> "false") {
-      withRecordType()(withTempDir{tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+    Seq("cow", "mor").foreach { tableType =>
+      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false", "hoodie.merge.allow.duplicate.on.inserts" -> "false") {
+        withRecordType()(withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
        """.stripMargin)
-        spark.sql(
-          s"""
-             |insert overwrite table $tableName
-             |select * from (
-             | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
-             | union all
-             | select 1 as id, 'a1' as name, 11 as price, 1001 as ts
-             | )
-             |""".stripMargin
-        )
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 11.0, 1001)
-        )
-      })
+          spark.sql(
+            s"""
+               |insert overwrite table $tableName
+               |select * from (
+               | select 1 as id, 'a1' as name, 10 as price, 1000 as ts
+               | union all
+               | select 1 as id, 'a1' as name, 11 as price, 1001 as ts
+               | )
+               |""".stripMargin
+          )
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 11.0, 1001)
+          )
+        })
+      }
     }
   }
 
   test("Test insert pk-table") {
-    withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
-      withRecordType()(withTempDir{tmp =>
-        val tableName = generateTableName
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long
-             |) using hudi
-             | location '${tmp.getCanonicalPath}/$tableName'
-             | tblproperties (
-             |  primaryKey = 'id',
-             |  preCombineField = 'ts'
-             | )
+    Seq("cow", "mor").foreach { tableType =>
+      withSQLConf("hoodie.sql.bulk.insert.enable" -> "false") {
+        withRecordType()(withTempDir { tmp =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  type = '$tableType',
+               |  preCombineField = 'ts'
+               | )
        """.stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(1, 'a1', 11, 1000)")
-        checkAnswer(s"select id, name, price, ts from $tableName")(
-          Seq(1, "a1", 11.0, 1000)
-        )
-      })
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(1, 'a1', 11, 1000)")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 11.0, 1000)
+          )
+        })
+      }
     }
   }
 
@@ -1952,39 +1964,41 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test Insert Into with auto generate record keys with precombine ") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create a partitioned table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  dt string,
-           |  name string,
-           |  price double,
-           |  ts long
-           |) using hudi
-           | partitioned by (dt)
-           | location '${tmp.getCanonicalPath}'
-           | tblproperties (
-           |  type = 'cow',
-           |  preCombineField = 'price'
-           | )
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        // Create a partitioned table
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  dt string,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             | tblproperties (
+             |  type = '$tableType',
+             |  preCombineField = 'price'
+             | )
        """.stripMargin)
 
-      spark.sql(
-        s"""
-           | insert into $tableName values
-           | (1, 'a1', 10, 1000, "2021-01-05"),
-           | (2, 'a2', 20, 2000, "2021-01-06"),
-           | (3, 'a3', 30, 3000, "2021-01-07")
+        spark.sql(
+          s"""
+             | insert into $tableName values
+             | (1, 'a1', 10, 1000, "2021-01-05"),
+             | (2, 'a2', 20, 2000, "2021-01-06"),
+             | (3, 'a3', 30, 3000, "2021-01-07")
               """.stripMargin)
 
-      checkAnswer(s"select id, name, price, ts, dt from $tableName")(
-        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
-        Seq(2, "a2", 20.0, 2000, "2021-01-06"),
-        Seq(3, "a3", 30.0, 3000, "2021-01-07")
-      )
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+          Seq(2, "a2", 20.0, 2000, "2021-01-06"),
+          Seq(3, "a3", 30.0, 3000, "2021-01-07")
+        )
+      }
     }
   }
 
@@ -2527,7 +2541,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test DROP insert dup policy with INSERT_INTO explicit new configs BULK INSERT operation") {
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
-      Seq("cow").foreach { tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val dupPolicy = DROP_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
           ingestAndValidateDropDupPolicyBulkInsert(tableType, tableName, tmp,
@@ -2540,7 +2554,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
 
   test("Test FAIL insert dup policy with INSERT_INTO explicit new configs") {
     withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
-      Seq("cow").foreach { tableType =>
+      Seq("cow", "mor").foreach { tableType =>
         val operation = WriteOperationType.UPSERT
         val dupPolicy = FAIL_INSERT_DUP_POLICY
         withTable(generateTableName) { tableName =>
@@ -2592,7 +2606,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
   test(s"Test INSERT INTO with upsert operation type") {
     if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
-        Seq("mor").foreach { tableType =>
+        Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           spark.sql(
             s"""

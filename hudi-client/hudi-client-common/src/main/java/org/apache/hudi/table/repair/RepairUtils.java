@@ -31,10 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.PathFilter;
-
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -167,11 +164,5 @@ public final class RepairUtils {
       // In case of failure, does not remove any files for the instant
       return Collections.emptyList();
     }
-  }
-
-  /**
-   * Serializable path filter class for Spark job.
-   */
-  public interface SerializablePathFilter extends PathFilter, Serializable {
   }
 }

@@ -33,12 +33,12 @@ public class TestUtilHelpers {
   @Test
   void testAddLockOptions() {
     TypedProperties props1 = new TypedProperties();
-    UtilHelpers.addLockOptions("path1", props1);
+    UtilHelpers.addLockOptions("path1", "file", props1);
     assertEquals(FileSystemBasedLockProvider.class.getName(), props1.getString(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
     TypedProperties props2 = new TypedProperties();
     props2.put(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key(), "Dummy");
-    UtilHelpers.addLockOptions("path2", props2);
+    UtilHelpers.addLockOptions("path2", "file", props2);
     assertEquals(1, props2.size(), "Should not add lock options if the lock provider is already there.");
   }
 }

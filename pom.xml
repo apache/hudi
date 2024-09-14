@@ -700,6 +700,7 @@
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
+              <exclude>**/main/resources/version.txt</exclude>
               <exclude>**/*NOTICE*</exclude>
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
@@ -2372,6 +2373,9 @@
           <family>mac</family>
           <arch>aarch64</arch>
         </os>
+        <property>
+          <name>spark2.4</name>
+        </property>
       </activation>
     </profile>
 
