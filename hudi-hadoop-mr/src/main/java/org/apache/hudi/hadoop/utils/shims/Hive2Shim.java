@@ -50,7 +50,7 @@ public class Hive2Shim implements HiveShim {
     return ((DateWritable) dateWritable).getDays();
   }
 
-  public long getMills(Object timestamp) {
-    return ((Timestamp) timestamp).getTime();
+  public long getMills(Object timestampWritable) {
+    return ((TimestampWritable) timestampWritable).getTimestamp().getTime();
   }
 }

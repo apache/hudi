@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.view;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.fs.FSUtils;
@@ -38,6 +39,7 @@ import org.apache.hudi.common.table.timeline.TimelineDiffHelper;
 import org.apache.hudi.common.table.timeline.TimelineDiffHelper.TimelineDiffResult;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -306,8 +308,8 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
 
     if (metadata.getRestoreInstantInfo() != null) {
       Set<String> rolledbackInstants = metadata.getRestoreInstantInfo().stream()
-          .filter(instantInfo -> HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instantInfo.getAction()))
-          .map(instantInfo -> instantInfo.getCommitTime()).collect(Collectors.toSet());
+          .filter(instantInfo -> ClusteringUtils.isClusteringOrReplaceCommitAction(instantInfo.getAction()))
+          .map(HoodieInstantInfo::getCommitTime).collect(Collectors.toSet());
       removeReplacedFileIdsAtInstants(rolledbackInstants);
     }
     LOG.info("Done Syncing restore instant (" + instant + ")");

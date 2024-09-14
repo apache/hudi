@@ -430,23 +430,7 @@ public class ParquetUtils extends FileFormatUtils {
     // there are multiple blocks. Compute min(block_mins) and max(block_maxs)
     return blockRanges.stream()
         .sequential()
-        .reduce(this::combineRanges).get();
-  }
-
-  private <T extends Comparable<T>> HoodieColumnRangeMetadata<T> combineRanges(
-      HoodieColumnRangeMetadata<T> one,
-      HoodieColumnRangeMetadata<T> another
-  ) {
-    final T minValue = getMinValueForColumnRanges(one, another);
-    final T maxValue = getMaxValueForColumnRanges(one, another);
-
-    return HoodieColumnRangeMetadata.create(
-        one.getFilePath(),
-        one.getColumnName(), minValue, maxValue,
-        one.getNullCount() + another.getNullCount(),
-        one.getValueCount() + another.getValueCount(),
-        one.getTotalSize() + another.getTotalSize(),
-        one.getTotalUncompressedSize() + another.getTotalUncompressedSize());
+        .reduce(HoodieColumnRangeMetadata::merge).get();
   }
 
   private static Comparable<?> convertToNativeJavaType(PrimitiveType primitiveType, Comparable<?> val) {

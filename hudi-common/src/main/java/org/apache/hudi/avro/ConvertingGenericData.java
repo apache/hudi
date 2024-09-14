@@ -25,6 +25,7 @@ import org.apache.avro.data.TimeConversions;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -139,6 +140,15 @@ public class ConvertingGenericData extends GenericData {
       default:
         return false;
     }
+  }
+
+  @Override
+  public int compare(Object o1, Object o2, Schema s) {
+    // Handle byte[] by wrapping first in ByteBuffer because byte array is not comparable
+    if (s.getType() == Schema.Type.BYTES && o1 instanceof byte[] && o2 instanceof byte[]) {
+      return super.compare(ByteBuffer.wrap((byte[]) o1), ByteBuffer.wrap((byte[]) o2), s);
+    }
+    return super.compare(o1, o2, s);
   }
 }
 

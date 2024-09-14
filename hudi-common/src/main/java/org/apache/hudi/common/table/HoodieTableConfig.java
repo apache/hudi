@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -76,6 +77,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
+import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -113,7 +115,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty
       .key("hoodie.table.version")
-      .defaultValue(HoodieTableVersion.ZERO)
+      .defaultValue(HoodieTableVersion.current())
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
@@ -134,7 +136,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.table.partition.fields")
       .noDefaultValue()
       .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
-          + "the partition path, by invoking toString()");
+          + "the partition path, by invoking toString(). These fields also include the partition type which is used by custom key generators");
 
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
@@ -284,6 +286,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 
   public static final List<ConfigProperty<String>> PERSISTED_CONFIG_LIST = Arrays.asList(
+      TIMESTAMP_TYPE_FIELD,
       INPUT_TIME_UNIT,
       TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX,
       TIMESTAMP_INPUT_DATE_FORMAT,
@@ -516,6 +519,67 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
+   */
+  public static Option<String> getPartitionFieldPropForKeyGenerator(HoodieConfig config) {
+    return Option.ofNullable(config.getString(PARTITION_FIELDS));
+  }
+
+  /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
+   */
+  public static Option<List<String>> getPartitionFieldsForKeyGenerator(HoodieConfig config) {
+    return Option.ofNullable(config.getString(PARTITION_FIELDS)).map(field -> Arrays.asList(field.split(BaseKeyGenerator.FIELD_SEPARATOR)));
+  }
+
+  /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will
+   * strip the partition key generator related info from the fields.
+   */
+  public static Option<String> getPartitionFieldProp(HoodieConfig config) {
+    // With table version eight, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
+    // stores the corresponding partition type as well. This partition type is useful for CustomKeyGenerator
+    // and CustomAvroKeyGenerator.
+    return getPartitionFields(config).map(fields -> String.join(BaseKeyGenerator.FIELD_SEPARATOR, fields));
+  }
+
+  /**
+   * This function returns the partition fields only. This method strips the key generator related
+   * partition key types from the configured fields.
+   */
+  public static Option<String[]> getPartitionFields(HoodieConfig config) {
+    if (contains(PARTITION_FIELDS, config)) {
+      return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(BaseKeyGenerator.FIELD_SEPARATOR))
+          .filter(p -> !p.isEmpty())
+          .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
+          .collect(Collectors.toList()).toArray(new String[] {}));
+    }
+    return Option.empty();
+  }
+
+  /**
+   * This function returns the partition fields only. The input partition field would contain partition
+   * type corresponding to the custom key generator if table version is eight and if custom key
+   * generator is configured. This function would strip the partition type and return the partition field.
+   */
+  public static String getPartitionFieldWithoutKeyGenPartitionType(String partitionField, HoodieConfig config) {
+    return partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0];
+  }
+
+  /**
+   * This function returns the hoodie.table.version from hoodie.properties file.
+   */
+  public static HoodieTableVersion getTableVersion(HoodieConfig config) {
+    return contains(VERSION, config)
+        ? HoodieTableVersion.versionFromCode(config.getInt(VERSION))
+        : VERSION.defaultValue();
+  }
+
+  /**
    * Read the table type from the table properties and if not found, return the default.
    */
   public HoodieTableType getTableType() {
@@ -532,9 +596,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return the hoodie.table.version from hoodie.properties file.
    */
   public HoodieTableVersion getTableVersion() {
-    return contains(VERSION)
-        ? HoodieTableVersion.versionFromCode(getInt(VERSION))
-        : VERSION.defaultValue();
+    return getTableVersion(this);
   }
 
   /**
@@ -583,11 +645,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getPartitionFields() {
-    if (contains(PARTITION_FIELDS)) {
-      return Option.of(Arrays.stream(getString(PARTITION_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    return getPartitionFields(this);
   }
 
   public boolean isTablePartitioned() {
@@ -610,7 +668,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getPartitionFieldProp() {
     // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
     //       behavior until this method is fully deprecated
-    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
+    return getPartitionFieldProp(this).orElse("");
   }
 
   /**

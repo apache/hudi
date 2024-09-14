@@ -18,15 +18,16 @@
 
 package org.apache.spark.sql.execution.benchmark
 
-import org.apache.hudi.{HoodieFileIndex, HoodieSparkUtils}
-import org.apache.spark.SparkConf
-import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
-import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
-import org.apache.spark.sql.types._
-import java.sql.{Date, Timestamp}
+import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.hadoop.fs.Path
+import org.apache.spark.SparkConf
+import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
+import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, RowFactory, SparkSession}
+
+import java.sql.{Date, Timestamp}
 
 import scala.util.Random
 
@@ -49,7 +50,7 @@ object CowTableReadBenchmark extends HoodieBenchmarkBase {
 
   def sparkConf(): SparkConf = {
     val sparkConf = new SparkConf()
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       sparkConf.set("spark.sql.catalog.spark_catalog",
         "org.apache.spark.sql.hudi.catalog.HoodieCatalog")
     }

@@ -71,10 +71,15 @@ public final class SchemaTestUtil {
 
   private final Random random = new Random(0xDEED);
 
-  public SchemaTestUtil() {}
+  public SchemaTestUtil() {
+  }
 
   public static Schema getSimpleSchema() throws IOException {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
+  }
+  
+  public static Schema getSchemaFromResourceFilePath(String filePath) throws IOException {
+    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(filePath));
   }
 
   public static Schema getSchema(String path) throws IOException {
@@ -150,7 +155,7 @@ public final class SchemaTestUtil {
     if (resource.toString().contains("!")) {
       return uriToPath(resource);
     } else {
-      return Paths.get(SchemaTestUtil.class.getResource(RESOURCE_SAMPLE_DATA).toURI());
+      return Paths.get(resource);
     }
   }
 
@@ -159,7 +164,7 @@ public final class SchemaTestUtil {
     if (resource.toString().contains("!")) {
       return uriToPath(resource);
     } else {
-      return Paths.get(SchemaTestUtil.class.getResource(path).toURI());
+      return Paths.get(resource);
     }
   }
 

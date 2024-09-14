@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -145,15 +145,6 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_SCHEMA = "_5";
 
   /**
-   * Gets the file system based on the file path and configuration.
-   *
-   * @param path File path to get the file system.
-   * @param conf {@link StorageConfiguration} for I/O.
-   * @return The {@link HoodieStorage} instance to use.
-   */
-  public abstract HoodieStorage getStorage(String path, StorageConfiguration<?> conf);
-
-  /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
    *
@@ -168,6 +159,24 @@ public abstract class HoodieReaderContext<T> {
   public abstract ClosableIterator<T> getFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException;
+
+  /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file.
+   *
+   * @param storagePathInfo {@link StoragePathInfo} instance of a file.
+   * @param start           Starting byte to start reading.
+   * @param length          Bytes to read.
+   * @param dataSchema      Schema of records in the file in {@link Schema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link Schema} for projection.
+   * @param storage         {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   */
+  public ClosableIterator<T> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  }
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.

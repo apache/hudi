@@ -19,11 +19,12 @@
 
 package org.apache.hudi.util
 
-import org.apache.avro.Schema
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter.collectColNamesFromSparkStruct
 import org.apache.hudi.internal.schema.convert.TestAvroInternalSchemaConverter._
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
+
+import org.apache.avro.Schema
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test

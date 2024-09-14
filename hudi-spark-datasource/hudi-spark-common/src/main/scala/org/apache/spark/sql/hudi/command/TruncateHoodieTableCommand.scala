@@ -24,13 +24,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{getPartitionPathToDrop, normalizePartitionSpec}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 
 /**
  * Command for truncate hudi table.

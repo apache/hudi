@@ -207,8 +207,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     List<String> partitionIDFileIDStringsList = new ArrayList<>(partitionIDFileIDStrings);
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
         getRecordsByKeys(partitionIDFileIDStringsList, MetadataPartitionType.BLOOM_FILTERS.getPartitionPath());
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR,
-        (timer.endTimer() / partitionIDFileIDStrings.size())));
+    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_METADATA_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_BLOOM_FILTERS_FILE_COUNT_STR, partitionIDFileIDStringsList.size()));
 
     Map<Pair<String, String>, BloomFilter> partitionFileToBloomFilterMap = new HashMap<>(hoodieRecords.size());
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -259,6 +259,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     Map<String, HoodieRecord<HoodieMetadataPayload>> hoodieRecords =
         getRecordsByKeys(columnStatKeylist, MetadataPartitionType.COLUMN_STATS.getPartitionPath());
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_METADATA_STR, timer.endTimer()));
+    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_COLUMN_STATS_FILE_COUNT_STR, columnStatKeylist.size()));
 
     Map<Pair<String, String>, HoodieMetadataColumnStats> fileToColumnStatMap = new HashMap<>();
     for (final Map.Entry<String, HoodieRecord<HoodieMetadataPayload>> entry : hoodieRecords.entrySet()) {
@@ -306,8 +307,8 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
     }));
 
     metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_TIME_STR, timer.endTimer()));
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
-    metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
+    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_COUNT_STR, recordKeys.size()));
+    metrics.ifPresent(m -> m.setMetric(HoodieMetadataMetrics.LOOKUP_RECORD_INDEX_KEYS_HITS_COUNT_STR, recordKeyToLocation.size()));
 
     return recordKeyToLocation;
   }
@@ -342,12 +343,12 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   /**
    * Returns a map of (record-key -> secondary-key) for the provided record keys.
    */
-  public Map<String, String> getSecondaryKeys(List<String> recordKeys) {
+  public Map<String, String> getSecondaryKeys(List<String> recordKeys, String secondaryIndexName) {
     ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "Record index is not initialized in MDT");
-    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX),
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().getMetadataPartitions().contains(secondaryIndexName),
         "Secondary index is not initialized in MDT");
-    return getSecondaryKeysForRecordKeys(recordKeys, MetadataPartitionType.SECONDARY_INDEX.getPartitionPath());
+    return getSecondaryKeysForRecordKeys(recordKeys, secondaryIndexName);
   }
 
   /**

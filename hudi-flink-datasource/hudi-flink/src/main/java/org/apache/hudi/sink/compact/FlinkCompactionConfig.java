@@ -162,10 +162,10 @@ public class FlinkCompactionConfig extends Configuration {
   public String propsFilePath = "";
 
   public static TypedProperties getProps(FlinkCompactionConfig cfg) {
-    return cfg.propsFilePath.isEmpty()
-        ? buildProperties(cfg.configs)
-        : readConfig(HadoopConfigurations.getHadoopConf(cfg),
-        new StoragePath(cfg.propsFilePath), cfg.configs).getProps();
+    return cfg.propsFilePath.isEmpty() ? buildProperties(cfg.configs) : readConfig(
+        HadoopConfigurations.getHadoopConf(cfg),
+        new StoragePath(cfg.propsFilePath),
+        cfg.configs).getProps();
   }
 
   /**

@@ -78,7 +78,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public static final Integer CLEAN_PLAN_VERSION_1 = CleanPlanV1MigrationHandler.VERSION;
   public static final Integer CLEAN_PLAN_VERSION_2 = CleanPlanV2MigrationHandler.VERSION;
   public static final Integer LATEST_CLEAN_PLAN_VERSION = CLEAN_PLAN_VERSION_2;
-  public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
 
   private final SyncableFileSystemView fileSystemView;
   private final HoodieTimeline commitTimeline;
@@ -88,6 +87,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private final HoodieWriteConfig config;
   private transient HoodieEngineContext context;
   private List<String> savepointedTimestamps;
+  private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -124,11 +124,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   public Stream<String> getSavepointedDataFiles(String savepointTime) {
     HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
     return metadata.getPartitionMetadata().values().stream().flatMap(s -> s.getSavepointDataFile().stream());
-  }
-
-  private Stream<String> getPartitionsFromSavepoint(String savepointTime) {
-    HoodieSavepointMetadata metadata = getSavepointMetadata(savepointTime);
-    return metadata.getPartitionMetadata().keySet().stream();
   }
 
   private HoodieSavepointMetadata getSavepointMetadata(String savepointTimestamp) {
@@ -203,8 +198,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   private List<String> getPartitionPathsForIncrementalCleaning(HoodieCleanMetadata cleanMetadata,
       Option<HoodieInstant> newInstantToRetain) {
-    boolean isSavepointDeleted = isAnySavepointDeleted(cleanMetadata);
-    if (isSavepointDeleted) {
+
+    boolean isAnySavepointDeleted = isAnySavepointDeleted(cleanMetadata);
+    if (isAnySavepointDeleted) {
       LOG.info("Since savepoints have been removed compared to previous clean, triggering clean planning for all partitions");
       return getPartitionPathsForFullCleaning();
     } else {
@@ -222,7 +218,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
   private boolean isAnySavepointDeleted(HoodieCleanMetadata cleanMetadata) {
     List<String> savepointedTimestampsFromLastClean = cleanMetadata.getExtraMetadata() == null ? Collections.emptyList()
-        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
+        : Arrays.stream(cleanMetadata.getExtraMetadata().getOrDefault(CleanerUtils.SAVEPOINTED_TIMESTAMPS, StringUtils.EMPTY_STRING).split(","))
         .filter(partition -> !StringUtils.isNullOrEmpty(partition)).collect(Collectors.toList());
     if (savepointedTimestampsFromLastClean.isEmpty()) {
       return false;
@@ -553,13 +549,16 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * Returns the earliest commit to retain based on cleaning policy.
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
-    return CleanerUtils.getEarliestCommitToRetain(
-        hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
-        config.getCleanerPolicy(),
-        config.getCleanerCommitsRetained(),
-        Instant.now(),
-        config.getCleanerHoursRetained(),
-        hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+    if (!earliestCommitToRetain.isPresent()) {
+      earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
+          hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
+          config.getCleanerPolicy(),
+          config.getCleanerCommitsRetained(),
+          Instant.now(),
+          config.getCleanerHoursRetained(),
+          hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+    }
+    return earliestCommitToRetain;
   }
 
   /**

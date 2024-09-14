@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -147,7 +148,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator = new BootstrapOperator<>(conf);
-      CollectorOutput<HoodieRecord<?>> output = new CollectorOutput<>();
+      CollectOutputAdapter<HoodieRecord<?>> output = new CollectOutputAdapter<>();
       bootstrapOperator.setup(streamTask, streamConfig, output);
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
@@ -210,6 +211,17 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     if (asyncCompaction) {
       try {
         compactFunctionWrapper.compact(checkpointId);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    }
+  }
+
+  @Override
+  public void inlineCompaction() {
+    if (asyncCompaction) {
+      try {
+        compactFunctionWrapper.compact(1); // always uses a constant checkpoint ID.
       } catch (Exception e) {
         throw new HoodieException(e);
       }

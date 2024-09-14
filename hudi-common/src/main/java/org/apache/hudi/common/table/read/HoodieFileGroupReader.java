@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 
@@ -109,6 +110,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setLatestCommitTime(latestCommitTime);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
+    if (readerContext.getHasLogFiles() && start != 0) {
+      throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
+    }
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
@@ -145,10 +149,18 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return makeBootstrapBaseFileIterator(baseFile);
     }
 
-    return readerContext.getFileRecordIterator(
-        baseFile.getStoragePath(), start, length,
-        readerContext.getSchemaHandler().getDataSchema(),
-        readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    StoragePathInfo baseFileStoragePathInfo = baseFile.getPathInfo();
+    if (baseFileStoragePathInfo != null) {
+      return readerContext.getFileRecordIterator(
+          baseFileStoragePathInfo, start, length,
+          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    } else {
+      return readerContext.getFileRecordIterator(
+          baseFile.getStoragePath(), start, length,
+          readerContext.getSchemaHandler().getDataSchema(),
+          readerContext.getSchemaHandler().getRequiredSchema(), storage);
+    }
   }
 
   private ClosableIterator<T> makeBootstrapBaseFileIterator(HoodieBaseFile baseFile) throws IOException {
@@ -166,6 +178,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else if (!skeletonFileIterator.isPresent()) {
       return dataFileIterator.get().getLeft();
     } else {
+      if (start != 0) {
+        throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
+      }
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
           dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
     }
@@ -186,8 +201,14 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return Option.empty();
     }
     Schema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
-    return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
-        readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    StoragePathInfo fileStoragePathInfo = file.getPathInfo();
+    if (fileStoragePathInfo != null) {
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    } else {
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, file.getFileLen(),
+          readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
+    }
   }
 
   /**

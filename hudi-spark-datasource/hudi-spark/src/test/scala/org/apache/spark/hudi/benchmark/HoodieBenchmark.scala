@@ -18,17 +18,16 @@
 package org.apache.spark.hudi.benchmark
 
 
+import org.apache.commons.io.output.TeeOutputStream
+import org.apache.commons.lang3.SystemUtils
+import org.apache.spark.util.Utils
+
 import java.io.{OutputStream, PrintStream}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 import scala.util.Try
-
-import org.apache.commons.io.output.TeeOutputStream
-import org.apache.commons.lang3.SystemUtils
-
-import org.apache.spark.util.Utils
 
 /**
  * Reference from spark.

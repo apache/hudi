@@ -45,21 +45,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
-import java.util.ArrayList;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import java.util.Collections;
-
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieBigQuerySyncClient {
   private static final String PROJECT_ID = "test_project";
@@ -186,6 +185,11 @@ public class TestHoodieBigQuerySyncClient {
     // manifest does not exist
     when(externalTableDefinition.getSourceUris()).thenReturn(Collections.emptyList());
     assertTrue(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
+
+    // manifest exists but base path is outdated
+    when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(
+        basePath + "/.hoodie/" + ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));
+    assertFalse(client.tableNotExistsOrDoesNotMatchSpecification(TEST_TABLE));
 
     // manifest exists but base path is outdated
     when(externalTableDefinition.getSourceUris()).thenReturn(Collections.singletonList(ManifestFileWriter.ABSOLUTE_PATH_MANIFEST_FOLDER_NAME));

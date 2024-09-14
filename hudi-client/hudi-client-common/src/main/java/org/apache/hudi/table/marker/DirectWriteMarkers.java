@@ -32,19 +32,13 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.LocatedFileStatus;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.RemoteIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,23 +106,18 @@ public class DirectWriteMarkers extends WriteMarkers {
       }
     }
 
-    if (subDirectories.size() > 0) {
+    if (!subDirectories.isEmpty()) {
       parallelism = Math.min(subDirectories.size(), parallelism);
       StorageConfiguration<?> storageConf = storage.getConf();
       context.setJobStatus(this.getClass().getSimpleName(), "Obtaining marker files for all created, merged paths");
       dataFiles.addAll(context.flatMap(subDirectories, directory -> {
-        Path path = new Path(directory);
-        FileSystem fileSystem = HadoopFSUtils.getFs(path, storageConf.unwrapAs(Configuration.class));
-        RemoteIterator<LocatedFileStatus> itr = fileSystem.listFiles(path, true);
-        List<String> result = new ArrayList<>();
-        while (itr.hasNext()) {
-          FileStatus status = itr.next();
-          String pathStr = status.getPath().toString();
-          if (pathStr.contains(HoodieTableMetaClient.MARKER_EXTN) && !pathStr.endsWith(IOType.APPEND.name())) {
-            result.add(translateMarkerToDataPath(pathStr));
-          }
-        }
-        return result.stream();
+        StoragePath path = new StoragePath(directory);
+        HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
+        return storage.listFiles(path).stream()
+            .map(pathInfo -> pathInfo.getPath().toString())
+            .filter(pathStr -> pathStr.contains(HoodieTableMetaClient.MARKER_EXTN)
+                && !pathStr.endsWith(IOType.APPEND.name()))
+            .map(this::translateMarkerToDataPath);
       }, parallelism));
     }
 

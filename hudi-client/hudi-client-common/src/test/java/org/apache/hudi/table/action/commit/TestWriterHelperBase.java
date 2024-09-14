@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import java.io.IOException;
 import java.util.List;
 
-
 /**
  * Tests for write helpers
  */

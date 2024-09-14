@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.appendFieldsToSchemaDedupNested;
+import static org.apache.hudi.avro.AvroSchemaUtils.createNewSchemaFromFieldsWithReference;
 import static org.apache.hudi.avro.AvroSchemaUtils.findNestedField;
 
 /**
@@ -57,6 +59,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final InternalSchema internalSchema;
 
+  protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -83,6 +86,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     this.hoodieTableConfig = hoodieTableConfig;
     this.requiredSchema = prepareRequiredSchema();
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
+    this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
     readerContext.setNeedsBootstrapMerge(this.needsBootstrapMerge);
   }
 
@@ -102,6 +106,10 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return this.internalSchema;
   }
 
+  public Option<InternalSchema> getInternalSchemaOpt() {
+    return this.internalSchemaOpt;
+  }
+
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!requestedSchema.equals(requiredSchema)) {
       return Option.of(readerContext.projectRecord(requiredSchema, requestedSchema));
@@ -109,7 +117,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return Option.empty();
   }
 
-  private static InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
+  private InternalSchema pruneInternalSchema(Schema requiredSchema, Option<InternalSchema> internalSchemaOption) {
     if (!internalSchemaOption.isPresent()) {
       return InternalSchema.getEmptyInternalSchema();
     }
@@ -118,7 +126,15 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       return InternalSchema.getEmptyInternalSchema();
     }
 
-    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, notPruned);
+    return doPruneInternalSchema(requiredSchema, notPruned);
+  }
+
+  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
+    return internalSchemaOpt;
+  }
+
+  protected InternalSchema doPruneInternalSchema(Schema requiredSchema, InternalSchema internalSchema) {
+    return AvroInternalSchemaConverter.pruneAvroSchemaToInternalSchema(requiredSchema, internalSchema);
   }
 
   private Schema generateRequiredSchema() {
@@ -163,7 +179,8 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     return getDataAndMetaCols(dataSchema);
   }
 
-  private static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
+  @VisibleForTesting
+  static Pair<List<Schema.Field>, List<Schema.Field>> getDataAndMetaCols(Schema schema) {
     Map<Boolean, List<Schema.Field>> fieldsByMeta = schema.getFields().stream()
         //if there are no data fields, then we don't want to think the temp col is a data col
         .filter(f -> !Objects.equals(f.name(), HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME))
@@ -178,11 +195,6 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
       Schema.Field curr = fields.get(i);
       fields.set(i, new Schema.Field(curr.name(), curr.schema(), curr.doc(), curr.defaultVal()));
     }
-    Schema newSchema = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
-    for (Map.Entry<String, Object> prop : dataSchema.getObjectProps().entrySet()) {
-      newSchema.addProp(prop.getKey(), prop.getValue());
-    }
-    newSchema.setFields(fields);
-    return newSchema;
+    return createNewSchemaFromFieldsWithReference(dataSchema, fields);
   }
 }

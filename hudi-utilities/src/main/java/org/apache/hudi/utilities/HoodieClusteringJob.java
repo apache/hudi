@@ -70,7 +70,7 @@ public class HoodieClusteringJob {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(), this.props);
     }
   }
 
@@ -92,7 +92,7 @@ public class HoodieClusteringJob {
     public String sparkMemory = null;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
-    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
+    @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after clustering", required = false)
     public Boolean skipClean = true;
 
     @Parameter(names = {"--schedule", "-sc"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")

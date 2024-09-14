@@ -19,14 +19,15 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.metadata.HoodieMetadataPayload.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.getPartitionStatsIndexKey
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.spark.sql.functions.{col, from_json}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
 
   test(s"Test hudi_query Table-Valued Function") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -88,7 +89,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_table_changes latest_state") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -195,7 +196,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_filesystem_view") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -242,8 +243,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result1DF = spark.sql(s"select * from hudi_filesystem_view('$identifier', 'price*')")
           result1DF.show(false)
           val result1Array = result1DF.select(
-              col("Partition_Path")
-            ).orderBy("Partition_Path").take(10)
+            col("Partition_Path")
+          ).orderBy("Partition_Path").take(10)
           checkAnswer(result1Array)(
             Seq("price=10.0"),
             Seq("price=10.0"),
@@ -258,7 +259,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_table_changes cdc") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -415,7 +416,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_query_timeline") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq(
           ("cow", true),
@@ -563,7 +564,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_metadata Table-Valued Function") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -599,22 +600,22 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.ALL_PARTITIONS.getRecordType}"
           )
           assert(result2DF.count() == 1)
 
           val result3DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.FILES.getRecordType}"
           )
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=3 or type=6"
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.COLUMN_STATS.getRecordType}"
           )
-          assert(result4DF.count() == 6)
+          assert(result4DF.count() == 3)
 
           val result5DF = spark.sql(
-            s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=5"
+            s"select type, key, recordIndexMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.RECORD_INDEX.getRecordType}"
           )
           assert(result5DF.count() == 3)
 
@@ -622,6 +623,12 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
             s"select type, key, BloomFilterMetadata from hudi_metadata('$identifier') where BloomFilterMetadata is not null"
           )
           assert(result6DF.count() == 0)
+
+          // no partition stats by default
+          val result7DF = spark.sql(
+            s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
+          )
+          assert(result7DF.count() == 0)
         }
       }
     }
@@ -629,7 +636,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
   }
 
   test(s"Test hudi_metadata Table-Valued Function For PARTITION_STATS index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
@@ -664,25 +671,25 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           )
 
           val result2DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=1"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.ALL_PARTITIONS.getRecordType}"
           )
           assert(result2DF.count() == 1)
 
           val result3DF = spark.sql(
-            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=2"
+            s"select type, key, filesystemmetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.FILES.getRecordType}"
           )
           assert(result3DF.count() == 3)
 
           val result4DF = spark.sql(
-            s"select * from hudi_metadata('$identifier') where type=3"
+            s"select * from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
           )
           assert(result4DF.count() == 3)
-          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=3")(
+          checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
             Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000),
             Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000),
             Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000)
           )
-          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=3")(
+          checkAnswer(s"select key, ColumnStatsMetadata.maxValue.member1.value from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}")(
             Seq(getPartitionStatsIndexKey("ts=10", "price"), 2000),
             Seq(getPartitionStatsIndexKey("ts=20", "price"), 3000),
             Seq(getPartitionStatsIndexKey("ts=30", "price"), 4000)

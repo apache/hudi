@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -40,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -47,7 +49,6 @@ import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.FlinkClientUtil;
 
-import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,7 +116,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       String clusteringCommitTime,
       Option<HoodieData<WriteStatus>> writeStatuses) {
     this.context.setJobStatus(this.getClass().getSimpleName(), "Collect clustering write status and commit clustering");
-    HoodieInstant clusteringInstant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, clusteringCommitTime);
+    HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime, table.getActiveTimeline()).get();
     List<HoodieWriteStat> writeStats = metadata.getPartitionToWriteStats().entrySet().stream().flatMap(e ->
         e.getValue().stream()).collect(Collectors.toList());
     if (writeStats.stream().mapToLong(HoodieWriteStat::getTotalWriteErrors).sum() > 0) {
@@ -137,10 +138,11 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       writeTableMetadata(table, clusteringCommitTime, metadata, writeStatuses.orElseGet(context::emptyHoodieData));
 
       LOG.info("Committing Clustering {} finished with result {}.", clusteringCommitTime, metadata);
-      table.getActiveTimeline().transitionReplaceInflightToComplete(
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
           false,
-          HoodieTimeline.getReplaceCommitInflightInstant(clusteringCommitTime),
-          serializeCommitMetadata(metadata));
+          clusteringInstant,
+          serializeCommitMetadata(metadata),
+          table.getActiveTimeline());
     } catch (IOException e) {
       throw new HoodieClusteringException(
           "Failed to commit " + table.getMetaClient().getBasePath() + " at time " + clusteringCommitTime, e);
@@ -154,7 +156,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       long durationInMs = metrics.getDurationInMs(clusteringTimer.stop());
       try {
         metrics.updateCommitMetrics(HoodieActiveTimeline.parseDateFromInstantTime(clusteringCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.REPLACE_COMMIT_ACTION);
+            durationInMs, metadata, HoodieActiveTimeline.CLUSTERING_ACTION);
       } catch (ParseException e) {
         throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
             + config.getBasePath() + " at time " + clusteringCommitTime, e);
@@ -184,7 +186,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, Configuration hadoopConf) {
+  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
     return HoodieFlinkTable.create(config, context);
   }
 

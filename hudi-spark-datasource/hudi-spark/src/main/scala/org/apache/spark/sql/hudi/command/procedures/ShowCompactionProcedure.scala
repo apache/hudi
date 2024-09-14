@@ -27,6 +27,7 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.types._
 
 import java.util.function.Supplier
+
 import scala.collection.JavaConverters._
 
 class ShowCompactionProcedure extends BaseProcedure with ProcedureBuilder with SparkAdapterSupport with Logging {

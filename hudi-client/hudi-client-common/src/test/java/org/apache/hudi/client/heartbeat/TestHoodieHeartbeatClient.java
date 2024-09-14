@@ -19,8 +19,8 @@
 package org.apache.hudi.client.heartbeat;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

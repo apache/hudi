@@ -137,6 +137,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected SparkRDDWriteClient writeClient;
   protected SparkRDDReadClient readClient;
   protected HoodieTableFileSystemView tableView;
+  protected Map<String, String> extraConf = new HashMap<>();
 
   protected TimelineService timelineService;
   protected final SparkTaskContextSupplier supplier = new SparkTaskContextSupplier();
@@ -200,6 +201,7 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
     // Initialize a local spark env
     SparkConf sc = HoodieClientTestUtils.getSparkConfForTest(appName + "#" + testMethodName);
+    extraConf.forEach(sc::set);
     SparkContext sparkContext = new SparkContext(sc);
     HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext);
     jsc = new JavaSparkContext(sparkContext);
@@ -227,6 +229,10 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
    */
   protected void initSparkContexts() {
     initSparkContexts(this.getClass().getSimpleName());
+  }
+
+  protected void initQueryIndexConf() {
+    extraConf.put("hoodie.fileIndex.dataSkippingFailureMode", "strict");
   }
 
   /**

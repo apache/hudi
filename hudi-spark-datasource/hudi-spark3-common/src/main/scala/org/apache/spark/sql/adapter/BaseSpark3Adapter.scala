@@ -17,15 +17,15 @@
 
 package org.apache.spark.sql.adapter
 
+import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark3.internal.ReflectUtil
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSparkUtils, Spark3RowSerDe}
-
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SparkSession, SQLContext}
 import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters}
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.util.DateFormatter
@@ -34,8 +34,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
-import org.apache.spark.sql.{HoodieSpark3CatalogUtils, SQLContext, SparkSession}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 
 import java.time.ZoneId
@@ -48,9 +47,7 @@ import scala.collection.JavaConverters._
  * Base implementation of [[SparkAdapter]] for Spark 3.x branch
  */
 abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
-
-  // JsonUtils for Support Spark Version >= 3.3
-  if (HoodieSparkUtils.gteqSpark3_3) JsonUtils.registerModules()
+  JsonUtils.registerModules()
 
   private val cache = new ConcurrentHashMap[ZoneId, DateFormatter](1)
 

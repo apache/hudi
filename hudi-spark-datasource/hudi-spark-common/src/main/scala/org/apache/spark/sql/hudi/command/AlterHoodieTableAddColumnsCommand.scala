@@ -18,21 +18,21 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
+import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
-import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.CommitUtils
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.hudi.{AvroConversionUtils, DataSourceUtils, HoodieWriterUtils, SparkAdapterSupport}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal

@@ -19,6 +19,7 @@
 package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.common.model.HoodieTableType;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 

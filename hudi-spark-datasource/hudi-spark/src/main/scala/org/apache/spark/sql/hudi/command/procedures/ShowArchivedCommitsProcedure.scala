@@ -29,6 +29,7 @@ import java.time.ZonedDateTime
 import java.util
 import java.util.function.Supplier
 import java.util.{Collections, Date}
+
 import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {

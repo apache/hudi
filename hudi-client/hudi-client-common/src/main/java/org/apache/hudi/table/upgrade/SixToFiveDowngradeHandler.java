@@ -18,27 +18,14 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
-import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -64,9 +51,8 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
     // Since version 6 includes a new schema field for metadata table(MDT), the MDT needs to be deleted during downgrade to avoid column drop error.
     HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
     // The log block version has been upgraded in version six so compaction is required for downgrade.
-    runCompaction(table, context, config, upgradeDowngradeHelper);
-
-    syncCompactionRequestedFileToAuxiliaryFolder(table);
+    UpgradeDowngradeUtils.runCompaction(table, context, config, upgradeDowngradeHelper);
+    UpgradeDowngradeUtils.syncCompactionRequestedFileToAuxiliaryFolder(table);
 
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.reload(table.getMetaClient());
     Map<ConfigProperty, String> updatedTableProps = new HashMap<>();
@@ -78,45 +64,4 @@ public class SixToFiveDowngradeHandler implements DowngradeHandler {
     return updatedTableProps;
   }
 
-  /**
-   * Utility method to run compaction for MOR table as part of downgrade step.
-   */
-  private void runCompaction(HoodieTable table, HoodieEngineContext context, HoodieWriteConfig config,
-                             SupportsUpgradeDowngrade upgradeDowngradeHelper) {
-    try {
-      if (table.getMetaClient().getTableType() == HoodieTableType.MERGE_ON_READ) {
-        // set required configs for scheduling compaction.
-        HoodieInstantTimeGenerator.setCommitTimeZone(table.getMetaClient().getTableConfig().getTimelineTimezone());
-        HoodieWriteConfig compactionConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT.key(), "true");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "1");
-        compactionConfig.setValue(HoodieCompactionConfig.INLINE_COMPACT_TRIGGER_STRATEGY.key(), CompactionTriggerStrategy.NUM_COMMITS.name());
-        compactionConfig.setValue(HoodieCompactionConfig.COMPACTION_STRATEGY.key(), UnBoundedCompactionStrategy.class.getName());
-        compactionConfig.setValue(HoodieMetadataConfig.ENABLE.key(), "false");
-        try (BaseHoodieWriteClient writeClient = upgradeDowngradeHelper.getWriteClient(compactionConfig, context)) {
-          Option<String> compactionInstantOpt = writeClient.scheduleCompaction(Option.empty());
-          if (compactionInstantOpt.isPresent()) {
-            writeClient.compact(compactionInstantOpt.get());
-          }
-        }
-      }
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
-  }
-
-  /**
-   * See HUDI-6040.
-   */
-  private static void syncCompactionRequestedFileToAuxiliaryFolder(HoodieTable table) {
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieTimeline compactionTimeline = new HoodieActiveTimeline(metaClient, false).filterPendingCompactionTimeline()
-        .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED);
-    compactionTimeline.getInstantsAsStream().forEach(instant -> {
-      String fileName = instant.getFileName();
-      FileIOUtils.copy(metaClient.getStorage(),
-          new StoragePath(metaClient.getMetaPath(), fileName),
-          new StoragePath(metaClient.getMetaAuxiliaryPath(), fileName));
-    });
-  }
 }

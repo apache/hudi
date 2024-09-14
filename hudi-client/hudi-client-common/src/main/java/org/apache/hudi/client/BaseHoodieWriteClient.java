@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -63,7 +64,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
@@ -696,7 +696,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         // or before the oldest compaction on MDT.
         // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
         HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(hadoopConf))
+            .setConf(storageConf.newInstance())
             .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
         Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
         boolean deleteMDT = false;
@@ -928,8 +928,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       this.heartbeatClient.start(instantTime);
     }
 
-    if (actionType.equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
-      metaClient.getActiveTimeline().createRequestedReplaceCommit(instantTime, actionType);
+    if (ClusteringUtils.isClusteringOrReplaceCommitAction(actionType)) {
+      metaClient.getActiveTimeline().createRequestedCommitWithReplaceMetadata(instantTime, actionType);
     } else {
       metaClient.getActiveTimeline().createNewInstant(new HoodieInstant(HoodieInstant.State.REQUESTED, actionType,
           instantTime));
@@ -1013,7 +1013,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @return Collection of WriteStatus to inspect errors and counts
    */
   public HoodieWriteMetadata<O> cluster(String clusteringInstantTime) {
-    if (shouldDelegateToTableServiceManager(config, ActionType.replacecommit)) {
+    if (shouldDelegateToTableServiceManager(config, ActionType.clustering)) {
       throw new UnsupportedOperationException("Clustering should be delegated to table service manager instead of direct run.");
     }
     return cluster(clusteringInstantTime, true);

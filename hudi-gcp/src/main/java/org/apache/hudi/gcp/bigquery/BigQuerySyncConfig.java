@@ -103,7 +103,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
   public static final ConfigProperty<String> BIGQUERY_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.partition_fields")
       .noDefaultValue()
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+      .withInferFunction(cfg -> HoodieTableConfig.getPartitionFieldProp(cfg)
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .markAdvanced()
       .withDocumentation("Comma-delimited partition fields. Default to non-partitioned.");

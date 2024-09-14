@@ -43,7 +43,8 @@ public class ClusteringGroupInfo implements Serializable {
   
   // Only for serialization/de-serialization
   @Deprecated
-  public ClusteringGroupInfo() {}
+  public ClusteringGroupInfo() {
+  }
   
   private ClusteringGroupInfo(final List<ClusteringOperation> operations, final int numOutputGroups) {
     this.operations = operations;

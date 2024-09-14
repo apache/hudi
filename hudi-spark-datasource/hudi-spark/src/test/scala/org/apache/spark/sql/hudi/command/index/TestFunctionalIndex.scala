@@ -29,6 +29,7 @@ import org.apache.hudi.hive.{HiveSyncTool, HoodieHiveSyncClient}
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.sync.common.HoodieSyncConfig.{META_SYNC_BASE_PATH, META_SYNC_DATABASE_NAME, META_SYNC_NO_PARTITION_METADATA, META_SYNC_TABLE_NAME}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.apache.spark.sql.catalyst.analysis.Analyzer
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.parser.ParserInterface
@@ -40,11 +41,15 @@ import org.scalatest.Ignore
 @Ignore
 class TestFunctionalIndex extends HoodieSparkSqlTestBase {
 
+  override protected def beforeAll(): Unit = {
+    initQueryIndexConf()
+  }
+
   test("Test Functional Index With Hive Sync Non Partitioned Table") {
     // There is a big difference between Java class loader architecture of versions 1.8 and 17.
     // Hive 2.3.7 is compiled with Java 1.8, and the class loader used there throws error when Hive APIs are run on Java 17.
     // So we special case this test only for Java 8.
-    if (HoodieSparkUtils.gteqSpark3_2 && HoodieTestUtils.getJavaVersion == 8) {
+    if (HoodieSparkUtils.gteqSpark3_3 && HoodieTestUtils.getJavaVersion == 8) {
       withTempDir { tmp =>
         Seq("mor").foreach { tableType =>
           val databaseName = "testdb"
@@ -115,7 +120,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Functional Index Syntax") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val databaseName = "default"
@@ -169,7 +174,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Functional Index") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
           val databaseName = "default"
@@ -244,7 +249,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test functional index update after initialization") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir(tmp => {
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -306,7 +311,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Create Functional Index With Data Skipping") {
-    if (HoodieSparkUtils.gteqSpark3_2) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       withTempDir { tmp =>
         Seq("cow").foreach { tableType =>
           val tableName = generateTableName

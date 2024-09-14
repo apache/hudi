@@ -72,14 +72,15 @@ public class HoodieRowDataFileWriterFactory {
     HoodieRowDataParquetWriteSupport writeSupport =
         new HoodieRowDataParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), rowType, filter);
     return new HoodieRowDataParquetWriter(
-        convertToStoragePath(path), new HoodieParquetConfig<>(
-        writeSupport,
-        getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
-        writeConfig.getParquetBlockSize(),
-        writeConfig.getParquetPageSize(),
-        writeConfig.getParquetMaxFileSize(),
-        new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
-        writeConfig.getParquetCompressionRatio(),
-        writeConfig.parquetDictionaryEnabled()));
+        convertToStoragePath(path),
+        new HoodieParquetConfig<>(
+            writeSupport,
+            getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
+            writeConfig.getParquetBlockSize(),
+            writeConfig.getParquetPageSize(),
+            writeConfig.getParquetMaxFileSize(),
+            new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
+            writeConfig.getParquetCompressionRatio(),
+            writeConfig.parquetDictionaryEnabled()));
   }
 }

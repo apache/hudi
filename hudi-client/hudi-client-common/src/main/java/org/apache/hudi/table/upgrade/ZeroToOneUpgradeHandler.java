@@ -31,8 +31,8 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.rollback.BaseRollbackHelper;
 import org.apache.hudi.table.action.rollback.ListingBasedRollbackStrategy;
@@ -55,7 +55,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     // fetch pending commit info
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingMajorAndMinorCompaction();
+    HoodieTimeline inflightTimeline = table.getMetaClient().getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
     List<String> commits = inflightTimeline.getReverseOrderedInstants().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (!commits.isEmpty() && instantTime != null) {

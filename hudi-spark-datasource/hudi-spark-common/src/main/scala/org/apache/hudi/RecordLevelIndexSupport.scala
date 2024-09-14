@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
@@ -24,15 +25,17 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
 
+import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
-class RecordLevelIndexSupport (spark: SparkSession,
-                               metadataConfig: HoodieMetadataConfig,
-                               metaClient: HoodieTableMetaClient)
-  extends SparkBaseIndexSupport (spark, metadataConfig, metaClient) {
+class RecordLevelIndexSupport(spark: SparkSession,
+                              metadataConfig: HoodieMetadataConfig,
+                              metaClient: HoodieTableMetaClient)
+  extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
 
 
   override def getIndexName: String = RecordLevelIndexSupport.INDEX_NAME
@@ -44,9 +47,9 @@ class RecordLevelIndexSupport (spark: SparkSession,
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
-    val allFiles = fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
+    val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
     if (recordKeys.nonEmpty) {
-      Option.apply(getCandidateFilesForRecordKeys(allFiles, recordKeys))
+      Option.apply(getCandidateFilesForRecordKeys(prunedStoragePaths, recordKeys))
     } else {
       Option.empty
     }
@@ -92,6 +95,7 @@ class RecordLevelIndexSupport (spark: SparkSession,
 
 object RecordLevelIndexSupport {
   val INDEX_NAME = "RECORD_LEVEL"
+
   /**
    * If the input query is an EqualTo or IN query on simple record key columns, the function returns a tuple of
    * list of the query and list of record key literals present in the query otherwise returns an empty option.
@@ -139,6 +143,36 @@ object RecordLevelIndexSupport {
   }
 
   /**
+   * Returns the list of storage paths from the pruned partitions and file slices.
+   *
+   * @param prunedPartitionsAndFileSlices - List of pruned partitions and file slices
+   * @return List of storage paths
+   */
+  def getPrunedStoragePaths(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                            fileIndex: HoodieFileIndex): Seq[StoragePath] = {
+    if (prunedPartitionsAndFileSlices.isEmpty) {
+      fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
+    } else {
+      prunedPartitionsAndFileSlices
+        .flatMap { case (_, fileSlices) =>
+          fileSlices
+        }
+        .flatMap { fileSlice =>
+          val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
+          val logFiles = if (fileIndex.includeLogFiles) {
+            fileSlice.getLogFiles.iterator().asScala
+          } else {
+            Iterator.empty
+          }
+          val baseFilePaths = baseFileOption.map(baseFile => baseFile.getStoragePath).toSeq
+          val logFilePaths = logFiles.map(logFile => logFile.getPath).toSeq
+
+          baseFilePaths ++ logFilePaths
+        }
+    }
+  }
+
+  /**
    * Returns the attribute and literal pair given the operands of a binary operator. The pair is returned only if one of
    * the operand is an attribute and other is literal. In other cases it returns an empty Option.
    * @param expression1 - Left operand of the binary operator
@@ -172,7 +206,7 @@ object RecordLevelIndexSupport {
     if (recordKeyOpt.isDefined && recordKeyOpt.get == attributeName) {
       true
     } else {
-      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == recordKeyOpt.get
+      HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName == attributeName
     }
   }
 }

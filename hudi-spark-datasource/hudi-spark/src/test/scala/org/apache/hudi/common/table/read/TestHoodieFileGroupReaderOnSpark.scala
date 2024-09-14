@@ -20,15 +20,16 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordMerger, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.{HoodieSparkRecordMerger, OverwriteWithLatestSparkMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{DefaultSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, HoodieInternalRowUtils, HoodieUnsafeUtils, Row, SaveMode, SparkSession}
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util
+
 import scala.collection.JavaConverters._
 
 /**
@@ -87,12 +89,13 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
     val metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build
-    val recordKeyField = new HoodieSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
+    val recordKeyField = new DefaultSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
     new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, Seq.empty)
   }
 
-  override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
-    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.asScala.toList, 2))
+  override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
+    val recs = RawTripTestPayload.recordsToStrings(recordList)
+    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs.asScala.toList, 2))
 
     inputDF.write.format("hudi")
       .options(options)

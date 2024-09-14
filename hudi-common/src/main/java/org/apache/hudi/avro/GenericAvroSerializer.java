@@ -40,7 +40,6 @@ import java.util.HashMap;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
-
 /**
  * Custom serializer used for generic Avro containers.
  * <p>

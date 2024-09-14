@@ -29,7 +29,6 @@ import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
-import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CompactionUtils;
@@ -87,7 +86,8 @@ public class MetadataConversionUtils {
         archivedMetaWrapper.setActionType(ActionType.deltacommit.name());
         break;
       }
-      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case HoodieTimeline.CLUSTERING_ACTION: {
         if (hoodieInstant.isCompleted()) {
           HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(instantDetails.get(), HoodieReplaceCommitMetadata.class);
           archivedMetaWrapper.setHoodieReplaceCommitMetadata(convertReplaceCommitMetadata(replaceCommitMetadata));
@@ -107,7 +107,8 @@ public class MetadataConversionUtils {
             archivedMetaWrapper.setHoodieRequestedReplaceMetadata(requestedReplaceMetadata.get());
           }
         }
-        archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
+        archivedMetaWrapper.setActionType(
+            hoodieInstant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION) ? ActionType.replacecommit.name() : ActionType.clustering.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
@@ -157,7 +158,8 @@ public class MetadataConversionUtils {
         activeAction.getCleanPlan(metaClient).ifPresent(plan -> lsmTimelineInstant.setPlan(ByteBuffer.wrap(plan)));
         break;
       }
-      case HoodieTimeline.REPLACE_COMMIT_ACTION: {
+      case HoodieTimeline.REPLACE_COMMIT_ACTION:
+      case HoodieTimeline.CLUSTERING_ACTION: {
         // we may have cases with empty HoodieRequestedReplaceMetadata e.g. insert_overwrite_table or insert_overwrite
         // without clustering. However, we should revisit the requested commit file standardization
         activeAction.getRequestedCommitMetadata(metaClient).ifPresent(metadata -> lsmTimelineInstant.setPlan(ByteBuffer.wrap(metadata)));
@@ -201,6 +203,10 @@ public class MetadataConversionUtils {
       }
       case HoodieTimeline.REPLACE_COMMIT_ACTION: {
         archivedMetaWrapper.setActionType(ActionType.replacecommit.name());
+        break;
+      }
+      case HoodieTimeline.CLUSTERING_ACTION: {
+        archivedMetaWrapper.setActionType(ActionType.clustering.name());
         break;
       }
       case HoodieTimeline.ROLLBACK_ACTION: {
@@ -255,9 +261,6 @@ public class MetadataConversionUtils {
     }
     hoodieCommitMetadata.getPartitionToWriteStats().remove(null);
     org.apache.hudi.avro.model.HoodieCommitMetadata avroMetaData = JsonUtils.getObjectMapper().convertValue(hoodieCommitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class);
-    if (hoodieCommitMetadata.getCompacted()) {
-      avroMetaData.setOperationType(WriteOperationType.COMPACT.name());
-    }
     return (T) avroMetaData;
   }
 

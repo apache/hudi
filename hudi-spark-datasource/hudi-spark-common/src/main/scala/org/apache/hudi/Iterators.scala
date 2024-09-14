@@ -37,6 +37,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMeta
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
+
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -48,6 +49,7 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -365,7 +367,7 @@ object LogFileIterator extends SparkAdapterSupport {
         new StoragePath(tablePath), partitionPath)
 
       val logRecordReader =
-        metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)))
+        metadataTable.getLogRecordScanner(logFiles.asJava, relativePartitionPath, toJavaOption(Some(forceFullScan)), toJavaOption(Some(tableState.latestCommitTimestamp.get)))
           .getLeft
 
       val recordList = closing(logRecordReader) {

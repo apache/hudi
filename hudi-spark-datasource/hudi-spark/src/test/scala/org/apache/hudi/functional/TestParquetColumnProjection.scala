@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{Dataset, HoodieUnsafeUtils, Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.{Disabled, Tag, Test}
+import org.junit.jupiter.api.{Tag, Test}
 
 import scala.collection.JavaConverters._
 import scala.math.abs
@@ -60,7 +60,6 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
-  @Disabled("Currently disabled b/c of the fallback to HadoopFsRelation")
   @Test
   def testBaseFileOnlyViewRelation(): Unit = {
     val tablePath = s"$basePath/cow"

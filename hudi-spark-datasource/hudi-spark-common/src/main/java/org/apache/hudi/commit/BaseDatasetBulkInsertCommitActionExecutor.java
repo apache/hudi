@@ -40,6 +40,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -48,6 +49,8 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_STATUS_STORAGE_LEVEL_VALUE;
 
 public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Serializable {
 
@@ -78,6 +81,8 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   private HoodieWriteMetadata<JavaRDD<WriteStatus>> buildHoodieWriteMetadata(Option<HoodieData<WriteStatus>> writeStatuses) {
     return writeStatuses.map(statuses -> {
+      // cache writeStatusRDD, so that all actions before this are not triggered again for future
+      statuses.persist(writeConfig.getString(WRITE_STATUS_STORAGE_LEVEL_VALUE), writeClient.getEngineContext(), HoodieData.HoodieDataCacheKey.of(writeConfig.getBasePath(), instantTime));
       HoodieWriteMetadata<JavaRDD<WriteStatus>> hoodieWriteMetadata = new HoodieWriteMetadata<>();
       hoodieWriteMetadata.setWriteStatuses(HoodieJavaRDD.getJavaRDD(statuses));
       hoodieWriteMetadata.setPartitionToReplaceFileIds(getPartitionToReplacedFileIds(statuses));

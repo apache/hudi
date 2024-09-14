@@ -327,7 +327,8 @@ public class CompactionAdminClient extends BaseHoodieClient {
    */
   public static class RenameOpResult extends OperationResult<RenameInfo> {
 
-    public RenameOpResult() {}
+    public RenameOpResult() {
+    }
 
     public RenameOpResult(Pair<HoodieLogFile, HoodieLogFile> op, boolean success, Option<Exception> exception) {
       super(

@@ -92,7 +92,8 @@ public class NonSerializableFileSystem extends FileSystem {
   }
 
   @Override
-  public void setWorkingDirectory(Path path) {}
+  public void setWorkingDirectory(Path path) {
+  }
 
   @Override
   public Path getWorkingDirectory() {

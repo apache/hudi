@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -42,7 +43,9 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.util.JavaScalaConverters;
+import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
+import org.apache.hudi.utilities.transform.Transformer;
 
 import com.beust.jcommander.IValueValidator;
 import com.beust.jcommander.JCommander;
@@ -61,12 +64,14 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -121,6 +126,21 @@ public class HoodieSnapshotExporter {
 
     @Parameter(names = {"--parallelism", "-pl"}, description = "Parallelism for file listing")
     public int parallelism = 0;
+
+    @Parameter(names = {"--transformer-class"}, description = "A subclass of org.apache.hudi.utilities.transform.Transformer"
+            + ". Allows transforming raw source Dataset to a target Dataset (conforming to target schema) before "
+            + "writing. Default: Not set. Available transformers: org.apache.hudi.utilities.transform.SqlQueryBasedTransformer, "
+            + "org.apache.hudi.utilities.transform.SqlFileBasedTransformer, org.apache.hudi.utilities.transform.FlatteningTransformer, "
+            + "org.apache.hudi.utilities.transform.AWSDmsTransformer.")
+    public String transformerClassName = null;
+
+    @Parameter(names = {"--transformer-sql"}, description = "sql-query template be used to transform the source before"
+            + " writing to Hudi data-set. The query should reference the source as a table named \"<SRC>\".")
+    public String transformerSql = null;
+
+    @Parameter(names = {"--transformer-sql-file"}, description = "File with a SQL query to be executed during write."
+            + " The query should reference the source as a table named \"<SRC>\".")
+    public String transformerSqlFile = null;
   }
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
@@ -175,7 +195,7 @@ public class HoodieSnapshotExporter {
   }
 
   private void exportAsNonHudi(JavaSparkContext jsc, FileSystem sourceFs,
-                               Config cfg, List<String> partitions, String latestCommitTimestamp) {
+                               Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
     Partitioner defaultPartitioner = dataset -> {
       Dataset<Row> hoodieDroppedDataset = dataset.drop(JavaScalaConverters.convertJavaIteratorToScalaIterator(HoodieRecord.HOODIE_META_COLUMNS.iterator()).toSeq());
       return StringUtils.isNullOrEmpty(cfg.outputPartitionField)
@@ -198,6 +218,17 @@ public class HoodieSnapshotExporter {
         .toLocalIterator();
 
     Dataset<Row> sourceDataset = new SQLContext(jsc).read().parquet(JavaScalaConverters.convertJavaIteratorToScalaIterator(exportingFilePaths).toSeq());
+
+    if (!StringUtils.isNullOrEmpty(cfg.transformerClassName)) {
+      Option<Transformer> transformer = UtilHelpers.createTransformer(
+              Option.of(Collections.singletonList(cfg.transformerClassName)), Option::empty, false);
+      if (transformer.isPresent()) {
+        TypedProperties transformerProps = new TypedProperties();
+        transformerProps.setPropertyIfNonNull(SqlTransformerConfig.TRANSFORMER_SQL.key(), cfg.transformerSql);
+        transformerProps.setPropertyIfNonNull(SqlTransformerConfig.TRANSFORMER_SQL_FILE.key(), cfg.transformerSqlFile);
+        sourceDataset = transformer.get().apply(jsc, SparkSession.builder().getOrCreate(), sourceDataset, transformerProps);
+      }
+    }
     partitioner.partition(sourceDataset)
         .format(cfg.outputFormat)
         .mode(SaveMode.ErrorIfExists)
@@ -243,7 +274,7 @@ public class HoodieSnapshotExporter {
           executorOutputFs,
           new Path(toPartitionPath, sourceFilePath.getName()),
           false,
-          false,
+          true,
           executorOutputFs.getConf());
     }, parallelism);
 
@@ -278,7 +309,7 @@ public class HoodieSnapshotExporter {
           executorOutputFs,
           targetFilePath,
           false,
-          false,
+          true,
           executorOutputFs.getConf());
     }, parallelism);
   }
@@ -296,6 +327,10 @@ public class HoodieSnapshotExporter {
     final Config cfg = new Config();
     new JCommander(cfg, null, args);
 
+    if (!areTransformerOptionsValid(cfg)) {
+      System.exit(1);
+    }
+
     SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-exporter", "local[*]");
     JavaSparkContext jsc = new JavaSparkContext(sparkConf);
     LOG.info("Initializing spark job.");
@@ -305,5 +340,28 @@ public class HoodieSnapshotExporter {
     } finally {
       jsc.stop();
     }
+  }
+
+  public static boolean areTransformerOptionsValid(Config config) {
+    boolean valid = true;
+    if (!StringUtils.isNullOrEmpty(config.transformerClassName)) {
+      switch (config.transformerClassName) {
+        case "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer":
+          if (StringUtils.isNullOrEmpty(config.transformerSql)) {
+            LOG.error("--transformer-sql is required when using SqlQueryBasedTransformer");
+            valid = false;
+          }
+          break;
+        case "org.apache.hudi.utilities.transform.SqlFileBasedTransformer":
+          if (StringUtils.isNullOrEmpty(config.transformerSqlFile)) {
+            LOG.error("--transformer-sql-file is required when using SqlFileBasedTransformer");
+            valid = false;
+          }
+          break;
+        default:
+          // valid by default
+      }
+    }
+    return valid;
   }
 }

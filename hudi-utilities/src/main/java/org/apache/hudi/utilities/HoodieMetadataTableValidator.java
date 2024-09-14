@@ -78,7 +78,6 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
-import org.apache.spark.sql.Row;
 import org.apache.spark.sql.functions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -283,6 +282,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
 
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    public Integer validateLastNFileSlices = null;
+
     @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
     public boolean validateAllColumnStats = false;
 
@@ -348,6 +350,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-latest-file-slices " + validateLatestFileSlices + ", \n"
           + "   --validate-latest-base-files " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
+          + "   --validate-last-n-file-slices " + validateLastNFileSlices + ", \n"
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
@@ -783,6 +786,17 @@ public class HoodieMetadataTableValidator implements Serializable {
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
     }
+    if (cfg.validateLastNFileSlices != null) {
+      int lastNFileSlices = cfg.validateLastNFileSlices;
+      int allFileSlicesFromFSCount = allFileSlicesFromFS.size();
+      if (allFileSlicesFromFSCount > lastNFileSlices) {
+        allFileSlicesFromFS = allFileSlicesFromFS.subList(allFileSlicesFromFSCount - lastNFileSlices, allFileSlicesFromFSCount);
+      }
+      int allFileSlicesFromMetaCount = allFileSlicesFromMeta.size();
+      if (allFileSlicesFromMetaCount > lastNFileSlices) {
+        allFileSlicesFromMeta = allFileSlicesFromMeta.subList(allFileSlicesFromMetaCount - lastNFileSlices, allFileSlicesFromMetaCount);
+      }
+    }
 
     LOG.debug("All file slices from metadata: {}. For partitions {}", allFileSlicesFromMeta, partitionPath);
     LOG.debug("All file slices from direct listing: {}. For partitions {}", allFileSlicesFromFS, partitionPath);
@@ -1038,6 +1052,7 @@ public class HoodieMetadataTableValidator implements Serializable {
                                                                       String basePath,
                                                                       String latestCompletedCommit) {
     return sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
         .load(getMetadataTableBasePath(basePath))
         .filter("type = 5")
         .select(functions.col("key"),
@@ -1058,18 +1073,11 @@ public class HoodieMetadataTableValidator implements Serializable {
               row.getInt(row.fieldIndex("fileIndex")),
               row.getString(row.fieldIndex("fileId")),
               row.getLong(row.fieldIndex("instantTime")));
-          // handle false positive case. a commit was pending when FS based locations were fetched, but committed when MDT was polled.
-          if (HoodieTimeline.compareTimestamps(location.getInstantTime(), GREATER_THAN, latestCompletedCommit)) {
-            return new Tuple2<>(row, Option.empty());
-          } else {
-            return new Tuple2<>(row, Option.of(location));
-          }
+          return new Tuple2<>(row, Option.of(location));
         }).filter(tuple2 -> tuple2._2.isPresent()) // filter the false positives
-        .mapToPair(tuple2 -> {
-          Tuple2<Row, Option<HoodieRecordGlobalLocation>> rowAndLocation = (Tuple2<Row, Option<HoodieRecordGlobalLocation>>) tuple2;
-          return new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
-              Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId()));
-        }).cache();
+        .mapToPair(rowAndLocation -> new Tuple2<>(rowAndLocation._1.getString(rowAndLocation._1.fieldIndex("key")),
+            Pair.of(rowAndLocation._2.get().getPartitionPath(), rowAndLocation._2.get().getFileId())))
+        .cache();
   }
 
   private String constructLocationInfoString(String recordKey, Optional<Pair<String, String>> locationOnFs,
@@ -1133,6 +1141,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
             || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())
             || !Objects.equals(fileSlice1.getBaseFile(), fileSlice2.getBaseFile())) {
+          mismatch = true;
+          break;
+        }
+        // test for log files equality
+        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
           mismatch = true;
           break;
         }

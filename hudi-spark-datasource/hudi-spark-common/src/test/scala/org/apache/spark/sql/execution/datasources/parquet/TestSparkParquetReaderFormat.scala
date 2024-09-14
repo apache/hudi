@@ -19,14 +19,17 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.util
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+
+import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.SerializableConfiguration
 
 /**
  * Class used to test [[SparkParquetReader]]
@@ -45,12 +48,13 @@ class TestSparkParquetReaderFormat extends ParquetFileFormat with SparkAdapterSu
     val reader = sparkAdapter.createParquetFileReader(supportBatch(sparkSession,
       StructType(partitionSchema.fields ++ requiredSchema.fields)),
       sparkSession.sqlContext.conf, options, hadoopConf)
-    val broadcastedStorageConf =
-      sparkSession.sparkContext.broadcast(HadoopFSUtils.getStorageConf(hadoopConf))
+    val broadcastedHadoopConf =
+      sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
     (file: PartitionedFile) => {
       //code inside the lambda will run on the executor
-      reader.read(file, requiredSchema, partitionSchema, filters, broadcastedStorageConf.value)
+      reader.read(file, requiredSchema, partitionSchema, util.Option.empty(), filters,
+        HadoopFSUtils.getStorageConf(broadcastedHadoopConf.value.value))
     }
   }
 }

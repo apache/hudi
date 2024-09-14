@@ -145,7 +145,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.REPLACE_COMMIT_ACTION, commitTime1);
+    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, commitTime1);
     saveAsComplete(
         commitTimeline,
         instant1,
@@ -187,7 +187,11 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
       HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
-      timeline.saveAsComplete(inflight, data);
+      if (inflight.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
+        timeline.transitionClusterInflightToComplete(true, inflight, data);
+      } else {
+        timeline.saveAsComplete(inflight, data);
+      }
     }
   }
 }

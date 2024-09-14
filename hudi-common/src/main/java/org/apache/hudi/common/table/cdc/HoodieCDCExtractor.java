@@ -60,6 +60,7 @@ import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.BASE_FILE_INSERT;
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.LOG_FILE;
 import static org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase.REPLACE_COMMIT;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
@@ -90,14 +91,18 @@ public class HoodieCDCExtractor {
 
   private HoodieTableFileSystemView fsView;
 
+  private final boolean consumeChangesFromCompaction;
+
   public HoodieCDCExtractor(
       HoodieTableMetaClient metaClient,
-      InstantRange range) {
+      InstantRange range,
+      boolean consumeChangesFromCompaction) {
     this.metaClient = metaClient;
     this.basePath = metaClient.getBasePath();
     this.storage = metaClient.getStorage();
     this.supplementalLoggingMode = metaClient.getTableConfig().cdcSupplementalLoggingMode();
     this.instantRange = range;
+    this.consumeChangesFromCompaction = consumeChangesFromCompaction;
     init();
   }
 
@@ -210,7 +215,7 @@ public class HoodieCDCExtractor {
    */
   private void initInstantAndCommitMetadata() {
     try {
-      Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION));
+      Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
       this.commits = activeTimeLine.getInstantsAsStream()
           .filter(instant ->
@@ -226,7 +231,8 @@ public class HoodieCDCExtractor {
             }
             return Pair.of(instant, commitMetadata);
           }).filter(pair ->
-              WriteOperationType.isDataChange(pair.getRight().getOperationType())
+              WriteOperationType.yieldChanges(pair.getRight().getOperationType())
+                  || (this.consumeChangesFromCompaction && pair.getRight().getOperationType() == WriteOperationType.COMPACT)
           ).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
     } catch (Exception e) {
       throw new HoodieIOException("Fail to get the commit metadata for CDC");
@@ -322,8 +328,9 @@ public class HoodieCDCExtractor {
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
-          HoodieBaseFile baseFile = new HoodieBaseFile(
-              storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
+          HoodieBaseFile baseFile = fileSlice.getLeft().isEmpty()
+              ? null
+              : new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
           List<StoragePath> logFilePaths = fileSlice.getRight().stream()
               .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))

@@ -28,11 +28,11 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +66,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     HoodieLocalEngineContext localEngineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
 
     try {
-      timelineService = new TimelineService(localEngineContext, new Configuration(),
+      timelineService = new TimelineService(localEngineContext, HadoopFSUtils.getStorageConf(),
           TimelineService.Config.builder().serverPort(0).enableMarkerRequests(true).build(),
           storage,
           FileSystemViewManager.createViewManager(localEngineContext, storageConf, HoodieCommonConfig.newBuilder().build()));

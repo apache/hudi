@@ -293,6 +293,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
           + "For example 'column1,column2'");
 
+  public static final ConfigProperty<Boolean> BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS = ConfigProperty
+      .key("hoodie.bulkinsert.sort.suffix.record_key")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation(
+          "When using user defined sort columns there can be possibility of skew because spark's RangePartitioner used in sort can reduce the number of outputSparkPartitions"
+              + "if the sampled dataset has a low cardinality on the provided sort columns. This can cause an increase in commit durations as we are not leveraging the original parallelism."
+              + "Enabling this config suffixes the record key at the end to avoid skew."
+              + "This config is used by RowCustomColumnsSortPartitioner, RDDCustomColumnsSortPartitioner and JavaCustomColumnsSortPartitioner");
+
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
       .noDefaultValue()
@@ -1295,11 +1306,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
   }
 
-  public boolean isCDCEnabled() {
-    return getBooleanOrDefault(
-        HoodieTableConfig.CDC_ENABLED, HoodieTableConfig.CDC_ENABLED.defaultValue());
-  }
-
   public boolean isConsistentHashingEnabled() {
     return getIndexType() == HoodieIndex.IndexType.BUCKET && getBucketIndexEngineType() == HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING;
   }
@@ -1307,6 +1313,19 @@ public class HoodieWriteConfig extends HoodieConfig {
   public boolean isSimpleBucketIndex() {
     return HoodieIndex.IndexType.BUCKET.equals(getIndexType())
         && HoodieIndex.BucketIndexEngineType.SIMPLE.equals(getBucketIndexEngineType());
+  }
+
+  /**
+   * Returns whether the table writer would generate pure log files at the very first place.
+   */
+  public boolean isYieldingPureLogForMor() {
+    switch (getIndexType()) {
+      case BUCKET:
+      case FLINK_STATE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public boolean isConsistentLogicalTimestampEnabled() {

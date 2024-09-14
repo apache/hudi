@@ -19,7 +19,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
+import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
@@ -50,8 +51,8 @@ class SecondaryIndexSupport(spark: SparkSession,
     }
     lazy val (_, secondaryKeys) = if (isIndexAvailable) filterQueriesWithSecondaryKey(queryFilters, secondaryKeyConfigOpt.map(_._2)) else (List.empty, List.empty)
     if (isIndexAvailable && queryFilters.nonEmpty && secondaryKeys.nonEmpty) {
-      val allFiles = fileIndex.inputFiles.map(strPath => new StoragePath(strPath)).toSeq
-      Some(getCandidateFilesFromSecondaryIndex(allFiles, secondaryKeys, secondaryKeyConfigOpt.get._1))
+      val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
+      Some(getCandidateFilesFromSecondaryIndex(prunedStoragePaths, secondaryKeys, secondaryKeyConfigOpt.get._1))
     } else {
       Option.empty
     }
