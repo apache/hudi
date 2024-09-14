@@ -1561,7 +1561,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
     hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, "year,month,day");
     hiveSyncConfig.setHadoopConf(hiveTestService.getHiveConf());
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, null);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf())
+        .setBasePath(tableBasePath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
     final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
     assertEquals(3, hiveClient.getAllPartitions(tableName).size(),
@@ -2702,7 +2707,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // make sure hive table is present
     HiveSyncConfig hiveSyncConfig = getHiveSyncConfig(tableBasePath, "hive_trips");
     hiveSyncConfig.setHadoopConf(hiveServer.getHiveConf());
-    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, null);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf())
+        .setBasePath(tableBasePath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+    HoodieHiveSyncClient hiveClient = new HoodieHiveSyncClient(hiveSyncConfig, metaClient);
     final String tableName = hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_TABLE_NAME);
     assertTrue(hiveClient.tableExists(tableName), "Table " + tableName + " should exist");
   }

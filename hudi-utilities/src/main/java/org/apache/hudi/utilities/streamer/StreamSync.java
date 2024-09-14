@@ -340,16 +340,16 @@ public class StreamSync implements Serializable, Closeable {
   public void refreshTimeline() throws IOException {
     if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
-        HoodieTableMetaClient meta = getMetaClient();
-        switch (meta.getTableType()) {
+        HoodieTableMetaClient metaClient = getMetaClient();
+        switch (metaClient.getTableType()) {
           case COPY_ON_WRITE:
           case MERGE_ON_READ:
             // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-            this.commitsTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-            this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+            this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+            this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
             break;
           default:
-            throw new HoodieException("Unsupported table type :" + meta.getTableType());
+            throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
         }
       } catch (HoodieIOException e) {
         LOG.warn("Full exception msg " + e.getMessage());
@@ -1204,10 +1204,10 @@ public class StreamSync implements Serializable, Closeable {
       if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
           && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
         // target schema is null. fetch schema from commit metadata and use it
-        HoodieTableMetaClient meta = getMetaClient();
-        int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
+        HoodieTableMetaClient metaClient = getMetaClient();
+        int totalCompleted = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
         if (totalCompleted > 0) {
-          TableSchemaResolver schemaResolver = new TableSchemaResolver(meta);
+          TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
           Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
           if (tableSchema.isPresent()) {
             newWriteSchema = tableSchema.get();

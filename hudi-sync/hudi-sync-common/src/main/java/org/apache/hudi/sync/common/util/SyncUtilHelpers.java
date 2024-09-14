@@ -125,7 +125,7 @@ public class SyncUtilHelpers {
       String tableName = properties.getString(META_SYNC_TABLE_NAME.key());
       if (!tableName.equals(tableName.toLowerCase())) {
         LOG.warn(
-            "Table name \"" + tableName + "\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.");
+            "Table name \"{}\" contains capital letters. Your metastore may automatically convert this to lower case and can cause table not found errors during subsequent syncs.", tableName);
       }
     }
 
