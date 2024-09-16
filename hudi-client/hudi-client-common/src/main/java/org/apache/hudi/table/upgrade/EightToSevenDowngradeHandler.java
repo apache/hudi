@@ -28,7 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -95,10 +94,8 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
-      StoragePath basePath = metaClient.getBasePath();
-      HoodieTableMetaClient mdtMetaClient = createMetadataTableMetaClient(context, basePath);
       // Delete unsupported metadata partitions in table version 7.
-      downgradeMetadataPartitions(context, metaClient.getStorage(), mdtMetaClient, tablePropsToAdd);
+      downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
     }
 
     return tablePropsToAdd;
@@ -119,18 +116,18 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   static void downgradeMetadataPartitions(HoodieEngineContext context,
                                           HoodieStorage hoodieStorage,
-                                          HoodieTableMetaClient mdtMetaClient,
+                                          HoodieTableMetaClient metaClient,
                                           Map<ConfigProperty, String> tablePropsToAdd) {
     // Fetch metadata partition paths.
     List<String> metadataPartitions = FSUtils.getAllPartitionPaths(
         context,
         hoodieStorage,
-        mdtMetaClient.getBasePath(),
+        metaClient.getBasePath(),
         false);
 
     // Delete partitions.
     List<String> validPartitionPaths =
-        deleteMetadataPartition(context, mdtMetaClient, metadataPartitions);
+        deleteMetadataPartition(context, metaClient, metadataPartitions);
 
     // Clean the configuration.
     tablePropsToAdd.put(
@@ -138,26 +135,18 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
   }
 
   static List<String> deleteMetadataPartition(HoodieEngineContext context,
-                                              HoodieTableMetaClient mdtMetaClient,
+                                              HoodieTableMetaClient metaClient,
                                               List<String> metadataPartitions) {
     metadataPartitions.stream()
         .filter(metadataPath -> !SUPPORTED_METADATA_PARTITION_PATHS.contains(metadataPath))
         .forEach(metadataPath ->
             HoodieTableMetadataUtil.deleteMetadataTablePartition(
-                mdtMetaClient, context, metadataPath, true)
+                metaClient, context, metadataPath, true)
         );
 
     return metadataPartitions.stream()
         .filter(SUPPORTED_METADATA_PARTITION_PATHS::contains)
         .collect(Collectors.toList());
-  }
-
-  private static HoodieTableMetaClient createMetadataTableMetaClient(HoodieEngineContext context,
-                                                                     StoragePath basePath) {
-    return HoodieTableMetaClient.builder()
-        .setConf(context.getStorageConf().newInstance())
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))
-        .build();
   }
 
   private static Set<String> getSupportedMetadataPartitionPaths() {
