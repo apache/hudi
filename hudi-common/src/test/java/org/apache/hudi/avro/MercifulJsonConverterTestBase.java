@@ -336,7 +336,6 @@ public class MercifulJsonConverterTestBase {
     );
   }
 
-
   static Stream<Object> dataNestedJsonAsString() {
     return Stream.of(
         "{\"first\":\"John\",\"last\":\"Smith\"}",
