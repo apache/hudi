@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.CompactionTestUtils;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -35,6 +36,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieHBaseIndexConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.estimator.RecordSizeEstimator;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -65,13 +67,14 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestUpsertPartitioner.class);
   private static final Schema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
+  private static final Long MAX_FILE_SIZE_BYTES = 1000 * 1024L;
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,
       String testPartitionPath, boolean autoSplitInserts) throws Exception {
     HoodieWriteConfig config = makeHoodieClientConfigBuilder()
         .withCompactionConfig(HoodieCompactionConfig.newBuilder().compactionSmallFileSize(smallFileSize)
             .insertSplitSize(100).autoTuneInsertSplits(autoSplitInserts).build())
-        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(1000 * 1024).parquetMaxFileSize(1000 * 1024).orcMaxFileSize(1000 * 1024).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MAX_FILE_SIZE_BYTES).parquetMaxFileSize(MAX_FILE_SIZE_BYTES).orcMaxFileSize(MAX_FILE_SIZE_BYTES).build())
         .build();
 
     FileCreateUtils.createCommit(basePath, "001");
@@ -207,10 +210,14 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     Double[] weights = { 0.5, 0.25, 0.25};
     Double[] cumulativeWeights = { 0.5, 0.75, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+  }
 
-    // Now with insert split size auto tuned
-    partitioner = getUpsertPartitioner(1000 * 1024, 2400, 100, 800 * 1024, testPartitionPath, true);
-    insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+  @Test
+  public void testUpsertPartitionerWithSmallInsertHandlingAndInsertSplitsAutoTuned() throws Exception {
+    final String testPartitionPath = "2016/09/26";
+    // Insert split size auto tuned
+    UpsertPartitioner partitioner = getUpsertPartitioner(1000 * 1024, 2400, 100, 800 * 1024, testPartitionPath, true);
+    List<InsertBucketCumulativeWeightPair> insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
 
     assertEquals(4, partitioner.numPartitions(), "Should have 4 partitions");
     assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
@@ -223,9 +230,22 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
         "Bucket 3 is INSERT");
     assertEquals(4, insertBuckets.size(), "Total of 4 insert buckets");
 
-    weights = new Double[] { 0.08, 0.42, 0.42, 0.08};
-    cumulativeWeights = new Double[] { 0.08, 0.5, 0.92, 1.0};
+    Double[] weights = new Double[] { 0.08, 0.42, 0.42, 0.08};
+    Double[] cumulativeWeights = new Double[] { 0.08, 0.5, 0.92, 1.0};
     assertInsertBuckets(weights, cumulativeWeights, insertBuckets);
+
+    // test in a scenario where the avg record estimate may be equal or above the file size.
+    MockAverageRecordSizeEstimator.resetAvgRecordSize(MAX_FILE_SIZE_BYTES + 1);
+    final int numInserts = 2400;
+    partitioner = getUpsertPartitioner(1000 * 1024, numInserts, 100, 800 * 1024, testPartitionPath, true);
+    insertBuckets = partitioner.getInsertBuckets(testPartitionPath);
+
+    assertEquals(BucketType.UPDATE, partitioner.getBucketInfo(0).bucketType,
+        "Bucket 0 is UPDATE");
+    // Ensure insertBuckets do not exceed the num of inserts and total buckets are within insertBuckets + 1 for udpate bucket
+    assertTrue(partitioner.numPartitions() <= (numInserts + 1));
+    assertTrue(insertBuckets.size() <= numInserts);
+    MockAverageRecordSizeEstimator.resetAvgRecordSize();
   }
 
   @Test
@@ -387,6 +407,36 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
-    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
+    return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString()).withRecordSizeEstimator(MockAverageRecordSizeEstimator.class.getName());
+  }
+
+  /**
+   * Mock the record size estimator to ensure tests are consistent with changes
+   * in the default implementation of the {@link RecordSizeEstimator}
+   */
+  public static class MockAverageRecordSizeEstimator extends RecordSizeEstimator {
+
+    private static long MOCK_AVG_RECORD_SIZE = Integer.parseInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue());
+
+    public MockAverageRecordSizeEstimator(HoodieWriteConfig config) {
+      super(config);
+    }
+
+    public static void resetAvgRecordSize() {
+      resetAvgRecordSize(0L);
+    }
+
+    public static void resetAvgRecordSize(long avgRecordSize) {
+      if (avgRecordSize > 0) {
+        MOCK_AVG_RECORD_SIZE = avgRecordSize;
+        return;
+      }
+      MOCK_AVG_RECORD_SIZE = Integer.parseInt(HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE.defaultValue());
+    }
+
+    @Override
+    public long averageBytesPerRecord(HoodieTimeline commitTimeline) {
+      return MOCK_AVG_RECORD_SIZE;
+    }
   }
 }
