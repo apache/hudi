@@ -68,7 +68,6 @@ object HoodieOptionConfig {
     .withSqlKey("payloadClass")
     .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key)
     .withTableConfigKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key)
-    .defaultValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue())
     .build()
 
   val SQL_MERGE_MODE: HoodieSQLOption[String] = buildConf()
@@ -82,7 +81,6 @@ object HoodieOptionConfig {
     .withSqlKey("recordMergerStrategy")
     .withHoodieKey(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key)
     .withTableConfigKey(HoodieTableConfig.RECORD_MERGER_STRATEGY.key)
-    .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
     .build()
 
   /**
