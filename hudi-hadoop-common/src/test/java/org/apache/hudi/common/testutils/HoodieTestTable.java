@@ -233,17 +233,21 @@ public class HoodieTestTable implements AutoCloseable {
   }
 
   public HoodieTestTable addCommit(String instantTime) throws Exception {
-    return addCommit(instantTime, Option.empty());
+    return addCommit(instantTime, Option.of(new HoodieCommitMetadata()));
   }
 
   public HoodieTestTable addCommit(String instantTime, Option<HoodieCommitMetadata> metadata) throws Exception {
     return addCommit(instantTime, Option.empty(), metadata);
   }
 
-  public HoodieTestTable addCommit(String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> metadata) throws Exception {
+  public HoodieTestTable addCommit(String instantTime, Option<String> completionTime, Option<HoodieCommitMetadata> commitMetadata) throws Exception {
     createRequestedCommit(basePath, instantTime);
     createInflightCommit(basePath, instantTime);
-    createCommit(basePath, instantTime, completionTime, metadata);
+    // add schema to commit metadata
+    if (commitMetadata.isPresent() && commitMetadata.get().getExtraMetadata() != null) {
+      commitMetadata.get().getExtraMetadata().putIfAbsent(HoodieCommitMetadata.SCHEMA_KEY, PHONY_TABLE_SCHEMA);
+    }
+    createCommit(basePath, instantTime, completionTime, commitMetadata);
     currentInstantTime = instantTime;
     return this;
   }

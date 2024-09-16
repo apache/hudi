@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.Transformations;
@@ -72,7 +73,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -83,6 +83,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestTable.PHONY_TABLE_SCHEMA;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieSparkClientTestHarness.buildProfile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -426,6 +427,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         .withAvroSchemaValidate(false)
         .withAllowAutoEvolutionColumnDrop(true)
         .withAutoCommit(false)
+        .withSchema(PHONY_TABLE_SCHEMA)
         .build();
 
     setUp(cfg.getProps());
@@ -436,13 +438,15 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       // Create a commit without metadata stats in metadata to test backwards compatibility
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       String commitActionType = table.getMetaClient().getCommitActionType();
-      List<String> instants = new ArrayList<>();
       String instant0 = metaClient.createNewInstantTime();
       HoodieInstant instant = new HoodieInstant(State.REQUESTED, commitActionType, instant0);
       activeTimeline.createNewInstant(instant);
       activeTimeline.transitionRequestedToInflight(instant, Option.empty());
       instant = new HoodieInstant(State.INFLIGHT, commitActionType, instant0);
-      activeTimeline.saveAsComplete(instant, Option.empty());
+      // set schema in commit metadata
+      HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+      commitMetadata.getExtraMetadata().putIfAbsent(HoodieCommitMetadata.SCHEMA_KEY, PHONY_TABLE_SCHEMA);
+      activeTimeline.saveAsComplete(instant, TimelineMetadataUtils.serializeCommitMetadata(commitMetadata));
 
       String instant1 = metaClient.createNewInstantTime();
       client.startCommitWithTime(instant1);
