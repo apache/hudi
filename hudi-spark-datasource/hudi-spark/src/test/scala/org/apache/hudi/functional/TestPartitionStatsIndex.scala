@@ -20,14 +20,16 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
+import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
@@ -36,7 +38,10 @@ import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
+import java.util.concurrent.Executors
 import scala.collection.JavaConverters._
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
  * Test cases on partition stats index with Spark datasource.
@@ -142,6 +147,56 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     createTempTable(hudiOpts)
     verifyQueryPredicate(hudiOpts)
+  }
+
+  /**
+   * Test case to do a write with updates and then validate partition stats with multi-writer.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testPartitionStatsWithMultiWriter(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
+    )
+
+    doWriteAndValidateDataAndPartitionStats(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+
+    val executor = Executors.newFixedThreadPool(2)
+    implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+    val function = new Function0[Boolean] {
+      override def apply(): Boolean = {
+        try {
+          doWriteAndValidateDataAndPartitionStats(hudiOpts,
+            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+            saveMode = SaveMode.Append,
+            validate = false)
+          true
+        } catch {
+          case _: HoodieWriteConflictException => false
+          case e => throw new Exception("Multi write failed", e)
+        }
+      }
+    }
+    val f1 = Future[Boolean] {
+      function.apply()
+    }
+    val f2 = Future[Boolean] {
+      function.apply()
+    }
+
+    Await.result(f1, Duration("5 minutes"))
+    Await.result(f2, Duration("5 minutes"))
+
+    assertTrue(f1.value.get.get || f2.value.get.get)
+    executor.shutdownNow()
+    validateDataAndPartitionStats()
   }
 
   /**
