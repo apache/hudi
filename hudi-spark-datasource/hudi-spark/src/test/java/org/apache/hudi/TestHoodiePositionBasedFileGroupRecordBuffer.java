@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.FileGroupReaderState;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -103,39 +104,37 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         ? Option.empty() : Option.of(partitionPaths[0]);
 
     HoodieReaderContext ctx = getHoodieReaderContext(getBasePath(), avroSchema, getStorageConf());
-    ctx.setTablePath(getBasePath());
-    ctx.setLatestCommitTime(metaClient.createNewInstantTime());
-    ctx.setShouldMergeUseRecordPosition(true);
-    ctx.setHasBootstrapBaseFile(false);
-    ctx.setHasLogFiles(true);
-    ctx.setNeedsBootstrapMerge(false);
+    FileGroupReaderState readerState = new FileGroupReaderState();
+    ctx.setHoodieReaderState(readerState);
+    readerState.setLatestCommitTime(metaClient.createNewInstantTime());
+    readerState.setShouldMergeUseRecordPosition(true);
+    readerState.setHasBootstrapBaseFile(false);
+    readerState.setHasLogFiles(true);
+    readerState.setNeedsBootstrapMerge(false);
+    readerState.setPartitionNameOverrideOpt(partitionNameOpt);
+    readerState.setPartitionPathFieldOpt(partitionFields);
+    readerState.setMetaClient(metaClient);
     switch (mergeMode) {
       case CUSTOM:
-        ctx.setRecordMerger(new CustomMerger());
+        readerState.setRecordMerger(new CustomMerger());
         break;
       case EVENT_TIME_ORDERING:
-        ctx.setRecordMerger(new DefaultSparkRecordMerger());
+        readerState.setRecordMerger(new DefaultSparkRecordMerger());
         break;
       case OVERWRITE_WITH_LATEST:
       default:
-        ctx.setRecordMerger(new OverwriteWithLatestSparkRecordMerger());
+        readerState.setRecordMerger(new OverwriteWithLatestSparkRecordMerger());
         break;
     }
-    ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
-        Option.empty(), metaClient.getTableConfig()));
+    readerState.setSchemaHandler(new HoodiePositionBasedSchemaHandler(readerState, avroSchema, avroSchema, Option.empty()));
     TypedProperties props = new TypedProperties();
     props.put(HoodieCommonConfig.RECORD_MERGE_MODE.key(), mergeMode.name());
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(),String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));
     props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
     props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
-    buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
-        ctx,
-        metaClient,
-        partitionNameOpt,
-        partitionFields,
-        ctx.getRecordMerger(),
-        props);
+    readerState.setProps(props);
+    buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(ctx, readerState);
   }
 
   public Map<HoodieLogBlock.HeaderMetadataType, String> getHeader() {

@@ -290,7 +290,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
           getHoodieReaderContext(tablePath, avroSchema, storageConf),
           metaClient.getStorage(),
-          tablePath,
           metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
           fileSlice,
           avroSchema,
@@ -305,7 +304,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
-        tablePath,
         metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
         fileSlice,
         avroSchema,

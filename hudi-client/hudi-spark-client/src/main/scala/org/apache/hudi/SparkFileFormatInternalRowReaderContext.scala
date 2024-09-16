@@ -103,16 +103,16 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         .createPartitionedFile(InternalRow.empty, filePath, start, length)
       val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
       new CloseableInternalRowIterator(parquetFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
+        readSchema, StructType(Seq.empty), getReaderState.getInternalSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]]))
     }
   }
 
   private def getSchemaAndFiltersForRead(structType: StructType, hasRowIndexField: Boolean): (StructType, Seq[Filter]) = {
     val schemaForRead = getAppliedRequiredSchema(structType, hasRowIndexField)
-    if (!getHasLogFiles && !getNeedsBootstrapMerge) {
+    if (!getReaderState.getHasLogFiles && !getReaderState.getNeedsBootstrapMerge) {
       (schemaForRead, allFilters)
-    } else if (!getHasLogFiles && hasRowIndexField) {
+    } else if (!getReaderState.getHasLogFiles && hasRowIndexField) {
       (schemaForRead, bootstrapSafeFilters)
     } else {
       (schemaForRead, requiredFilters)
@@ -164,7 +164,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
         HoodieAvroUtils.removeFields(skeletonRequiredSchema, rowIndexColumn))
 
       //If we need to do position based merging with log files we will leave the row index column at the end
-      val dataProjection = if (getHasLogFiles && getShouldMergeUseRecordPosition) {
+      val dataProjection = if (getReaderState.getHasLogFiles && getReaderState.getShouldMergeUseRecordPosition) {
         getIdentityProjection
       } else {
         projectRecord(dataRequiredSchema,
