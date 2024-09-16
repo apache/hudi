@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.Conversions;
@@ -41,6 +40,7 @@ import org.apache.avro.generic.GenericFixed;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -88,7 +88,7 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     try {
       Map<String, Object> jsonObjectMap = mapper.readValue(json, Map.class);
       return convertJsonToRow(jsonObjectMap, schema);
-    } catch (HoodieException | JsonProcessingException e) {
+    } catch (HoodieException | IOException e) {
       throw new HoodieJsonToRowConversionException("Failed to convert json to row", e);
     }
   }
