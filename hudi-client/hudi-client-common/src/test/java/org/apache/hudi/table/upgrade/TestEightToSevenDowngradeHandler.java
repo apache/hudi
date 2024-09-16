@@ -64,7 +64,7 @@ class TestEightToSevenDowngradeHandler {
       FILES.getPartitionPath(),
       COLUMN_STATS.getPartitionPath());
   @Mock
-  HoodieTableMetaClient mdtMetaClient;
+  HoodieTableMetaClient metaClient;
   @Mock
   HoodieEngineContext context;
 
@@ -72,19 +72,19 @@ class TestEightToSevenDowngradeHandler {
   void testDeleteMetadataPartition() {
     try (MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
       List<String> leftPartitionPaths =
-          EightToSevenDowngradeHandler.deleteMetadataPartition(context, mdtMetaClient, SAMPLE_METADATA_PATHS);
+          EightToSevenDowngradeHandler.deleteMetadataPartition(context, metaClient, SAMPLE_METADATA_PATHS);
 
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, "func_index_random", true),
+              metaClient, context, "func_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, "secondary_index_random", true),
+              metaClient, context, "secondary_index_random", true),
           times(1));
       mockedMetadataUtils.verify(
           () -> HoodieTableMetadataUtil.deleteMetadataTablePartition(
-              mdtMetaClient, context, "partition_stats", true),
+              metaClient, context, "partition_stats", true),
           times(1));
 
       assertArrayEquals(new String[]{"files", "column_stats"}, leftPartitionPaths.toArray());
@@ -95,8 +95,8 @@ class TestEightToSevenDowngradeHandler {
   void testDowngradeMetadataPartitions() {
     String baseTablePath = baseDir.toString();
     HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
-    StoragePath basePath = new StoragePath(baseTablePath + "/.hoodie/metadata/.hoodie");
-    when(mdtMetaClient.getBasePath()).thenReturn(basePath);
+    StoragePath basePath = new StoragePath(baseTablePath + "/.hoodie");
+    when(metaClient.getBasePath()).thenReturn(basePath);
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
@@ -105,7 +105,7 @@ class TestEightToSevenDowngradeHandler {
           .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, basePath, false))
           .thenReturn(SAMPLE_METADATA_PATHS);
 
-      EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, mdtMetaClient, tablePropsToAdd);
+      EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, metaClient, tablePropsToAdd);
 
       assertTrue(tablePropsToAdd.containsKey(TABLE_METADATA_PARTITIONS));
       assertEquals("files,column_stats", tablePropsToAdd.get(TABLE_METADATA_PARTITIONS));
