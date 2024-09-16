@@ -557,14 +557,10 @@ object ProvidesHoodieConfig {
       if (classOf[CustomKeyGenerator].equals(keyGenClass)
         || classOf[CustomAvroKeyGenerator].equals(keyGenClass)) {
         val partitionFieldWithKeyGenType = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(catalogTable.tableConfig).orElse("")
-        if (partitionFieldWithKeyGenType.contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
-          partitionFieldWithKeyGenType
-        } else if (writeConfigPartitionField.isDefined) {
-          // For custom key generator, we have to take the write config value from
-          // "hoodie.datasource.write.partitionpath.field" which contains the key generator
-          // type, whereas the table config only contains the prtition field names without
-          // key generator types.
+        if (writeConfigPartitionField.isDefined) {
           writeConfigPartitionField.get
+        } else if (StringUtils.nonEmpty(partitionFieldWithKeyGenType)) {
+          partitionFieldWithKeyGenType
         } else {
           log.warn("Write config \"hoodie.datasource.write.partitionpath.field\" is not set for "
             + "custom key generator. This may fail the write operation.")

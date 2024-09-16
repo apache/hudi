@@ -302,29 +302,18 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
 
             testFirstRoundInserts(tableNameNonPartitioned, extractPartition, TS_TO_STRING_FUNC, (_, _) => "")
             testFirstRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
-            // INSERT INTO should fail for tableNameCustom1
-            val sourceTableName = tableNameCustom1 + "_source"
-            prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-            assertThrows[HoodieException] {
-              spark.sql(
-                s"""
-                   | INSERT INTO $tableNameCustom1
-                   | SELECT * from $sourceTableName
-                   | """.stripMargin)
-            }
             testFirstRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
 
-            // Now add the missing partition path field write config for tableNameCustom1
-            spark.sql(
-              s"""ALTER TABLE $tableNameCustom1
-                 | SET TBLPROPERTIES (hoodie.datasource.write.partitionpath.field = '$writePartitionFields1')
-                 | """.stripMargin)
+            // INSERT INTO should succeed for tableNameCustom1 even if write partition path field config is not set
+            // It should pick up the partition fields from table config
+            val sourceTableName = tableNameCustom1 + "_source"
+            prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+            testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
 
             // All tables should be able to do INSERT INTO without any problem,
             // since the scope of the added write config is at the catalog table level
             testSecondRoundInserts(tableNameNonPartitioned, extractPartition, TS_TO_STRING_FUNC, (_, _) => "")
             testSecondRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
-            testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testSecondRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
 
             // Validate ts field is still of type int in the table
