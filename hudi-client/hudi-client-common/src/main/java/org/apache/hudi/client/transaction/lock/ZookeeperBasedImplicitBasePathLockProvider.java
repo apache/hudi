@@ -18,41 +18,54 @@
 
 package org.apache.hudi.client.transaction.lock;
 
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.lock.LockProvider;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
-import static org.apache.hudi.common.config.LockConfiguration.ZK_BASE_PATH_PROP_KEY;
-import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
-import static org.apache.hudi.config.HoodieLockConfig.ZK_BASE_PATH;
-import static org.apache.hudi.config.HoodieLockConfig.ZK_LOCK_KEY;
+import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
 
 /**
  * A zookeeper based lock. This {@link LockProvider} implementation allows to lock table operations
  * using zookeeper. Users need to have a Zookeeper cluster deployed to be able to use this lock.
- * The lock provider requires mandatory config "hoodie.write.lock.zookeeper.base_path" and
- * "hoodie.write.lock.zookeeper.lock_key" to be set.
+ *
+ * This class derives the zookeeper base path from the hudi table base path (hoodie.base.path) and
+ * table name (hoodie.table.name), with lock key set to a hard-coded value.
  */
 @NotThreadSafe
-public class ZookeeperBasedLockProvider extends BaseZookeeperBasedLockProvider {
+public class ZookeeperBasedImplicitBasePathLockProvider extends BaseZookeeperBasedLockProvider {
 
-  public ZookeeperBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+  public static final String LOCK_KEY = "lock_key";
+
+  public static String getLockBasePath(String hudiTableBasePath, String hudiTableName) {
+    // Ensure consistent format for S3 URI.
+    String hashPart = '-' + HashID.generateXXHashAsString(s3aToS3(hudiTableBasePath), HashID.Size.BITS_64);
+    String folderName = concatenateWithThreshold(hudiTableName, hashPart, MAX_ZK_BASE_PATH_NUM_BYTES);
+    return "/tmp/" + folderName;
+  }
+
+  public ZookeeperBasedImplicitBasePathLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     super(lockConfiguration, conf);
   }
 
   @Override
   protected String getZkBasePath(LockConfiguration lockConfiguration) {
-    ValidationUtils.checkArgument(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_BASE_PATH) != null);
-    return lockConfiguration.getConfig().getString(ZK_BASE_PATH_PROP_KEY);
+    String hudiTableBasePath = ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), HoodieCommonConfig.BASE_PATH);
+    String hudiTableName = ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), HoodieTableConfig.NAME);
+    ValidationUtils.checkArgument(hudiTableBasePath != null);
+    ValidationUtils.checkArgument(hudiTableName != null);
+    return getLockBasePath(hudiTableBasePath, hudiTableName);
   }
 
   @Override
   protected String getLockKey(LockConfiguration lockConfiguration) {
-    ValidationUtils.checkArgument(ConfigUtils.getStringWithAltKeys(lockConfiguration.getConfig(), ZK_LOCK_KEY) != null);
-    return this.lockConfiguration.getConfig().getString(ZK_LOCK_KEY_PROP_KEY);
+    return LOCK_KEY;
   }
 }
