@@ -230,12 +230,23 @@ object AvroConversionUtils {
   private def resolveUnion(schema: Schema, dataType: DataType): (Schema, Boolean) = {
     val innerFields = schema.getTypes.asScala
     val containsNullSchema = innerFields.foldLeft(false)((nullFieldEncountered, schema) => nullFieldEncountered | schema.getType == Schema.Type.NULL)
-    (if (containsNullSchema) {
-      Schema.createUnion((List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
-        .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType))).asJava)
-    } else {
-      Schema.createUnion(schema.getTypes.asScala.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)).asJava)
-    }, containsNullSchema)
+    dataType match {
+      case structType: StructType if innerFields.size > 2 =>
+        val fieldsmap = structType.fields.map(f => (f.name, f.dataType)).toMap
+        (if (containsNullSchema) {
+          Schema.createUnion((List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
+            .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, fieldsmap(innerSchema.getName)))).asJava)
+        } else {
+          Schema.createUnion(schema.getTypes.asScala.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, fieldsmap(innerSchema.getName))).asJava)
+        }, containsNullSchema)
+      case _ =>
+        (if (containsNullSchema) {
+          Schema.createUnion((List(Schema.create(Schema.Type.NULL)) ++ innerFields.filter(innerSchema => !(innerSchema.getType == Schema.Type.NULL))
+            .map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType))).asJava)
+        } else {
+          Schema.createUnion(schema.getTypes.asScala.map(innerSchema => getAvroSchemaWithDefaults(innerSchema, dataType)).asJava)
+        }, containsNullSchema)
+    }
   }
 
   /**
