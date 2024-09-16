@@ -125,13 +125,11 @@ class TestHdfsParquetImportProcedure extends HoodieSparkProcedureTestBase {
       .withSchema(HoodieTestDataGenerator.AVRO_SCHEMA)
       .withConf(HoodieTestUtils.getDefaultStorageConf.unwrap()).build
     try {
-      try {
-        for (record <- records.asScala) {
-          writer.write(record)
-        }
-      } finally {
-        if (writer != null) writer.close()
+      for (record <- records.asScala) {
+        writer.write(record)
       }
+    } finally {
+      if (writer != null) writer.close()
     }
     records
   }
