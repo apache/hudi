@@ -29,7 +29,6 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
@@ -180,22 +179,12 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
           if (basepathExists) {
             lfs.delete(new Path(getBasePath()), true);
           }
-          String recordMergerStrategy = "";
-          if (RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")).equals(RecordMergeMode.OVERWRITE_WITH_LATEST)) {
-            recordMergerStrategy = HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-          } else if (RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")).equals(RecordMergeMode.EVENT_TIME_ORDERING)) {
-            recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-          } else if (RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")).equals(RecordMergeMode.CUSTOM)) {
-            //match the behavior of spark for now, but this should be a config
-            recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
-          }
           Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
           HoodieTableMetaClient.withPropertyBuilder()
               .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
               .setTableName(writeConfigs.get("hoodie.table.name"))
               .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
               .setRecordMergeMode(RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")))
-              .setRecordMergerStrategy(recordMergerStrategy)
               .set(initConfigs).initTable(storageConf, getBasePath());
         }
       }

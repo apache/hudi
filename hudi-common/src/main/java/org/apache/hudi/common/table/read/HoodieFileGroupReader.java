@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
@@ -77,9 +76,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
   private final long length;
   // Core structure to store and process records.
   private final HoodieFileGroupRecordBuffer<T> recordBuffer;
-  private final RecordMergeMode recordMergeMode;
   private ClosableIterator<T> baseFileIterator;
-  private final HoodieRecordMerger recordMerger;
   private final Option<UnaryOperator<T>> outputConverter;
 
   public HoodieFileGroupReader(HoodieReaderContext<T> readerContext,
@@ -102,10 +99,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.props = props;
     this.start = start;
     this.length = length;
-    this.recordMergeMode = getRecordMergeMode(props);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
-    this.recordMerger = readerContext.getRecordMerger(tableConfig.getRecordMergerStrategy());
-    readerContext.setRecordMerger(this.recordMerger);
+    readerContext.setRecordMerger(readerContext.getRecordMerger(tableConfig.getRecordMergeMode(), tableConfig.getRecordMergerStrategy()));
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
     readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
@@ -121,8 +116,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     this.recordBuffer = this.logFiles.isEmpty()
         ? null
         : shouldUseRecordPosition
-        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props)
-        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props)
+        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props);
   }
 
   /**
@@ -244,8 +239,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         .withBufferSize(getIntWithAltKeys(props, HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE))
         .withPartition(getRelativePartitionPath(
             new StoragePath(path), logFiles.get(0).getPath().getParent()))
-        .withRecordMerger(recordMerger)
-        .withRecordMergeMode(recordMergeMode)
         .withRecordBuffer(recordBuffer)
         .build();
     logRecordReader.close();

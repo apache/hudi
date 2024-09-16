@@ -22,9 +22,12 @@ import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -155,7 +158,10 @@ public class HoodieMetadataWriteUtils {
         .withKeyGenerator(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
         .withPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
         .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
-        .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled());
+        .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled())
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
+        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
+        .withRecordMergerImpls(HoodieAvroRecordMerger.class.getCanonicalName());
 
     // RecordKey properties are needed for the metadata table records
     final Properties properties = new Properties();

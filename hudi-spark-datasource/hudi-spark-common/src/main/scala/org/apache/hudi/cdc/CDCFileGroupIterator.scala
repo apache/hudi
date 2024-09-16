@@ -113,7 +113,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       metadataConfig,
       // TODO support CDC with spark record
       recordMergerImpls = List(classOf[HoodieAvroRecordMerger].getName),
-      recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID
+      recordMergerStrategy = Some(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
     )
   }
 

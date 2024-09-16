@@ -69,7 +69,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
   protected final RecordMergeMode recordMergeMode;
-  protected final HoodieRecordMerger recordMerger;
+  protected final Option<HoodieRecordMerger> recordMerger;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
   protected ClosableIterator<T> baseFileIterator;
@@ -83,18 +83,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                          HoodieTableMetaClient hoodieTableMetaClient,
                                          Option<String> partitionNameOverrideOpt,
                                          Option<String[]> partitionPathFieldOpt,
-                                         HoodieRecordMerger recordMerger,
                                          TypedProperties props) {
     this.readerContext = readerContext;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     this.partitionNameOverrideOpt = partitionNameOverrideOpt;
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(props);
-    this.recordMerger = recordMerger;
-    //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
-    if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
-      throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
-    }
+    this.recordMerger = readerContext.getRecordMerger();
     this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
@@ -214,7 +209,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         // Merge and store the combined record
         // Note that the incoming `record` is from an older commit, so it should be put as
         // the `older` in the merge API
-        Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.partialMerge(
+        Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().partialMerge(
             readerContext.constructHoodieRecord(Option.of(record), metadata),
             (Schema) metadata.get(INTERNAL_META_SCHEMA),
             readerContext.constructHoodieRecord(
@@ -256,7 +251,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             // Merge and store the combined record
             // Note that the incoming `record` is from an older commit, so it should be put as
             // the `older` in the merge API
-            Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.merge(
+            Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(Option.of(record), metadata),
                 (Schema) metadata.get(INTERNAL_META_SCHEMA),
                 readerContext.constructHoodieRecord(
@@ -388,7 +383,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     if (enablePartialMerging) {
       // TODO(HUDI-7843): decouple the merging logic from the merger
       //  and use the record merge mode to control how to merge partial updates
-      Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.partialMerge(
+      Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().partialMerge(
           readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
           readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA),
           readerSchema, props);
@@ -422,7 +417,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return newer;
         case CUSTOM:
         default:
-          Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.merge(
+          Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
               readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
               readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
 

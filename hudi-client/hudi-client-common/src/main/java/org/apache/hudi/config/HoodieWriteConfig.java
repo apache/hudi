@@ -40,7 +40,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
-import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -161,7 +160,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_MERGER_IMPLS = ConfigProperty
       .key("hoodie.datasource.write.record.merger.impls")
-      .defaultValue(HoodieAvroRecordMerger.class.getName())
+      .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("List of HoodieMerger implementations constituting Hudi's merging strategy -- based on the engine used. "
@@ -170,7 +169,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> RECORD_MERGER_STRATEGY = ConfigProperty
       .key("hoodie.datasource.write.record.merger.strategy")
-      .defaultValue(HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID)
+      .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Id of merger strategy. Hudi will pick HoodieRecordMerger implementations in hoodie.datasource.write.record.merger.impls which has the same merger strategy id");
@@ -824,11 +823,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   @Deprecated
   public static final String WRITE_PAYLOAD_CLASS = WRITE_PAYLOAD_CLASS_NAME.key();
   /**
-   * @deprecated Use {@link #WRITE_PAYLOAD_CLASS_NAME} and its methods instead
-   */
-  @Deprecated
-  public static final String DEFAULT_WRITE_PAYLOAD_CLASS = WRITE_PAYLOAD_CLASS_NAME.defaultValue();
-  /**
    * @deprecated Use {@link #KEYGENERATOR_CLASS_NAME} and its methods instead
    */
   @Deprecated
@@ -1221,13 +1215,44 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieFileFormat.valueOf(getStringOrDefault(BASE_FILE_FORMAT));
   }
 
+  public RecordMergeMode getRecordMergeMode() {
+    return RecordMergeMode.valueOf(getString(RECORD_MERGE_MODE));
+  }
+
   public HoodieRecordMerger getRecordMerger() {
-    List<String> mergers = StringUtils.split(getStringOrDefault(RECORD_MERGER_IMPLS), ",").stream()
+    List<String> mergers = StringUtils.split(getString(RECORD_MERGER_IMPLS), ",").stream()
         .map(String::trim)
         .distinct()
         .collect(Collectors.toList());
-    String recordMergerStrategy = getString(RECORD_MERGER_STRATEGY);
-    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, mergers, recordMergerStrategy);
+    return getRecordMerger(getString(BASE_PATH), getRecordMergeMode(),
+        engineType, mergers, getStringOpt(RECORD_MERGER_STRATEGY));
+  }
+
+  public static HoodieRecordMerger getRecordMerger(String basePath,
+                                                   RecordMergeMode mergeMode,
+                                                   EngineType engineType,
+                                                   List<String> mergers,
+                                                   Option<String> strategy) {
+    //TODO: [HUDI-8202] make this custom mergers only
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        switch (engineType) {
+          case SPARK:
+            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
+          default:
+            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+        }
+      case OVERWRITE_WITH_LATEST:
+        switch (engineType) {
+          case SPARK:
+            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
+          default:
+            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+        }
+      case CUSTOM:
+      default:
+        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+    }
   }
 
   public String getSchema() {
@@ -3049,6 +3074,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     public Builder withPayloadConfig(HoodiePayloadConfig payloadConfig) {
       writeConfig.getProps().putAll(payloadConfig.getProps());
       isPayloadConfigSet = true;
+      return this;
+    }
+
+    public Builder withRecordMergeMode(RecordMergeMode recordMergeMode) {
+      writeConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
       return this;
     }
 

@@ -19,11 +19,13 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -32,6 +34,7 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 import org.apache.avro.Schema;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +68,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
 
   protected final HoodieReaderContext<T> readerContext;
 
-  protected final HoodieRecordMerger recordMerger;
+  protected final Option<HoodieRecordMerger> recordMerger;
 
   protected final boolean hasBootstrapBaseFile;
   protected boolean needsBootstrapMerge;
@@ -144,7 +147,7 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     }
 
     List<Schema.Field> addedFields = new ArrayList<>();
-    for (String field : recordMerger.getMandatoryFieldsForMerging(hoodieTableConfig)) {
+    for (String field : getMandatoryFieldsForMerging(hoodieTableConfig, recordMerger)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         Option<Schema.Field> foundFieldOpt  = findNestedField(dataSchema, field);
         if (!foundFieldOpt.isPresent()) {
@@ -160,6 +163,31 @@ public class HoodieFileGroupReaderSchemaHandler<T> {
     }
 
     return appendFieldsToSchemaDedupNested(requestedSchema, addedFields);
+  }
+
+  private static String[] getMandatoryFieldsForMerging(HoodieTableConfig cfg, Option<HoodieRecordMerger> recordMerger) {
+    if (cfg.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+      return recordMerger.get().getMandatoryFieldsForMerging(cfg);
+    }
+
+    ArrayList<String> requiredFields = new ArrayList<>();
+
+    if (cfg.populateMetaFields()) {
+      requiredFields.add(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    } else {
+      Option<String[]> fields = cfg.getRecordKeyFields();
+      if (fields.isPresent()) {
+        requiredFields.addAll(Arrays.asList(fields.get()));
+      }
+    }
+
+    if (cfg.getRecordMergeMode() == RecordMergeMode.EVENT_TIME_ORDERING) {
+      String preCombine = cfg.getPreCombineField();
+      if (!StringUtils.isNullOrEmpty(preCombine)) {
+        requiredFields.add(preCombine);
+      }
+    }
+    return requiredFields.toArray(new String[0]);
   }
 
   protected Schema prepareRequiredSchema() {

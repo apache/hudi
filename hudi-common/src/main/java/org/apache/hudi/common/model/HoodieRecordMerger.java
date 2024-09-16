@@ -48,7 +48,7 @@ public interface HoodieRecordMerger extends Serializable {
 
   String OVERWRITE_MERGER_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
 
-  String PAYLOAD_BASED_MERGER_STRATEGY_UUDID = "8375dc0b-45c0-44fe-a23c-d0d032d40783";
+  String PAYLOAD_BASED_MERGER_STRATEGY_UUDID = "00000000-0000-0000-0000-000000000000";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.

@@ -934,7 +934,6 @@ public class HoodieTableMetaClient implements Serializable {
     private String archiveLogFolder;
     private RecordMergeMode recordMergeMode;
     private String payloadClassName;
-    private String payloadType;
     private String recordMergerStrategy;
     private Integer timelineLayoutVersion;
     private String baseFileFormat;
@@ -1026,13 +1025,10 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public PropertyBuilder setPayloadType(String payloadType) {
-      this.payloadType = payloadType;
-      return this;
-    }
-
-    public PropertyBuilder setRecordMergerStrategy(String recordMergerStrategy) {
-      this.recordMergerStrategy = recordMergerStrategy;
+    public PropertyBuilder setRecordMergerStrategy(Option<String> recordMergerStrategy) {
+      if (recordMergerStrategy.isPresent()) {
+        this.recordMergerStrategy = recordMergerStrategy.get();
+      }
       return this;
     }
 
@@ -1205,7 +1201,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
         setRecordMergerStrategy(
-            hoodieConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
+            hoodieConfig.getStringOpt(HoodieTableConfig.RECORD_MERGER_STRATEGY));
       }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_LAYOUT_VERSION)) {
         setTimelineLayoutVersion(hoodieConfig.getInt(HoodieTableConfig.TIMELINE_LAYOUT_VERSION));
@@ -1322,7 +1318,12 @@ public class HoodieTableMetaClient implements Serializable {
           }
         } else {
           checkArgument(recordMergeMode != RecordMergeMode.CUSTOM, "Record merge strategy must be set if merge mode is custom");
-          tableConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+          if (recordMergeMode == null) {
+            tableConfig.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue());
+          } else {
+            tableConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+          }
+
         }
       }
 
@@ -1423,17 +1424,6 @@ public class HoodieTableMetaClient implements Serializable {
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, String basePath)
         throws IOException {
       return HoodieTableMetaClient.initTableAndGetMetaClient(configuration, basePath, build());
-    }
-
-    private String constructMergeConfigErrorMessage() {
-      StringBuilder stringBuilder = new StringBuilder();
-      stringBuilder.append("Payload class name (");
-      stringBuilder.append(payloadClassName != null ? payloadClassName : "null");
-      stringBuilder.append(") or type (");
-      stringBuilder.append(payloadType != null ? payloadType : "null");
-      stringBuilder.append(") should be consistent with the record merge mode ");
-      stringBuilder.append(recordMergeMode);
-      return stringBuilder.toString();
     }
 
     public HoodieTableMetaClient initTable(StorageConfiguration<?> configuration, StoragePath basePath) throws IOException {

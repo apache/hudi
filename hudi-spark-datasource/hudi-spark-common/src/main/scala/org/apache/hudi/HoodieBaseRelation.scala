@@ -87,7 +87,7 @@ case class HoodieTableState(tablePath: String,
                             recordPayloadClassName: Option[String],
                             metadataConfig: HoodieMetadataConfig,
                             recordMergerImpls: List[String],
-                            recordMergerStrategy: String)
+                            recordMergerStrategy: Option[String])
 
 
 /**
@@ -264,8 +264,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   lazy val tableState: HoodieTableState = {
     val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
-    val recordMergerStrategy = getConfigValue(HoodieWriteConfig.RECORD_MERGER_STRATEGY,
-      Option(metaClient.getTableConfig.getRecordMergerStrategy))
+    val recordMergerStrategy = metaClient.getTableConfig.getRecordMergerStrategy.toScala
 
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(

@@ -109,17 +109,10 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     ctx.setHasBootstrapBaseFile(false);
     ctx.setHasLogFiles(true);
     ctx.setNeedsBootstrapMerge(false);
-    switch (mergeMode) {
-      case CUSTOM:
-        ctx.setRecordMerger(new CustomMerger());
-        break;
-      case EVENT_TIME_ORDERING:
-        ctx.setRecordMerger(new DefaultSparkRecordMerger());
-        break;
-      case OVERWRITE_WITH_LATEST:
-      default:
-        ctx.setRecordMerger(new OverwriteWithLatestSparkRecordMerger());
-        break;
+    if (mergeMode == RecordMergeMode.CUSTOM) {
+      ctx.setRecordMerger(Option.of(new CustomMerger()));
+    } else {
+      ctx.setRecordMerger(Option.empty());
     }
     ctx.setSchemaHandler(new HoodiePositionBasedSchemaHandler<>(ctx, avroSchema, avroSchema,
         Option.empty(), metaClient.getTableConfig()));
@@ -134,7 +127,6 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
         metaClient,
         partitionNameOpt,
         partitionFields,
-        ctx.getRecordMerger(),
         props);
   }
 

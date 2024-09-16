@@ -19,6 +19,7 @@
 
 package org.apache.hudi;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -26,8 +27,10 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -55,8 +58,18 @@ import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedSchema;
 public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderContext<InternalRow> {
 
   @Override
-  public HoodieRecordMerger getRecordMerger(String mergerStrategy) {
-    return HoodieSparkRecordMerger.getRecordMerger(mergerStrategy);
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, Option<String> mergerStrategy) {
+    // TODO(HUDI-7843):
+    // get rid of event time and overwrite with latest. Just return Option.empty
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return Option.of(new DefaultSparkRecordMerger());
+      case OVERWRITE_WITH_LATEST:
+        return Option.of(new OverwriteWithLatestSparkRecordMerger());
+      case CUSTOM:
+      default:
+        throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy.get());
+    }
   }
 
   @Override

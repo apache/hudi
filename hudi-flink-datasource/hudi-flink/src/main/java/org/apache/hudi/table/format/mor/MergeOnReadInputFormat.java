@@ -746,7 +746,7 @@ public class MergeOnReadInputFormat
           .map(String::trim)
           .distinct()
           .collect(Collectors.toList());
-      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
+      this.recordMerger = HoodieRecordUtils.createRecordMerger(split.getTablePath(), EngineType.FLINK, mergers, Option.ofNullable(flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY, null)));
     }
 
     @Override

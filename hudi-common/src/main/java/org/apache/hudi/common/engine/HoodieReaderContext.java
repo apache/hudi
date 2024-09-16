@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.engine;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -57,7 +58,7 @@ public abstract class HoodieReaderContext<T> {
   private HoodieFileGroupReaderSchemaHandler<T> schemaHandler = null;
   private String tablePath = null;
   private String latestCommitTime = null;
-  private HoodieRecordMerger recordMerger = null;
+  private Option<HoodieRecordMerger> recordMerger = null;
   private Boolean hasLogFiles = null;
   private Boolean hasBootstrapBaseFile = null;
   private Boolean needsBootstrapMerge = null;
@@ -91,11 +92,11 @@ public abstract class HoodieReaderContext<T> {
     this.latestCommitTime = latestCommitTime;
   }
 
-  public HoodieRecordMerger getRecordMerger() {
+  public Option<HoodieRecordMerger> getRecordMerger() {
     return recordMerger;
   }
 
-  public void setRecordMerger(HoodieRecordMerger recordMerger) {
+  public void setRecordMerger(Option<HoodieRecordMerger> recordMerger) {
     this.recordMerger = recordMerger;
   }
 
@@ -190,7 +191,7 @@ public abstract class HoodieReaderContext<T> {
    * @param mergerStrategy Merger strategy UUID.
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract HoodieRecordMerger getRecordMerger(String mergerStrategy);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, Option<String> mergerStrategy);
 
   /**
    * Gets the field value.

@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.util.StringUtils;
 
 import java.io.File;
 import java.io.FileReader;
@@ -107,7 +108,9 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public HoodiePayloadConfig.Builder withPayloadClass(String payloadClassName) {
-      payloadConfig.setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+      if (!StringUtils.isNullOrEmpty(payloadClassName)) {
+        payloadConfig.setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+      }
       return this;
     }
 

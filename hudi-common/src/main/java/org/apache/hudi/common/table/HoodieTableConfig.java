@@ -599,8 +599,8 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public String getRecordMergerStrategy() {
-    return getStringOrDefault(RECORD_MERGER_STRATEGY);
+  public Option<String> getRecordMergerStrategy() {
+    return getStringOpt(RECORD_MERGER_STRATEGY);
   }
 
   public String getPreCombineField() {
@@ -978,11 +978,6 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   @Deprecated
   public static final HoodieFileFormat DEFAULT_LOG_FILE_FORMAT = LOG_FILE_FORMAT.defaultValue();
-  /**
-   * @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods.
-   */
-  @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
   /**
    * @deprecated Use {@link #BOOTSTRAP_INDEX_CLASS_NAME} and its methods.
    */
