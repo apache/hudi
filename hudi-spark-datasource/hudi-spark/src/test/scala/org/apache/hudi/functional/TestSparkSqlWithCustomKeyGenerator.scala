@@ -27,9 +27,9 @@ import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
+import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.SparkKeyGenUtils
-
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.joda.time.DateTime
@@ -302,29 +302,18 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
 
             testFirstRoundInserts(tableNameNonPartitioned, extractPartition, TS_TO_STRING_FUNC, (_, _) => "")
             testFirstRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
-            // INSERT INTO should fail for tableNameCustom1
-            val sourceTableName = tableNameCustom1 + "_source"
-            prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
-            assertThrows[HoodieException] {
-              spark.sql(
-                s"""
-                   | INSERT INTO $tableNameCustom1
-                   | SELECT * from $sourceTableName
-                   | """.stripMargin)
-            }
             testFirstRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
 
-            // Now add the missing partition path field write config for tableNameCustom1
-            spark.sql(
-              s"""ALTER TABLE $tableNameCustom1
-                 | SET TBLPROPERTIES (hoodie.datasource.write.partitionpath.field = '$writePartitionFields1')
-                 | """.stripMargin)
+            // INSERT INTO should succeed for tableNameCustom1 even if write partition path field config is not set
+            // It should pick up the partition fields from table config
+            val sourceTableName = tableNameCustom1 + "_source"
+            prepareParquetSource(sourceTableName, Seq("(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+            testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
 
             // All tables should be able to do INSERT INTO without any problem,
             // since the scope of the added write config is at the catalog table level
             testSecondRoundInserts(tableNameNonPartitioned, extractPartition, TS_TO_STRING_FUNC, (_, _) => "")
             testSecondRoundInserts(tableNameSimpleKey, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
-            testFirstRoundInserts(tableNameCustom1, extractPartition, TS_TO_STRING_FUNC, segmentPartitionFunc)
             testSecondRoundInserts(tableNameCustom2, extractPartition, TS_FORMATTER_FUNC, customPartitionFunc)
 
             // Validate ts field is still of type int in the table
@@ -442,11 +431,133 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test query with custom key generator without partition path field config") {
+    for (extractPartition <- Seq(true, false)) {
+      withSQLConf(EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key() -> extractPartition.toString) {
+        withTempDir { tmp => {
+          val tableName = generateTableName
+          val tablePath = tmp.getCanonicalPath + "/" + tableName
+          val writePartitionFields = "ts:timestamp"
+          val dateFormat = "yyyy/MM/dd"
+          val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+          val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
+          val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
+
+          prepareTableWithKeyGenerator(
+            tableName, tablePath, "MERGE_ON_READ",
+            CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, keyGenConfigs)
+
+          // We are not specifying config hoodie.datasource.write.partitionpath.field while creating
+          // table
+          createTableWithSql(tableName, tablePath,
+            keyGenConfigs.map(e => e._1 + " = '" + e._2 + "'").mkString(", "))
+          testFirstRoundInserts(tableName, extractPartition, tsGenFunc, customPartitionFunc)
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from $tableName
+               | """.stripMargin).count())
+          val incrementalDF = spark.read.format("hudi").
+            option("hoodie.datasource.query.type", "incremental").
+            option("hoodie.datasource.read.begin.instanttime", 0).
+            load(tablePath)
+          incrementalDF.createOrReplaceTempView("tbl_incremental")
+          assertEquals(7, spark.sql(
+            s"""
+               | SELECT * from tbl_incremental
+               | """.stripMargin).count())
+
+          // Validate ts field is still of type int in the table
+          validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+        }
+        }
+      }
+    }
+  }
+
+  test("Test create table with custom key generator") {
+    withTempDir { tmp => {
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + "/" + tableName
+      val writePartitionFields = "ts:timestamp"
+      val dateFormat = "yyyy/MM/dd"
+      val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
+      val customPartitionFunc = (ts: Integer, _: String) => "ts=" + tsGenFunc.apply(ts)
+
+      spark.sql(
+        s"""
+           |create table ${tableName} (
+           |  `id` INT,
+           |  `name` STRING,
+           |  `price` DECIMAL(5, 1),
+           |  `ts` INT,
+           |  `segment` STRING
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id,name',
+           |  'type' = 'mor',
+           |  'preCombineField'='name',
+           |  'hoodie.datasource.write.keygenerator.class' = '$CUSTOM_KEY_GEN_CLASS_NAME',
+           |  'hoodie.datasource.write.partitionpath.field' = '$writePartitionFields',
+           |  'hoodie.insert.shuffle.parallelism' = '1',
+           |  'hoodie.upsert.shuffle.parallelism' = '1',
+           |  'hoodie.bulkinsert.shuffle.parallelism' = '1',
+           |  'hoodie.keygen.timebased.timestamp.type' = 'SCALAR',
+           |  'hoodie.keygen.timebased.output.dateformat' = '$dateFormat',
+           |  'hoodie.keygen.timebased.timestamp.scalar.time.unit' = 'seconds'
+           |)
+           location '${tablePath}'
+           """.stripMargin)
+
+      testInserts(tableName, tsGenFunc, customPartitionFunc)
+
+      // Validate ts field is still of type int in the table
+      validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+
+      val metaClient = createMetaClient(spark, tablePath)
+      assertEquals(KeyGeneratorType.CUSTOM.getClassName, metaClient.getTableConfig.getKeyGeneratorClassName)
+    }
+    }
+  }
+
   private def validateTsFieldSchema(tablePath: String, fieldName: String, expectedType: Schema.Type): Unit = {
     val metaClient = createMetaClient(spark, tablePath)
     val schemaResolver = new TableSchemaResolver(metaClient)
     val nullableSchema = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(expectedType))
     assertEquals(nullableSchema, schemaResolver.getTableAvroSchema(true).getField(fieldName).schema())
+  }
+
+  private def testInserts(tableName: String,
+                          tsGenFunc: Integer => String,
+                          partitionGenFunc: (Integer, String) => String): Unit = {
+    val sourceTableName = tableName + "_source1"
+    prepareParquetSource(sourceTableName, Seq(
+      "(1, 'a1', 1.6, 1704121827, 'cat1')",
+      "(2, 'a2', 10.8, 1704121827, 'cat1')",
+      "(3, 'a3', 30.0, 1706800227, 'cat1')",
+      "(4, 'a4', 103.4, 1701443427, 'cat2')",
+      "(5, 'a5', 1999.0, 1704121827, 'cat2')",
+      "(6, 'a6', 80.0, 1704121827, 'cat3')",
+      "(7, 'a7', 1399.0, 1706800227, 'cat1')"))
+    spark.sql(
+      s"""
+         | INSERT INTO $tableName
+         | SELECT * from $sourceTableName
+         | """.stripMargin)
+    validateResults(
+      tableName,
+      s"SELECT id, name, cast(price as string), cast(ts as string), segment from $tableName",
+      false,
+      tsGenFunc,
+      partitionGenFunc,
+      Seq(),
+      Seq(1, "a1", "1.6", 1704121827, "cat1"),
+      Seq(2, "a2", "10.8", 1704121827, "cat1"),
+      Seq(3, "a3", "30.0", 1706800227, "cat1"),
+      Seq(4, "a4", "103.4", 1701443427, "cat2"),
+      Seq(5, "a5", "1999.0", 1704121827, "cat2"),
+      Seq(6, "a6", "80.0", 1704121827, "cat3"),
+      Seq(7, "a7", "1399.0", 1706800227, "cat1")
+    )
   }
 
   private def testFirstRoundInserts(tableName: String,

@@ -42,6 +42,8 @@ class TestProvidesHoodieConfig {
     val mockTable = mock(classOf[HoodieCatalogTable])
     val partitionFieldNames = "ts,segment"
     val customKeyGenPartitionFieldWriteConfig = "ts:timestamp,segment:simple"
+    val tableConfig = new HoodieTableConfig()
+    when(mockTable.tableConfig).thenReturn(tableConfig)
 
     mockPartitionWriteConfigInCatalogProps(mockTable, None)
     assertEquals(
@@ -66,6 +68,16 @@ class TestProvidesHoodieConfig {
       partitionFieldNames,
       ProvidesHoodieConfig.getPartitionPathFieldWriteConfig(
         classOf[ComplexKeyGenerator].getName, partitionFieldNames, mockTable))
+    assertEquals(
+      customKeyGenPartitionFieldWriteConfig,
+      ProvidesHoodieConfig.getPartitionPathFieldWriteConfig(
+        classOf[CustomKeyGenerator].getName, partitionFieldNames, mockTable))
+
+    // catalog props do not have write partition path field config set but table config has the
+    // partition type in partition field
+    mockPartitionWriteConfigInCatalogProps(mockTable, Option.empty)
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, customKeyGenPartitionFieldWriteConfig)
+    when(mockTable.tableConfig).thenReturn(tableConfig)
     assertEquals(
       customKeyGenPartitionFieldWriteConfig,
       ProvidesHoodieConfig.getPartitionPathFieldWriteConfig(
