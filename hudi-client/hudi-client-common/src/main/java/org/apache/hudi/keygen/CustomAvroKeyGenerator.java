@@ -109,15 +109,25 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     }
   }
 
-  public static List<String> getTimestampFields(List<String> partitionPathFields) {
-    if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
-      return Collections.emptyList(); // Corresponds to no partition case
+  /**
+   * Returns the partition fields with timestamp partition type.
+   *
+   * @param partitionPathFields list of partition fields
+   * @return Optional list of partition fields with timestamp partition type
+   */
+  public static Option<List<String>> getTimestampFields(List<String> partitionPathFields) {
+    if (partitionPathFields.isEmpty() || (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty())) {
+      return Option.of(Collections.emptyList()); // Corresponds to no partition case
+    } else if (getPartitionFieldAndKeyType(partitionPathFields.get(0)).getRight().isEmpty()) {
+      // Partition type is not configured for the partition fields therefore timestamp partition fields
+      // can not be determined
+      return Option.empty();
     } else {
-      return partitionPathFields.stream()
+      return Option.of(partitionPathFields.stream()
           .map(CustomAvroKeyGenerator::getPartitionFieldAndKeyType)
           .filter(fieldAndKeyType -> fieldAndKeyType.getRight().isPresent() && fieldAndKeyType.getRight().get().equals(PartitionKeyType.TIMESTAMP))
           .map(Pair::getLeft)
-          .collect(Collectors.toList());
+          .collect(Collectors.toList()));
     }
   }
 
