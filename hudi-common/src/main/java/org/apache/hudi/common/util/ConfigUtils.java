@@ -238,9 +238,22 @@ public class ConfigUtils {
    */
   public static boolean containsConfigProperty(Map<String, Object> props,
                                                ConfigProperty<?> configProperty) {
-    if (!props.containsKey(configProperty.key())) {
+    return containsConfigProperty(props::containsKey, configProperty);
+  }
+
+  /**
+   * Whether the properties contain a config. If any of the key or alternative keys of the
+   * {@link ConfigProperty} exists, this method returns {@code true}.
+   *
+   * @param keyExistsFn    Function to check if key exists
+   * @param configProperty Config to look up.
+   * @return {@code true} if exists; {@code false} otherwise.
+   */
+  public static boolean containsConfigProperty(Function<String, Boolean> keyExistsFn,
+                                               ConfigProperty<?> configProperty) {
+    if (!keyExistsFn.apply(configProperty.key())) {
       for (String alternative : configProperty.getAlternatives()) {
-        if (props.containsKey(alternative)) {
+        if (keyExistsFn.apply(alternative)) {
           return true;
         }
       }
