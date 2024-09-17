@@ -331,3 +331,12 @@ f8f31946ee [ENG-12604][HUDI-8126] Use union to parallelize data and error table 
 
 ---[2024-09-10 10:06:21] [release-v1.32.1] ---
 0fee04a70a1 [ENG-12228][HUDI-8124] Allow reuse of meta client in Meta Sync path (#890)
+
+---[2024-09-17 03:17:29] [release-v1.33.0] ---
+c1819f43e9b [ENG-8251][INTERNAL] Enhancing FSV tests to account for sync apis and adding logs to External spillable map (#920)
+58588f38dba [ENG-13890][INTERNAL] Implement retry logic for all HTTP calls to timeline server including remote file system view and markers (#912)
+b0c7977636a [ENG-14449][INTERNAL] Fix the insert splits to avoid integer overflow (#923)
+d68f36112f4 [ENG-12764][HUDI-8090] Add new zookeeper based lock provider (#877)
+2cff3d74c86 [AUDIT-953] Changelog for release-v1.32.0 (#917)
+5918ecab770 [AUDIT-953]: Changelog for release-v1.32.1 (#918)
+318d0b94e46 [ENG-12228][HUDI-8124] Allow reuse of meta client in Meta Sync path (#890)
