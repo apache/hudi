@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -96,7 +97,15 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   public abstract void validateRecordsInFileGroup(String tablePath,
                                                   List<T> actualRecordList,
                                                   Schema schema,
-                                                  String fileGroupId);
+                                                  FileSlice fileSlice,
+                                                  boolean isSkipMerge);
+
+  public void validateRecordsInFileGroup(String tablePath,
+                                                  List<T> actualRecordList,
+                                                  Schema schema,
+                                                  FileSlice fileSlice) {
+    validateRecordsInFileGroup(tablePath, actualRecordList, schema, fileSlice, false);
+  }
 
   public abstract Comparable getComparableUTF8String(String value);
 
@@ -322,7 +331,32 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileGroupReader.close();
 
-    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice.getFileId());
+    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice);
+
+    //validate skip merge
+    actualRecordList.clear();
+    props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    fileGroupReader = new HoodieFileGroupReader<>(
+        getHoodieReaderContext(tablePath, avroSchema, storageConf),
+        metaClient.getStorage(),
+        tablePath,
+        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+        fileSlice,
+        avroSchema,
+        avroSchema,
+        Option.empty(),
+        metaClient,
+        props,
+        0,
+        fileSlice.getTotalFileSize(),
+        false);
+    fileGroupReader.initRecordIterators();
+    while (fileGroupReader.hasNext()) {
+      actualRecordList.add(fileGroupReader.next());
+    }
+    fileGroupReader.close();
+
+    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice, true);
   }
 
   private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {

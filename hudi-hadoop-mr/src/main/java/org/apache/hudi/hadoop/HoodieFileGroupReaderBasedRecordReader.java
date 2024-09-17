@@ -68,7 +68,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_TYPE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
-import static org.apache.hudi.common.config.HoodieReaderConfig.SHOULD_ENABLE_SKIP_MERGE_BOOL;
 import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.fs.FSUtils.getFileId;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
@@ -79,6 +78,7 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getFs;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getRelativePartitionPath;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.isLogFile;
+import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getPartitionFieldNames;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getTableBasePath;
 
@@ -131,9 +131,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
         props.setProperty(e.getKey(), e.getValue());
       }
     });
-    if (props.containsKey(SHOULD_ENABLE_SKIP_MERGE_BOOL)
+    if (props.containsKey(REALTIME_SKIP_MERGE_PROP)
         && !props.containsKey(MERGE_TYPE.key())) {
-      if (props.getString(SHOULD_ENABLE_SKIP_MERGE_BOOL).equalsIgnoreCase("true")) {
+      if (props.getString(REALTIME_SKIP_MERGE_PROP).equalsIgnoreCase("true")) {
         props.setProperty(MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
       } else {
         props.setProperty(MERGE_TYPE.key(), REALTIME_PAYLOAD_COMBINE);

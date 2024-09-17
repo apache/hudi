@@ -29,8 +29,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.SHOULD_ENABLE_SKIP_MERGE_BOOL;
-
 /**
  * Realtime Record Reader which can do compacted (merge-on-read) record reading or unmerged reading (parquet and log
  * files read in parallel) based on job configuration.
@@ -38,7 +36,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.SHOULD_ENABLE_SKI
 public class HoodieRealtimeRecordReader implements RecordReader<NullWritable, ArrayWritable> {
 
   // Property to enable parallel reading of parquet and log files without merging.
-  public static final String REALTIME_SKIP_MERGE_PROP = SHOULD_ENABLE_SKIP_MERGE_BOOL;
+  public static final String REALTIME_SKIP_MERGE_PROP = "hoodie.realtime.merge.skip";
   // By default, we do merged-reading
   public static final String DEFAULT_REALTIME_SKIP_MERGE = "false";
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRealtimeRecordReader.class);

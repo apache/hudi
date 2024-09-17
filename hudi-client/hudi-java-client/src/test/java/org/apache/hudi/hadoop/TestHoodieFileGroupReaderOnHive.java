@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.testutils.ArrayWritableTestUtil;
 import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 import org.apache.hudi.storage.HoodieStorage;
@@ -214,17 +216,18 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   }
 
   @Override
-  public void validateRecordsInFileGroup(String tablePath, List<ArrayWritable> actualRecordList, Schema schema, String fileGroupId) {
+  public void validateRecordsInFileGroup(String tablePath, List<ArrayWritable> actualRecordList, Schema schema, FileSlice fileSlice, boolean isSkipMerge) {
     assertEquals(HoodieAvroUtils.addMetadataFields(HoodieTestDataGenerator.AVRO_SCHEMA), schema);
+    String fileGroupId = fileSlice.getFileId();
     try {
       //prepare fg reader records to be compared to the baseline reader
       HoodieReaderContext<ArrayWritable> readerContext = getHoodieReaderContext(tablePath, schema, storageConf);
       Map<String, ArrayWritable> recordMap = new HashMap<>();
       for (ArrayWritable record : actualRecordList) {
-        recordMap.put(readerContext.getRecordKey(record, schema), record);
+        recordMap.put(createUniqueKey(readerContext, schema, record, isSkipMerge), record);
       }
 
-      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath);
+      RecordReader<NullWritable, ArrayWritable> reader = createRecordReader(tablePath, isSkipMerge);
       // use reader to read log file.
       NullWritable key = reader.createKey();
       ArrayWritable value = reader.createValue();
@@ -232,7 +235,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
         if (readerContext.getValue(value, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(fileGroupId)) {
           //only evaluate records from the specified filegroup. Maybe there is a way to get
           //hive to do this?
-          ArrayWritable compVal = recordMap.remove(readerContext.getRecordKey(value, schema));
+          ArrayWritable compVal = recordMap.remove(createUniqueKey(readerContext, schema, value, isSkipMerge));
           assertNotNull(compVal);
           ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
         }
@@ -246,9 +249,18 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     }
   }
 
-  private RecordReader<NullWritable, ArrayWritable> createRecordReader(String tablePath) throws IOException {
+  private static String createUniqueKey(HoodieReaderContext<ArrayWritable> readerContext, Schema schema, ArrayWritable record, boolean isSkipMerge) {
+    if (isSkipMerge) {
+      return readerContext.getRecordKey(record, schema) + readerContext.getValue(record, schema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+    } else {
+      return readerContext.getRecordKey(record, schema);
+    }
+  }
+
+  private RecordReader<NullWritable, ArrayWritable> createRecordReader(String tablePath, boolean isSkipMerge) throws IOException {
     JobConf jobConf = new JobConf(baseJobConf);
     jobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
+    jobConf.set(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP, String.valueOf(isSkipMerge));
 
     TableDesc tblDesc = Utilities.defaultTd;
     // Set the input format
