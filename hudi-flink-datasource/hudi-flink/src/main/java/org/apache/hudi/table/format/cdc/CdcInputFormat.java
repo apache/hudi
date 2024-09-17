@@ -643,7 +643,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       ClosableIterator<RowData> itr = splitIteratorFunc.apply(inputSplit);
       // initialize the image records map
       ExternalSpillableMap<String, byte[]> imageRecordsMap =
-          FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes);
+          FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes, CdcInputFormat.class.getSimpleName());
       while (itr.hasNext()) {
         RowData row = itr.next();
         String recordKey = row.getString(HOODIE_RECORD_KEY_COL_POS).toString();

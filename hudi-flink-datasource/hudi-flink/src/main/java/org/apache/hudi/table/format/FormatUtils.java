@@ -130,7 +130,7 @@ public class FormatUtils {
 
   public static ExternalSpillableMap<String, byte[]> spillableMap(
       HoodieWriteConfig writeConfig,
-      long maxCompactionMemoryInBytes) {
+      long maxCompactionMemoryInBytes, String loggingContext) {
     try {
       return new ExternalSpillableMap<>(
           maxCompactionMemoryInBytes,
@@ -139,7 +139,8 @@ public class FormatUtils {
           new DefaultSizeEstimator<>(),
           writeConfig.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
-          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled());
+          writeConfig.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
+          loggingContext);
     } catch (IOException e) {
       throw new HoodieIOException(
           "IOException when creating ExternalSpillableMap at " + writeConfig.getSpillableMapBasePath(), e);

@@ -91,7 +91,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closeFileGroupsMapIfPresent();
       return new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
           new DefaultSizeEstimator<>(), new HoodieFileGroupSizeEstimator(),
-          diskMapType, new HoodieFileGroupSerializer(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new HoodieFileGroupSerializer(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_partitionToFileGroups");
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -105,7 +106,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closePendingCompactionMapIfPresent();
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForPendingCompaction, baseStoreDir, new DefaultSizeEstimator<>(), new DefaultSizeEstimator<>(),
-          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_fileIdToPendingCompactionMap");
       pendingMap.putAll(fgIdToPendingCompaction);
       return pendingMap;
     } catch (IOException e) {
@@ -121,7 +123,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closePendingLogCompactionMapIfPresent();
       Map<HoodieFileGroupId, Pair<String, CompactionOperation>> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForPendingLogCompaction, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
-          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_fileIdtoPendingLogCompactionMap");
       pendingMap.putAll(fgIdToPendingLogCompaction);
       return pendingMap;
     } catch (IOException e) {
@@ -137,7 +140,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closeBootstrapFileMapIfPresent();
       Map<HoodieFileGroupId, BootstrapBaseFileMapping> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForBootstrapBaseFile, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
-          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_fileIdToBootstrapBaseFileMap");
       pendingMap.putAll(fileGroupIdBootstrapBaseFileMap);
       return pendingMap;
     } catch (IOException e) {
@@ -152,7 +156,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closeReplaceInstantsMapIfPresent();
       Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForReplaceFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
-          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_fileIdtoReplaceInstantMap");
       pendingMap.putAll(replacedFileGroups);
       return pendingMap;
     } catch (IOException e) {
@@ -167,7 +172,8 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closePendingClusteringMapIfPresent();
       Map<HoodieFileGroupId, HoodieInstant> pendingMap = new ExternalSpillableMap<>(
           maxMemoryForClusteringFileGroups, baseStoreDir, new DefaultSizeEstimator(), new DefaultSizeEstimator<>(),
-          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled);
+          diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled,
+          SpillableMapBasedFileSystemView.class.getSimpleName() + "_fileIdToPendingClusteringMap");
       pendingMap.putAll(fileGroupsInClustering);
       return pendingMap;
     } catch (IOException e) {
