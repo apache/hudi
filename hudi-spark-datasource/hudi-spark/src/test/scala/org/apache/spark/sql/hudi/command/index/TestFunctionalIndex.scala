@@ -99,7 +99,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           tool.syncHoodieTable()
 
           // assert table created and no partition metadata
-          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig)
+          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig, metaClient)
           assertTrue(hiveClient.tableExists("h0_ro"))
           assertTrue(hiveClient.tableExists("h0_rt"))
           assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())

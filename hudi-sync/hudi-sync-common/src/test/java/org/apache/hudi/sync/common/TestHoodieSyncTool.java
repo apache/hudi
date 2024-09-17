@@ -16,29 +16,25 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.sync;
+package org.apache.hudi.sync.common;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.HiveSyncConfig;
+import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 
 import org.apache.hadoop.conf.Configuration;
-import org.mockito.Mock;
-import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import org.junit.jupiter.api.Test;
 
-import java.util.Properties;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class MockAwsGlueCatalogSyncTool extends AwsGlueCatalogSyncTool {
-
-  @Mock
-  private GlueAsyncClient mockAwsGlue;
-
-  public MockAwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
-    super(props, hadoopConf, Option.empty());
-  }
-
-  @Override
-  protected void initSyncClient(HiveSyncConfig hiveSyncConfig, HoodieTableMetaClient metaClient) {
-    syncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, metaClient);
+class TestHoodieSyncTool extends HoodieCommonTestHarness {
+  @Test
+  void testBuildMetaClient() throws Exception {
+    initMetaClient();
+    TypedProperties properties = new TypedProperties();
+    properties.put("hoodie.datasource.meta.sync.base.path", metaClient.getBasePath().toString());
+    HoodieSyncConfig syncConfig = new HoodieSyncConfig(properties, new Configuration());
+    HoodieTableMetaClient actual = HoodieSyncTool.buildMetaClient(syncConfig);
+    assertEquals(actual.getBasePath(), metaClient.getBasePath());
   }
 }

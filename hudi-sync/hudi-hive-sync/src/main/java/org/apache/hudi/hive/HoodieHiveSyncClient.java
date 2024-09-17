@@ -19,6 +19,7 @@
 package org.apache.hudi.hive;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -80,8 +81,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   DDLExecutor ddlExecutor;
   private IMetaStoreClient client;
 
-  public HoodieHiveSyncClient(HiveSyncConfig config) {
-    super(config);
+  public HoodieHiveSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
 

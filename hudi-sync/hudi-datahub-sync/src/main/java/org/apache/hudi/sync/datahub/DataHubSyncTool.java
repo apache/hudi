@@ -19,10 +19,14 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
 
 import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
 
 import java.util.Properties;
 
@@ -37,10 +41,16 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 public class DataHubSyncTool extends HoodieSyncTool {
 
   protected final DataHubSyncConfig config;
+  private final HoodieTableMetaClient metaClient;
 
   public DataHubSyncTool(Properties props) {
-    super(props);
+    this(props, HadoopConfigUtils.createHadoopConf(props), Option.empty());
+  }
+
+  public DataHubSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
+    super(props, hadoopConf);
     this.config = new DataHubSyncConfig(props);
+    this.metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
   }
 
   /**
@@ -51,7 +61,7 @@ public class DataHubSyncTool extends HoodieSyncTool {
    */
   @Override
   public void syncHoodieTable() {
-    try (DataHubSyncClient syncClient = new DataHubSyncClient(config)) {
+    try (DataHubSyncClient syncClient = new DataHubSyncClient(config, metaClient)) {
       syncClient.updateTableSchema(config.getString(META_SYNC_TABLE_NAME), null, null);
       syncClient.updateLastCommitTimeSynced(config.getString(META_SYNC_TABLE_NAME));
     }

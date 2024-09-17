@@ -90,13 +90,13 @@ public class ITTestGluePartitionPushdown {
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
     fileSystem.mkdirs(new Path(tablePath));
     StorageConfiguration<?> configuration = HadoopFSUtils.getStorageConf(new Configuration());
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(configuration, tablePath);
 
-    glueSync = new AWSGlueCatalogSyncClient(new HiveSyncConfig(hiveSyncProps));
+    glueSync = new AWSGlueCatalogSyncClient(new HiveSyncConfig(hiveSyncProps), metaClient);
     glueSync.awsGlue.createDatabase(CreateDatabaseRequest.builder().databaseInput(DatabaseInput.builder().name(DB_NAME).build()).build()).get();
 
     glueSync.awsGlue.createTable(CreateTableRequest.builder().databaseName(DB_NAME)

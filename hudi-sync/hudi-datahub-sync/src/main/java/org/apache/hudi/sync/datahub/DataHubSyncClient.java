@@ -65,8 +65,8 @@ public class DataHubSyncClient extends HoodieSyncClient {
   private final DatasetUrn datasetUrn;
   private static final Status SOFT_DELETE_FALSE = new Status().setRemoved(false);
 
-  public DataHubSyncClient(DataHubSyncConfig config) {
-    super(config);
+  public DataHubSyncClient(DataHubSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.datasetUrn = config.datasetIdentifier.getDatasetUrn();
   }

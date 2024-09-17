@@ -335,21 +335,16 @@ public class StreamSync implements Serializable, Closeable {
   public void refreshTimeline() throws IOException {
     if (storage.exists(new StoragePath(cfg.targetBasePath))) {
       try {
-        HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-            .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .setRecordMergerStrategy(null)
-            .build();
-        switch (meta.getTableType()) {
+        HoodieTableMetaClient metaClient = getMetaClient();
+        switch (metaClient.getTableType()) {
           case COPY_ON_WRITE:
           case MERGE_ON_READ:
             // we can use getCommitsTimeline for both COW and MOR here, because for COW there is no deltacommit
-            this.commitsTimelineOpt = Option.of(meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
-            this.allCommitsTimelineOpt = Option.of(meta.getActiveTimeline().getAllCommitsTimeline());
+            this.commitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants());
+            this.allCommitsTimelineOpt = Option.of(metaClient.getActiveTimeline().getAllCommitsTimeline());
             break;
           default:
-            throw new HoodieException("Unsupported table type :" + meta.getTableType());
+            throw new HoodieException("Unsupported table type :" + metaClient.getTableType());
         }
       } catch (HoodieIOException e) {
         LOG.warn("Full exception msg " + e.getMessage());
@@ -369,8 +364,7 @@ public class StreamSync implements Serializable, Closeable {
             LOG.warn("Base path exists, but table is not fully initialized. Re-initializing again");
             initializeEmptyTable();
             // reload the timeline from metaClient and validate that its empty table. If there are any instants found, then we should fail the pipeline, bcoz hoodie.properties got deleted by mistake.
-            HoodieTableMetaClient metaClientToValidate = HoodieTableMetaClient.builder()
-                .setConf(HadoopFSUtils.getStorageConfWithCopy(conf)).setBasePath(cfg.targetBasePath).build();
+            HoodieTableMetaClient metaClientToValidate = getMetaClient();
             if (metaClientToValidate.reloadActiveTimeline().countInstants() > 0) {
               // Deleting the recreated hoodie.properties and throwing exception.
               storage.deleteDirectory(new StoragePath(String.format("%s%s/%s", basePathWithForwardSlash,
@@ -388,6 +382,16 @@ public class StreamSync implements Serializable, Closeable {
     } else {
       initializeEmptyTable();
     }
+  }
+
+  private HoodieTableMetaClient getMetaClient() {
+    return HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
+        .setBasePath(cfg.targetBasePath)
+        .setPayloadClassName(cfg.payloadClassName)
+        .setRecordMergerStrategy(null)
+        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
+        .build();
   }
 
   private void initializeEmptyTable() throws IOException {
@@ -430,12 +434,7 @@ public class StreamSync implements Serializable, Closeable {
 
     // Refresh Timeline
     refreshTimeline();
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-        .setBasePath(cfg.targetBasePath)
-        .setRecordMergerStrategy(null)
-        .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
-        .build();
+    HoodieTableMetaClient metaClient = getMetaClient();
     String instantTime = metaClient.createNewInstantTime();
 
     Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(instantTime, metaClient);
@@ -1045,8 +1044,9 @@ public class StreamSync implements Serializable, Closeable {
       syncClientToolClasses.add(HiveSyncTool.class.getName());
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
-    if (cfg.enableMetaSync) {
+    if (cfg.enableMetaSync && !syncClientToolClasses.isEmpty()) {
       LOG.debug("[MetaSync] Starting sync");
+      HoodieTableMetaClient metaClient = getMetaClient();
       FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
@@ -1071,7 +1071,7 @@ public class StreamSync implements Serializable, Closeable {
         Timer.Context syncContext = metrics.getMetaSyncTimerContext();
         Option<HoodieMetaSyncException> metaSyncException = Option.empty();
         try {
-          SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat);
+          SyncUtilHelpers.runHoodieMetaSync(impl.trim(), metaProps, conf, fs, cfg.targetBasePath, cfg.baseFileFormat, Option.of(metaClient));
         } catch (HoodieMetaSyncException e) {
           metaSyncException = Option.of(e);
         }
@@ -1226,14 +1226,10 @@ public class StreamSync implements Serializable, Closeable {
       if (targetSchema == null || (SchemaCompatibility.checkReaderWriterCompatibility(targetSchema, InputBatch.NULL_SCHEMA).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE
           && SchemaCompatibility.checkReaderWriterCompatibility(InputBatch.NULL_SCHEMA, targetSchema).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE)) {
         // target schema is null. fetch schema from commit metadata and use it
-        HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
-            .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
-            .setBasePath(cfg.targetBasePath)
-            .setPayloadClassName(cfg.payloadClassName)
-            .build();
-        int totalCompleted = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
+        HoodieTableMetaClient metaClient = getMetaClient();
+        int totalCompleted = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
         if (totalCompleted > 0) {
-          TableSchemaResolver schemaResolver = new TableSchemaResolver(meta);
+          TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
           Option<Schema> tableSchema = schemaResolver.getTableAvroSchemaIfPresent(false);
           if (tableSchema.isPresent()) {
             newWriteSchema = tableSchema.get();
