@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -95,14 +96,15 @@ class TestEightToSevenDowngradeHandler {
   void testDowngradeMetadataPartitions() {
     String baseTablePath = baseDir.toString();
     HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(getDefaultStorageConf());
-    StoragePath basePath = new StoragePath(baseTablePath + "/.hoodie");
+    StoragePath basePath = new StoragePath(baseTablePath);
     when(metaClient.getBasePath()).thenReturn(basePath);
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
          MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
+      StoragePath realBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
       mockedFSUtils
-          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, basePath, false))
+          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, realBasePath, false))
           .thenReturn(SAMPLE_METADATA_PATHS);
 
       EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, metaClient, tablePropsToAdd);

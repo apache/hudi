@@ -28,6 +28,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -118,11 +119,15 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
                                           HoodieStorage hoodieStorage,
                                           HoodieTableMetaClient metaClient,
                                           Map<ConfigProperty, String> tablePropsToAdd) {
+    // Get base path for metadata table.
+    StoragePath metadataTableBasePath =
+        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+
     // Fetch metadata partition paths.
     List<String> metadataPartitions = FSUtils.getAllPartitionPaths(
         context,
         hoodieStorage,
-        metaClient.getBasePath(),
+        metadataTableBasePath,
         false);
 
     // Delete partitions.
