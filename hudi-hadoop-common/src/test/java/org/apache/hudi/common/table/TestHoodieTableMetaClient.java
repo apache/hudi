@@ -275,21 +275,18 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
 
   @Test
   public void testTableVersion() throws IOException {
-    final String basePath = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t1";
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
     HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table-version-test")
         .setTableVersion(HoodieTableVersion.SIX.versionCode())
         .initTable(this.metaClient.getStorageConf(), basePath);
-
     assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
-    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableInitialVersion());
 
     HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
         .setConf(this.metaClient.getStorageConf())
         .setBasePath(basePath)
         .build();
-    assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableInitialVersion());
     assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
   }
 

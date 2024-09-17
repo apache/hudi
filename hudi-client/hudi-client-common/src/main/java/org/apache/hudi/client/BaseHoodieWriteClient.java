@@ -943,7 +943,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   private void startCommitWithTime(String instantTime, String actionType, HoodieTableMetaClient metaClient) {
     if (needsUpgradeOrDowngrade(metaClient)) {
-      //TODO(vc): is the first argument correct?
+      // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),

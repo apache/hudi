@@ -40,8 +40,10 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -59,6 +61,8 @@ import javax.annotation.concurrent.Immutable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -67,6 +71,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
@@ -119,13 +124,13 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
-  // TODO: hows this used?
   public static final ConfigProperty<HoodieTableVersion> INITIAL_VERSION = ConfigProperty
-          .key("hoodie.table.initial.version")
-          .defaultValue(HoodieTableVersion.ZERO)
-          .withDocumentation("Initial Version of table when the table was created. Used for upgrade/downgrade"
-                  + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
-                  + "when the table is initially setup.");
+      .key("hoodie.table.initial.version")
+      .defaultValue(HoodieTableVersion.current())
+      .sinceVersion("1.0.0")
+      .withDocumentation("Initial Version of table when the table was created. Used for upgrade/downgrade"
+          + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
+          + "when the table is initially setup.");
 
   // TODO: is this this called precombine in 1.0. ..
   public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
@@ -186,7 +191,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
       .sinceVersion("1.0.0")
-      // TODO: whats this doing. would it serialize any java class names
       .withDocumentation(RecordMergeMode.class);
 
   public static final ConfigProperty<String> PAYLOAD_CLASS_NAME = ConfigProperty
@@ -330,7 +334,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("The metadata of secondary indexes");
 
-  // TODO: should this have a default value?
   public static final ConfigProperty<String> INDEX_DEFINITION_PATH = ConfigProperty
       .key("hoodie.table.index.defs.path")
       .noDefaultValue()
@@ -338,6 +341,23 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Absolute path where the index definitions are stored");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
+
+  static List<ConfigProperty<?>> definedTableConfigs() {
+    Field[] fields = ReflectionUtils.getClass(HoodieTableConfig.class.getName()).getDeclaredFields();
+    return Arrays.stream(fields)
+        .filter(f -> f.getType().equals(ConfigProperty.class)
+            && Modifier.isPublic(f.getModifiers())
+            && Modifier.isStatic(f.getModifiers())
+        )
+        .map(f -> {
+          try {
+            return (ConfigProperty<?>) f.get(null);
+          } catch (IllegalAccessException e) {
+            throw new HoodieException("Error reading defined table configs, for " + f.getName(), e);
+          }
+        })
+        .collect(Collectors.toList());
+  }
 
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
@@ -487,16 +507,16 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
+    HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
     try (OutputStream outputStream = storage.create(propertyPath)) {
-
-      // TODO: this is where we need logic to write table configs based on target table version.
-
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
+        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
+          hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
+        }
         hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
@@ -505,14 +525,19 @@ public class HoodieTableConfig extends HoodieConfig {
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
-        // Use the default bootstrap index class.
-        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
+        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
+          hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_TYPE, BootstrapIndexType.getBootstrapIndexType(hoodieConfig).toString());
+        } else {
+          // Use the default bootstrap index class.
+          hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
+        }
       }
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
+      dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
@@ -528,6 +553,36 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static boolean validateChecksum(Properties props) {
     return Long.parseLong(props.getProperty(TABLE_CHECKSUM.key())) == generateChecksum(props);
+  }
+
+  static void dropInvalidConfigs(HoodieConfig config) {
+    HoodieTableVersion tableVersion = getTableVersion(config);
+    Map<String, ConfigProperty<?>> definedTableConfigs = HoodieTableConfig.definedTableConfigs()
+        .stream().collect(Collectors.toMap(ConfigProperty::key, Function.identity()));
+    List<String> invalidConfigs = config.getProps().keySet().stream()
+        .map(k -> (String) k)
+        // TODO: this can be eventually tightened to ensure all table configs are defined.
+        .filter(key -> definedTableConfigs.containsKey(key)
+            && !validateConfigVersion(definedTableConfigs.get(key), tableVersion))
+        .collect(Collectors.toList());
+    invalidConfigs.forEach(key -> {
+      config.getProps().remove(key);
+    });
+  }
+
+  static boolean validateConfigVersion(ConfigProperty<?> configProperty, HoodieTableVersion tableVersion) {
+    // TODO: this can be tightened up, once all configs have a since version.
+    if (!configProperty.getSinceVersion().isPresent()) {
+      return true;
+    }
+    // validate that the table version is greater than or equal to the config version
+    HoodieTableVersion firstVersion = HoodieTableVersion.fromReleaseVersion(configProperty.getSinceVersion().get());
+    boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
+    if (!valid) {
+      LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
+          tableVersion, firstVersion, configProperty.key());
+    }
+    return valid;
   }
 
   /**
@@ -624,6 +679,10 @@ public class HoodieTableConfig extends HoodieConfig {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
   }
 
+  public void setInitialVersion(HoodieTableVersion initialVersion) {
+    setValue(INITIAL_VERSION, Integer.toString(initialVersion.versionCode()));
+  }
+
   public RecordMergeMode getRecordMergeMode() {
     return RecordMergeMode.valueOf(getStringOrDefault(RECORD_MERGE_MODE).toUpperCase());
   }
@@ -681,32 +740,6 @@ public class HoodieTableConfig extends HoodieConfig {
     // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
     //       behavior until this method is fully deprecated
     return getPartitionFieldProp(this).orElse("");
-  }
-
-  /**
-   * Read the payload class for HoodieRecords from the table properties.
-   */
-  public String getBootstrapIndexClass() {
-    if (!props.getBoolean(BOOTSTRAP_INDEX_ENABLE.key(), BOOTSTRAP_INDEX_ENABLE.defaultValue())) {
-      return BootstrapIndexType.NO_OP.getClassName();
-    }
-    String bootstrapIndexClassName;
-    if (contains(BOOTSTRAP_INDEX_TYPE)) {
-      bootstrapIndexClassName = BootstrapIndexType.valueOf(getString(BOOTSTRAP_INDEX_TYPE)).getClassName();
-    } else if (contains(BOOTSTRAP_INDEX_CLASS_NAME)) {
-      bootstrapIndexClassName = getString(BOOTSTRAP_INDEX_CLASS_NAME);
-    } else {
-      bootstrapIndexClassName = BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
-    }
-    return bootstrapIndexClassName;
-  }
-
-  public static String getDefaultBootstrapIndexClass(Properties props) {
-    HoodieConfig hoodieConfig = new HoodieConfig(props);
-    if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      return BootstrapIndexType.NO_OP.getClassName();
-    }
-    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
   }
 
   public Option<String> getBootstrapBasePath() {
@@ -811,13 +844,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public boolean isMultipleBaseFileFormatsEnabled() {
     return getBooleanOrDefault(MULTIPLE_BASE_FILE_FORMATS_ENABLE);
-  }
-
-  /**
-   * Read the table checksum.
-   */
-  private Long getTableChecksum() {
-    return getLong(TABLE_CHECKSUM);
   }
 
   public Set<String> getMetadataPartitionsInflight() {

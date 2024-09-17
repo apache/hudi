@@ -39,6 +39,7 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
     val basePath = s"${tempBasePath}/tbl_1";
     val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
 
+    // write table with current version
     df.write.format("hudi")
       .option(HoodieWriteConfig.TBL_NAME.key, "tbl_1")
       .mode(SaveMode.Overwrite)
@@ -48,9 +49,9 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
     assertEquals(HoodieTableVersion.current().versionCode(),
       metaClient.getTableConfig.getTableVersion.versionCode())
 
+    // should error out when writing with lower write version.
     assertThrows[HoodieNotSupportedException] {
       df.write.format("hudi")
-        .option(HoodieWriteConfig.TBL_NAME.key, "tbl_1")
         .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode())
         .mode(SaveMode.Append)
         .save(basePath)
@@ -60,15 +61,11 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
   @Test
   def testThrowsExceptionForIncompatibleTableVersion(): Unit = {
     val basePath = s"${tempBasePath}/tbl_2";
-    val props = new Properties()
-    props.put("hoodie.table.name", "tbl_2")
-    props.put("hoodie.table.version", HoodieTableVersion.SIX.versionCode.toString)
-    HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, props);
+    HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
 
     val df = spark.range(1).selectExpr("1 as id", "1 as name", "1 as partition")
     assertThrows[HoodieNotSupportedException] {
       df.write.format("hudi")
-        .option(HoodieWriteConfig.TBL_NAME.key, "tbl_2")
         .mode(SaveMode.Append)
         .save(basePath)
     }

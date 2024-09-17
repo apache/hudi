@@ -159,13 +159,14 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
   public void testCreateWithSpecifiedValues() {
     // Test create with specified values
     Object result = shell.evaluate(() -> "create --path " + tablePath + " --tableName " + tableName
-            + " --tableType MERGE_ON_READ --archiveLogFolder archive");
+            + " --tableType MERGE_ON_READ --archiveLogFolder archive --tableVersion 6");
     assertTrue(ShellEvaluationResultUtil.isSuccess(result));
     assertEquals("Metadata for table " + tableName + " loaded", result.toString());
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     assertEquals(metaPath + StoragePath.SEPARATOR + "archive", client.getArchivePath());
     assertEquals(tablePath, client.getBasePath().toString());
     assertEquals(metaPath, client.getMetaPath().toString());
+    assertEquals(HoodieTableVersion.SIX, client.getTableConfig().getTableVersion());
     assertEquals(HoodieTableType.MERGE_ON_READ, client.getTableType());
   }
 

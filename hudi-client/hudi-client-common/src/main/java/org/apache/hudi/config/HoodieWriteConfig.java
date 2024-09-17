@@ -138,7 +138,6 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<Integer> WRITE_TABLE_VERSION = ConfigProperty
       .key("hoodie.write.table.version")
       .defaultValue(HoodieTableVersion.current().versionCode())
-      // TODO(vc) does this validation actually work.
       .withValidValues(
           String.valueOf(HoodieTableVersion.SIX.versionCode()),
           String.valueOf(HoodieTableVersion.current().versionCode())
@@ -1277,6 +1276,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieTableVersion getWriteVersion() {
+    Integer versionCode = getInt(WRITE_TABLE_VERSION);
+    if (versionCode != null) {
+      WRITE_TABLE_VERSION.checkValues(versionCode.toString());
+    }
     return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
   }
 

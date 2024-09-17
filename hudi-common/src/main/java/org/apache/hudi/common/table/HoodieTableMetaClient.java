@@ -81,7 +81,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
@@ -909,8 +908,7 @@ public class HoodieTableMetaClient implements Serializable {
      */
     private Properties others = new Properties();
 
-    private TableBuilder() {
-
+    TableBuilder() {
     }
 
     public TableBuilder setTableType(HoodieTableType tableType) {
@@ -1244,7 +1242,6 @@ public class HoodieTableMetaClient implements Serializable {
       checkArgument(tableType != null, "tableType is null");
       checkArgument(tableName != null, "tableName is null");
 
-      // TODO(vc): This is where we need to make these table configs be version specific..,
       HoodieTableConfig tableConfig = new HoodieTableConfig();
 
       tableConfig.setAll(others);
@@ -1257,10 +1254,10 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != tableVersion) {
         tableConfig.setTableVersion(tableVersion);
-        tableConfig.setValue(INITIAL_VERSION, Integer.toString(tableVersion.versionCode()));
+        tableConfig.setInitialVersion(tableVersion);
       } else {
         tableConfig.setTableVersion(HoodieTableVersion.current());
-        tableConfig.setValue(INITIAL_VERSION, Integer.toString(HoodieTableVersion.current().versionCode()));
+        tableConfig.setInitialVersion(HoodieTableVersion.current());
       }
 
       if (tableType == HoodieTableType.MERGE_ON_READ) {
