@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -29,13 +30,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.exception.HoodieRemoteException;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hadoop.fs.Path;
-import org.apache.http.client.fluent.Request;
-import org.apache.http.client.fluent.Response;
-import org.apache.http.client.utils.URIBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +54,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EX
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
+import static org.apache.hudi.timeline.TimelineServiceClient.RequestMethod;
 
 /**
  * Marker operations of using timeline server as a proxy to create and delete markers.
@@ -65,28 +64,23 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PA
  */
 public class TimelineServerBasedWriteMarkers extends WriteMarkers {
   private static final Logger LOG = LoggerFactory.getLogger(TimelineServerBasedWriteMarkers.class);
-  private final ObjectMapper mapper;
-  private final String timelineServerHost;
-  private final int timelineServerPort;
-  private final int timeoutSecs;
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
   private static final TypeReference<Set<String>> SET_TYPE_REFERENCE = new TypeReference<Set<String>>() {};
+
+  private final TimelineServiceClient timelineServiceClient;
 
   public TimelineServerBasedWriteMarkers(HoodieTable table, String instantTime) {
     this(table.getMetaClient().getBasePath(),
         table.getMetaClient().getMarkerFolderPath(instantTime), instantTime,
-        table.getConfig().getViewStorageConfig().getRemoteViewServerHost(),
-        table.getConfig().getViewStorageConfig().getRemoteViewServerPort(),
-        table.getConfig().getViewStorageConfig().getRemoteTimelineClientTimeoutSecs());
+        table.getConfig().getViewStorageConfig());
   }
 
-  TimelineServerBasedWriteMarkers(String basePath, String markerFolderPath, String instantTime,
-                                  String timelineServerHost, int timelineServerPort, int timeoutSecs) {
+  TimelineServerBasedWriteMarkers(String basePath,
+                                  String markerFolderPath,
+                                  String instantTime,
+                                  FileSystemViewStorageConfig  fileSystemViewStorageConfig) {
     super(basePath, markerFolderPath, instantTime);
-    this.mapper = new ObjectMapper();
-    this.timelineServerHost = timelineServerHost;
-    this.timelineServerPort = timelineServerPort;
-    this.timeoutSecs = timeoutSecs;
+    this.timelineServiceClient = new TimelineServiceClient(fileSystemViewStorageConfig);
   }
 
   @Override
@@ -129,7 +123,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     Map<String, String> paramsMap = Collections.singletonMap(MARKER_DIR_PATH_PARAM, markerDirPath.toString());
     try {
       Set<String> markerPaths = executeRequestToTimelineServer(
-          APPEND_MARKERS_URL, paramsMap, new TypeReference<Set<String>>() {}, RequestMethod.GET);
+          APPEND_MARKERS_URL, paramsMap, SET_TYPE_REFERENCE, RequestMethod.GET);
       return markerPaths.stream().map(WriteMarkers::stripMarkerSuffix).collect(Collectors.toSet());
     } catch (IOException e) {
       throw new HoodieRemoteException("Failed to get APPEND log file paths in "
@@ -229,29 +223,8 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
 
   private <T> T executeRequestToTimelineServer(String requestPath, Map<String, String> queryParameters,
                                                TypeReference reference, RequestMethod method) throws IOException {
-    URIBuilder builder =
-        new URIBuilder().setHost(timelineServerHost).setPort(timelineServerPort).setPath(requestPath).setScheme("http");
-
-    queryParameters.forEach(builder::addParameter);
-
-    String url = builder.toString();
-    LOG.debug("Sending request : (" + url + ")");
-    Response response;
-    int timeout = this.timeoutSecs * 1000; // msec
-    switch (method) {
-      case GET:
-        response = Request.Get(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-      case POST:
-      default:
-        response = Request.Post(url).connectTimeout(timeout).socketTimeout(timeout).execute();
-        break;
-    }
-    String content = response.returnContent().asString();
-    return (T) mapper.readValue(content, reference);
-  }
-
-  private enum RequestMethod {
-    GET, POST
+    return timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())
+        .getDecodedContent(reference);
   }
 }

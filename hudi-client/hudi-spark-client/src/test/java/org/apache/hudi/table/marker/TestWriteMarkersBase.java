@@ -51,7 +51,7 @@ public abstract class TestWriteMarkersBase extends HoodieCommonTestHarness {
   protected JavaSparkContext jsc;
   protected HoodieSparkEngineContext context;
 
-  private void createSomeMarkers(boolean isTablePartitioned) {
+  protected void createSomeMarkers(boolean isTablePartitioned) {
     writeMarkers.create(isTablePartitioned ? "2020/06/01" : "", "file1", IOType.MERGE);
     writeMarkers.create(isTablePartitioned ? "2020/06/02" : "", "file2", IOType.APPEND);
     writeMarkers.create(isTablePartitioned ? "2020/06/03" : "", "file3", IOType.CREATE);
