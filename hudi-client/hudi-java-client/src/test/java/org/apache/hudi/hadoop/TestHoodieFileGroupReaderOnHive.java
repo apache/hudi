@@ -87,6 +87,7 @@ import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getR
 import static org.apache.hudi.hadoop.HoodieFileGroupReaderBasedRecordReader.getStoredPartitionFieldNames;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBase<ArrayWritable> {
 
@@ -231,22 +232,42 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
       // use reader to read log file.
       NullWritable key = reader.createKey();
       ArrayWritable value = reader.createValue();
+      //TODO: [HUDI-8209] get rid of logFileCounts and don't guard recordMap.remove(uniqueKey);
+      Map<String, Integer> logFileCounts = new HashMap<>();
       while (reader.next(key, value)) {
         if (readerContext.getValue(value, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(fileGroupId)) {
           //only evaluate records from the specified filegroup. Maybe there is a way to get
           //hive to do this?
-          ArrayWritable compVal = recordMap.remove(createUniqueKey(readerContext, schema, value, isSkipMerge));
-          assertNotNull(compVal);
-          ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
+          String uniqueKey = createUniqueKey(readerContext, schema, value, isSkipMerge);
+          Integer seenCount = logFileCounts.get(uniqueKey);
+          boolean isLogFile = isLogFileRec(readerContext, schema, value);
+          if (!isSkipMerge || seenCount == null) {
+            ArrayWritable compVal = recordMap.remove(uniqueKey);
+            assertNotNull(compVal);
+            ArrayWritableTestUtil.assertArrayWritableEqual(schema, value, compVal, USE_FAKE_PARTITION);
+            if (isSkipMerge && isLogFile) {
+              logFileCounts.put(uniqueKey, 1);
+            }
+          } else {
+            assertTrue(isLogFile);
+            logFileCounts.put(uniqueKey, seenCount + 1);
+          }
         }
         key = reader.createKey();
         value = reader.createValue();
       }
       reader.close();
       assertEquals(0, recordMap.size());
+      for (Integer v : logFileCounts.values()) {
+        assertEquals(2, v);
+      }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static boolean isLogFileRec(HoodieReaderContext<ArrayWritable> readerContext, Schema schema, ArrayWritable record) {
+    return !readerContext.getValue(record, schema, HoodieRecord.FILENAME_METADATA_FIELD).toString().contains(".parquet");
   }
 
   private static String createUniqueKey(HoodieReaderContext<ArrayWritable> readerContext, Schema schema, ArrayWritable record, boolean isSkipMerge) {
