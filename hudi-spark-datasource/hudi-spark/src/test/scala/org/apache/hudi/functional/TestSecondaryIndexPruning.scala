@@ -160,6 +160,70 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource(Array("testSecondaryIndexPruningParameters"))
+  def testCreateAndDropSecondaryIndex(testCase: SecondaryIndexTestCase): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      val tableType = testCase.tableType
+      val isPartitioned = testCase.isPartitioned
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts + (
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
+      tableName += "test_secondary_index_create_drop" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
+      val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = '$sqlTableType',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | $partitionedByClause
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+        Seq("abc", "row1"),
+        Seq("cde", "row2"),
+        Seq("def", "row3")
+      )
+      // drop secondary index
+      spark.sql(s"drop index secondary_index_idx_not_record_key_col on $tableName")
+      // validate index dropped successfully
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assert(!metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // query metadata table and check no records for secondary index
+      assert(spark.sql(s"select * from hudi_metadata('$basePath') where type=7").count() == 0)
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testSecondaryIndexPruningParameters"))
   def testSecondaryIndexPruningWithUpdates(testCase: SecondaryIndexTestCase): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       val tableType = testCase.tableType

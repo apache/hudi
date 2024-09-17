@@ -32,7 +32,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieFunctionalIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.table.action.index.functional.BaseHoodieFunctionalIndexClient;
+import org.apache.hudi.table.action.index.functional.BaseHoodieIndexClient;
 
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
@@ -56,24 +56,24 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_FU
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 
-public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexClient {
+public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkFunctionalIndexClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkIndexClient.class);
 
-  private static volatile HoodieSparkFunctionalIndexClient _instance;
+  private static volatile HoodieSparkIndexClient _instance;
 
   private final SparkSession sparkSession;
 
-  private HoodieSparkFunctionalIndexClient(SparkSession sparkSession) {
+  private HoodieSparkIndexClient(SparkSession sparkSession) {
     super();
     this.sparkSession = sparkSession;
   }
 
-  public static HoodieSparkFunctionalIndexClient getInstance(SparkSession sparkSession) {
+  public static HoodieSparkIndexClient getInstance(SparkSession sparkSession) {
     if (_instance == null) {
-      synchronized (HoodieSparkFunctionalIndexClient.class) {
+      synchronized (HoodieSparkIndexClient.class) {
         if (_instance == null) {
-          _instance = new HoodieSparkFunctionalIndexClient(sparkSession);
+          _instance = new HoodieSparkIndexClient(sparkSession);
         }
       }
     }
@@ -109,6 +109,24 @@ public class HoodieSparkFunctionalIndexClient extends BaseHoodieFunctionalIndexC
       } else {
         throw new HoodieFunctionalIndexException("Scheduling of index action did not return any instant.");
       }
+    }
+  }
+
+  @Override
+  public void drop(HoodieTableMetaClient metaClient, String indexName, MetadataPartitionType metadataPartitionType, boolean ignoreIfNotExists) {
+    if (!indexExists(metaClient, indexName)) {
+      if (ignoreIfNotExists) {
+        return;
+      } else {
+        throw new HoodieFunctionalIndexException("Index does not exist: " + indexName);
+      }
+    }
+
+    LOG.info("Dropping index {}", indexName);
+    HoodieIndexDefinition indexDefinition = metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName);
+    try (SparkRDDWriteClient writeClient = HoodieCLIUtils.createHoodieWriteClient(
+        sparkSession, metaClient.getBasePath().toString(), mapAsScalaImmutableMap(buildWriteConfig(metaClient, indexDefinition)), toScalaOption(Option.empty()))) {
+      writeClient.dropIndex(Collections.singletonList(indexName));
     }
   }
 

@@ -895,9 +895,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }, fileGroupFileIds.size());
   }
 
-  public void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException {
-    for (MetadataPartitionType partitionType : metadataPartitions) {
-      String partitionPath = partitionType.getPartitionPath();
+  public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
+    for (String partitionPath : metadataPartitions) {
       // first update table config
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionPath, false);
       LOG.warn("Deleting Metadata Table partition: {}", partitionPath);

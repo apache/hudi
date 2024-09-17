@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.index.functional;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -28,11 +29,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public abstract class BaseHoodieFunctionalIndexClient {
+public abstract class BaseHoodieIndexClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieFunctionalIndexClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieIndexClient.class);
 
-  public BaseHoodieFunctionalIndexClient() {
+  public BaseHoodieIndexClient() {
   }
 
   /**
@@ -61,4 +62,9 @@ public abstract class BaseHoodieFunctionalIndexClient {
    * Create a functional index.
    */
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options);
+
+  /**
+   * Drop an index. By default, ignore drop if index does not exist.
+   */
+  public abstract void drop(HoodieTableMetaClient metaClient, String indexName, MetadataPartitionType metadataPartitionType, boolean ignoreIfNotExists);
 }
