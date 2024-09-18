@@ -22,11 +22,11 @@ import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
-import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
-import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord, HoodieRecordPayload}
 import org.apache.hudi.common.model.HoodieFileFormat.HFILE
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -84,10 +84,10 @@ case class HoodieTableState(tablePath: String,
                             recordKeyField: String,
                             preCombineFieldOpt: Option[String],
                             usesVirtualKeys: Boolean,
-                            recordPayloadClassName: Option[String],
+                            recordPayloadClassName: String,
                             metadataConfig: HoodieMetadataConfig,
                             recordMergerImpls: List[String],
-                            recordMergerStrategy: Option[String])
+                            recordMergerStrategy: String)
 
 
 /**
@@ -263,9 +263,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       FileStatusCache.getOrCreate(sparkSession), shouldIncludeLogFiles())
 
   lazy val tableState: HoodieTableState = {
-    val recordMergerImpls = ConfigUtils.split2List(getConfigValue(HoodieWriteConfig.RECORD_MERGER_IMPLS)).asScala.toList
-    val recordMergerStrategy = metaClient.getTableConfig.getRecordMergerStrategy.toScala
-
+    val recordMergerImpls = optParams.get(HoodieWriteConfig.RECORD_MERGER_IMPLS.key()).map(impls => ConfigUtils.split2List(impls).asScala.toList).getOrElse(List.empty)
     // Subset of the state of table's configuration as of at the time of the query
     HoodieTableState(
       tablePath = basePath.toString,
@@ -273,10 +271,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getPayloadClass.toScala,
+      recordPayloadClassName = tableConfig.getAvroPayloadClass,
       metadataConfig = fileIndex.metadataConfig,
       recordMergerImpls = recordMergerImpls,
-      recordMergerStrategy = recordMergerStrategy
+      recordMergerStrategy = tableConfig.getAvroRecordMergerStrategy
     )
   }
 

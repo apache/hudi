@@ -217,7 +217,7 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     // Put the DELETE record
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       records.put((K) key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN().orElseThrow(() -> new IllegalStateException("No payload class defined for table"))));
+          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
       HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put((K) key, record);

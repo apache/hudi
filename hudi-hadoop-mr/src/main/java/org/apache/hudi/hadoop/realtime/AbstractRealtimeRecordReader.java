@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hadoop.realtime;
 
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -109,7 +110,7 @@ public abstract class AbstractRealtimeRecordReader {
   }
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
-    return metaClient.getTableConfig().getPayloadClass().isPresent();
+    return metaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.CUSTOM);
   }
 
   private void prepareHiveAvroSerializer() {

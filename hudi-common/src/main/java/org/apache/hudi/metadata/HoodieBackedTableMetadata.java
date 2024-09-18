@@ -555,10 +555,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private HoodieRecord<HoodieMetadataPayload> composeRecord(GenericRecord avroRecord, String partitionName) {
     if (metadataTableConfig.populateMetaFields()) {
       return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
-          metadataTableConfig.getPayloadClass().orElseThrow(() -> new IllegalStateException("No payload class defined for table")), metadataTableConfig.getPreCombineField(), false);
+          metadataTableConfig.getAvroPayloadClass(), metadataTableConfig.getPreCombineField(), false);
     }
     return SpillableMapUtils.convertToHoodieRecordPayload(avroRecord,
-        metadataTableConfig.getPayloadClass().orElseThrow(() -> new IllegalStateException("No payload class defined for table")), metadataTableConfig.getPreCombineField(),
+        metadataTableConfig.getAvroPayloadClass(), metadataTableConfig.getPreCombineField(),
         Pair.of(metadataTableConfig.getRecordKeyFieldProp(), metadataTableConfig.getPartitionFieldProp()),
         false, Option.of(partitionName), Option.empty());
   }

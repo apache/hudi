@@ -29,6 +29,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.RecordPayloadType;
@@ -596,11 +598,19 @@ public class HoodieTableConfig extends HoodieConfig {
     return RecordPayloadType.getPayloadClassName(this);
   }
 
+  public String getAvroPayloadClass() {
+    return getPayloadClass().orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
+  }
+
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
   public Option<String> getRecordMergerStrategy() {
     return getStringOpt(RECORD_MERGER_STRATEGY);
+  }
+
+  public String getAvroRecordMergerStrategy() {
+    return getRecordMergerStrategy().orElseGet(() -> HoodieRecordMerger.getAvroMergerStrategyFromMergeMode(getRecordMergeMode()));
   }
 
   public String getPreCombineField() {

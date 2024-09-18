@@ -40,11 +40,14 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -65,6 +68,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -101,6 +105,8 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
@@ -1225,33 +1231,42 @@ public class HoodieWriteConfig extends HoodieConfig {
         .distinct()
         .collect(Collectors.toList());
     return getRecordMerger(getString(BASE_PATH), getRecordMergeMode(),
-        engineType, mergers, getStringOpt(RECORD_MERGER_STRATEGY));
+        engineType, getLogDataBlockFormat(), mergers, getStringOpt(RECORD_MERGER_STRATEGY));
   }
 
   public static HoodieRecordMerger getRecordMerger(String basePath,
                                                    RecordMergeMode mergeMode,
                                                    EngineType engineType,
+                                                   HoodieLogBlock.HoodieLogBlockType logBlockType,
                                                    List<String> mergers,
                                                    Option<String> strategy) {
-    //TODO: [HUDI-8202] make this custom mergers only
-    switch (mergeMode) {
-      case EVENT_TIME_ORDERING:
-        switch (engineType) {
-          case SPARK:
-            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
+    switch (logBlockType) {
+      case AVRO_DATA_BLOCK:
+      case HFILE_DATA_BLOCK:
+        return HoodieAvroRecordMerger.INSTANCE;
+      case PARQUET_DATA_BLOCK:
+        //TODO: [HUDI-8202] make this custom mergers only
+        switch (mergeMode) {
+          case EVENT_TIME_ORDERING:
+            switch (engineType) {
+              case SPARK:
+                return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
+              default:
+                return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+            }
+          case OVERWRITE_WITH_LATEST:
+            switch (engineType) {
+              case SPARK:
+                return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
+              default:
+                return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+            }
+          case CUSTOM:
           default:
             return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
         }
-      case OVERWRITE_WITH_LATEST:
-        switch (engineType) {
-          case SPARK:
-            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
-          default:
-            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-        }
-      case CUSTOM:
       default:
-        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+        throw new IllegalStateException("This log block type is not implemented");
     }
   }
 
@@ -1735,7 +1750,18 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPayloadClass() {
-    return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
+    String payloadClass = getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
+    if (payloadClass == null) {
+      switch (getRecordMergeMode()) {
+        case EVENT_TIME_ORDERING:
+          return DefaultHoodieRecordPayload.class.getCanonicalName();
+        case OVERWRITE_WITH_LATEST:
+          return OverwriteWithLatestAvroPayload.class.getCanonicalName();
+        default:
+          throw new IllegalArgumentException("Payload class must be defined");
+      }
+    }
+    return payloadClass;
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {
@@ -2188,9 +2214,22 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
   }
 
-  public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
-    return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
-        .map(HoodieLogBlock.HoodieLogBlockType::fromId);
+  public HoodieLogBlock.HoodieLogBlockType getLogDataBlockFormat() {
+    String logBlockTypeName = getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT);
+    if (StringUtils.isNullOrEmpty(logBlockTypeName)) {
+      HoodieFileFormat fileFormat = getBaseFileFormat();
+      switch (fileFormat) {
+        case HFILE:
+          return HFILE_DATA_BLOCK;
+        case PARQUET:
+        case ORC:
+          return AVRO_DATA_BLOCK;
+        default:
+          throw new HoodieException("Base file format " + fileFormat
+              + " does not have associated log block type");
+      }
+    }
+    return HoodieLogBlock.HoodieLogBlockType.fromId(logBlockTypeName);
   }
 
   public long getLogFileMaxSize() {

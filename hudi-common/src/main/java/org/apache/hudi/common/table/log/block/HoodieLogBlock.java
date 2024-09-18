@@ -177,6 +177,10 @@ public abstract class HoodieLogBlock {
     public static HoodieLogBlockType fromId(String id) {
       return ID_TO_ENUM_MAP.get(id);
     }
+
+    public String getId() {
+      return id;
+    }
   }
 
   /**

@@ -96,7 +96,7 @@ public abstract class AbstractHoodieLogRecordReader {
   private final String latestInstantTime;
   protected final HoodieTableMetaClient hoodieTableMetaClient;
   // Merge strategy to use when combining records from log
-  private final Option<String> payloadClassFQN;
+  private final String payloadClassFQN;
   // Record's key/partition-path fields
   private final String recordKeyField;
   private final Option<String> partitionPathFieldOpt;
@@ -164,7 +164,7 @@ public abstract class AbstractHoodieLogRecordReader {
             .setBasePath(basePath).build());
     // load class from the payload fully qualified class name
     HoodieTableConfig tableConfig = this.hoodieTableMetaClient.getTableConfig();
-    this.payloadClassFQN = tableConfig.getPayloadClass();
+    this.payloadClassFQN = tableConfig.getAvroPayloadClass();
     this.preCombineField = tableConfig.getPreCombineField();
     // Log scanner merge log with precombine
     TypedProperties props = new TypedProperties();
@@ -682,7 +682,7 @@ public abstract class AbstractHoodieLogRecordReader {
     return totalLogBlocks.get();
   }
 
-  protected Option<String> getPayloadClassFQN() {
+  protected String getPayloadClassFQN() {
     return payloadClassFQN;
   }
 

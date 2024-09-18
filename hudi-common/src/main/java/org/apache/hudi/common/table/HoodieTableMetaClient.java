@@ -1025,9 +1025,14 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setRecordMergerStrategy(String recordMergerStrategy) {
+      this.recordMergerStrategy = recordMergerStrategy;
+      return this;
+    }
+
     public PropertyBuilder setRecordMergerStrategy(Option<String> recordMergerStrategy) {
       if (recordMergerStrategy.isPresent()) {
-        this.recordMergerStrategy = recordMergerStrategy.get();
+        return this.setRecordMergerStrategy(recordMergerStrategy.get());
       }
       return this;
     }

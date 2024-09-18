@@ -169,17 +169,16 @@ public interface HoodieRecordMerger extends Serializable {
    */
   String getMergingStrategy();
 
-  /**
-   * The record merge mode that corresponds to this record merger
-   */
-  default RecordMergeMode getRecordMergeMode() {
-    switch (getMergingStrategy()) {
-      case DEFAULT_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.EVENT_TIME_ORDERING;
-      case OVERWRITE_MERGER_STRATEGY_UUID:
-        return RecordMergeMode.OVERWRITE_WITH_LATEST;
+  static String getAvroMergerStrategyFromMergeMode(RecordMergeMode mergeMode) {
+    switch (mergeMode) {
+      case OVERWRITE_WITH_LATEST:
+        return OVERWRITE_MERGER_STRATEGY_UUID;
+      case EVENT_TIME_ORDERING:
+        return DEFAULT_MERGER_STRATEGY_UUID;
+      case CUSTOM:
+        return PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
       default:
-        return RecordMergeMode.CUSTOM;
+        throw new IllegalStateException("afdsafdsafds");
     }
   }
 }

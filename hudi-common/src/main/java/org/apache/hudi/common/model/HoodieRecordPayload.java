@@ -21,6 +21,7 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -139,5 +140,16 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
   default Comparable<?> getOrderingValue() {
     // default natural order
     return 0;
+  }
+
+  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        return DefaultHoodieRecordPayload.class.getName();
+      case OVERWRITE_WITH_LATEST:
+        return OverwriteWithLatestAvroPayload.class.getName();
+      default:
+        throw new IllegalArgumentException("Merge mode does not have associated payload");
+    }
   }
 }

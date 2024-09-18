@@ -36,6 +36,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -138,7 +139,7 @@ public class UtilHelpers {
     List<String> recordMergerImplClasses = ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), ""));
     HoodieRecordMerger recordMerger = HoodieWriteConfig.getRecordMerger(null,
         RecordMergeMode.valueOf(props.getProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key(), HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue())),
-        EngineType.SPARK, recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
+        EngineType.SPARK, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK, recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
 
     return recordMerger;
   }

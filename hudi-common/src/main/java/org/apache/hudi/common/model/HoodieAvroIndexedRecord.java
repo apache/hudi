@@ -162,7 +162,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       Option<String> partitionNameOp,
       Boolean populateMetaFields,
       Option<Schema> schemaWithoutMetaFields) {
-    String payloadClass = ConfigUtils.getPayloadClass(props).get();
+    String payloadClass = ConfigUtils.getAvroPayloadClass(props);
     String preCombineField = ConfigUtils.getOrderingField(props);
     return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, preCombineField, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }

@@ -27,6 +27,10 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
+
 /**
  * Storage related config.
  */
@@ -90,6 +94,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
+      .withValidValues(AVRO_DATA_BLOCK.getId(), HFILE_DATA_BLOCK.getId(), PARQUET_DATA_BLOCK.getId())
       .markAdvanced()
       .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
 
