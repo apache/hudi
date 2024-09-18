@@ -26,6 +26,8 @@ import org.apache.hudi.avro.processors.EnumTypeProcessor;
 import org.apache.hudi.avro.processors.FixedTypeProcessor;
 import org.apache.hudi.avro.processors.JsonFieldProcessor;
 import org.apache.hudi.avro.processors.Parser;
+import org.apache.hudi.avro.processors.TimestampMicroLogicalTypeProcessor;
+import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
@@ -42,6 +44,9 @@ import org.apache.spark.sql.RowFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -213,6 +218,61 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
         return Pair.of(true, convertJsonToRow((Map<String, Object>) value, schema));
       }
     };
+  }
+
+  @Override
+  protected JsonFieldProcessor generateTimestampMilliLogicalTypeHandler() {
+    return new TimestampMilliToRowLogicalTypeProcessor();
+  }
+
+  private static class TimestampMilliToRowLogicalTypeProcessor extends TimestampMilliLogicalTypeProcessor {
+    @Override
+    public Pair<Boolean, Object> convert(
+        Object value, String name, Schema schema) {
+      Pair<Boolean, Object> result = convertCommon(
+          new Parser.LongParser() {
+            @Override
+            public Pair<Boolean, Object> handleStringValue(String value) {
+              return convertDateTime(
+                  value,
+                  null,
+                  time -> Instant.EPOCH.until(time, ChronoField.MILLI_OF_SECOND.getBaseUnit()));  // Diff in millis
+            }
+          },
+          value, schema);
+      if (result.getLeft()) {
+        return Pair.of(true, new Timestamp((Long) result.getRight()));
+      }
+      return Pair.of(false, null);
+    }
+  }
+
+  @Override
+  protected JsonFieldProcessor generateTimestampMicroLogicalTypeHandler() {
+    return new TimestampMicroToRowLogicalTypeProcessor();
+  }
+
+  private static class TimestampMicroToRowLogicalTypeProcessor extends TimestampMicroLogicalTypeProcessor {
+    @Override
+    public Pair<Boolean, Object> convert(
+        Object value, String name, Schema schema) {
+      Pair<Boolean, Object> result = convertCommon(
+          new Parser.LongParser() {
+            @Override
+            public Pair<Boolean, Object> handleStringValue(String value) {
+              return convertDateTime(
+                  value,
+                  null,
+                  time -> Instant.EPOCH.until(time, ChronoField.MICRO_OF_SECOND.getBaseUnit()));  // Diff in micro
+            }
+          },
+          value, schema);
+      if (result.getLeft()) {
+        // timestamp in spark sql doesn't support precision to the micro.
+        return Pair.of(true, new Timestamp(((Long) result.getRight()) / 1000));
+      }
+      return Pair.of(false, null);
+    }
   }
 
   @Override

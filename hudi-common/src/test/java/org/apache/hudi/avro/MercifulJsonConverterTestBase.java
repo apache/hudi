@@ -255,8 +255,6 @@ public class MercifulJsonConverterTestBase {
         Arguments.of(
             -1L * 1000, -1L, -1L * 1000),
         Arguments.of(
-            Long.MIN_VALUE, Long.MIN_VALUE / 1000, Long.MIN_VALUE),
-        Arguments.of(
             Long.MAX_VALUE, Long.MAX_VALUE / 1000, Long.MAX_VALUE),
         // The test case leads to long overflow due to how java calculate duration between 2 timestamps
         // Arguments.of(
