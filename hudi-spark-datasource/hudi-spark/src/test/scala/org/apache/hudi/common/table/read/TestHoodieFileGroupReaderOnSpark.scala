@@ -20,9 +20,9 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
-import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, FileSlice, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.storage.StorageConfiguration
@@ -110,16 +110,21 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def validateRecordsInFileGroup(basePath: String,
                                           actualRecordList: util.List[InternalRow],
                                           schema: Schema,
-                                          fileGroupId: String): Unit = {
-    val expectedDf = spark.read.format("hudi")
-      .option(FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(basePath)
-      .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileGroupId))
-    assertEquals(expectedDf.count, actualRecordList.size)
-    val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
-      spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
-    assertEquals(0, expectedDf.except(actualDf).count())
-    assertEquals(0, actualDf.except(expectedDf).count())
+                                          fileSlice: FileSlice,
+                                          isSkipMerge: Boolean): Unit = {
+    //TODO [HUDI-8207] get rid of this if block, and revert the argument change from (fileGroupId: String -> fileSlice: FileSlice)
+    if (!isSkipMerge || fileSlice.getLogFiles.count() < 2) {
+      val expectedDf = spark.read.format("hudi")
+        .option(FILE_GROUP_READER_ENABLED.key(), "false")
+        .option(HoodieReaderConfig.MERGE_TYPE.key, if (isSkipMerge) HoodieReaderConfig.REALTIME_SKIP_MERGE else HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE)
+        .load(basePath)
+        .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileSlice.getFileId))
+      assertEquals(expectedDf.count, actualRecordList.size)
+      val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
+        spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
+      assertEquals(0, expectedDf.except(actualDf).count())
+      assertEquals(0, actualDf.except(expectedDf).count())
+    }
   }
 
   override def getComparableUTF8String(value: String): Comparable[_] = {

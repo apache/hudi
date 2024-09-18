@@ -47,7 +47,6 @@ import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
-import org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -573,7 +572,6 @@ public class HoodieInputFormatUtils {
    */
   public static boolean shouldUseFilegroupReader(final JobConf jobConf) {
     return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
-        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
-        && !jobConf.getBoolean(HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP, false);
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue());
   }
 }
