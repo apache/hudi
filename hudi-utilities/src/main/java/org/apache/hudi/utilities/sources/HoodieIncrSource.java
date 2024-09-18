@@ -72,7 +72,7 @@ public class HoodieIncrSource extends RowSource {
   public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
       CollectionUtils.createImmutableSet(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
-  private Option<HoodieIngestionMetrics> metricsOption;
+  private final Option<HoodieIngestionMetrics> metricsOption;
 
   public static class Config {
 
@@ -146,15 +146,7 @@ public class HoodieIncrSource extends RowSource {
 
   public HoodieIncrSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                           StreamContext streamContext) {
-    super(props, sparkContext, sparkSession, streamContext);
-    this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
-    this.metricsOption = Option.empty();
-    for (Object key : props.keySet()) {
-      String keyString = key.toString();
-      if (HOODIE_INCR_SOURCE_READ_OPT_KEYS.contains(keyString)) {
-        readOpts.put(keyString, props.getString(key.toString()));
-      }
-    }
+    this(props, sparkContext, sparkSession, null, streamContext);
   }
 
   public HoodieIncrSource(
@@ -163,7 +155,14 @@ public class HoodieIncrSource extends RowSource {
       SparkSession sparkSession,
       HoodieIngestionMetrics metricsOption,
       StreamContext streamContext) {
-    this(props, sparkContext, sparkSession, streamContext);
+    super(props, sparkContext, sparkSession, streamContext);
+    for (Object key : props.keySet()) {
+      String keyString = key.toString();
+      if (HOODIE_INCR_SOURCE_READ_OPT_KEYS.contains(keyString)) {
+        readOpts.put(keyString, props.getString(key.toString()));
+      }
+    }
+    this.snapshotLoadQuerySplitter = SnapshotLoadQuerySplitter.getInstance(props);
     this.metricsOption = Option.ofNullable(metricsOption);
   }
 
