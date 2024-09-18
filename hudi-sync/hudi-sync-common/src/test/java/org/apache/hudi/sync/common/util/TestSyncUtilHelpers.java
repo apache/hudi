@@ -18,6 +18,8 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.common.HoodieSyncTool;
@@ -30,11 +32,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,9 +71,26 @@ public class TestSyncUtilHelpers {
         hadoopConf,
         fileSystem,
         BASE_PATH,
-        BASE_FORMAT
+        BASE_FORMAT,
+        Option.empty()
     );
     assertTrue(clazz.isAssignableFrom(syncTool.getClass()));
+  }
+
+  @Test
+  public void testRunValidSyncClass() {
+    String testId = UUID.randomUUID().toString();
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(DummySyncTool3.SYNC_KEY, testId);
+    SyncUtilHelpers.runHoodieMetaSync(
+        DummySyncTool3.class.getName(),
+        properties,
+        hadoopConf,
+        fileSystem,
+        BASE_PATH,
+        BASE_FORMAT
+    );
+    assertEquals(1, DummySyncTool3.NUM_SYNCS.get(testId).get());
   }
 
   /**
@@ -84,7 +107,8 @@ public class TestSyncUtilHelpers {
         hadoopConf,
         fileSystem,
         BASE_PATH,
-        BASE_FORMAT
+        BASE_FORMAT,
+        Option.empty()
     );
     assertTrue(clazz.isAssignableFrom(syncTool.getClass()));
   }
@@ -98,7 +122,8 @@ public class TestSyncUtilHelpers {
           hadoopConf,
           fileSystem,
           BASE_PATH,
-          BASE_FORMAT
+          BASE_FORMAT,
+          Option.empty()
       );
     });
 
@@ -183,6 +208,20 @@ public class TestSyncUtilHelpers {
     @Override
     public void syncHoodieTable() {
       throw new HoodieException("Method unimplemented as its a test class");
+    }
+  }
+
+  public static class DummySyncTool3 extends HoodieSyncTool {
+    private static final String SYNC_KEY = "test.key";
+    private static final Map<String, AtomicInteger> NUM_SYNCS = new HashMap<>();
+
+    public DummySyncTool3(Properties props, Configuration hadoopconf, Option<HoodieTableMetaClient> metaClient) {
+      super(props, hadoopconf);
+    }
+
+    @Override
+    public void syncHoodieTable() {
+      NUM_SYNCS.computeIfAbsent(props.getProperty(SYNC_KEY), key -> new AtomicInteger(0)).getAndIncrement();
     }
   }
 

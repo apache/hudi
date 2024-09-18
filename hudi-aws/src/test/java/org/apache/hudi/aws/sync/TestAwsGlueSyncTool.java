@@ -19,20 +19,32 @@
 package org.apache.hudi.aws.sync;
 
 import org.apache.hudi.aws.testutils.GlueTestUtil;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.sync.common.HoodieSyncTool;
+import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.services.glue.GlueAsyncClient;
+import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
 
 import java.io.IOException;
 
+import static org.apache.hudi.aws.testutils.GlueTestUtil.getHadoopConf;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.RECREATE_GLUE_TABLE_ON_ERROR;
 import static org.apache.hudi.hive.HiveSyncConfig.RECREATE_HIVE_TABLE_ON_ERROR;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TestAwsGlueSyncTool {
@@ -42,7 +54,7 @@ class TestAwsGlueSyncTool {
   @BeforeEach
   void setUp() throws IOException {
     GlueTestUtil.setUp();
-    awsGlueCatalogSyncTool = new MockAwsGlueCatalogSyncTool(glueSyncProps, GlueTestUtil.getHadoopConf());
+    awsGlueCatalogSyncTool = new MockAwsGlueCatalogSyncTool(glueSyncProps, getHadoopConf());
   }
 
   @AfterEach
@@ -64,6 +76,27 @@ class TestAwsGlueSyncTool {
   }
 
   private void reinitGlueSyncTool() {
-    awsGlueCatalogSyncTool = new MockAwsGlueCatalogSyncTool(glueSyncProps, GlueTestUtil.getHadoopConf());
+    awsGlueCatalogSyncTool = new MockAwsGlueCatalogSyncTool(glueSyncProps, getHadoopConf());
+  }
+
+  @Test
+  void validateInitThroughSyncTool() throws Exception {
+    try (MockedStatic<GlueAsyncClient> mockedStatic = mockStatic(GlueAsyncClient.class)) {
+      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
+      mockedStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+      when(builder.credentialsProvider(any())).thenReturn(builder);
+      GlueAsyncClient mockClient = mock(GlueAsyncClient.class);
+      when(builder.build()).thenReturn(mockClient);
+      HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
+          AwsGlueCatalogSyncTool.class.getName(),
+          new TypedProperties(),
+          getHadoopConf(),
+          GlueTestUtil.fileSystem,
+          GlueTestUtil.getMetaClient().getBasePath().toString(),
+          "PARQUET",
+          Option.empty());
+      assertTrue(syncTool instanceof AwsGlueCatalogSyncTool);
+      syncTool.close();
+    }
   }
 }

@@ -60,7 +60,7 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = baseFileIterator.next();
+      nextRecord = readerContext.seal(baseFileIterator.next());
       return true;
     }
 

@@ -242,7 +242,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
       .load(basePath)
-    assertEquals(200, hudiIncDF4SkipMerge.count())
+    assertEquals(250, hudiIncDF4SkipMerge.count())
 
     // Fourth Operation:
     // Insert records to a new partition. Produced a new parquet file.
