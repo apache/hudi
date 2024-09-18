@@ -55,12 +55,12 @@ public final class ErrorTableUtils {
 
     Class<?>[] legacyArgClass = new Class[]{HoodieStreamer.Config.class,
         SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class};
-    Class<?>[] argClassV1 = new Class[]{HoodieStreamer.Config.class,
+    Class<?>[] argClass = new Class[] {HoodieStreamer.Config.class,
         SparkSession.class, TypedProperties.class, HoodieSparkEngineContext.class, FileSystem.class, Option.class};
 
     try {
-      if (ReflectionUtils.hasConstructor(errorTableWriterClass, argClassV1)) {
-        return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClassV1)
+      if (ReflectionUtils.hasConstructor(errorTableWriterClass, argClass)) {
+        return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(argClass)
             .newInstance(cfg, sparkSession, props, hoodieSparkContext, fs, metrics));
       } else if (ReflectionUtils.hasConstructor(errorTableWriterClass, legacyArgClass)) {
         return Option.of((BaseErrorTableWriter) ReflectionUtils.getClass(errorTableWriterClass).getConstructor(legacyArgClass)

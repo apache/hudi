@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
@@ -53,6 +54,11 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
       this.errorTableWriteTimerName = getMetricsName("timer", "errorTableWrite");
     }
+  }
+
+  @VisibleForTesting
+  Metrics getMetrics() {
+    return metrics;
   }
 
   @Override

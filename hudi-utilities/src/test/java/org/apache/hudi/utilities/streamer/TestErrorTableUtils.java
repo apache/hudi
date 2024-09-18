@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamerSchemaEvolutionBase.TestErrorTable;
+import org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamerSchemaEvolutionBase.TestErrorTableV1;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.sql.SparkSession;
@@ -57,10 +58,15 @@ public class TestErrorTableUtils {
         () -> ErrorTableUtils.getErrorTableWriter(
             new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()));
 
-    // Proper error table writer config
+    // Proper error table writer config: legacy constructor
     props.put("hoodie.errortable.write.class", TestErrorTable.class.getName());
     assertTrue(ErrorTableUtils.getErrorTableWriter(
         new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()).get() instanceof TestErrorTable);
+
+    // Proper error table writer config: latest constructor
+    props.put("hoodie.errortable.write.class", TestErrorTableV1.class.getName());
+    assertTrue(ErrorTableUtils.getErrorTableWriter(
+        new HoodieStreamer.Config(), sparkSession, props, sparkContext, fileSystem, Option.empty()).get() instanceof TestErrorTableV1);
 
     // Wrong error table writer config
     props.put("hoodie.errortable.write.class", HoodieConfig.class.getName());
