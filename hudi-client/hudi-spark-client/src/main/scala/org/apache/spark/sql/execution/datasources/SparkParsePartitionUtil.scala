@@ -22,6 +22,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util
 import org.apache.hudi.keygen.CustomAvroKeyGenerator.PartitionKeyType
 import org.apache.hudi.keygen.{BaseKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{DataType, StringType, StructField, StructType}
@@ -76,8 +77,10 @@ trait SparkParsePartitionUtil extends Serializable with Logging {
             val partitionField = pair.getLeft
             val partitionKeyTypeOpt = pair.getRight
             partitionKeyTypeOpt.map[StructField] {
-              case PartitionKeyType.SIMPLE => nameFieldMap.getOrElse(partitionField, null)
-              case PartitionKeyType.TIMESTAMP => if (shouldUseStringTypeForTimestampPartitionKeyType) StructField(partitionField, StringType) else nameFieldMap.getOrElse(partitionField, null)
+              JFunction.toJavaFunction {
+                case PartitionKeyType.SIMPLE => nameFieldMap.getOrElse(partitionField, null)
+                case PartitionKeyType.TIMESTAMP => if (shouldUseStringTypeForTimestampPartitionKeyType) StructField(partitionField, StringType) else nameFieldMap.getOrElse(partitionField, null)
+              }
             }.orElse(nameFieldMap.getOrElse(partitionField, null))
           })
           .filter(structField => structField != null)
