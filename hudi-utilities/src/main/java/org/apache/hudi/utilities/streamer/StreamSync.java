@@ -1065,7 +1065,12 @@ public class StreamSync implements Serializable, Closeable {
     }
     if (cfg.enableMetaSync && !syncClientToolClasses.isEmpty()) {
       LOG.debug("[MetaSync] Starting sync");
-      HoodieTableMetaClient metaClient = getMetaClient();
+      HoodieTableMetaClient metaClient;
+      try {
+        metaClient = initializeMetaClient();
+      } catch (IOException ex) {
+        throw new HoodieIOException("Failed to load meta client", ex);
+      }
       FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, hoodieSparkContext.hadoopConfiguration());
 
       TypedProperties metaProps = new TypedProperties();
