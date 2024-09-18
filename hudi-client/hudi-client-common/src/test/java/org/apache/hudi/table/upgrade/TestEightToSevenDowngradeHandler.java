@@ -102,9 +102,9 @@ class TestEightToSevenDowngradeHandler {
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
     try (MockedStatic<FSUtils> mockedFSUtils = mockStatic(FSUtils.class);
          MockedStatic<HoodieTableMetadataUtil> mockedMetadataUtils = mockStatic(HoodieTableMetadataUtil.class)) {
-      StoragePath realBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+      StoragePath mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
       mockedFSUtils
-          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, realBasePath, false))
+          .when(() -> FSUtils.getAllPartitionPaths(context, hoodieStorage, mdtBasePath, false))
           .thenReturn(SAMPLE_METADATA_PATHS);
 
       EightToSevenDowngradeHandler.downgradeMetadataPartitions(context, hoodieStorage, metaClient, tablePropsToAdd);
