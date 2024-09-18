@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
@@ -34,9 +35,11 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   private String overallTimerName;
   private String hiveSyncTimerName;
   private String metaSyncTimerName;
+  private String errorTableWriteTimerName;
   private transient Timer overallTimer;
   private transient Timer hiveSyncTimer;
   private transient Timer metaSyncTimer;
+  private transient  Timer errorTableWriteTimer;
 
   public HoodieStreamerMetrics(HoodieWriteConfig writeConfig, HoodieStorage storage) {
     this(writeConfig.getMetricsConfig(), storage);
@@ -49,9 +52,16 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
       this.overallTimerName = getMetricsName("timer", "deltastreamer");
       this.hiveSyncTimerName = getMetricsName("timer", "deltastreamerHiveSync");
       this.metaSyncTimerName = getMetricsName("timer", "deltastreamerMetaSync");
+      this.errorTableWriteTimerName = getMetricsName("timer", "errorTableWrite");
     }
   }
 
+  @VisibleForTesting
+  Metrics getMetrics() {
+    return metrics;
+  }
+
+  @Override
   public Timer.Context getOverallTimerContext() {
     if (writeConfig.isMetricsOn() && overallTimer == null) {
       overallTimer = createTimer(overallTimerName);
@@ -59,6 +69,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     return overallTimer == null ? null : overallTimer.time();
   }
 
+  @Override
   public Timer.Context getHiveSyncTimerContext() {
     if (writeConfig.isMetricsOn() && hiveSyncTimer == null) {
       hiveSyncTimer = createTimer(hiveSyncTimerName);
@@ -66,11 +77,20 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     return hiveSyncTimer == null ? null : hiveSyncTimer.time();
   }
 
+  @Override
   public Timer.Context getMetaSyncTimerContext() {
     if (writeConfig.isMetricsOn() && metaSyncTimer == null) {
       metaSyncTimer = createTimer(metaSyncTimerName);
     }
     return metaSyncTimer == null ? null : metaSyncTimer.time();
+  }
+
+  @Override
+  public Timer.Context getErrorTableWriteTimerContext() {
+    if (writeConfig.isMetricsOn() && errorTableWriteTimer == null) {
+      errorTableWriteTimer = createTimer(errorTableWriteTimerName);
+    }
+    return errorTableWriteTimer == null ? null : errorTableWriteTimer.time();
   }
 
   private Timer createTimer(String name) {
@@ -81,21 +101,31 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     return String.format("%s.%s.%s", writeConfig.getMetricReporterMetricsNamePrefix(), action, metric);
   }
 
+  @Override
   public void updateStreamerMetrics(long durationInNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
     }
   }
 
+  @Override
   public void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", syncClassShortName), getDurationInMs(syncNs));
     }
   }
 
+  @Override
   public void updateStreamerSyncMetrics(long syncEpochTimeInMs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "lastSync"), syncEpochTimeInMs);
+    }
+  }
+
+  @Override
+  public void updateErrorTableCommitDuration(long durationInNs) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "errorTableCommitDuration"), getDurationInMs(durationInNs));
     }
   }
 
@@ -140,18 +170,21 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
    *
    * @param heartbeatTimestampMs the timestamp in milliseconds at which heartbeat is emitted.
    */
+  @Override
   public void updateStreamerHeartbeatTimestamp(long heartbeatTimestampMs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "heartbeatTimestampMs"), heartbeatTimestampMs);
     }
   }
 
+  @Override
   public void updateStreamerSourceDelayCount(String sourceMetricName, long sourceDelayCount) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceDelayCount);
     }
   }
 
+  @Override
   public void updateStreamerSourceNewMessageCount(String sourceMetricName, long sourceNewMessageCount) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", sourceMetricName), sourceNewMessageCount);
