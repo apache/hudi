@@ -272,7 +272,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
 
   private static String createUniqueKey(HoodieReaderContext<ArrayWritable> readerContext, Schema schema, ArrayWritable record, boolean isSkipMerge) {
     if (isSkipMerge) {
-      return readerContext.getRecordKey(record, schema) + readerContext.getValue(record, schema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+      return readerContext.getRecordKey(record, schema) + "_" + readerContext.getValue(record, schema, HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
     } else {
       return readerContext.getRecordKey(record, schema);
     }

@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -70,6 +71,7 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_PAYLOAD_
 import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.fs.FSUtils.getCommitTime;
 import static org.apache.hudi.common.fs.FSUtils.getFileId;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePathInfo;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getDeltaCommitTimeFromLogPath;
@@ -132,7 +134,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
       }
     });
     if (props.containsKey(REALTIME_SKIP_MERGE_PROP)
-        && !props.containsKey(MERGE_TYPE.key())) {
+        && !containsConfigProperty(props, MERGE_TYPE)) {
       if (props.getString(REALTIME_SKIP_MERGE_PROP).equalsIgnoreCase("true")) {
         props.setProperty(MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
       } else {
