@@ -289,12 +289,16 @@ public class HoodieIndexUtils {
     Option<Pair<HoodieRecord, Schema>> mergeResult = recordMerger.merge(existing, existingSchema,
         incoming, writeSchemaWithMetaFields, config.getProps());
     if (!mergeResult.isPresent()) {
+      //the record was deleted
       return Option.empty();
     }
     HoodieRecord<R> result = mergeResult.get().getLeft();
     if (result.getData().equals(HoodieRecord.SENTINEL)) {
+      //the record did not match and merge case and should not be modified
       return Option.of(result);
     }
+
+    //record is inserted or updated
     String partitionPath = keyGenerator.getPartitionPath((GenericRecord) result.getData());
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
             new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), config.getProps());
