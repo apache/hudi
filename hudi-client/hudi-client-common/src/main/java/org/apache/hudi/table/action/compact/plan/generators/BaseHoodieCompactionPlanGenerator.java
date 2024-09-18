@@ -82,18 +82,20 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     // TODO - rollback any compactions in flight
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
     CompletionTimeQueryView completionTimeQueryView = new CompletionTimeQueryView(metaClient);
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(
+    List<String> allPartitionPaths = FSUtils.getAllPartitionPaths(
         engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
     // filter the partition paths if needed to reduce list status
-    partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
-    if (partitionPaths.isEmpty()) {
+    List<String> strategyFilterPartitionPaths = filterPartitionPathsByStrategy(writeConfig, allPartitionPaths);
+    LOG.info("Strategy: {} matched {} partition paths from all {} partitions",
+        writeConfig.getCompactionStrategy().getClass().getSimpleName(), strategyFilterPartitionPaths.size(), allPartitionPaths.size());
+    if (strategyFilterPartitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
       return null;
     }
     // avoid logging all partitions in table by default
-    LOG.info("Looking for files to compact in {} partitions", partitionPaths.size());
-    LOG.debug("Partitions scanned for compaction: {}", partitionPaths);
+    LOG.info("Looking for files to compact in {} partitions", strategyFilterPartitionPaths.size());
+    LOG.debug("Partitions scanned for compaction: {}", strategyFilterPartitionPaths);
     engineContext.setJobStatus(this.getClass().getSimpleName(), "Looking for files to compact: " + writeConfig.getTableName());
 
     SyncableFileSystemView fileSystemView = (SyncableFileSystemView) this.hoodieTable.getSliceView();
@@ -119,7 +121,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     LOG.info("Last completed instant time " + lastCompletedInstantTime);
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 
-    List<HoodieCompactionOperation> operations = engineContext.flatMap(partitionPaths, partitionPath -> fileSystemView
+    List<HoodieCompactionOperation> operations = engineContext.flatMap(strategyFilterPartitionPaths, partitionPath -> fileSystemView
         .getLatestFileSlicesStateless(partitionPath)
         .filter(slice -> filterFileSlice(slice, lastCompletedInstantTime, fgIdsInPendingCompactionAndClustering, instantRange))
         .map(s -> {
@@ -146,7 +148,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
           Option<HoodieBaseFile> dataFile = s.getBaseFile();
           return new CompactionOperation(dataFile, partitionPath, logFiles,
               writeConfig.getCompactionStrategy().captureMetrics(writeConfig, s));
-        }), partitionPaths.size()).stream()
+        }), strategyFilterPartitionPaths.size()).stream()
         .map(CompactionUtils::buildHoodieCompactionOperation).collect(toList());
 
     LOG.info("Total of " + operations.size() + " compaction operations are retrieved");
