@@ -56,7 +56,6 @@ import scala.Function1;
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.spark.sql.HoodieInternalRowUtils.getCachedUnsafeProjection;
 import static org.apache.spark.sql.types.DataTypes.BooleanType;
-import static org.apache.spark.sql.types.DataTypes.ByteType;
 import static org.apache.spark.sql.types.DataTypes.StringType;
 
 /**
