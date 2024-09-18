@@ -21,6 +21,7 @@ package org.apache.hudi.io.sort.merge;
 import org.apache.hudi.avro.HoodieFileFooterSupport;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.log.HoodieSortedMergedLogRecordScanner;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieCreateHandle;
@@ -36,24 +37,24 @@ public class HoodieSortMergeJoinCreateHandle<T, I, K, O> extends HoodieCreateHan
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSortMergeJoinCreateHandle.class);
 
-  private Iterator<HoodieRecord> unmergedRecordsIter;
+  private Iterator<HoodieRecord> logRecords;
 
   public HoodieSortMergeJoinCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                          String partitionPath, String fileId, Iterator<HoodieRecord> recordItr,
                                          TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, Collections.EMPTY_MAP, taskContextSupplier);
-    unmergedRecordsIter = recordItr;
+    logRecords = recordItr;
   }
 
   @Override
   public void write() {
     // Iterate all unmerged records and write them out
-    if (!unmergedRecordsIter.hasNext()) {
+    if (!logRecords.hasNext()) {
       LOG.info("No unmerged records to write for partition path " + partitionPath + " and fileId " + fileId);
       return;
     }
-    while (unmergedRecordsIter.hasNext()) {
-      writeRecord(unmergedRecordsIter.next());
+    while (logRecords.hasNext()) {
+      writeRecord(logRecords.next());
     }
   }
 
@@ -61,8 +62,12 @@ public class HoodieSortMergeJoinCreateHandle<T, I, K, O> extends HoodieCreateHan
   protected void closeInner() {
     // add metadata about sorted
     fileWriter.writeFooterMetadata(HoodieFileFooterSupport.HOODIE_BASE_FILE_SORTED, "true");
-    if (unmergedRecordsIter instanceof ClosableIterator) {
-      ((ClosableIterator) unmergedRecordsIter).close();
+    // set merged record in log
+    if (logRecords instanceof HoodieSortedMergedLogRecordScanner.PreCombinedRecordIterator) {
+      writeStatus.getStat().setTotalUpdatedRecordsCompacted(((HoodieSortedMergedLogRecordScanner.PreCombinedRecordIterator) logRecords).getNumMergedRecordsInLog());
+    }
+    if (logRecords instanceof ClosableIterator) {
+      ((ClosableIterator) logRecords).close();
     }
     LOG.info("SortedCreateHandle for partitionPath " + partitionPath + " fileID " + fileId + " wrote with sorted records");
   }

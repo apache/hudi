@@ -212,25 +212,36 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     long maxMemoryForLogScanner = maxMemoryPerCompaction;
     // calculate the max available memory in compaction
     FileSystem fileSystem = (FileSystem) storage.getFileSystem();
-    long logFilesSize = logFiles.stream().map(logFile -> {
-      try {
-        return HadoopFSUtils.getFileSize(fileSystem, new Path(logFile));
-      } catch (IOException e) {
-        throw new HoodieIOException("Failed to get file size for log file " + logFile, e);
-      }
-    }).reduce(Long::sum).orElse(0L);
+    long logFilesSize;
+    if (operation.getMetrics().containsKey(CompactionStrategy.TOTAL_LOG_FILE_SIZE)) {
+      logFilesSize = operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue();
+    } else {
+      logFilesSize = logFiles.stream().map(logFile -> {
+        try {
+          return HadoopFSUtils.getFileSize(fileSystem, new Path(logFile));
+        } catch (IOException e) {
+          throw new HoodieIOException("Failed to get file size for log file " + logFile, e);
+        }
+      }).reduce(Long::sum).orElse(0L);
+    }
     long estimatedLogFilesSize = (long) (logFilesSize * config.getMagnificationRatioForLogFile());
     // set log files related context
+    // TODO: consider log in append mode
     context.setLogFilesContext(logFiles, logFilesSize, estimatedLogFilesSize);
 
     if (oldDataFileOpt.isPresent()) {
+      long baseFileSize;
       StoragePath oldDataPath = oldDataFileOpt.get().getStoragePath();
+      if (operation.getMetrics().containsKey(CompactionStrategy.TOTAL_BASE_FILE_SIZE)) {
+        baseFileSize = operation.getMetrics().get(CompactionStrategy.TOTAL_BASE_FILE_SIZE).longValue();
+      } else {
+        baseFileSize = HadoopFSUtils.getFileSize(fileSystem, new Path(oldDataPath.toUri()));
+      }
+      long estimatedBaseFileSize = (long) (baseFileSize * config.getMagnificationRatioForBaseFile());
+      // set base file related context
       HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(storage.newInstance(oldDataPath, storage.getConf().newInstance()))
           .getReaderFactory(config.getRecordMerger().getRecordType())
           .getFileReader(config, oldDataFileOpt.get().getStoragePath());
-      long baseFileSize = HadoopFSUtils.getFileSize(fileSystem, new Path(oldDataPath.toUri()));
-      long estimatedBaseFileSize = (long) (baseFileSize * config.getMagnificationRatioForBaseFile());
-      // set base file related context
       context.setBaseFileContext(oldDataPath.toString(), baseFileSize, estimatedBaseFileSize, baseFileReader.isSorted());
     }
 
@@ -323,8 +334,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     Iterable<List<WriteStatus>> resultIterable = () -> result;
     return StreamSupport.stream(resultIterable.spliterator(), false).flatMap(Collection::stream).peek(s -> {
       final HoodieWriteStat stat = s.getStat();
-      // TODO: add merged records count
-      // stat.setTotalUpdatedRecordsCompacted(scanner.getNumMergedRecordsInLog());
+      if (scanner instanceof HoodieMergedLogRecordScanner) {
+        stat.setTotalUpdatedRecordsCompacted(((HoodieMergedLogRecordScanner) scanner).getNumMergedRecordsInLog());
+      }
       stat.setTotalLogFilesCompacted(scanner.getTotalLogFiles());
       stat.setTotalLogRecords(scanner.getTotalLogRecords());
       stat.setPartitionPath(operation.getPartitionPath());

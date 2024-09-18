@@ -155,11 +155,13 @@ public class HoodieSortedMergedLogRecordScanner extends AbstractHoodieLogRecordS
     return new PreCombinedRecordIterator(iterator);
   }
 
-  class PreCombinedRecordIterator implements ClosableIterator<HoodieRecord> {
+  public class PreCombinedRecordIterator implements ClosableIterator<HoodieRecord> {
 
     private final ClosableIterator<HoodieRecord> rawIterator;
 
     private Option<HoodieRecord> currentRecord = Option.empty();
+
+    private long numMergedRecordsInLog = 0;
 
     PreCombinedRecordIterator(ClosableIterator<HoodieRecord> rawIterator) {
       this.rawIterator = rawIterator;
@@ -270,7 +272,12 @@ public class HoodieSortedMergedLogRecordScanner extends AbstractHoodieLogRecordS
         outputRecord = currentRecord.get();
         currentRecord = Option.empty();
       }
+      numMergedRecordsInLog++;
       return outputRecord;
+    }
+
+    public long getNumMergedRecordsInLog() {
+      return numMergedRecordsInLog;
     }
   }
 
