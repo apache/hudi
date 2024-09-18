@@ -62,6 +62,7 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieBigQuerySyncClient {
   private static final String PROJECT_ID = "test_project";
+  private static final String BILLING_PROJECT_ID = "test_project";
   private static final String MANIFEST_FILE_URI = "file:/manifest_file";
   private static final String SOURCE_PREFIX = "file:/manifest_file/date=*";
   private static final String TEST_TABLE = "test_table";
@@ -89,6 +90,7 @@ public class TestHoodieBigQuerySyncClient {
   void setup() {
     properties = new Properties();
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID.key(), PROJECT_ID);
+    properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), BILLING_PROJECT_ID);
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME.key(), TEST_DATASET);
     properties.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), tempDir.toString());
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_REQUIRE_PARTITION_FILTER.key(), "true");
