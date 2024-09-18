@@ -204,6 +204,7 @@
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>META-INF/maven/com.fasterxml.jackson.core/jackson-databind/*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
                     <!-- hbase-default.xml comes from hbase-common, hbase related classes used in hudi are in shaded
