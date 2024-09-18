@@ -20,8 +20,9 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
-import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
-import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider
+import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieLockConfig, HoodieWriteConfig}
@@ -157,10 +158,10 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   def testPartitionStatsWithMultiWriter(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> "optimistic_concurrency_control",
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> "LAZY",
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> "org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider",
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
     )
 
     doWriteAndValidateDataAndPartitionStats(hudiOpts,

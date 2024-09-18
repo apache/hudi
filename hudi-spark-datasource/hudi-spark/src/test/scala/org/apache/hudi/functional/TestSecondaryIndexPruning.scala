@@ -21,12 +21,14 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
+import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.config.{HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.{HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
@@ -38,16 +40,16 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.assertResult
 
+import java.util.concurrent.Executors
 import scala.collection.JavaConverters
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
  * Test cases for secondary index
@@ -321,27 +323,23 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   }
 
   /**
-   * Test case to do a write with updates and validate secondary index with multiple writers (only one of them creates secondary index).
+   * Test case to write with updates and validate secondary index with multiple writers.
    */
-  @Test
-  def testSecondaryIndexWithConcurrentWrites(): Unit = {
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexWithConcurrentWrites(tableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
-      val tableName = "hudi_multi_writer_table"
+      val tableName = "hudi_multi_writer_table_" + tableType.name()
 
       // Common Hudi options
-      val hudiOpts = Map(
-        "hoodie.table.name" -> tableName,
-        "hoodie.datasource.write.recordkey.field" -> "record_key_col",
-        "hoodie.datasource.write.precombine.field" -> "ts",
-        "hoodie.datasource.write.operation" -> "upsert",
-        "hoodie.upsert.shuffle.parallelism" -> "2",
-        "hoodie.insert.shuffle.parallelism" -> "2",
-        "hoodie.metadata.enable" -> "true",
-        "hoodie.metadata.record.index.enable" -> "true",
-        "hoodie.enable.data.skipping" -> "true",
-        "hoodie.parquet.small.file.limit" -> "0",
-        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> "optimistic_concurrency_control",
-        HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[PreferWriterConflictResolutionStrategy].getName
+      val hudiOpts = commonOpts ++ Map(
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+        HoodieWriteConfig.TBL_NAME.key -> tableName,
+        HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+        HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+        HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
+        HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
+        HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
       )
 
       // Create the Hudi table
@@ -364,67 +362,68 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            | PARTITIONED BY (partition_key_col)
            | LOCATION '$basePath'
        """.stripMargin)
+      // Insert some data
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
 
-      // Function to perform writes
-      def writer(writerId: Int, promise: Promise[Unit]): Future[Unit] = Future {
-        try {
-          val data = Seq(
-            (System.currentTimeMillis(), s"row${writerId}_1", s"value${writerId}_1", s"p$writerId"),
-            (System.currentTimeMillis(), s"row${writerId}_2", s"value${writerId}_2", s"p$writerId")
-          )
+      val executor = Executors.newFixedThreadPool(2)
+      implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+      val function = new Function1[Int, Boolean] {
+        override def apply(writerId: Int): Boolean = {
+          try {
+            val data = if(writerId == 1) Seq(
+              (System.currentTimeMillis(), s"row$writerId", s"value${writerId}_1", s"p$writerId")
+            ) else Seq(
+              (System.currentTimeMillis(), s"row$writerId", s"value${writerId}_2", s"p$writerId")
+            )
 
-          val df = spark.createDataFrame(data).toDF("ts", "record_key_col", "not_record_key_col", "partition_key_col")
-          df.write.format("hudi")
-            .options(hudiOpts)
-            .mode("append")
-            .save(basePath)
-
-          // Create secondary index (only once)
-          if (writerId == 1) {
-            spark.sql(s"CREATE INDEX idx_not_record_key_col ON $tableName USING secondary_index(not_record_key_col)")
+            val df = spark.createDataFrame(data).toDF("ts", "record_key_col", "not_record_key_col", "partition_key_col")
+            df.write.format("hudi")
+              .options(hudiOpts)
+              .mode("append")
+              .save(basePath)
+            true
+          } catch {
+            case _: HoodieWriteConflictException => false
+            case e => throw new Exception("Multi write failed", e)
           }
-
-          promise.success(())
-        } catch {
-          case e: Exception => promise.failure(e)
         }
       }
+      // Set up futures for two writers
+      val f1 = Future[Boolean] {
+        function.apply(1)
+      }(executorContext)
+      val f2 = Future[Boolean] {
+        function.apply(2)
+      }(executorContext)
 
-      // Set up promises and futures for two writers
-      val promise1 = Promise[Unit]()
-      val promise2 = Promise[Unit]()
+      Await.result(f1, Duration("5 minutes"))
+      Await.result(f2, Duration("5 minutes"))
 
-      val future1 = writer(1, promise1)
-      val future2 = writer(2, promise2)
+      assertTrue(f1.value.get.get || f2.value.get.get)
+      executor.shutdownNow()
 
-      // Wait for both writers to complete
-      Await.result(Future.sequence(Seq(future1, future2)), 5.minutes)
-
-      // Validate the secondary index
+      // Validate the secondary index got created
       metaClient = HoodieTableMetaClient.builder()
         .setBasePath(basePath)
         .setConf(HoodieTestUtils.getDefaultStorageConf)
         .build()
-
       assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
 
       // Query the secondary index metadata
-      val indexData = spark.sql(
+      checkAnswer(
         s"""
-           |SELECT key, SecondaryIndexMetadata.recordKey
+           |SELECT key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted
            |FROM hudi_metadata('$basePath')
            |WHERE type=7
-       """.stripMargin).collect()
-
-      // Expected results
-      val expectedKeys = Seq(
-        ("value1_1", "row1_1"),
-        ("value1_2", "row1_2"),
-        ("value2_1", "row2_1"),
-        ("value2_2", "row2_2")
+       """.stripMargin)(
+        Seq("abc", "row1", true),
+        Seq("cde", "row2", true),
+        Seq("value1_1", "row1", false),
+        Seq("value2_2", "row2", false)
       )
-
-      assert(indexData.map(row => (row.getString(0), row.getString(1))).toSet == expectedKeys.toSet)
     }
   }
 
