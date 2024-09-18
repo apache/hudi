@@ -25,7 +25,7 @@ import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.avro.Schema.Type
 import org.apache.avro.generic.GenericRecord
-import org.apache.avro.{JsonProperties, Schema}
+import org.apache.avro.{AvroRuntimeException, JsonProperties, Schema}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructType}
@@ -149,6 +149,7 @@ object AvroConversionUtils {
       val avroSchema = schemaConverters.toAvroType(structType, nullable = false, structName, recordNamespace)
       getAvroSchemaWithDefaults(avroSchema, structType)
     } catch {
+      case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException("Failed to convert struct type to avro schema: " + structType, e)
     }
   }
