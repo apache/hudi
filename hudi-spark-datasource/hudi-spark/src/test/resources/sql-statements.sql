@@ -224,11 +224,11 @@ select id, name, price, ts, dt from h1_p order by id;
 
 merge into h1_p t0
 using (
-  select 1 as id, '_delete' as name, 10 as price, 1000 as ts, '2021-05-07' as dt
+  select 1 as id, '_delete' as name, 10 as price, 1000L as ts, '2021-05-07' as dt
   union
-  select 2 as id, '_update' as name, 12 as price, 1001 as ts, '2021-05-07' as dt
+  select 2 as id, '_update' as name, 12 as price, 1001L as ts, '2021-05-07' as dt
   union
-  select 6 as id, '_insert' as name, 10 as price, 1000 as ts, '2021-05-08' as dt
+  select 6 as id, '_insert' as name, 10 as price, 1000L as ts, '2021-05-08' as dt
 ) s0
 on s0.id = t0.id
 when matched and s0.name = '_update'

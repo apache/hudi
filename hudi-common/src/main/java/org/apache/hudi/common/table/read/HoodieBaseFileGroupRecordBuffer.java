@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
@@ -158,44 +157,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   /**
-   * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
-   * If one of the {@link Comparable}s is a String, assumes that both are String values for comparison.
-   *
-   * @param readerContext {@link HoodieReaderContext} instance.
-   * @param o1 {@link Comparable} object.
-   * @param o2 other {@link Comparable} object to compare to.
-   * @return comparison result.
-   */
-  @VisibleForTesting
-  static int compareTo(HoodieReaderContext readerContext, Comparable o1, Comparable o2) {
-    // TODO(HUDI-7848): fix the delete records to contain the correct ordering value type
-    //  so this util with the number comparison is not necessary.
-    try {
-      return o1.compareTo(o2);
-    } catch (ClassCastException e) {
-      boolean isO1LongOrInteger = (o1 instanceof Long || o1 instanceof Integer);
-      boolean isO2LongOrInteger = (o2 instanceof Long || o2 instanceof Integer);
-      boolean isO1DoubleOrFloat = (o1 instanceof Double || o1 instanceof Float);
-      boolean isO2DoubleOrFloat = (o2 instanceof Double || o2 instanceof Float);
-      if (isO1LongOrInteger && isO2LongOrInteger) {
-        Long o1LongValue = ((Number) o1).longValue();
-        Long o2LongValue = ((Number) o2).longValue();
-        return o1LongValue.compareTo(o2LongValue);
-      } else if ((isO1LongOrInteger && isO2DoubleOrFloat)
-          || (isO1DoubleOrFloat && isO2LongOrInteger)) {
-        Double o1DoubleValue = ((Number) o1).doubleValue();
-        Double o2DoubleValue = ((Number) o2).doubleValue();
-        return o1DoubleValue.compareTo(o2DoubleValue);
-      } else {
-        return readerContext.compareTo(o1, o2);
-      }
-    } catch (Throwable e) {
-      throw new HoodieException("Cannot compare values: "
-          + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
-    }
-  }
-
-  /**
    * Merge two log data records if needed.
    *
    * @param record
@@ -247,8 +208,18 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             }
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
                 Option.of(record), metadata, readerSchema, props);
-            if (compareTo(readerContext, incomingOrderingValue, existingOrderingValue) > 0) {
-              return Option.of(Pair.of(record, metadata));
+
+            try {
+              if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
+                return Option.of(Pair.of(record, metadata));
+              }
+            } catch (ClassCastException e) {
+              throw new HoodieException(String.format(
+                  "Cannot compare values: %s(%s), %s(%s)",
+                  incomingOrderingValue,
+                  incomingOrderingValue.getClass(),
+                  existingOrderingValue,
+                  existingOrderingValue.getClass()));
             }
             return Option.empty();
           case CUSTOM:
@@ -416,8 +387,17 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-          if (compareTo(readerContext, oldOrderingValue, newOrderingValue) > 0) {
-            return older;
+          try {
+            if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
+              return older;
+            }
+          } catch (ClassCastException e) {
+            throw new HoodieException(String.format(
+                "Cannot compare values: %s(%s), %s(%s)",
+                oldOrderingValue,
+                oldOrderingValue.getClass(),
+                newOrderingValue,
+                newOrderingValue.getClass()));
           }
           return newer;
         case CUSTOM:
