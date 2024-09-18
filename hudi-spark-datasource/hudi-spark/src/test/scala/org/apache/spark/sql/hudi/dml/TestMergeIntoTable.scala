@@ -341,134 +341,86 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
   }
 
   test("Test MergeInto with changing partition and global index") {
-    withRecordType()(withTempDir { tmp =>
-      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE") {
-        Seq("cow","mor").foreach { tableType => {
-          val sourceTable = generateTableName
-          val targetTable = generateTableName
-          spark.sql(
-            s"""
-               | create table $sourceTable
-               | using parquet
-               | partitioned by (partition)
-               | location '${tmp.getCanonicalPath}/$sourceTable'
-               | as
-               | select
-               | 1 as id,
-               | 2 as version,
-               | 'yes' as mergeCond,
-               | '2023-10-02' as partition
-            """.stripMargin
-          )
-          spark.sql(s"insert into $sourceTable values(2, 2, 'no', '2023-10-02')")
-          spark.sql(s"insert into $sourceTable values(3, 1, 'insert', '2023-10-01')")
-
-          spark.sql(
-            s"""
-               | create table $targetTable (
-               |  id int,
-               |  version int,
-               |  mergeCond string,
-               |  partition string
-               | ) using hudi
-               | partitioned by (partition)
-               | tblproperties (
-               |    'primaryKey' = 'id',
-               |    'type' = '$tableType',
-               |    'payloadClass' = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload',
-               |    'payloadType' = 'CUSTOM',
-               |    preCombineField = 'version'
-               | )
-               | location '${tmp.getCanonicalPath}/$targetTable'
+    Seq(true, false).foreach { updatePartitionPathEnabled =>
+      withTempDir { tmp =>
+        withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE",
+          "hoodie.simple.index.update.partition.path" -> updatePartitionPathEnabled.toString) {
+          Seq("cow","mor").foreach { tableType =>
+            val targetTable = generateTableName
+            spark.sql(
+              s"""
+                 | create table $targetTable (
+                 |  id int,
+                 |  version int,
+                 |  mergeCond string,
+                 |  partition string
+                 | ) using hudi
+                 | partitioned by (partition)
+                 | tblproperties (
+                 |    'primaryKey' = 'id',
+                 |    'type' = '$tableType',
+                 |    'payloadClass' = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload',
+                 |    'payloadType' = 'CUSTOM',
+                 |    preCombineField = 'version'
+                 | )
+                 | location '${tmp.getCanonicalPath}/$targetTable'
              """.stripMargin)
 
-          spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
-          spark.sql(s"insert into $targetTable values(2, 3, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(2, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(3, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(4, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(5, 1, 'insert', '2023-10-01')")
+            spark.sql(s"insert into $targetTable values(6, 1, 'insert', '2023-10-01')")
 
-          spark.sql(
-            s"""
-               | merge into $targetTable t using
-               | (select * from $sourceTable) as s
-               | on t.id=s.id
-               | when matched and s.mergeCond = 'yes' then update set *
-               | when not matched then insert *
+            val sourceTable = generateTableName
+            spark.sql(
+              s"""
+                 | create table $sourceTable (
+                 | id int,
+                 | version int,
+                 | mergeCond string,
+                 | partition string
+                 | ) using parquet
+                 | partitioned by (partition)
+                 | location '${tmp.getCanonicalPath}/$sourceTable'
+            """.stripMargin)
+
+            //merge cond matches and partition is changed
+            spark.sql(s"insert into $sourceTable values(1, 2, 'yes', '2023-10-02')")
+            //merge cond does not match and partition is changed
+            spark.sql(s"insert into $sourceTable values(2, 2, 'no', '2023-10-02')")
+            //merge cond matches and partition is not changed
+            spark.sql(s"insert into $sourceTable values(3, 2, 'yes', '2023-10-01')")
+            //merge cond does not match and partition is not changed
+            spark.sql(s"insert into $sourceTable values(4, 2, 'no', '2023-10-01')")
+            //merge cond is delete and partition is changed
+            spark.sql(s"insert into $sourceTable values(5, 2, 'delete', '2023-10-02')")
+            //merge cond is delete and partition is not changed
+            spark.sql(s"insert into $sourceTable values(6, 2, 'delete', '2023-10-01')")
+            //id does not match
+            spark.sql(s"insert into $sourceTable values(7, 1, 'insert', '2023-10-01')")
+
+            spark.sql(
+              s"""
+                 | merge into $targetTable t using
+                 | (select * from $sourceTable) as s
+                 | on t.id=s.id
+                 | when matched and s.mergeCond = 'yes' then update set *
+                 | when matched and s.mergeCond = 'delete' then delete
+                 | when not matched then insert *
              """.stripMargin)
-          checkAnswer(s"select id,version,_hoodie_partition_path from $targetTable order by id")(
-            Seq(1, 2, "partition=2023-10-02"),
-            Seq(2, 3, "partition=2023-10-01"),
-            Seq(3, 1, "partition=2023-10-01")
-          )
+             val updatedPartitionPath = if (updatePartitionPathEnabled) "partition=2023-10-02" else "partition=2023-10-01"
+            checkAnswer(s"select id,version,_hoodie_partition_path from $targetTable order by id")(
+              Seq(1, 2, updatedPartitionPath),
+              Seq(2, 1, "partition=2023-10-01"),
+              Seq(3, 2, "partition=2023-10-01"),
+              Seq(4, 1, "partition=2023-10-01"),
+              Seq(7, 1, "partition=2023-10-01"))
+          }
         }
-        } }
-    })
-    spark.sessionState.conf.unsetConf("hoodie.index.type")
-  }
-
-  test("Test MergeInto with changing partition and global index and update partition path false") {
-    withRecordType()(withTempDir { tmp =>
-      withSQLConf("hoodie.index.type" -> "GLOBAL_SIMPLE", "hoodie.simple.index.update.partition.path" -> "false") {
-        Seq("cow", "mor").foreach { tableType => {
-          val sourceTable = generateTableName
-          val targetTable = generateTableName
-          spark.sql(
-            s"""
-               | create table $sourceTable
-               | using parquet
-               | partitioned by (partition)
-               | location '${tmp.getCanonicalPath}/$sourceTable'
-               | as
-               | select
-               | 1 as id,
-               | 2 as version,
-               | 'yes' as mergeCond,
-               | '2023-10-02' as partition
-            """.stripMargin
-          )
-          spark.sql(s"insert into $sourceTable values(2, 2, 'yes', '2023-10-02')")
-          spark.sql(s"insert into $sourceTable values(3, 1, 'yes', '2023-10-01')")
-
-          spark.sql(
-            s"""
-               | create table $targetTable (
-               |  id int,
-               |  version int,
-               |  mergeCond string,
-               |  partition string
-               | ) using hudi
-               | partitioned by (partition)
-               | tblproperties (
-               |    'primaryKey' = 'id',
-               |    'type' = '$tableType',
-               |    'payloadClass' = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload',
-               |    'payloadType' = 'CUSTOM',
-               |    'preCombineField' = 'version',
-               |    "hoodie.simple.index.update.partition.path" = "false",
-               |    "hoodie.index.type" = "GLOBAL_SIMPLE"
-               | )
-               | location '${tmp.getCanonicalPath}/$targetTable'
-             """.stripMargin)
-
-          spark.sql(s"insert into $targetTable values(1, 1, 'insert', '2023-10-01')")
-          spark.sql(s"insert into $targetTable values(2, 1, 'insert', '2023-10-01')")
-
-          spark.sql(
-            s"""
-               | merge into $targetTable t using
-               | (select * from $sourceTable) as s
-               | on t.id=s.id
-               | when matched and s.mergeCond = 'yes' then update set *
-               | when not matched then insert *
-             """.stripMargin)
-          checkAnswer(s"select id,version,_hoodie_partition_path from $targetTable order by id")(
-            Seq(1, 2, "partition=2023-10-01"),
-            Seq(2, 2, "partition=2023-10-01"),
-            Seq(3, 1, "partition=2023-10-01")
-          )
-        }
-        } }
-    })
-    spark.sessionState.conf.unsetConf("hoodie.index.type")
-    spark.sessionState.conf.unsetConf("hoodie.simple.index.update.partition.path")
+      }
+    }
   }
 
   test("Test MergeInto for MOR table ") {
