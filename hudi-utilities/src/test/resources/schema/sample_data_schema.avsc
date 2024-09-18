@@ -21,7 +21,8 @@
   "fields": [
     {
       "name": "data",
-      "type": "string"
+      "type": "string",
+      "aliases": ["old_data"]
     }
   ]
 }

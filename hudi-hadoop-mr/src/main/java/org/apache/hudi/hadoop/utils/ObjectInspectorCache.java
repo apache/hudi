@@ -19,8 +19,6 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
@@ -46,8 +44,7 @@ import java.util.stream.IntStream;
  */
 public class ObjectInspectorCache {
   private final Map<String, TypeInfo> columnTypeMap = new HashMap<>();
-  private final Cache<Schema, ArrayWritableObjectInspector>
-      objectInspectorCache = Caffeine.newBuilder().maximumSize(1000).build();
+  private final Map<Schema, ArrayWritableObjectInspector> objectInspectorCache = new HashMap<>();
 
   public Map<String, TypeInfo> getColumnTypeMap() {
     return columnTypeMap;
@@ -82,7 +79,7 @@ public class ObjectInspectorCache {
   }
 
   public ArrayWritableObjectInspector getObjectInspector(Schema schema) {
-    return objectInspectorCache.get(schema, s -> {
+    return objectInspectorCache.computeIfAbsent(schema, s -> {
       List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
       List<TypeInfo> columnTypeList = columnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
       StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
@@ -92,12 +89,7 @@ public class ObjectInspectorCache {
   }
 
   public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    try {
-      ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-      return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
-    } catch (Exception e) {
-      throw e;
-    }
-
+    ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
+    return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
   }
 }

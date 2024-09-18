@@ -1,0 +1,81 @@
+{
+  "type": "record",
+  "name": "Person",
+  "namespace": "com.example",
+  "fields": [
+    {
+      "name": "firstName",
+      "type": "string"
+    },
+    {
+      "name": "lastName",
+      "type": ["null", "string"],
+      "aliases": ["surname"],
+      "default": null
+    },
+    {
+      "name": "birthdate",
+      "type": {
+        "type": "record",
+        "name": "Birthdate",
+        "fields": [
+          {
+            "name": "year",
+            "type": "int"
+          },
+          {
+            "name": "month",
+            "type": "int"
+          },
+          {
+            "name": "day",
+            "type": "int"
+          }
+        ]
+      },
+      "aliases": ["dob", "dateofbirth"]
+    },
+    {
+      "name": "address",
+      "type": {
+        "type": "record",
+        "name": "Address",
+        "fields": [
+          {
+            "name": "street",
+            "type": "string"
+          },
+          {
+            "name": "city",
+            "type": "string"
+          },
+          {
+            "name": "zipCode",
+            "type": "string",
+            "aliases": ["postalCode"]
+          },
+          {
+            "name": "country",
+            "type": ["null", {
+              "type": "record",
+              "name": "Country",
+              "fields": [
+                {
+                  "name": "name",
+                  "type": "string"
+                },
+                {
+                  "name": "code",
+                  "type": ["null", "string"],
+                  "aliases": ["countryCode"],
+                  "default": null
+                }
+              ]
+            }]
+          }
+        ]
+      },
+      "aliases": ["residence"]
+    }
+  ]
+}

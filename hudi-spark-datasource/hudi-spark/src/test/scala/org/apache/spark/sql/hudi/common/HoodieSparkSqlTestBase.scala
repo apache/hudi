@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -224,7 +224,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
-        case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
+        case HoodieRecordType.SPARK => (classOf[DefaultSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
@@ -240,7 +240,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   protected def getRecordType(): HoodieRecordType = {
     val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
-    if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
+    if (merger.equals(classOf[DefaultSparkRecordMerger].getName)) {
       HoodieRecordType.SPARK
     } else {
       HoodieRecordType.AVRO

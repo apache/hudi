@@ -29,7 +29,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -191,7 +191,8 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = combinedOpts.getOrElse(PRECOMBINE_FIELD.key, "")
+    val preCombineField = combinedOpts.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key,
+      combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -555,12 +556,11 @@ object ProvidesHoodieConfig {
       val keyGenClass = ReflectionUtils.getClass(tableConfigKeyGeneratorClassName)
       if (classOf[CustomKeyGenerator].equals(keyGenClass)
         || classOf[CustomAvroKeyGenerator].equals(keyGenClass)) {
-        // For custom key generator, we have to take the write config value from
-        // "hoodie.datasource.write.partitionpath.field" which contains the key generator
-        // type, whereas the table config only contains the prtition field names without
-        // key generator types.
+        val partitionFieldWithKeyGenType = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(catalogTable.tableConfig).orElse("")
         if (writeConfigPartitionField.isDefined) {
           writeConfigPartitionField.get
+        } else if (StringUtils.nonEmpty(partitionFieldWithKeyGenType)) {
+          partitionFieldWithKeyGenType
         } else {
           log.warn("Write config \"hoodie.datasource.write.partitionpath.field\" is not set for "
             + "custom key generator. This may fail the write operation.")

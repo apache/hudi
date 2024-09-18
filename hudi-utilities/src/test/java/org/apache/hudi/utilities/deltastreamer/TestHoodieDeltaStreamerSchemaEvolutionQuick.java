@@ -241,7 +241,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     }
     assertRecordCount(numRecords);
 
-    df = sparkSession.read().format("hudi").options(readOpts).load(tableBasePath);
+    df = sparkSession.read().format("hudi").load(tableBasePath);
     df.show(100,false);
     df.cache();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
@@ -492,7 +492,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
           .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
-      assertTrue(containsErrorMessage(e, "java.lang.NullPointerException",
+      assertTrue(containsErrorMessage(e, "has no default value and is non-nullable",
           "Schema validation failed due to missing field."));
     }
   }

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi;
+package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,10 +29,9 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 
 /**
- * Spark merger that always chooses the newer record
+ * Hive merger that always chooses the newer record
  */
-public class OverwriteWithLatestSparkMerger extends HoodieSparkRecordMerger {
-
+public class OverwriteWithLatestHiveRecordMerger extends HoodieHiveRecordMerger {
   @Override
   public String getMergingStrategy() {
     return OVERWRITE_MERGER_STRATEGY_UUID;
@@ -42,5 +41,4 @@ public class OverwriteWithLatestSparkMerger extends HoodieSparkRecordMerger {
   public Option<Pair<HoodieRecord, Schema>> merge(HoodieRecord older, Schema oldSchema, HoodieRecord newer, Schema newSchema, TypedProperties props) throws IOException {
     return Option.of(Pair.of(newer, newSchema));
   }
-
 }

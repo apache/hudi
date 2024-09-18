@@ -18,10 +18,10 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.avro.Schema
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkRecordMerger}
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model.{HoodieRecord, HoodieRecordMerger, OperationModeAwareness}
-import org.apache.hudi.common.util.{collection, HoodieRecordUtils, Option => HOption}
+import org.apache.hudi.common.util.{HoodieRecordUtils, collection, Option => HOption}
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
 /**
@@ -37,6 +37,11 @@ class HoodieSparkValidateDuplicateKeyRecordMerger extends HoodieSparkRecordMerge
   }
 
   override def asPreCombiningMode(): HoodieRecordMerger = {
-    HoodieRecordUtils.loadRecordMerger(classOf[HoodieSparkRecordMerger].getName)
+    HoodieRecordUtils.loadRecordMerger(classOf[DefaultSparkRecordMerger].getName)
   }
+
+  /**
+   * The kind of merging strategy this recordMerger belongs to. An UUID represents merging strategy.
+   */
+  override def getMergingStrategy: String = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID
 }

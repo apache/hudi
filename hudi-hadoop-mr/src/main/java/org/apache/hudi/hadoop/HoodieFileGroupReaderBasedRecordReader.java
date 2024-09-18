@@ -25,15 +25,19 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
+import org.apache.hudi.hadoop.utils.ObjectInspectorCache;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,7 +51,6 @@ import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
-import org.apache.hadoop.mapred.Reporter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,6 +58,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -84,8 +88,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   public interface HiveReaderCreator {
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
         final org.apache.hadoop.mapred.InputSplit split,
-        final org.apache.hadoop.mapred.JobConf job,
-        final org.apache.hadoop.mapred.Reporter reporter
+        final org.apache.hadoop.mapred.JobConf job
     ) throws IOException;
   }
 
@@ -99,8 +102,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
 
   public HoodieFileGroupReaderBasedRecordReader(HiveReaderCreator readerCreator,
                                                 final InputSplit split,
-                                                final JobConf jobConf,
-                                                final Reporter reporter) throws IOException {
+                                                final JobConf jobConf) throws IOException {
     this.jobConfCopy = new JobConf(jobConf);
     HoodieRealtimeInputFormatUtils.cleanProjectionColumnIds(jobConfCopy);
     Set<String> partitionColumns = new HashSet<>(getPartitionFieldNames(jobConfCopy));
@@ -115,7 +117,9 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     String latestCommitTime = getLatestCommitTime(split, metaClient);
     Schema tableSchema = getLatestTableSchema(metaClient, jobConfCopy, latestCommitTime);
     Schema requestedSchema = createRequestedSchema(tableSchema, jobConfCopy);
-    this.readerContext = new HiveHoodieReaderContext(readerCreator, split, jobConfCopy, reporter, tableSchema, metaClient);
+    this.readerContext = new HiveHoodieReaderContext(readerCreator, getRecordKeyField(metaClient),
+        getStoredPartitionFieldNames(jobConfCopy, tableSchema),
+        new ObjectInspectorCache(tableSchema, jobConfCopy));
     this.arrayWritable = new ArrayWritable(Writable.class, new Writable[requestedSchema.getFields().size()]);
     TypedProperties props = metaClient.getTableConfig().getProps();
     jobConf.forEach(e -> {
@@ -171,6 +175,30 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     return readerContext.getProgress();
   }
 
+  /**
+   * If populate meta fields is false, then getRecordKeyFields()
+   * should return exactly 1 recordkey field.
+   */
+  @VisibleForTesting
+  static String getRecordKeyField(HoodieTableMetaClient metaClient) {
+    if (metaClient.getTableConfig().populateMetaFields()) {
+      return HoodieRecord.RECORD_KEY_METADATA_FIELD;
+    }
+
+    Option<String[]> recordKeyFieldsOpt = metaClient.getTableConfig().getRecordKeyFields();
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.isPresent(), "No record key field set in table config, but populateMetaFields is disabled");
+    ValidationUtils.checkArgument(recordKeyFieldsOpt.get().length == 1, "More than 1 record key set in table config, but populateMetaFields is disabled");
+    return recordKeyFieldsOpt.get()[0];
+  }
+
+  /**
+   * List of partition fields that are actually written to the file
+   */
+  @VisibleForTesting
+  static List<String> getStoredPartitionFieldNames(JobConf jobConf, Schema writerSchema) {
+    return getPartitionFieldNames(jobConf).stream().filter(n -> writerSchema.getField(n) != null).collect(Collectors.toList());
+  }
+
   public RealtimeSplit getSplit() {
     return (RealtimeSplit) inputSplit;
   }
@@ -203,7 +231,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
   }
 
   /**
-   * Convert FileSplit to FileSlice, but save the locations in 'hosts' because that data is otherwise lost.
+   * Convert FileSplit to FileSlice
    */
   private static FileSlice getFileSliceFromSplit(FileSplit split, FileSystem fs, String tableBasePath) throws IOException {
     BaseFile bootstrapBaseFile = createBootstrapBaseFile(split, fs);
