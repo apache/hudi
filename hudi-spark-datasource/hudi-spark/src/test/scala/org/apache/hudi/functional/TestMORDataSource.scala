@@ -895,7 +895,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
     val records1RDD = spark.sparkContext.parallelize(HoodieCommonTestHarness.toGenericRecords(
       records1,
-      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala, 2)
+      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala.toSeq, 2)
     val inputDF1 = AvroConversionUtils.createDataFrame(records1RDD, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, spark)
     inputDF1.write.format("hudi")
       .options(hudiOpts)
@@ -917,7 +917,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
     val records2RDD = spark.sparkContext.parallelize(HoodieCommonTestHarness.toGenericRecords(
       records2,
-      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala, 2)
+      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala.toSeq, 2)
     val inputDF2 = AvroConversionUtils.createDataFrame(records2RDD, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, spark)
     inputDF2.write.format("hudi")
       .options(hudiOpts)
