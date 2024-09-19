@@ -600,6 +600,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Maximum number of times to retry a batch on conflict failure.");
 
+  public static final ConfigProperty<Long> MAX_DURATION_TO_CREATE_EMPTY_CLEAN = ConfigProperty
+      .key("hoodie.write.empty.clean.create.duration")
+      .defaultValue(-1L)
+      .markAdvanced()
+      .withDocumentation("In some cases empty clean commit needs to be created to ensure the clean planner "
+          + "does not look through entire dataset if there are no clean plans. This is possible for insert-only "
+          + "dataset. Also, for these datasets we cannot ignore clean completely since in the future there could "
+          + "be upsert or replace operations. By creating empty clean commit, earliest_commit_to_retain value "
+          + "will be updated so that now clean planner can only check for partitions that are modified after the "
+          + "last empty clean's earliest_commit_toRetain value there by reducing the stress on the hdfs.");
+
   public static final ConfigProperty<String> WRITE_SCHEMA_OVERRIDE = ConfigProperty
       .key("hoodie.write.schema")
       .noDefaultValue()
@@ -2592,6 +2603,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
+  public long maxDurationToCreateEmptyClean() {
+    return getLong(MAX_DURATION_TO_CREATE_EMPTY_CLEAN);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *
@@ -3188,6 +3203,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
+      return this;
+    }
+
+    public Builder withMaxDurationToCreateEmptyClean(long duration) {
+      writeConfig.setValue(MAX_DURATION_TO_CREATE_EMPTY_CLEAN, String.valueOf(duration));
       return this;
     }
 
