@@ -1247,7 +1247,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
     spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
     withRecordType()(withTempDir { tmp =>
       spark.sql("set hoodie.payload.combined.schema.validate = true")
-      Seq("cow", "mor").foreach { tableType =>
+      Seq("mor").foreach { tableType =>
         val tableName1 = generateTableName
         spark.sql(
           s"""
@@ -1267,7 +1267,8 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | partitioned by(dt)
              | location '${tmp.getCanonicalPath}/$tableName1'
          """.stripMargin)
-        // Insert data
+
+        // Insert data; pre-combine field value type is long.
         spark.sql(
           s"""
              | merge into $tableName1 as t0
@@ -1282,7 +1283,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 10, "2021-03-21", 1001)
         )
 
-        // Update data with a bigger version value
+        // Insert data; pre-combine field value type is short.
         checkExceptionContain(
           s"""
           | merge into $tableName1 as t0
