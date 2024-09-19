@@ -23,6 +23,7 @@ import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.table.HoodieTable;
 
+import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +74,6 @@ public class TransactionUtils {
     if (config.needResolveWriteConflict(operationType)) {
       // deal with pendingInstants
       Stream<HoodieInstant> completedInstantsDuringCurrentWriteOperation = getCompletedInstantsDuringCurrentWriteOperation(table.getMetaClient(), pendingInstants);
-
       ConflictResolutionStrategy resolutionStrategy = config.getWriteConflictResolutionStrategy();
       if (reloadActiveTimeline) {
         table.getMetaClient().reloadActiveTimeline();
@@ -80,6 +81,8 @@ public class TransactionUtils {
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
           table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
               completedInstantsDuringCurrentWriteOperation);
+
+      abortTxnOnConcurrentSchemaEvolution(table, config, lastCompletedTxnOwnerInstant, new TableSchemaResolver(table.getMetaClient()));
 
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {
@@ -99,6 +102,79 @@ public class TransactionUtils {
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
+  }
+
+  static void abortTxnOnConcurrentSchemaEvolution(
+      HoodieTable table,
+      HoodieWriteConfig config,
+      Option<HoodieInstant> lastCompletedTxnOwnerInstant,
+      TableSchemaResolver schemaResolver) {
+    HoodieInstant lastCompletedInstantsAtTxnStart = lastCompletedTxnOwnerInstant.isPresent() ? lastCompletedTxnOwnerInstant.get() : null;
+    HoodieInstant lastCompletedInstantsAtTxnValidation = table.getMetaClient().reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants()
+        .lastInstant()
+        .orElse(null);
+    // Populate configs regardless of what's the case we are trying to handle.
+    Schema schemaOfTxn = new Schema.Parser().parse(config.getWriteSchema());
+    Schema schemaAtTxnStart = null;
+    Schema schemaAtTxnValidation = null;
+    try {
+      if (lastCompletedInstantsAtTxnStart != null) {
+        schemaAtTxnStart = schemaResolver.getTableAvroSchema(lastCompletedInstantsAtTxnStart, false);
+      }
+      if (lastCompletedInstantsAtTxnValidation != null) {
+        schemaAtTxnValidation = schemaResolver.getTableAvroSchema(lastCompletedInstantsAtTxnValidation, false);
+      }
+    } catch (Exception e) {
+      throw new HoodieWriteConflictException("Unable to resolve conflict, if present", e);
+    }
+
+    // Case 1:
+    // We (curr txn) are the first to commit ever on this table, no conflict could happen.
+    // curr txn: |--read write--|--validate & commit--|
+    if (lastCompletedInstantsAtTxnValidation == null) {
+      // Implies lastCompletedInstantsAtTxnStart is null as well.
+      return;
+    }
+
+    // Case 2:
+    // We (curr txn) are the second to commit, and the first one commits during the read write phase.
+    // txn 1:    |-----read write-----|validate & commit|
+    // curr txn: -----------------|--------read write--------|--validate & commit--|
+    // lastCompletedInstantsAtTxnValidation != null is implied.
+    if (lastCompletedInstantsAtTxnStart == null) {
+      // If they don't share the same schema, we simply abort as a naive way of handling without considering
+      // that they might be potentially compatible.
+      if (!schemaOfTxn.equals(schemaAtTxnValidation)) {
+        String concurrentSchemaEvolutionError = String.format(
+            "Detect concurrent schema evolution. Schema when transaction starts: %s, "
+                + "schema when transaction enters validation phase %s schemaAtTxnValidation, "
+                + "schema the transaction tries to commit with %s",
+            "Not exists as no commited txn at that time", schemaAtTxnValidation, schemaOfTxn);
+        throw new HoodieWriteConflictException(concurrentSchemaEvolutionError);
+      }
+      return;
+    }
+
+    // Case 3
+    // Before the curr txn started, there are commited txn, with optional txn that commited during the read-write phase
+    // of the curr txn (they can lead to concurrently schema evolution along with the curr txn).
+    // txn 1:            |validate & commit|
+    // txn 2 (optional): --------|-----read write-------|validate & commit|
+    // curr txn:         --------------------------|--------read write--------|--validate & commit--|
+
+    // We only abort if all 3 txn above has different schemas.
+    // Please note, we allow 2 special cases as they naturally work:
+    // - txn 1 commited with schema s1, txn 2 use s2, curr txn uses s1 - reader path will resolve it properly
+    // - txn 2 and curr txn uses the same schema.
+    if (!schemaAtTxnStart.equals(schemaOfTxn)
+        && !schemaAtTxnStart.equals(schemaAtTxnValidation)
+        && !schemaOfTxn.equals(schemaAtTxnValidation)) {
+      String concurrentSchemaEvolutionError = String.format(
+          "Detect concurrent schema evolution. Schema when transaction starts: %s, "
+              + "schema when transaction enters validation phase %s schemaAtTxnValidation, "
+              + "schema the transaction tries to commit with %s", schemaAtTxnStart, schemaAtTxnValidation, schemaOfTxn);
+      throw new HoodieWriteConflictException(concurrentSchemaEvolutionError);
+    }
   }
 
   /**

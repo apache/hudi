@@ -28,18 +28,21 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -71,6 +74,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -99,6 +103,11 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECTION_TIME
 import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
+import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
+import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_2;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -162,11 +171,101 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     List<Object[]> opts = new ArrayList<>();
     for (Object providerClass : LOCK_PROVIDER_CLASSES) {
       for (ConflictResolutionStrategy resolutionStrategy : CONFLICT_RESOLUTION_STRATEGY_CLASSES) {
-        opts.add(new Object[] {HoodieTableType.COPY_ON_WRITE, providerClass, resolutionStrategy});
-        opts.add(new Object[] {HoodieTableType.MERGE_ON_READ, providerClass, resolutionStrategy});
+        opts.add(new Object[] {COPY_ON_WRITE, providerClass, resolutionStrategy});
+        opts.add(new Object[] {MERGE_ON_READ, providerClass, resolutionStrategy});
       }
     }
     return opts;
+  }
+
+  @ParameterizedTest
+  @MethodSource("concurrentAlterSchemaTestDimension")
+  void testHoodieClientConcurrentAlterSchemaConflictDetection(
+      boolean padWithInitialCommit, HoodieTableType tableType, String concurrentAlterSchema1, String concurrentAlterSchema2, boolean shouldConflict) throws Exception {
+    if (tableType.equals(MERGE_ON_READ)) {
+      setUpMORTestTable();
+    }
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetMaxFileSize(20 * 1024).build())
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withMarkersType(MarkerType.TIMELINE_SERVER_BASED.name())
+        .withMarkersTimelineServerBasedBatchIntervalMs(1000)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withAutoCommit(false)
+        .withProperties(properties).build();
+
+    final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig);
+    final String nextCommitTime1 = "001";
+    if (padWithInitialCommit) {
+      // Create the first commit ingesting some data.
+      createCommitWithInserts(writeConfig, client1, "000", nextCommitTime1, 200, true);
+    }
+
+    // Start txn 002 altering table schema
+    HoodieWriteConfig writeConfig2 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
+    writeConfig2.setSchema(concurrentAlterSchema1);
+    final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig2);
+    final String nextCommitTime2 = "002";
+    startAlterTableTransaction(client2, nextCommitTime2, tableType);
+
+    // Start concurrent txn 003 alter table schema
+    HoodieWriteConfig writeConfig3 = HoodieWriteConfig.newBuilder().withProperties(writeConfig.getProps()).build();
+    writeConfig3.setSchema(concurrentAlterSchema2);
+    final SparkRDDWriteClient client3 = getHoodieWriteClient(writeConfig3);
+    final String nextCommitTime3 = "003";
+    startAlterTableTransaction(client3, nextCommitTime3, tableType);
+
+    // Commit txn 002.
+    client2.commit(nextCommitTime2, jsc.emptyRDD());
+    Exception e = null;
+    try {
+      client3.commit(nextCommitTime3, jsc.emptyRDD());
+    } catch (Exception ex) {
+      e = ex;
+    }
+    if (e != null) {
+      // If client 3 fails to commit, it should be due to schema conflict.
+      assertTrue(shouldConflict);
+      assertTrue(e instanceof HoodieWriteConflictException);
+      assertTrue(e.getMessage().contains("Detect concurrent schema evolution."));
+    } else {
+      assertFalse(shouldConflict);
+    }
+
+    List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().getInstants().stream()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+
+    // The padding txn always succeeds as long as it is triggered.
+    // 002 always succeeds, 003 depends.
+    int totalCommits = (padWithInitialCommit ? 1 : 0) + 1 + (shouldConflict ? 0 : 1);
+    assertEquals(totalCommits, completedInstant.size());
+    if (padWithInitialCommit) {
+      assertTrue(completedInstant.contains(nextCommitTime1));
+    }
+    assertTrue(completedInstant.contains(nextCommitTime2));
+    if (!shouldConflict) {
+      assertTrue(completedInstant.contains(nextCommitTime3));
+    }
+
+    FileIOUtils.deleteDirectory(new File(basePath));
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @ParameterizedTest
@@ -202,7 +301,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
    * @throws Exception
    */
   private void testHoodieClientBasicMultiWriterWithEarlyConflictDetection(String tableType, String markerType, String earlyConflictDetectionStrategy) throws Exception {
-    if (tableType.equalsIgnoreCase(HoodieTableType.MERGE_ON_READ.name())) {
+    if (tableType.equalsIgnoreCase(MERGE_ON_READ.name())) {
       setUpMORTestTable();
     }
 
@@ -301,7 +400,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @MethodSource("providerClassResolutionStrategyAndTableType")
   public void testHoodieClientBasicMultiWriter(HoodieTableType tableType, Class providerClass,
                                                ConflictResolutionStrategy resolutionStrategy) throws Exception {
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
+    if (tableType == MERGE_ON_READ) {
       setUpMORTestTable();
     }
     lockProperties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
@@ -383,7 +482,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testMultiWriterWithInsertsToDistinctPartitions(HoodieTableType tableType) throws Exception {
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
+    if (tableType == MERGE_ON_READ) {
       setUpMORTestTable();
     }
 
@@ -464,7 +563,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   public void testMultiWriterWithAsyncTableServicesWithConflict(HoodieTableType tableType, Class providerClass,
                                                                 ConflictResolutionStrategy resolutionStrategy) throws Exception {
     // create inserts X 1
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
+    if (tableType == MERGE_ON_READ) {
       setUpMORTestTable();
     }
 
@@ -555,7 +654,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     });
 
     Future future2 = executors.submit(() -> {
-      if (tableType == HoodieTableType.MERGE_ON_READ) {
+      if (tableType == MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           String compactionTimeStamp = client2.createNewInstantTime();
           client2.scheduleTableService(compactionTimeStamp, Option.empty(), TableServiceType.COMPACT);
@@ -575,7 +674,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     future2.get();
     future3.get();
 
-    String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ)
+    String pendingCompactionTime = (tableType == MERGE_ON_READ)
         ? metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
         .firstInstant().get().getTimestamp()
         : "";
@@ -599,7 +698,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     future2 = executors.submit(() -> {
       latchCountDownAndWait(runCountDownLatch, 30000);
-      if (tableType == HoodieTableType.MERGE_ON_READ) {
+      if (tableType == MERGE_ON_READ) {
         assertDoesNotThrow(() -> {
           HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(pendingCompactionTime);
           client2.commitCompaction(pendingCompactionTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
@@ -637,7 +736,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @EnumSource(value = HoodieTableType.class, names = {"MERGE_ON_READ", "COPY_ON_WRITE"})
   public void testMultiWriterWithAsyncLazyCleanRollback(HoodieTableType tableType) throws Exception {
     // create inserts X 1
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
+    if (tableType == MERGE_ON_READ) {
       setUpMORTestTable();
     }
     // Disabling embedded timeline server, it doesn't work with multiwriter
@@ -725,7 +824,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"COPY_ON_WRITE", "MERGE_ON_READ"})
   public void testHoodieClientMultiWriterWithClustering(HoodieTableType tableType) throws Exception {
-    if (tableType == HoodieTableType.MERGE_ON_READ) {
+    if (tableType == MERGE_ON_READ) {
       setUpMORTestTable();
     }
     Properties properties = new Properties();
@@ -1032,6 +1131,17 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     return result;
   }
 
+  private static void startAlterTableTransaction(SparkRDDWriteClient client, String nextCommitTime2, HoodieTableType tableType) throws IOException {
+    String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, tableType);
+    client.startCommitWithTime(nextCommitTime2, commitActionType);
+    client.preWrite(nextCommitTime2, WriteOperationType.ALTER_SCHEMA, client.createMetaClient(true));
+    HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, commitActionType, nextCommitTime2);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.setOperationType(WriteOperationType.ALTER_SCHEMA);
+    client.createMetaClient(true).getActiveTimeline().transitionRequestedToInflight(
+        requested, Option.of(metadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
+  }
+
   private void createCommitWithUpserts(HoodieWriteConfig cfg, SparkRDDWriteClient client, String prevCommit,
                                        String commitTimeBetweenPrevAndNew, String newCommitTime, int numRecords)
       throws Exception {
@@ -1136,5 +1246,36 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
           .withAsyncConflictDetectorPeriodMs(100)
           .withAutoCommit(false).withProperties(properties).build();
     }
+  }
+
+  public static Stream<Arguments> concurrentAlterSchemaTestDimension() {
+    Object[][] data =
+        new Object[][] {
+            // First element set to true means before testing anything, we make a commit
+            // with schema TRIP_EXAMPLE_SCHEMA.
+            // {<should pad with commit>, <table type>, <txn 1 schema>, <txn 2 schema>}
+            // --------------|-----read write-----|validate & commit|------------------------- txn 1
+            // --------------------------------|------read write------|--validate & commit--|- txn 2
+            // committed->|------------------------------------------------------------------- padding commit (optional)
+
+            // No schema evolution, no conflict.
+            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false},
+            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false},
+            // No concurrent schema evolution, no conflict.
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false},
+            // If there is a padding commits defining table schema to TRIP_EXAMPLE_SCHEMA.
+            // as long as txn 2 stick to that schema, backwards compatibility handles everything.
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false},
+            // In case no padding commits, table schema is not really predefined.
+            // It means are effectively having 2 concurrent txn trying to define table schema
+            // differently in this case.
+            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true},
+            // Concurrent schema evolution into the same schema does not conflict.
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false},
+            // Concurrent schema evolution into different schemas conflicts.
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true},
+            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true},
+        };
+    return Stream.of(data).map(Arguments::of);
   }
 }
