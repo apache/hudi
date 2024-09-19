@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
-import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -382,10 +381,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
-           | when matched and s0.ts = 1001L then delete
+           | when matched and s0.ts = 1001 then delete
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
