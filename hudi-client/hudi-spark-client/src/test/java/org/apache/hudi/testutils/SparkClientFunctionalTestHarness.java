@@ -178,7 +178,6 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     props = HoodieTableMetaClient.withPropertyBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
-        .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
         .build();
     return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);

@@ -267,12 +267,14 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             if (payloadClass.isPresent()) {
               ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
                   && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
+              HoodieRecord oldHoodieRecord = readerContext.constructHoodieAvroRecord(Option.of(record), metadata, payloadClass.get(), props);
+              HoodieRecord newHoodieRecord = readerContext.constructHoodieAvroRecord(
+                  existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), payloadClass.get(), props);
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
-                  readerContext.constructHoodieAvroRecord(Option.of(record), metadata, payloadClass.get(), props),
-                  (Schema) metadata.get(INTERNAL_META_SCHEMA),
-                  readerContext.constructHoodieAvroRecord(
-                      existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), payloadClass.get(), props),
-                  (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
+                  oldHoodieRecord,
+                  oldHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) metadata.get(INTERNAL_META_SCHEMA),
+                  newHoodieRecord,
+                  newHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
                   props);
               if (!combinedRecordAndSchemaOpt.isPresent()) {
                 return Option.empty();
@@ -285,7 +287,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               if (combinedRecordData != existingRecordMetadataPair.getLeft().get()) {
                 return Option.of(Pair.of(combinedRecordData, metadata));
               }
-              return Option.empty();
             } else {
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
                   readerContext.constructHoodieRecord(Option.of(record), metadata),
@@ -306,8 +307,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               if (combinedRecord.getData() != existingRecordMetadataPair.getLeft().get()) {
                 return Option.of(Pair.of(combinedRecord.getData(), metadata));
               }
-              return Option.empty();
             }
+            return Option.empty();
         }
       }
     } else {
@@ -458,9 +459,13 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (payloadClass.isPresent()) {
             ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
                 && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
+            HoodieRecord oldHoodieRecord = readerContext.constructHoodieAvroRecord(older, olderInfoMap, payloadClass.get(), props);
+            HoodieRecord newHoodieRecord = readerContext.constructHoodieAvroRecord(newer, newerInfoMap, payloadClass.get(), props);
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-                  readerContext.constructHoodieAvroRecord(older, olderInfoMap, payloadClass.get(), props), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
-                  readerContext.constructHoodieAvroRecord(newer, newerInfoMap, payloadClass.get(), props), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
+                oldHoodieRecord,
+                oldHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+                newHoodieRecord,
+                newHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
 
             if (mergedRecord.isPresent()
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {

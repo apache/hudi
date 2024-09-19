@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -269,9 +270,11 @@ public abstract class HoodieReaderContext<T> {
    * @return A new instance of {@link HoodieRecord}.
    */
   public HoodieRecord constructHoodieAvroRecord(Option<T> recordOption, Map<String, Object> metadataMap, String payloadClassName, TypedProperties properties) {
+
     HoodieKey hoodieKey = new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
     if (!recordOption.isPresent()) {
-      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.AVRO);
+      return  new HoodieAvroRecord<>(hoodieKey,
+          HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {null, getOrderingValue(recordOption, metadataMap, null, properties)}, GenericRecord.class, Comparable.class));
     }
     Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
     GenericRecord record = convertToAvroRecord(recordOption.get(), schema);
