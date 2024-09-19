@@ -85,15 +85,20 @@ public class CleanerUtils {
         partitionBootstrapMetadataMap.put(stat.getPartitionPath(), bootstrapMetadata);
       }
       totalDeleted += stat.getSuccessDeleteFiles().size();
-      if (earliestCommitToRetain == null) {
-        // This will be the same for all partitions
-        earliestCommitToRetain = stat.getEarliestCommitToRetain();
+
+      // Use the largest completion time.
+      if (needUpdate(stat.getLastCompletedCommitTimestamp(), earliestCommitToRetain)) {
+        earliestCommitToRetain = stat.getLastCompletedCommitTimestamp();
         lastCompletedCommitTimestamp = stat.getLastCompletedCommitTimestamp();
       }
     }
 
     return new HoodieCleanMetadata(startCleanTime, durationInMs.orElseGet(() -> -1L), totalDeleted, earliestCommitToRetain,
         lastCompletedCommitTimestamp, partitionMetadataMap, CLEAN_METADATA_VERSION_2, partitionBootstrapMetadataMap, extraMetadatafromCleanPlan);
+  }
+
+  private static boolean needUpdate(String currentTimestamp, String existingTimestamp) {
+    return existingTimestamp == null || currentTimestamp.compareTo(existingTimestamp) > 0;
   }
 
   /**

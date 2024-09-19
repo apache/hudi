@@ -51,6 +51,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -275,6 +276,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
             throw e;
           }
         }
+
         table.getMetaClient().reloadActiveTimeline();
         if (table.getMetaClient().getTableConfig().isMetadataTableAvailable()) {
           table.getHoodieView().sync();
@@ -282,10 +284,13 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
     }
 
-    // return the last clean metadata for now
-    // TODO (NA) : Clean only the earliest pending clean just like how we do for other table services
-    // This requires the CleanActionExecutor to be refactored as BaseCommitActionExecutor
-    return cleanMetadataList.size() > 0 ? cleanMetadataList.get(cleanMetadataList.size() - 1) : null;
+    return getMetadataWithMaxCompletionTime(cleanMetadataList);
+  }
+
+  private HoodieCleanMetadata getMetadataWithMaxCompletionTime(List<HoodieCleanMetadata> cleanMetadata) {
+    Optional<HoodieCleanMetadata> r = cleanMetadata.stream().reduce((e1, e2) ->
+        e1.getLastCompletedCommitTimestamp().compareTo(e2.getLastCompletedCommitTimestamp()) > 0 ? e1 : e2);
+    return r.orElse(null);
   }
 
   private void checkIfOtherWriterCommitted(HoodieInstant hoodieInstant, HoodieIOException e) {
