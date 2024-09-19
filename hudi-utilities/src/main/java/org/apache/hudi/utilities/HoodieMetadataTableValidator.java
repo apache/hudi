@@ -296,12 +296,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files", required = false)
     public boolean validateBloomFilters = false;
 
-    @Parameter(names = {"--view-storage-type-fs-listing"}, description = "View storage type to use for File System based listing. Supported values are MEMORY (by default) and SPILLABLE_DISK.", required = false)
-    public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
-
-    @Parameter(names = {"--view-storage-type-mdt"}, description = "View storage type to use for metadata table based listing. Supported values are MEMORY (by default) and SPILLABLE_DISK.", required = false)
-    public String viewStorageTypeForMetadata = FileSystemViewStorageType.MEMORY.name();
-
     @Parameter(names = {"--validate-record-index-count"},
         description = "Validate the number of entries in the record index, which should be equal "
             + "to the number of record keys in the latest snapshot of the table",
@@ -318,6 +312,18 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Number of error samples to show for record index validation",
         required = false)
     public int numRecordIndexErrorSamples = 100;
+
+    @Parameter(names = {"--view-storage-type-fs-listing"},
+        description = "View storage type to use for File System based listing. "
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
+    public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
+
+    @Parameter(names = {"--view-storage-type-mdt"},
+        description = "View storage type to use for metadata table based listing. "
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
+    public String viewStorageTypeForMetadata = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
@@ -367,6 +373,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
           + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
+          + "   --view-storage-type-fs-listing " + viewStorageTypeForFSListing + ", \n"
+          + "   --view-storage-type-mdt " + viewStorageTypeForMetadata + ", \n"
           + "   --continuous " + continuous + ", \n"
           + "   --skip-data-files-for-cleaning " + skipDataFilesForCleaning + ", \n"
           + "   --ignore-failed " + ignoreFailed + ", \n"
@@ -400,6 +408,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
+          && Objects.equals(viewStorageTypeForFSListing, config.viewStorageTypeForFSListing)
+          && Objects.equals(viewStorageTypeForMetadata, config.viewStorageTypeForMetadata)
           && Objects.equals(numRecordIndexErrorSamples, config.numRecordIndexErrorSamples)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
@@ -417,6 +427,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validateBloomFilters,
           validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
           sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
