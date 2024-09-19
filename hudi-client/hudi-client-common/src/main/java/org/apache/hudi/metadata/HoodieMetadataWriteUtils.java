@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsDatadogConfig;
@@ -161,6 +162,8 @@ public class HoodieMetadataWriteUtils {
         .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled())
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
         .withRecordMergerImpls(HoodieAvroRecordMerger.class.getCanonicalName());
 
     // RecordKey properties are needed for the metadata table records

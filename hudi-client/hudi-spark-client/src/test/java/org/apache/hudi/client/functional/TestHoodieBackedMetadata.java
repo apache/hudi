@@ -402,7 +402,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     assertTrue(metadataWriter.isPresent());
     HoodieTableConfig hoodieTableConfig =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getPayloadClass(),
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getAvroPayloadClass(),
             writeConfig.getStringOrDefault(HoodieWriteConfig.RECORD_MERGER_IMPLS));
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
@@ -422,7 +422,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
-            writeConfig2.getPayloadClass(),
+            writeConfig2.getAvroPayloadClass(),
             writeConfig.getStringOrDefault(HoodieWriteConfig.RECORD_MERGER_IMPLS));
     assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
@@ -445,7 +445,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getPayloadClass(),
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getAvroPayloadClass(),
             writeConfig.getStringOrDefault(HoodieWriteConfig.RECORD_MERGER_IMPLS));
     assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }

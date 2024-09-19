@@ -46,6 +46,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -1749,19 +1750,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS);
   }
 
-  public String getPayloadClass() {
-    String payloadClass = getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
-    if (payloadClass == null) {
-      switch (getRecordMergeMode()) {
-        case EVENT_TIME_ORDERING:
-          return DefaultHoodieRecordPayload.class.getCanonicalName();
-        case OVERWRITE_WITH_LATEST:
-          return OverwriteWithLatestAvroPayload.class.getCanonicalName();
-        default:
-          throw new IllegalArgumentException("Payload class must be defined");
-      }
-    }
-    return payloadClass;
+  public String getAvroPayloadClass() {
+    return getStringOpt(HoodiePayloadConfig.PAYLOAD_CLASS_NAME).orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {

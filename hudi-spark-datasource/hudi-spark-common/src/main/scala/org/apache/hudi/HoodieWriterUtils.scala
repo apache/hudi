@@ -24,7 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
+import org.apache.hudi.config.HoodieWriteConfig.{RECORD_MERGE_MODE, SPARK_SQL_MERGE_INTO_PREPPED_KEY}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.constant.KeyGeneratorType
@@ -169,7 +169,11 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         // Base file format can change between writes, so ignore it.
-        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)) {
+        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
+          && !(RECORD_MERGE_MODE.key().equals(key)
+          && params.get(PAYLOAD_CLASS_NAME.key()).isDefined
+          && params.getOrElse(PAYLOAD_CLASS_NAME.key(), "")
+          .equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload"))) {
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")
