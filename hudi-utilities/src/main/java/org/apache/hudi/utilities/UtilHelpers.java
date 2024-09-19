@@ -66,7 +66,6 @@ import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
-import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
@@ -556,12 +555,6 @@ public class UtilHelpers {
 
     String schemaPostProcessorClass = getStringWithAltKeys(
         cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR, true);
-    boolean enableSparkAvroPostProcessor =
-        getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
-    if (transformerClassNames != null && !transformerClassNames.isEmpty()
-        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
-      schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
-    }
 
     if (schemaPostProcessorClass == null || schemaPostProcessorClass.isEmpty()) {
       return provider;
