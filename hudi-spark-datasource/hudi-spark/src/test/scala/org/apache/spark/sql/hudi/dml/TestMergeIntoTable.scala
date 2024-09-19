@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
+import org.apache.hudi.exception.HoodieUpsertException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
 
@@ -382,10 +382,10 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         s"""
            | merge into $tableName t0
            | using (
-           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001 as ts, '2021-03-21' as dt
+           |  select 2 as s_id, 'a2' as s_name, 15 as s_price, 1001L as ts, '2021-03-21' as dt
            | ) s0
            | on t0.id = s0.s_id
-           | when matched and s0.ts = 1001 then delete
+           | when matched and s0.ts = 1001L then delete
          """.stripMargin
       )
       checkAnswer(s"select id,name,price,dt from $tableName order by id")(
@@ -1241,5 +1241,62 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         )
       })
     }
+  }
+
+  test("Test MergeInto For PreCombineField With Different Types") {
+    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
+    withRecordType()(withTempDir { tmp =>
+      spark.sql("set hoodie.payload.combined.schema.validate = true")
+      Seq("cow", "mor").foreach { tableType =>
+        val tableName1 = generateTableName
+        spark.sql(
+          s"""
+             | create table $tableName1 (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  v long,
+             |  dt string
+             | ) using hudi
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  preCombineField = 'v',
+             |  hoodie.compaction.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
+             | )
+             | partitioned by(dt)
+             | location '${tmp.getCanonicalPath}/$tableName1'
+         """.stripMargin)
+        // Insert data
+        spark.sql(
+          s"""
+             | merge into $tableName1 as t0
+             | using (
+             |  select 1 as id, 'a1' as name, 10 as price, 1001L as v, '2021-03-21' as dt
+             | ) as s0
+             | on t0.id = s0.id
+             | when not matched and s0.id % 2 = 1 then insert *
+         """.stripMargin
+        )
+        checkAnswer(s"select id,name,price,dt,v from $tableName1")(
+          Seq(1, "a1", 10, "2021-03-21", 1001)
+        )
+
+        // Update data with a bigger version value
+        checkExceptionContain(
+          s"""
+          | merge into $tableName1 as t0
+          | using (
+          |  select 1 as id, 'a1' as name, 12 as price, 1001S as v, '2021-03-21' as dt
+          | ) as s0
+          | on t0.id = s0.id
+          | when matched then update set
+          | id = s0.id, name = s0.name, price = s0.price, v = s0.v, dt = s0.dt
+          | when not matched then insert *
+          | """.stripMargin) (
+          "Merge into Hoodie table command failed"
+        )
+      }
+    })
   }
 }
