@@ -85,19 +85,6 @@
       "type": "bytes"
     },
     {
-      "name": "city",
-      "type": {
-        "type": "record",
-        "name": "city",
-        "fields": [
-          {
-            "name": "name",
-            "type": "string"
-          }
-        ]
-      }
-    },
-    {
       "name": "current_date",
       "type": {
         "type": "int",
