@@ -20,6 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext.{filterIsSafeForBootstrap, getAppliedRequiredSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.isNullable
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
@@ -32,10 +33,10 @@ import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath
 import org.apache.hudi.util.CloseableInternalRowIterator
 
 import org.apache.avro.Schema
-import org.apache.avro.generic.IndexedRecord
+import org.apache.avro.generic.{GenericRecord, IndexedRecord}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
-import org.apache.spark.sql.avro.HoodieAvroDeserializer
+import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.PartitionedFile
@@ -67,6 +68,7 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private val deserializerMap: mutable.Map[Schema, HoodieAvroDeserializer] = mutable.Map()
+  private val serializerMap: mutable.Map[Schema, HoodieAvroSerializer] = mutable.Map()
   private lazy val allFilters = filters ++ requiredFilters
 
   override def supportsParquetRowIndex: Boolean = {
@@ -132,6 +134,14 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
       sparkAdapter.createAvroDeserializer(schema, structType)
     })
     deserializer.deserialize(avroRecord).get.asInstanceOf[InternalRow]
+  }
+
+  override def convertToAvroRecord(record: InternalRow, schema: Schema): GenericRecord = {
+    val structType = HoodieInternalRowUtils.getCachedSchema(schema)
+    val serializer = serializerMap.getOrElseUpdate(schema, {
+      sparkAdapter.createAvroSerializer(structType, schema, isNullable(schema))
+    })
+    serializer.serialize(record).asInstanceOf[GenericRecord]
   }
 
   /**

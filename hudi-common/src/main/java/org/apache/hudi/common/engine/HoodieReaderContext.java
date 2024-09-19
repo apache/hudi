@@ -21,10 +21,14 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -32,6 +36,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -187,6 +192,8 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract T convertAvroRecord(IndexedRecord avroRecord);
 
+  public abstract GenericRecord convertToAvroRecord(T record, Schema schema);
+
   /**
    * @param mergerStrategy Merger strategy UUID.
    * @return {@link HoodieRecordMerger} to use.
@@ -251,6 +258,27 @@ public abstract class HoodieReaderContext<T> {
    */
   public abstract HoodieRecord<T> constructHoodieRecord(Option<T> recordOption,
                                                         Map<String, Object> metadataMap);
+
+  /**
+   * Constructs a new {@link HoodieAvroRecord} for payload based merging
+   *
+   * @param recordOption An option of the record in engine-specific type if exists.
+   * @param metadataMap  The record metadata.
+   * @param payloadClassName name of the payload class
+   * @param properties typed properties
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  public HoodieRecord constructHoodieAvroRecord(Option<T> recordOption, Map<String, Object> metadataMap, String payloadClassName, TypedProperties properties) {
+    HoodieKey hoodieKey = new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
+    if (!recordOption.isPresent()) {
+      return new HoodieEmptyRecord<>(hoodieKey, HoodieRecord.HoodieRecordType.AVRO);
+    }
+    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    GenericRecord record = convertToAvroRecord(recordOption.get(), schema);
+    return  new HoodieAvroRecord<>(hoodieKey,
+        HoodieRecordUtils.loadPayload(payloadClassName, new Object[] {record, getOrderingValue(recordOption, metadataMap, schema, properties)}, GenericRecord.class,
+            Comparable.class), null);
+  }
 
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.

@@ -20,6 +20,7 @@
 package org.apache.hudi.hadoop.utils;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.typeinfo.StructTypeInfo;
@@ -45,6 +46,7 @@ import java.util.stream.IntStream;
 public class ObjectInspectorCache {
   private final Map<String, TypeInfo> columnTypeMap = new HashMap<>();
   private final Map<Schema, ArrayWritableObjectInspector> objectInspectorCache = new HashMap<>();
+  private final Map<Schema, HiveAvroSerializer> serializerCache = new HashMap<>();
 
   public Map<String, TypeInfo> getColumnTypeMap() {
     return columnTypeMap;
@@ -78,6 +80,11 @@ public class ObjectInspectorCache {
     objectInspectorCache.put(tableSchema, objectInspector);
   }
 
+  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
+    ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
+    return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
+  }
+
   public ArrayWritableObjectInspector getObjectInspector(Schema schema) {
     return objectInspectorCache.computeIfAbsent(schema, s -> {
       List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
@@ -85,11 +92,14 @@ public class ObjectInspectorCache {
       StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
       return new ArrayWritableObjectInspector(rowTypeInfo);
     });
-
   }
 
-  public Object getValue(ArrayWritable record, Schema schema, String fieldName) {
-    ArrayWritableObjectInspector objectInspector = getObjectInspector(schema);
-    return objectInspector.getStructFieldData(record, objectInspector.getStructFieldRef(fieldName));
+  public GenericRecord serialize(ArrayWritable record, Schema schema) {
+    return serializerCache.computeIfAbsent(schema, s -> {
+      List<String> columnNameList = s.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
+      List<TypeInfo> columnTypeList = columnNameList.stream().map(columnTypeMap::get).collect(Collectors.toList());
+      StructTypeInfo rowTypeInfo = (StructTypeInfo) TypeInfoFactory.getStructTypeInfo(columnNameList, columnTypeList);
+      return new HiveAvroSerializer(new ArrayWritableObjectInspector(rowTypeInfo), columnNameList, columnTypeList);
+    }).serialize(record, schema);
   }
 }

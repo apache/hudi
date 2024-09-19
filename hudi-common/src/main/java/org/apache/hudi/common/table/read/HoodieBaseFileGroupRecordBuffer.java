@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -46,6 +47,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -70,6 +72,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   protected final Option<String[]> partitionPathFieldOpt;
   protected final RecordMergeMode recordMergeMode;
   protected final Option<HoodieRecordMerger> recordMerger;
+  protected final String payloadClass;
   protected final TypedProperties props;
   protected final ExternalSpillableMap<Serializable, Pair<Option<T>, Map<String, Object>>> records;
   protected ClosableIterator<T> baseFileIterator;
@@ -90,6 +93,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = readerContext.getRecordMerger();
+    this.payloadClass = ConfigUtils.getAvroPayloadClass(props);
     this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
@@ -417,18 +421,34 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return newer;
         case CUSTOM:
         default:
-          Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-              readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
-              readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
 
-          if (mergedRecord.isPresent()
-              && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
-            if (!mergedRecord.get().getRight().equals(readerSchema)) {
-              return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+          if (recordMerger.get().getMergingStrategy().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)) {
+            Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
+                  readerContext.constructHoodieAvroRecord(older, olderInfoMap, payloadClass, props), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+                  readerContext.constructHoodieAvroRecord(newer, newerInfoMap, payloadClass, props), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
+
+            if (mergedRecord.isPresent()
+                && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
+              if (!mergedRecord.get().getRight().equals(readerSchema)) {
+                return Option.ofNullable(
+                    readerContext.convertAvroRecord((IndexedRecord) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData()));
+              }
+              return Option.ofNullable(readerContext.convertAvroRecord((IndexedRecord)  mergedRecord.get().getLeft().getData()));
             }
-            return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
+            return Option.empty();
+          } else {
+            Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
+                readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
+                readerContext.constructHoodieRecord(newer, newerInfoMap), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
+            if (mergedRecord.isPresent()
+                && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
+              if (!mergedRecord.get().getRight().equals(readerSchema)) {
+                return Option.ofNullable((T) mergedRecord.get().getLeft().rewriteRecordWithNewSchema(mergedRecord.get().getRight(), null, readerSchema).getData());
+              }
+              return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
+            }
+            return Option.empty();
           }
-          return Option.empty();
       }
     }
   }

@@ -42,6 +42,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -83,6 +84,11 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   @Override
   public IndexedRecord convertAvroRecord(IndexedRecord record) {
     return record;
+  }
+
+  @Override
+  public GenericRecord convertToAvroRecord(IndexedRecord record, Schema schema) {
+    return (GenericRecord) record;
   }
 
   @Override
