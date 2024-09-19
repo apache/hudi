@@ -19,31 +19,38 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, HIVE_STYLE_PARTITIONING, INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
+import org.apache.hudi.common.model.{ActionType, FileSlice, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
+import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
+import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.{HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JFunction, JavaConversions}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSparkUtils}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
+import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.{DataFrame, Row}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.apache.spark.sql.{DataFrame, Row, SaveMode}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 import org.scalatest.Assertions.assertResult
 
-import scala.collection.JavaConverters
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.stream.Collectors
+import scala.collection.JavaConverters._
+import scala.collection.{JavaConverters, mutable}
 
 /**
  * Test cases for secondary index
@@ -67,6 +74,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   var mergedDfList: List[DataFrame] = List.empty
   var tableName = "hoodie_"
   var metaClient: HoodieTableMetaClient = _
+  var instantTime: AtomicInteger = new AtomicInteger(1)
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
@@ -378,6 +386,212 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   private def metadataWriter(clientConfig: HoodieWriteConfig): HoodieBackedTableMetadataWriter[_] = SparkHoodieBackedTableMetadataWriter.create(
     storageConf, clientConfig, new HoodieSparkEngineContext(jsc)).asInstanceOf[HoodieBackedTableMetadataWriter[_]]
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexUpsertAndRollback(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
+    rollbackLastInstant(hudiOpts)
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testSecondaryIndexWithDelete(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
+    val insertDf = doWriteAndValidateSecondaryIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    val deleteDf = insertDf.limit(1)
+    deleteDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val prevDf = mergedDfList.last
+    mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+    validateDataAndSecondaryIndex(hudiOpts, partitionName = "secondary_index_idx_not_record_key_col")
+  }
+
+  protected def doWriteAndValidateSecondaryIndex(hudiOpts: Map[String, String],
+                                                 operation: String,
+                                                 saveMode: SaveMode,
+                                                 validate: Boolean = true,
+                                                 numUpdates: Int = 1,
+                                                 onlyUpdates: Boolean = false): DataFrame = {
+    var latestBatch: mutable.Buffer[String] = null
+    val dataGen = new HoodieTestDataGenerator()
+    if (operation == UPSERT_OPERATION_OPT_VAL) {
+      val instantTime = getInstantTime()
+      val records = recordsToStrings(dataGen.generateUniqueUpdates(instantTime, numUpdates))
+      if (!onlyUpdates) {
+        records.addAll(recordsToStrings(dataGen.generateInserts(instantTime, 1)))
+      }
+      latestBatch = records.asScala
+    } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
+      latestBatch = recordsToStrings(dataGen.generateInsertsForPartition(
+        getInstantTime(), 5, dataGen.getPartitionPaths.last)).asScala
+    } else {
+      latestBatch = recordsToStrings(dataGen.generateInserts(getInstantTime(), 5)).asScala
+    }
+    val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
+    latestBatchDf.cache()
+    latestBatchDf.write.format("org.apache.hudi")
+      .options(hudiOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, operation)
+      .mode(saveMode)
+      .save(basePath)
+    val deletedDf = calculateMergedDf(latestBatchDf, operation)
+    deletedDf.cache()
+    // initialization of meta client is required again after writing data so that
+    // latest table configs are picked up
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    if (validate) {
+      // TODO: pass the partition name as an argument
+      validateDataAndSecondaryIndex(hudiOpts, deletedDf, "secondary_index_idx_not_record_key_col")
+    }
+
+    deletedDf.unpersist()
+    latestBatchDf
+  }
+
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+    calculateMergedDf(latestBatchDf, operation, false)
+  }
+
+  /**
+   * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
+   */
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String, globalIndexEnableUpdatePartitions: Boolean): DataFrame = {
+    val prevDfOpt = mergedDfList.lastOption
+    if (prevDfOpt.isEmpty) {
+      mergedDfList = mergedDfList :+ latestBatchDf
+      spark.emptyDataFrame
+    } else {
+      if (operation == INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL) {
+        mergedDfList = mergedDfList :+ latestBatchDf
+        // after insert_overwrite_table, all previous snapshot's records should be deleted from RLI
+        prevDfOpt.get
+      } else if (operation == INSERT_OVERWRITE_OPERATION_OPT_VAL) {
+        val overwrittenPartitions = latestBatchDf.select("partition")
+          .collectAsList().stream().map[String](JavaConversions.getFunction[Row, String](r => r.getString(0))).collect(Collectors.toList[String])
+        val prevDf = prevDfOpt.get
+        val latestSnapshot = prevDf
+          .filter(not(col("partition").isInCollection(overwrittenPartitions)))
+          .union(latestBatchDf)
+        mergedDfList = mergedDfList :+ latestSnapshot
+
+        // after insert_overwrite (partition), all records in the overwritten partitions should be deleted from RLI
+        prevDf.filter(col("partition").isInCollection(overwrittenPartitions))
+      } else {
+        val prevDf = prevDfOpt.get
+        if (globalIndexEnableUpdatePartitions) {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        } else {
+          val prevDfOld = prevDf.join(latestBatchDf, prevDf("_row_key") === latestBatchDf("_row_key")
+            && prevDf("partition") === latestBatchDf("partition"), "leftanti")
+          val latestSnapshot = prevDfOld.union(latestBatchDf)
+          mergedDfList = mergedDfList :+ latestSnapshot
+        }
+        spark.emptyDataFrame
+      }
+    }
+  }
+
+  protected def validateDataAndSecondaryIndex(hudiOpts: Map[String, String],
+                                              deletedDf: DataFrame = spark.emptyDataFrame,
+                                              partitionName: String): Unit = {
+    val writeConfig = getWriteConfig(hudiOpts)
+    val metadata = metadataWriter(writeConfig).getTableMetadata
+    val readDf = spark.read.format("hudi").load(basePath)
+    val rowArr = readDf.collect()
+    val recordIndexMap = metadata.readRecordIndex(
+      JavaConverters.seqAsJavaListConverter(rowArr.map(row => row.getAs("_hoodie_record_key").toString).toList).asJava)
+
+    assertTrue(rowArr.length > 0)
+    for (row <- rowArr) {
+      val recordKey: String = row.getAs("_hoodie_record_key")
+      val partitionPath: String = row.getAs("_hoodie_partition_path")
+      val fileName: String = row.getAs("_hoodie_file_name")
+      val recordLocations = recordIndexMap.get(recordKey)
+      assertFalse(recordLocations.isEmpty)
+      // assuming no duplicate keys for now
+      val recordLocation = recordLocations.get(0)
+      assertEquals(partitionPath, recordLocation.getPartitionPath)
+      assertTrue(fileName.startsWith(recordLocation.getFileId), fileName + " should start with " + recordLocation.getFileId)
+    }
+
+    val deletedRows = deletedDf.collect()
+    val recordIndexMapForDeletedRows = metadata.readSecondaryIndex(
+      JavaConverters.seqAsJavaListConverter(deletedRows.map(row => row.getAs("_row_key").toString).toList).asJava, partitionName)
+    assertEquals(0, recordIndexMapForDeletedRows.size(), "deleted records should not present in RLI")
+    assertEquals(rowArr.length, recordIndexMap.keySet.size)
+    val prevDf = mergedDfList.last.drop("tip_history")
+    val nonMatchingRecords = readDf.drop("_hoodie_commit_time", "_hoodie_commit_seqno", "_hoodie_record_key",
+        "_hoodie_partition_path", "_hoodie_file_name", "tip_history")
+      .join(prevDf, prevDf.columns, "leftanti")
+    assertEquals(0, nonMatchingRecords.count())
+    assertEquals(readDf.count(), prevDf.count())
+  }
+
+  protected def rollbackLastInstant(hudiOpts: Map[String, String]): HoodieInstant = {
+    val lastInstant = getLatestMetaClient(false).getActiveTimeline
+      .filter(JavaConversions.getPredicate(instant => instant.getAction != ActionType.rollback.name()))
+      .lastInstant().get()
+    if (getLatestCompactionInstant() != getLatestMetaClient(false).getActiveTimeline.lastInstant()
+      && lastInstant.getAction != ActionType.replacecommit.name()
+      && lastInstant.getAction != ActionType.clean.name()) {
+      mergedDfList = mergedDfList.take(mergedDfList.size - 1)
+    }
+    val writeConfig = getWriteConfig(hudiOpts)
+    new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
+      .rollback(lastInstant.getTimestamp)
+
+    if (lastInstant.getAction != ActionType.clean.name()) {
+      assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
+    }
+    lastInstant
+  }
+
+  protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
+    val lastInsant = HoodieInstantTimeGenerator.getLastInstantTime
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+      println("Reloaded timeline")
+      metaClient.reloadActiveTimeline()
+      metaClient
+    }
+    metaClient
+  }
+
+  protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
+    getLatestMetaClient(false).getActiveTimeline
+      .filter(JavaConversions.getPredicate(s => Option(
+        try {
+          val commitMetadata = MetadataConversionUtils.getHoodieCommitMetadata(metaClient, s)
+            .orElse(new HoodieCommitMetadata())
+          commitMetadata
+        } catch {
+          case _: Exception => new HoodieCommitMetadata()
+        })
+        .map(c => c.getOperationType == WriteOperationType.COMPACT)
+        .get))
+      .lastInstant()
+  }
+
+  private def getInstantTime(): String = {
+    String.format("%03d", new Integer(instantTime.incrementAndGet()))
+  }
 }
 
 object TestSecondaryIndexPruning {
