@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sync.adb;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -76,8 +77,8 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   private final String databaseName;
   private Connection connection;
 
-  public HoodieAdbJdbcClient(AdbSyncConfig config) {
-    super(config);
+  public HoodieAdbJdbcClient(AdbSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
     this.config = config;
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     createAdbConnection();

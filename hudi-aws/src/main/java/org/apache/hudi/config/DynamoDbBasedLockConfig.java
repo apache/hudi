@@ -47,6 +47,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
     return new DynamoDbBasedLockConfig.Builder();
   }
 
+  // The max length of DDB partition key allowed.
   public static final int MAX_PARTITION_KEY_SIZE_BYTE = 2048;
 
   // configs for DynamoDb based locks

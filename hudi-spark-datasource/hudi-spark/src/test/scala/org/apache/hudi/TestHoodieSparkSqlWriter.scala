@@ -485,7 +485,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
-    val client = spy(DataSourceUtils.createHoodieClient(
+    val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       fooTableParams.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
@@ -543,7 +543,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
-      val client = spy(DataSourceUtils.createHoodieClient(
+      val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
         null,
         tempBasePath,
@@ -1171,7 +1171,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
+      case _: Throwable => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
     }
   }
 
@@ -1204,7 +1204,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+      case _: Throwable => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
     }
   }
 
