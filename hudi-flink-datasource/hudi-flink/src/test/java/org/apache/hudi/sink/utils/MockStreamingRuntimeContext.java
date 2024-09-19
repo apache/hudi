@@ -31,6 +31,7 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.TestProcessingTimeService;
 
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Mock {@link StreamingRuntimeContext} to use in tests.
@@ -100,7 +101,8 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
     private transient TestProcessingTimeService testProcessingTimeService;
 
-    private transient MockOperatorStateStore mockOperatorStateStore;
+    private transient Object currentKey;
+    private final transient Map<Object, MockKeyedStateStore> mockKeyedStateStoreMap = new HashMap<>();
 
     @Override
     public ExecutionConfig getExecutionConfig() {
@@ -121,11 +123,13 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     }
 
     @Override
+    public void setCurrentKey(Object key) {
+      this.currentKey = key;
+    }
+
+    @Override
     public KeyedStateStore getKeyedStateStore() {
-      if (mockOperatorStateStore == null) {
-        mockOperatorStateStore = new MockOperatorStateStore();
-      }
-      return mockOperatorStateStore;
+      return currentKey != null ? mockKeyedStateStoreMap.computeIfAbsent(currentKey, k -> new MockKeyedStateStore()) : null;
     }
   }
 

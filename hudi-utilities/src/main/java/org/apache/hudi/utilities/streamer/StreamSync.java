@@ -316,7 +316,7 @@ public class StreamSync implements Serializable, Closeable {
     this.hoodieMetrics = new HoodieMetrics(hoodieWriteConfig, storage);
     if (props.getBoolean(ERROR_TABLE_ENABLED.key(), ERROR_TABLE_ENABLED.defaultValue())) {
       this.errorTableWriter = ErrorTableUtils.getErrorTableWriter(
-          cfg, sparkSession, props, hoodieSparkContext, fs);
+          cfg, sparkSession, props, hoodieSparkContext, fs, Option.of(metrics));
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     refreshTimeline();
