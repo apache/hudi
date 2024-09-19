@@ -22,6 +22,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -68,6 +69,9 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
+        if (mergerStrategy.isPresent() && mergerStrategy.get().equals(HoodieAvroRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)){
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
         throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy.get());
     }
   }
