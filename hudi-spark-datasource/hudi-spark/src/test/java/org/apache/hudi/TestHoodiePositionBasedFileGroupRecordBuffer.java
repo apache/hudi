@@ -88,7 +88,11 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     writeConfigs.put("hoodie.merge.small.file.group.candidates.limit", "0");
     writeConfigs.put("hoodie.compact.inline", "false");
     writeConfigs.put(HoodieWriteConfig.WRITE_RECORD_POSITIONS.key(), "true");
-    writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getRecordPayloadForMergeMode(mergeMode));
+    writeConfigs.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), mergeMode.name());
+    if (mergeMode.equals(RecordMergeMode.CUSTOM)) {
+      writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
+      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+    }
     commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
 
     String[] partitionPaths = dataGen.getPartitionPaths();
@@ -122,6 +126,10 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     props.setProperty(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), metaClient.getTempFolderPath());
     props.setProperty(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), ExternalSpillableMap.DiskMapType.ROCKS_DB.name());
     props.setProperty(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), "false");
+    if (mergeMode.equals(RecordMergeMode.CUSTOM)) {
+      writeConfigs.put(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key(), getCustomPayload());
+      writeConfigs.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+    }
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,

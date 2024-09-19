@@ -27,10 +27,8 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.CustomPayloadForTesting;
 import org.apache.hudi.common.table.read.TestHoodieFileGroupReaderBase;
@@ -148,16 +146,8 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
   }
 
   @Override
-  public String getRecordPayloadForMergeMode(RecordMergeMode mergeMode) {
-    switch (mergeMode) {
-      case EVENT_TIME_ORDERING:
-        return DefaultHoodieRecordPayload.class.getName();
-      case OVERWRITE_WITH_LATEST:
-        return OverwriteWithLatestAvroPayload.class.getName();
-      case CUSTOM:
-      default:
-        return CustomPayloadForTesting.class.getName();
-    }
+  public String getCustomPayload() {
+    return CustomPayloadForTesting.class.getName();
   }
 
   @Override
@@ -183,12 +173,16 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
             lfs.delete(new Path(getBasePath()), true);
           }
           Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
-          HoodieTableMetaClient.withPropertyBuilder()
+          HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
               .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
               .setTableName(writeConfigs.get("hoodie.table.name"))
               .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
               .setRecordMergeMode(RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")))
-              .set(initConfigs).initTable(storageConf, getBasePath());
+              .set(initConfigs);
+          if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {
+            builder = builder.setPayloadClassName(writeConfigs.get("hoodie.datasource.write.payload.class"));
+          }
+          builder.initTable(storageConf, getBasePath());
         }
       }
     } catch (IOException e) {

@@ -1307,6 +1307,7 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setValue(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
         tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
         if (null == recordMergerStrategy) {
+          LOG.warn("{} is not set. Because record payload is set, we will infer strategy {}", RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
           tableConfig.setValue(RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
         } else {
           tableConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
