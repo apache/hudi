@@ -22,9 +22,11 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -35,6 +37,7 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -55,6 +58,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
@@ -423,6 +427,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         default:
 
           if (recordMerger.get().getMergingStrategy().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)) {
+            ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
+                && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                   readerContext.constructHoodieAvroRecord(older, olderInfoMap, payloadClass, props), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
                   readerContext.constructHoodieAvroRecord(newer, newerInfoMap, payloadClass, props), (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
@@ -435,7 +441,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               }
               return Option.ofNullable(readerContext.convertAvroRecord((IndexedRecord)  mergedRecord.get().getLeft().getData()));
             }
-            return Option.empty();
           } else {
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
                 readerContext.constructHoodieRecord(older, olderInfoMap), (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
@@ -447,8 +452,8 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               }
               return Option.ofNullable((T) mergedRecord.get().getLeft().getData());
             }
-            return Option.empty();
           }
+          return Option.empty();
       }
     }
   }
