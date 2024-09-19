@@ -399,7 +399,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0,10L);
+    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
     when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
