@@ -83,6 +83,7 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.orc.CompressionKind;
@@ -1655,7 +1656,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public CompactionStrategy getCompactionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
+    String compactionStrategiesStr = getString(HoodieCompactionConfig.COMPACTION_STRATEGY);
+    String[] compactionStrategyArr = compactionStrategiesStr.split(",");
+    List<CompactionStrategy> compactionStrategies = Arrays.stream(compactionStrategyArr)
+        .map(className -> (CompactionStrategy) ReflectionUtils.loadClass(className)).collect(Collectors.toList());
+    return new CompositeCompactionStrategy(compactionStrategies);
   }
 
   public Long getTargetIOPerCompactionInMB() {
