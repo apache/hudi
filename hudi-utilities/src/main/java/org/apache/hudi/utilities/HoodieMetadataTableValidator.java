@@ -296,7 +296,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-bloom-filters"}, description = "Validate bloom filters of base files", required = false)
     public boolean validateBloomFilters = false;
 
-    @Parameter(names = {"--view-storage-type-fs-listing"}, description = "View storage type to use for File System based listing", required = false)
+    @Parameter(names = {"--view-storage-type-fs-listing"}, description = "View storage type to use for File System based listing. Supported values are MEMORY (by default) and SPILLABLE_DISK.", required = false)
     public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--view-storage-type-mdt"}, description = "View storage type to use for metadata based listing. Supported values are MEMORY and SPILLABLE_DISK", required = false)
