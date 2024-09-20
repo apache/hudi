@@ -53,6 +53,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
@@ -395,9 +396,10 @@ public class UtilHelpers {
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
       int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
-    HoodieCompactionConfig compactionConfig = compactionStrategyClass
+    Option<CompactionStrategy> strategyOpt = compactionStrategyClass.map(ReflectionUtils::loadClass);
+    HoodieCompactionConfig compactionConfig = strategyOpt
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
+            .withCompactionStrategy(strategy).build())
         .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
