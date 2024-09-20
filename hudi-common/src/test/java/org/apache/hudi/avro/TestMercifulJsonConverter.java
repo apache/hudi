@@ -541,20 +541,10 @@ class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     assertEquals(rec, CONVERTER.convert(json, sanitizedSchema));
   }
 
-  @Test
-  void testEncodedDecimal() throws JsonProcessingException {
+  @ParameterizedTest
+  @MethodSource("encodedDecimalScalePrecisionProvider")
+  void testEncodedDecimal(int scale, int precision) throws JsonProcessingException {
     Random rand = new Random();
-    testEncodedDecimalHelper(rand, 6, 10);
-    testEncodedDecimalHelper(rand, 30, 32);
-    testEncodedDecimalHelper(rand, 1, 3);
-
-    //size calculated using AvroInternalSchemaConverter.computeMinBytesForPrecision
-    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 5, 6, 10);
-    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 14, 30, 32);
-    testEncodedDecimalAvroSparkPostProcessorCaseHelper(rand, 2, 1, 3);
-  }
-
-  private static void testEncodedDecimalHelper(Random rand, int scale, int precision) throws JsonProcessingException {
     BigDecimal decfield = BigDecimal.valueOf(rand.nextDouble())
         .setScale(scale, RoundingMode.HALF_UP).round(new MathContext(precision, RoundingMode.HALF_UP));
     Map<String, Object> data = new HashMap<>();
@@ -575,7 +565,10 @@ class TestMercifulJsonConverter extends MercifulJsonConverterTestBase {
     assertEquals(decfield, decoded);
   }
 
-  private static void testEncodedDecimalAvroSparkPostProcessorCaseHelper(Random rand, int size, int scale, int precision) throws JsonProcessingException {
+  @ParameterizedTest
+  @MethodSource("encodedDecimalFixedScalePrecisionProvider")
+  void testEncodedDecimalAvroSparkPostProcessorCase(int size, int scale, int precision) throws JsonProcessingException {
+    Random rand = new Random();
     String postProcessSchemaString = String.format("{\"type\":\"record\",\"name\":\"tripUberRec\","
         + "\"fields\":[{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"\"},{\"name\":\"_row_key\","
         + "\"type\":\"string\",\"doc\":\"\"},{\"name\":\"rider\",\"type\":\"string\",\"doc\":\"\"},"

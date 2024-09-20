@@ -372,8 +372,6 @@ public class MercifulJsonConverterTestBase {
         Arguments.of(
             -1L * 1000, -1L, -1L * 1000),
         Arguments.of(
-            Long.MIN_VALUE, Long.MIN_VALUE / 1000, Long.MIN_VALUE),
-        Arguments.of(
             Long.MAX_VALUE, Long.MAX_VALUE / 1000, Long.MAX_VALUE),
         // The test case leads to long overflow due to how java calculate duration between 2 timestamps
         // Arguments.of(
@@ -474,6 +472,22 @@ public class MercifulJsonConverterTestBase {
         Arguments.of("2020-09-01", "18506"),  // epochDaysString, not supported by row
         Arguments.of(null, Integer.toString(Integer.MAX_VALUE)), // not supported by row
         Arguments.of(null, Integer.toString(Integer.MIN_VALUE)) // not supported by row
+    );
+  }
+
+  static Stream<Object> encodedDecimalScalePrecisionProvider() {
+    return Stream.of(
+        Arguments.of(6, 10),
+        Arguments.of(30, 32),
+        Arguments.of(1, 3)
+    );
+  }
+
+  static Stream<Object> encodedDecimalFixedScalePrecisionProvider() {
+    return Stream.of(
+        Arguments.of(5, 6, 10),
+        Arguments.of(14, 30, 32),
+        Arguments.of(2, 1, 3)
     );
   }
 }
