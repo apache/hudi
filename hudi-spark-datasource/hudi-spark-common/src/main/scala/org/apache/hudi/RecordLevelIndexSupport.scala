@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
@@ -90,6 +90,13 @@ class RecordLevelIndexSupport(spark: SparkSession,
    */
   def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+  }
+
+  /**
+   * Returns true if the query type is supported by the index.
+   */
+  override def supportsQueryType(queryType: HoodieTableQueryType): Boolean = {
+    queryType == HoodieTableQueryType.SNAPSHOT
   }
 }
 

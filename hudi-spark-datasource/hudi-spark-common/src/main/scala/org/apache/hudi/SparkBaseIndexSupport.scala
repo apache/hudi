@@ -21,11 +21,10 @@ package org.apache.hudi
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.catalyst.expressions.{And, Expression}
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
@@ -44,6 +43,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   def getIndexName: String
 
   def isIndexAvailable: Boolean
+
+  def supportsQueryType(queryType: HoodieTableQueryType): Boolean = true
 
   def computeCandidateIsStrict(spark: SparkSession,
                                fileIndex: HoodieFileIndex,

@@ -23,7 +23,7 @@ import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPru
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
 import org.apache.hudi.storage.StoragePath
@@ -67,6 +67,13 @@ class SecondaryIndexSupport(spark: SparkSession,
    */
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getIndexMetadata.isPresent && !metaClient.getIndexMetadata.get().getIndexDefinitions.isEmpty
+  }
+
+  /**
+   * Returns true if the query type is supported by the index.
+   */
+  override def supportsQueryType(queryType: HoodieTableQueryType): Boolean = {
+    queryType == HoodieTableQueryType.SNAPSHOT
   }
 
   /**

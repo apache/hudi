@@ -400,7 +400,7 @@ case class HoodieFileIndex(spark: SparkSession,
     lazy val queryReferencedColumns = collectReferencedColumns(spark, queryFilters, schema)
     if (isDataSkippingEnabled) {
       for(indexSupport: SparkBaseIndexSupport <- indicesSupport) {
-        if (indexSupport.isIndexAvailable) {
+        if (indexSupport.supportsQueryType(getQueryType) && indexSupport.isIndexAvailable) {
           val prunedFileNames = indexSupport.computeCandidateIsStrict(spark, this, queryFilters, queryReferencedColumns,
             prunedPartitionsAndFileSlices, shouldPushDownFilesFilter)
           if (prunedFileNames.nonEmpty) {
