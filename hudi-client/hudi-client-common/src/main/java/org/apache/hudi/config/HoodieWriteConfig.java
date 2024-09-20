@@ -1217,7 +1217,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieFileFormat getBaseFileFormat() {
-    return HoodieFileFormat.valueOf(getStringOrDefault(BASE_FILE_FORMAT));
+    return HoodieFileFormat.valueOf(getStringOrDefault(BASE_FILE_FORMAT).toUpperCase());
   }
 
   public RecordMergeMode getRecordMergeMode() {
