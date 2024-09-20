@@ -265,7 +265,7 @@ public class HoodieStreamer implements Serializable {
     @Parameter(names = {"--payload-class"}, description = "Deprecated. Use --merge-mode for overwite or event time merging."
         + " Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
         + "other than overwriting existing value")
-    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+    public String payloadClassName = null;
 
     @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
     public RecordMergeMode recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
