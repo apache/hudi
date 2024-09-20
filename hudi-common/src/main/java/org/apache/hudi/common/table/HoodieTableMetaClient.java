@@ -32,7 +32,6 @@ import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
-import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
@@ -1314,7 +1313,7 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != payloadClassName) {
         if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
-         tableConfig.setValue(RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
+          tableConfig.setValue(RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
         } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
           tableConfig.setValue(RECORD_MERGE_MODE, OVERWRITE_WITH_LATEST.name());
         } else {
