@@ -157,7 +157,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> COMPACTION_SPECIFY_PARTITION_PATH_REGEX = ConfigProperty
       .key("hoodie.compaction.partition.path.regex")
-      .defaultValue(".*")
+      .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Used to specify the partition path regex for compaction. "
           + "Only partitions that match the regex will be compacted. Only be used when configure PartitionRegexBasedCompactionStrategy.");

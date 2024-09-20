@@ -288,7 +288,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   private static Stream<Arguments> regexTestParameters() {
     Object[][] data = new Object[][] {
         {
-          "default", Arrays.asList("2015/03/16", "2015/03/17", "2016/03/15")
+          ".*", Arrays.asList("2015/03/16", "2015/03/17", "2016/03/15")
         },
         {
           "2017/.*/.*", Collections.emptyList()
@@ -308,9 +308,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
   public void testCompactionSpecifyPartition(String regex, List<String> expectedCompactedPartition) throws Exception {
     HoodieCompactionConfig.Builder builder = HoodieCompactionConfig.newBuilder()
         .withCompactionStrategy(new PartitionRegexBasedCompactionStrategy()).withMaxNumDeltaCommitsBeforeCompaction(1);
-    if (!regex.equals("default")) {
-      builder.withCompactionSpecifyPartitionPathRegex(regex);
-    }
+    builder.withCompactionSpecifyPartitionPathRegex(regex);
     HoodieWriteConfig config = getConfigBuilder()
         .withCompactionConfig(builder.build())
         .withMetricsConfig(getMetricsConfig()).build();
