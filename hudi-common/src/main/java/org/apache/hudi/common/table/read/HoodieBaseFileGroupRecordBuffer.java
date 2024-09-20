@@ -24,6 +24,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
@@ -34,6 +36,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -50,6 +53,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
@@ -65,6 +69,8 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_PARTITION_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
@@ -267,15 +273,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             if (payloadClass.isPresent()) {
               ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
                   && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
-              HoodieRecord oldHoodieRecord = readerContext.constructHoodieAvroRecord(Option.of(record), metadata, payloadClass.get(), props);
-              HoodieRecord newHoodieRecord = readerContext.constructHoodieAvroRecord(
-                  existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), payloadClass.get(), props);
+              HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, Option.of(record), metadata);
+              HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight());
               Option<Pair<HoodieRecord, Schema>> combinedRecordAndSchemaOpt = recordMerger.get().merge(
-                  oldHoodieRecord,
-                  oldHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) metadata.get(INTERNAL_META_SCHEMA),
-                  newHoodieRecord,
-                  newHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) existingRecordMetadataPair.getRight().get(INTERNAL_META_SCHEMA),
-                  props);
+                  oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, metadata),
+                  newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, existingRecordMetadataPair.getRight()), props);
               if (!combinedRecordAndSchemaOpt.isPresent()) {
                 return Option.empty();
               }
@@ -459,14 +461,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (payloadClass.isPresent()) {
             ValidationUtils.checkArgument(!Objects.equals(payloadClass, OverwriteWithLatestAvroPayload.class.getCanonicalName())
                 && !Objects.equals(payloadClass, DefaultHoodieRecordPayload.class.getCanonicalName()));
-            HoodieRecord oldHoodieRecord = readerContext.constructHoodieAvroRecord(older, olderInfoMap, payloadClass.get(), props);
-            HoodieRecord newHoodieRecord = readerContext.constructHoodieAvroRecord(newer, newerInfoMap, payloadClass.get(), props);
+            HoodieRecord oldHoodieRecord = constructHoodieAvroRecord(readerContext, older, olderInfoMap);
+            HoodieRecord newHoodieRecord = constructHoodieAvroRecord(readerContext, newer, newerInfoMap);
             Option<Pair<HoodieRecord, Schema>> mergedRecord = recordMerger.get().merge(
-                oldHoodieRecord,
-                oldHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) olderInfoMap.get(INTERNAL_META_SCHEMA),
-                newHoodieRecord,
-                newHoodieRecord.isDelete(readerSchema, props) ? readerSchema : (Schema) newerInfoMap.get(INTERNAL_META_SCHEMA), props);
-
+                oldHoodieRecord, getSchemaForAvroPayloadMerge(oldHoodieRecord, olderInfoMap),
+                newHoodieRecord, getSchemaForAvroPayloadMerge(newHoodieRecord, newerInfoMap), props);
             if (mergedRecord.isPresent()
                 && !mergedRecord.get().getLeft().isDelete(mergedRecord.get().getRight(), props)) {
               if (!mergedRecord.get().getRight().equals(readerSchema)) {
@@ -490,6 +489,35 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return Option.empty();
       }
     }
+  }
+
+  /**
+   * Constructs a new {@link HoodieAvroRecord} for payload based merging
+   *
+   * @param readerContext reader context
+   * @param recordOption An option of the record in engine-specific type if exists.
+   * @param metadataMap  The record metadata.
+   * @return A new instance of {@link HoodieRecord}.
+   */
+  private HoodieRecord constructHoodieAvroRecord(HoodieReaderContext<T> readerContext, Option<T> recordOption, Map<String, Object> metadataMap) {
+
+    HoodieKey hoodieKey = new HoodieKey((String) metadataMap.get(INTERNAL_META_RECORD_KEY), (String) metadataMap.get(INTERNAL_META_PARTITION_PATH));
+    if (!recordOption.isPresent()) {
+      return  new HoodieAvroRecord<>(hoodieKey,
+          HoodieRecordUtils.loadPayload(payloadClass.get(), new Object[] {null, readerContext.getOrderingValue(recordOption, metadataMap, null, props)}, GenericRecord.class, Comparable.class));
+    }
+    Schema schema = (Schema) metadataMap.get(INTERNAL_META_SCHEMA);
+    GenericRecord record = readerContext.convertToAvroRecord(recordOption.get(), schema);
+    return  new HoodieAvroRecord<>(hoodieKey,
+        HoodieRecordUtils.loadPayload(payloadClass.get(), new Object[] {record, readerContext.getOrderingValue(recordOption, metadataMap, schema, props)}, GenericRecord.class,
+            Comparable.class), null);
+  }
+
+  private Schema getSchemaForAvroPayloadMerge(HoodieRecord record, Map<String, Object> infoMap) throws IOException {
+    if (record.isDelete(readerSchema, props)) {
+      return readerSchema;
+    }
+    return (Schema) infoMap.get(INTERNAL_META_SCHEMA);
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, Pair<Option<T>, Map<String, Object>> logRecordInfo) throws IOException {

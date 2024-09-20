@@ -55,7 +55,6 @@ object HoodieWriterUtils {
     hoodieConfig.setDefaultValue(OPERATION)
     hoodieConfig.setDefaultValue(TABLE_TYPE)
     hoodieConfig.setDefaultValue(PRECOMBINE_FIELD)
-    hoodieConfig.setDefaultValue(PAYLOAD_CLASS_NAME)
     hoodieConfig.setDefaultValue(KEYGENERATOR_CLASS_NAME)
     hoodieConfig.setDefaultValue(ENABLE)
     hoodieConfig.setDefaultValue(COMMIT_METADATA_KEYPREFIX)
@@ -169,6 +168,7 @@ object HoodieWriterUtils {
       val diffConfigs = StringBuilder.newBuilder
       params.foreach { case (key, value) =>
         // Base file format can change between writes, so ignore it.
+        // Expression payload is a special case where it can differ from the table config
         if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
           && !(RECORD_MERGE_MODE.key().equals(key)
           && params.get(PAYLOAD_CLASS_NAME.key()).isDefined

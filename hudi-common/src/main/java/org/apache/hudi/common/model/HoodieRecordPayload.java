@@ -146,7 +146,6 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return getAvroPayloadForMergeMode(RecordMergeMode.valueOf(mergeMode));
   }
 
-
   static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
