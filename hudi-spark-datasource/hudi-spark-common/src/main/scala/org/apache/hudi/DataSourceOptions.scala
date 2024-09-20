@@ -411,6 +411,8 @@ object DataSourceWriteOptions {
    */
   val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
 
+  val RECORD_MERGE_MODE = HoodieWriteConfig.RECORD_MERGE_MODE
+
   /**
    * Record key field. Value to be used as the `recordKey` component of `HoodieKey`. Actual value
    * will be obtained by invoking .toString() on the field value. Nested fields can be specified using

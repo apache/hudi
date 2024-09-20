@@ -221,8 +221,8 @@ public class TestDataSourceUtils {
     asyncClusteringKeyValues.stream().forEach(pair -> {
       HashMap<String, String> params = new HashMap<>(3);
       params.put(DataSourceWriteOptions.TABLE_TYPE().key(), DataSourceWriteOptions.TABLE_TYPE().defaultValue());
-      params.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
-              DataSourceWriteOptions.PAYLOAD_CLASS_NAME().defaultValue());
+      params.put(DataSourceWriteOptions.RECORD_MERGE_MODE().key(),
+              DataSourceWriteOptions.RECORD_MERGE_MODE().defaultValue());
       params.put(pair.left, pair.right.toString());
       HoodieWriteConfig hoodieConfig = DataSourceUtils
               .createHoodieConfig(avroSchemaString, config.getBasePath(), "test", params);
