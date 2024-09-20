@@ -97,7 +97,7 @@ public class ConfigUtils {
   public static String getAvroPayloadClass(Properties properties) {
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     return RecordPayloadType.getPayloadClassName(hoodieConfig).orElseGet(() ->
-        HoodieRecordPayload.getAvroPayloadForMergeMode(RecordMergeMode.valueOf(getStringWithAltKeys(properties, RECORD_MERGE_MODE, true))));
+        HoodieRecordPayload.getAvroPayloadForMergeMode(getStringWithAltKeys(properties, RECORD_MERGE_MODE, true)));
   }
 
   public static List<String> split2List(String param) {
