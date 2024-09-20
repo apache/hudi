@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.compaction.SortMergeCompactionHelper;
 import org.apache.hudi.common.util.SampleEstimator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.sorter.ExternalSorter;
 import org.apache.hudi.common.util.sorter.ExternalSorterFactory;
 import org.apache.hudi.common.util.sorter.ExternalSorterType;
@@ -98,8 +99,10 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     ClosableIterator<HoodieRecord> wrapRecordItr = new CloseableMappingIterator<HoodieRecord, HoodieRecord>(rawRecordIter, record -> {
       HoodieTableConfig tableConfig = mergeHandle.getHoodieTableMetaClient().getTableConfig();
       try {
+        Option<Pair<String, String>> simpleKeyGenFieldsOpt =
+            tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));
         return record.copy()
-            .wrapIntoHoodieRecordPayloadWithParams(readSchema, tableConfig.getProps(), Option.empty(), writeConfig.allowOperationMetadataField(), Option.of(mergeHandle.getPartitionPath()),
+            .wrapIntoHoodieRecordPayloadWithParams(readSchema, tableConfig.getProps(), simpleKeyGenFieldsOpt, writeConfig.allowOperationMetadataField(), Option.of(mergeHandle.getPartitionPath()),
               tableConfig.populateMetaFields(), Option.empty());
       } catch (IOException e) {
         throw new HoodieIOException("Failed to wrap record into HoodieRecordPayload", e);
