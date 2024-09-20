@@ -140,6 +140,10 @@ public class HoodieInstantTimeGenerator {
     }
   }
 
+  public static String getStrictlyLowerTimestamp(String instantTime) {
+    return instantTimeMinusMillis(instantTime, 1);
+  }
+
   private static boolean isSecondGranularity(String instant) {
     return instant.length() == SECS_INSTANT_ID_LENGTH;
   }

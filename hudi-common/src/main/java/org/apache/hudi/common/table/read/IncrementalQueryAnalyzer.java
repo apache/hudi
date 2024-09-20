@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -413,6 +414,7 @@ public class IncrementalQueryAnalyzer {
      * Returns the latest instant time which should be included physically in reading.
      */
     public String getLastInstant() {
+      ValidationUtils.checkArgument(!this.instants.isEmpty());
       return this.instants.get(this.instants.size() - 1);
     }
 
@@ -470,6 +472,16 @@ public class IncrementalQueryAnalyzer {
 
     public @Nullable HoodieTimeline getArchivedTimeline() {
       return archivedTimeline;
+    }
+
+    public QueryContext withUpdatedEndInstant(String endInstant) {
+      return new QueryContext(
+          startInstant.get(),
+          endInstant,
+          instants,
+          archivedInstants,
+          activeInstants,
+          activeTimeline,archivedTimeline);
     }
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
@@ -86,6 +87,12 @@ public abstract class SnapshotLoadQuerySplitter {
     return getNextCheckpoint(df, queryInfo.getStartInstant(), sourceProfileSupplier)
         .map(checkpoint -> queryInfo.withUpdatedEndInstant(checkpoint))
         .orElse(queryInfo);
+  }
+
+  public QueryContext getNextCheckpoint(Dataset<Row> df, QueryContext queryContext, Option<SourceProfileSupplier> sourceProfileSupplier) {
+    return getNextCheckpoint(df, queryContext.getStartInstant().get(), sourceProfileSupplier)
+        .map(checkpoint -> queryContext.withUpdatedEndInstant(checkpoint))
+        .orElse(queryContext);
   }
 
   public static Option<SnapshotLoadQuerySplitter> getInstance(TypedProperties props) {

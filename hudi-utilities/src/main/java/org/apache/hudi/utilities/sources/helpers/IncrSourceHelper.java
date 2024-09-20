@@ -56,12 +56,14 @@ public class IncrSourceHelper {
   public static final String DEFAULT_BEGIN_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
 
+  @Deprecated
   /**
+   * @Deprecated please use HoodieInstantTimeGenerator#getStrictlyLowerTimestamp
    * Get a timestamp which is the next value in a descending sequence.
    *
    * @param timestamp Timestamp
    */
-  private static String getStrictlyLowerTimestamp(String timestamp) {
+  public static String getStrictlyLowerTimestamp(String timestamp) {
     long ts = Long.parseLong(timestamp);
     ValidationUtils.checkArgument(ts > 0, "Timestamp must be positive");
     long lower = ts - 1;
