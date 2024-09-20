@@ -154,6 +154,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.datasource.write.payload.class")
       .noDefaultValue()
       .markAdvanced()
+      .deprecatedAfter("1.0.0")
       .withDocumentation("Payload class used. Override this, if you like to roll your own merge logic, when upserting/inserting. "
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
