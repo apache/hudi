@@ -51,7 +51,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -288,9 +287,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
   }
 
   private HoodieCleanMetadata getMetadataWithMaxCompletionTime(List<HoodieCleanMetadata> cleanMetadata) {
-    Optional<HoodieCleanMetadata> r = cleanMetadata.stream().reduce((e1, e2) ->
-        e1.getLastCompletedCommitTimestamp().compareTo(e2.getLastCompletedCommitTimestamp()) > 0 ? e1 : e2);
-    return r.orElse(null);
+    return cleanMetadata.stream().reduce((e1, e2) ->
+            e1.getLastCompletedCommitTimestamp().compareTo(e2.getLastCompletedCommitTimestamp()) > 0 ? e1 : e2)
+        .orElse(null);
   }
 
   private void checkIfOtherWriterCommitted(HoodieInstant hoodieInstant, HoodieIOException e) {

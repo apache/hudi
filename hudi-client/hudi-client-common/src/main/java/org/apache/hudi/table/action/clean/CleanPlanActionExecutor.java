@@ -49,8 +49,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.MetadataTableUtils.shouldUseBatchLookup;
-import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
+import static org.apache.hudi.common.util.MapUtils.nonEmpty;
 
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {
 
@@ -76,7 +76,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
         HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
             .deserializeHoodieCleanMetadata(table.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
         String lastCompletedCommitTimestamp = cleanMetadata.getLastCompletedCommitTimestamp();
-        numCommits = commitTimeline.findInstantsAfter(lastCompletedCommitTimestamp).countInstants();
+        numCommits = commitTimeline.findInstantsAfterCompletionTime(lastCompletedCommitTimestamp).countInstants();
       } catch (IOException e) {
         throw new HoodieIOException("Parsing of last clean instant " + lastCleanInstant.get() + " failed", e);
       }
