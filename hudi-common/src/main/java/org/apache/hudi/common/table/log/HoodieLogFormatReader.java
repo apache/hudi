@@ -57,10 +57,34 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.recordKeyField = recordKeyField;
     this.enableInlineReading = enableRecordLookups;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    nextLogFile();
+  }
+
+  public boolean nextLogFile() {
+    closeCurrentLogFileReader();
     if (!logFiles.isEmpty()) {
-      HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-          enableRecordLookups, recordKeyField, internalSchema);
+      try {
+        HoodieLogFile nextLogFile = logFiles.remove(0);
+        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
+            enableInlineReading, recordKeyField, internalSchema);
+      } catch (IOException io) {
+        throw new HoodieIOException("unable to initialize read with log file ", io);
+      }
+      LOG.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
+      return true;
+    }
+    return false;
+  }
+
+  private void closeCurrentLogFileReader() {
+    if (currentReader != null) {
+      try {
+        currentReader.close();
+      } catch (IOException e) {
+        LOG.error("unable to close log file reader: {} ", currentReader.getLogFile(), e);
+        throw new HoodieIOException("unable to close log file reader ", e);
+      }
+      currentReader = null;
     }
   }
 
@@ -69,10 +93,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
    */
   @Override
   public void close() throws IOException {
-    if (currentReader != null) {
-      currentReader.close();
-      currentReader = null;
-    }
+    closeCurrentLogFileReader();
   }
 
   @Override
@@ -80,21 +101,15 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
 
     if (currentReader == null) {
       return false;
-    } else if (currentReader.hasNext()) {
-      return true;
-    } else if (!logFiles.isEmpty()) {
-      try {
-        HoodieLogFile nextLogFile = logFiles.remove(0);
-        this.currentReader.close();
-        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
-            enableInlineReading, recordKeyField, internalSchema);
-      } catch (IOException io) {
-        throw new HoodieIOException("unable to initialize read with log file ", io);
-      }
-      LOG.debug("Moving to the next reader for logfile {}", currentReader.getLogFile());
-      return hasNext();
     }
-    return false;
+
+    if (currentReader.hasNext()) {
+      // current reader still has more blocks
+      return true;
+    }
+
+    // current reader has no more blocks, try to move to the next reader
+    return nextLogFile() && hasNext();
   }
 
   @Override

@@ -253,10 +253,13 @@ public abstract class AbstractHoodieLogRecordReader {
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
         if (logBlock.getBlockType() != CORRUPT_BLOCK
-            && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
+            && !HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          // skip current log file
+          LOG.info("Skipping log file {} as it has instant time: {} greater than latest instant time: {}", logFile.getPath(), instantTime, latestInstantTime);
+          logFormatReaderWrapper.nextLogFile();
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
@@ -440,10 +443,13 @@ public abstract class AbstractHoodieLogRecordReader {
           totalCorruptBlocks.incrementAndGet();
           continue;
         }
-        if (!HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME),
+        if (!HoodieTimeline.compareTimestamps(instantTime,
             HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime)) {
           // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          // skip current log file
+          LOG.info("Skipping log file {} as it has instant time: {} greater than latest instant time: {}", logFile.getPath(), instantTime, latestInstantTime);
+          logFormatReaderWrapper.nextLogFile();
+          continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
