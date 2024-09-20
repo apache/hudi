@@ -27,8 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-
-import org.apache.hadoop.fs.FileSystem;
+import org.apache.hudi.storage.HoodieStorage;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
@@ -41,8 +40,8 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 public class DirectMarkerTransactionManager extends TransactionManager {
   private final String filePath;
 
-  public DirectMarkerTransactionManager(HoodieWriteConfig config, FileSystem fs, String partitionPath, String fileId) {
-    super(new LockManager(config, fs, createUpdatedLockProps(config, partitionPath, fileId)), config.isLockRequired());
+  public DirectMarkerTransactionManager(HoodieWriteConfig config, HoodieStorage storage, String partitionPath, String fileId) {
+    super(new LockManager(config, storage, createUpdatedLockProps(config, partitionPath, fileId)), config.isLockRequired());
     this.filePath = partitionPath + "/" + fileId;
   }
 

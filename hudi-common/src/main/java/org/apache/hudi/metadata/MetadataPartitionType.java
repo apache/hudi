@@ -39,16 +39,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
-import static org.apache.hudi.common.config.HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
-import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -123,7 +119,7 @@ public enum MetadataPartitionType {
       HoodieMetadataColumnStats previousColStatsRecord = older.getColumnStatMetadata().get();
       HoodieMetadataColumnStats newColumnStatsRecord = newer.getColumnStatMetadata().get();
 
-      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord));
+      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord), getRecordType());
     }
   },
   BLOOM_FILTERS(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS, "bloom-filters-", 4) {
@@ -193,6 +189,12 @@ public enum MetadataPartitionType {
       }
       return false;
     }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+    }
   },
   SECONDARY_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX, "secondary-index-", 7) {
     @Override
@@ -219,16 +221,33 @@ public enum MetadataPartitionType {
           secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_RECORD_KEY).toString(),
           (Boolean) secondaryIndexRecord.get(SECONDARY_INDEX_FIELD_IS_DELETED));
     }
+
+    @Override
+    public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+      checkArgument(metaClient.getIndexMetadata().isPresent(), "Index definition is not present for index: " + indexName);
+      return metaClient.getIndexMetadata().get().getIndexDefinitions().get(indexName).getIndexName();
+    }
   },
   PARTITION_STATS(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, "partition-stats-", 6) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS) && nonEmpty(getStringWithAltKeys(writeConfig, COLUMN_STATS_INDEX_FOR_COLUMNS, EMPTY_STRING));
+      return getBooleanWithAltKeys(writeConfig, ENABLE_METADATA_INDEX_PARTITION_STATS);
     }
 
     @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       constructColumnStatsMetadataPayload(payload, record);
+    }
+
+    @Override
+    public HoodieMetadataPayload combineMetadataPayloads(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
+      checkArgument(older.getColumnStatMetadata().isPresent());
+      checkArgument(newer.getColumnStatMetadata().isPresent());
+
+      HoodieMetadataColumnStats previousColStatsRecord = older.getColumnStatMetadata().get();
+      HoodieMetadataColumnStats newColumnStatsRecord = newer.getColumnStatMetadata().get();
+
+      return new HoodieMetadataPayload(newer.key, mergeColumnStatsRecords(previousColStatsRecord, newColumnStatsRecord), getRecordType());
     }
   },
   // ALL_PARTITIONS is just another record type in FILES partition
@@ -319,6 +338,16 @@ public enum MetadataPartitionType {
     this.recordType = recordType;
   }
 
+  /**
+   * Get the partition name from the metadata partition type.
+   * NOTE: For certain types of metadata partition, such as functional index and secondary index,
+   * partition path defined enum is just the prefix to denote the type of metadata partition.
+   * The actual partition name is contained in the index definition.
+   */
+  public String getPartitionPath(HoodieTableMetaClient metaClient, String indexName) {
+    return partitionPath;
+  }
+
   public String getPartitionPath() {
     return partitionPath;
   }
@@ -389,6 +418,9 @@ public enum MetadataPartitionType {
    * Returns the list of metadata partition types enabled based on the metadata config and table config.
    */
   public static List<MetadataPartitionType> getEnabledPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
+    if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
+      return Collections.emptyList();
+    }
     return Arrays.stream(getValidValues())
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(writeConfig) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());

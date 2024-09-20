@@ -24,7 +24,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,8 +47,7 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
   @Override
   public void detectAndResolveConflictIfNecessary() throws HoodieEarlyConflictDetectionException {
     DirectMarkerTransactionManager txnManager =
-        new DirectMarkerTransactionManager((HoodieWriteConfig) config,
-            (FileSystem) storage.getFileSystem(), partitionPath, fileId);
+        new DirectMarkerTransactionManager((HoodieWriteConfig) config, storage, partitionPath, fileId);
     try {
       // Need to do transaction before create marker file when using early conflict detection
       txnManager.beginTransaction(instantTime);

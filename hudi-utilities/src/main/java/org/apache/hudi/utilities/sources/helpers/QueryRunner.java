@@ -106,11 +106,12 @@ public class QueryRunner {
   }
 
   public Dataset<Row> applySnapshotQueryFilters(Dataset<Row> snapshot, QueryInfo snapshotQueryInfo) {
-    return snapshot
+    Dataset<Row> df = snapshot
         // add filtering so that only interested records are returned.
         .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             snapshotQueryInfo.getStartInstant()))
         .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             snapshotQueryInfo.getEndInstant()));
+    return snapshotQueryInfo.getPredicateFilter().map(df::filter).orElse(df);
   }
 }

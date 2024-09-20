@@ -45,6 +45,7 @@ import java.util.concurrent.CompletableFuture;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -106,7 +107,7 @@ public class TestDataHubSyncClient {
   public class DataHubSyncClientStub extends DataHubSyncClient {
 
     public DataHubSyncClientStub(DataHubSyncConfig config) {
-      super(config);
+      super(config, mock(HoodieTableMetaClient.class));
     }
 
     @Override

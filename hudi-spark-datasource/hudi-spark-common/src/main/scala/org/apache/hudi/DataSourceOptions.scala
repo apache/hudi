@@ -76,16 +76,9 @@ object DataSourceReadOptions {
       "When set to 'latest_state', it returns the latest records' values." +
       "When set to 'cdc', it returns the cdc data.")
 
-  val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
-  val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
-  val REALTIME_MERGE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.merge.type")
-    .defaultValue(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
-    .withValidValues(REALTIME_SKIP_MERGE_OPT_VAL, REALTIME_PAYLOAD_COMBINE_OPT_VAL)
-    .markAdvanced()
-    .withDocumentation("For Snapshot query on merge on read table, control whether we invoke the record " +
-      s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
-      s"${REALTIME_SKIP_MERGE_OPT_VAL}")
+  val REALTIME_SKIP_MERGE_OPT_VAL = HoodieReaderConfig.REALTIME_SKIP_MERGE
+  val REALTIME_PAYLOAD_COMBINE_OPT_VAL = HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE
+  val REALTIME_MERGE: ConfigProperty[String] = HoodieReaderConfig.MERGE_TYPE
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
@@ -157,7 +150,7 @@ object DataSourceReadOptions {
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("0.10.0")
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +

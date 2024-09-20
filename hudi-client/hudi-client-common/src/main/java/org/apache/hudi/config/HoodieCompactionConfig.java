@@ -155,6 +155,13 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used by org.apache.hudi.io.compact.strategy.DayBasedCompactionStrategy to denote the number of "
           + "latest partitions to compact during a compaction run.");
 
+  public static final ConfigProperty<String> COMPACTION_SPECIFY_PARTITION_PATH_REGEX = ConfigProperty
+      .key("hoodie.compaction.partition.path.regex")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Used to specify the partition path regex for compaction. "
+          + "Only partitions that match the regex will be compacted. Only be used when configure PartitionRegexBasedCompactionStrategy.");
+
   /**
    * Configs related to specific table types.
    */
@@ -458,6 +465,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
       compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
+      return this;
+    }
+
+    public Builder withCompactionSpecifyPartitionPathRegex(String partitionPathRegex) {
+      compactionConfig.setValue(COMPACTION_SPECIFY_PARTITION_PATH_REGEX, partitionPathRegex);
       return this;
     }
 

@@ -528,6 +528,15 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
+   */
+  public static Option<List<String>> getPartitionFieldsForKeyGenerator(HoodieConfig config) {
+    return Option.ofNullable(config.getString(PARTITION_FIELDS)).map(field -> Arrays.asList(field.split(BaseKeyGenerator.FIELD_SEPARATOR)));
+  }
+
+  /**
    * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will
    * strip the partition key generator related info from the fields.
    */
@@ -544,7 +553,7 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public static Option<String[]> getPartitionFields(HoodieConfig config) {
     if (contains(PARTITION_FIELDS, config)) {
-      return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(","))
+      return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(BaseKeyGenerator.FIELD_SEPARATOR))
           .filter(p -> !p.isEmpty())
           .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
           .collect(Collectors.toList()).toArray(new String[] {}));

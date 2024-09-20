@@ -700,6 +700,7 @@
               <exclude>**/*.log</exclude>
               <exclude>**/*.sqltemplate</exclude>
               <exclude>**/compose_env</exclude>
+              <exclude>**/main/resources/version.txt</exclude>
               <exclude>**/*NOTICE*</exclude>
               <exclude>**/*LICENSE*</exclude>
               <exclude>**/dependency-reduced-pom.xml</exclude>
@@ -1699,6 +1700,12 @@
         <version>${mockito.jupiter.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-inline</artifactId>
+        <scope>test</scope>
+        <version>${mockito.jupiter.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.junit.platform</groupId>
         <artifactId>junit-platform-runner</artifactId>
         <version>${junit.platform.version}</version>
@@ -2366,6 +2373,9 @@
           <family>mac</family>
           <arch>aarch64</arch>
         </os>
+        <property>
+          <name>spark2.4</name>
+        </property>
       </activation>
     </profile>
 

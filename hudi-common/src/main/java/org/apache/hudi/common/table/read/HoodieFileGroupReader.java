@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.CachingIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -108,18 +110,34 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setRecordMerger(this.recordMerger);
     readerContext.setTablePath(tablePath);
     readerContext.setLatestCommitTime(latestCommitTime);
-    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition);
+    boolean isSkipMerge = ConfigUtils.getStringWithAltKeys(props, HoodieReaderConfig.MERGE_TYPE, true).equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    readerContext.setShouldMergeUseRecordPosition(shouldUseRecordPosition && !isSkipMerge);
     readerContext.setHasLogFiles(!this.logFiles.isEmpty());
+    if (readerContext.getHasLogFiles() && start != 0) {
+      throw new IllegalArgumentException("Filegroup reader is doing log file merge but not reading from the start of the base file");
+    }
     readerContext.setHasBootstrapBaseFile(hoodieBaseFileOption.isPresent() && hoodieBaseFileOption.get().getBootstrapBaseFile().isPresent());
     readerContext.setSchemaHandler(readerContext.supportsParquetRowIndex()
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.recordBuffer = this.logFiles.isEmpty()
-        ? null
-        : shouldUseRecordPosition
-        ? new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props)
-        : new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, recordMerger, props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
+  }
+
+  /**
+   * Initialize correct record buffer
+   */
+  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext, HoodieTableMetaClient hoodieTableMetaClient, HoodieRecordMerger recordMerger,
+                                                             TypedProperties props, boolean hasNoLogFiles, boolean isSkipMerge, boolean shouldUseRecordPosition) {
+    if (hasNoLogFiles) {
+      return null;
+    } else if (isSkipMerge) {
+      return new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    } else if (shouldUseRecordPosition) {
+      return new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    } else {
+      return new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), recordMerger, props);
+    }
   }
 
   /**
@@ -175,6 +193,9 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     } else if (!skeletonFileIterator.isPresent()) {
       return dataFileIterator.get().getLeft();
     } else {
+      if (start != 0) {
+        throw new IllegalArgumentException("Filegroup reader is doing bootstrap merge but we are not reading from the start of the base file");
+      }
       return readerContext.mergeBootstrapReaders(skeletonFileIterator.get().getLeft(), skeletonFileIterator.get().getRight(),
           dataFileIterator.get().getLeft(), dataFileIterator.get().getRight());
     }

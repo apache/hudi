@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,11 +16,24 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.action.rollback;
+package org.apache.hudi.sink.utils.keyedstate;
 
-import org.apache.hadoop.fs.PathFilter;
+import org.apache.flink.streaming.api.operators.KeyContext;
 
-import java.io.Serializable;
+/**
+ * Key context for testing.
+ *
+ */
+public class MockKeyContext implements KeyContext {
+  private Object currentKey;
 
-public interface SerializablePathFilter extends PathFilter, Serializable {
+  @Override
+  public void setCurrentKey(Object key) {
+    currentKey = key;
+  }
+
+  @Override
+  public Object getCurrentKey() {
+    return currentKey;
+  }
 }

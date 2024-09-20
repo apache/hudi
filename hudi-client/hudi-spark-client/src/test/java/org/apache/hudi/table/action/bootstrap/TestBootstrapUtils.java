@@ -24,7 +24,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -72,7 +71,7 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
     List<Pair<String, List<HoodieFileStatus>>> collected =
         BootstrapUtils.getAllLeafFoldersWithFiles(
             metaClient.getTableConfig().getBaseFileFormat(),
-            (FileSystem) metaClient.getStorage().getFileSystem(),
+            metaClient.getStorage(),
             basePath, context);
     assertEquals(3, collected.size());
     collected.forEach(k -> assertEquals(2, k.getRight().size()));
@@ -81,7 +80,7 @@ public class TestBootstrapUtils extends HoodieClientTestBase {
     collected =
         BootstrapUtils.getAllLeafFoldersWithFiles(
             metaClient.getTableConfig().getBaseFileFormat(),
-            (FileSystem) metaClient.getStorage().getFileSystem(),
+            metaClient.getStorage(),
             basePath + "/" + folders.get(0), context);
     assertEquals(1, collected.size());
     collected.forEach(k -> assertEquals(2, k.getRight().size()));

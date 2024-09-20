@@ -21,6 +21,7 @@ package org.apache.hudi.hive;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieSyncTableStrategy;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
@@ -104,6 +105,10 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private String hiveSyncTableStrategy;
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
+    this(props, hadoopConf, Option.empty());
+  }
+
+  public HiveSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
     super(props, hadoopConf);
     String configuredMetastoreUris = props.getProperty(METASTORE_URIS.key());
 
@@ -120,13 +125,14 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
     this.config = new HiveSyncConfig(props, hadoopConfForSync);
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.tableName = config.getStringOrDefault(META_SYNC_TABLE_NAME);
-    initSyncClient(config);
+    HoodieTableMetaClient metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
+    initSyncClient(config, metaClient);
     initTableNameVars(config);
   }
 
-  protected void initSyncClient(HiveSyncConfig config) {
+  protected void initSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
     try {
-      this.syncClient = new HoodieHiveSyncClient(config);
+      this.syncClient = new HoodieHiveSyncClient(config, metaClient);
     } catch (RuntimeException e) {
       if (config.getBoolean(HIVE_IGNORE_EXCEPTIONS)) {
         LOG.error("Got runtime exception when hive syncing, but continuing as ignoreExceptions config is set ", e);

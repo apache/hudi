@@ -136,4 +136,74 @@ class TestCompactionTable extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+  test("Test compaction before and after deletes") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'mor',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+      spark.sql("set hoodie.parquet.max.file.size = 10000")
+      // disable automatic inline compaction
+      spark.sql("set hoodie.compact.inline=false")
+      spark.sql("set hoodie.compact.schedule.inline=false")
+      // set compaction frequency to every 2 commits
+      spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+      // insert data
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000)")
+      spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000)")
+      // update data
+      spark.sql(s"update $tableName set price = 11 where id = 1")
+      // update data
+      spark.sql(s"update $tableName set price = 12 where id = 2")
+      // schedule compaction
+      spark.sql(s"schedule compaction on $tableName")
+      // show compaction
+      var compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+      var timestamps = compactionRows.map(_.getString(0))
+      assertResult(1)(timestamps.length)
+      // run compaction
+      spark.sql(s"run compaction on $tableName at ${timestamps(0)}")
+      // check data
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 11.0, 1000),
+        Seq(2, "a2", 12.0, 1000),
+        Seq(3, "a3", 10.0, 1000)
+      )
+      // show compaction
+      assertResult(1)(spark.sql(s"show compaction on $tableName").collect().length)
+      // Try deleting non-existent row
+      spark.sql(s"DELETE FROM $tableName WHERE id = 41")
+      // Delete record identified by some field other than the primary-key
+      spark.sql(s"DELETE FROM $tableName WHERE name = 'a2'")
+      // schedule compaction
+      spark.sql(s"schedule compaction on $tableName")
+      // show compaction
+      compactionRows = spark.sql(s"show compaction on $tableName limit 10").collect()
+      timestamps = compactionRows.map(_.getString(0)).sorted
+      assertResult(2)(timestamps.length)
+      // run compaction
+      spark.sql(s"run compaction on $tableName at ${timestamps(1)}")
+      // check data, only 2 records should be present
+      checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+        Seq(1, "a1", 11.0, 1000),
+        Seq(3, "a3", 10.0, 1000)
+      )
+      // show compaction
+      assertResult(2)(spark.sql(s"show compaction on $tableName limit 10").collect().length)
+    }
+  }
 }

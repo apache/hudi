@@ -32,19 +32,18 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -65,8 +64,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   private static final Logger LOG = LoggerFactory.getLogger(FileSystemBasedLockProvider.class);
   private static final String LOCK_FILE_NAME = "lock";
   private final int lockTimeoutMinutes;
-  private final transient FileSystem fs;
-  private final transient Path lockFile;
+  private final transient HoodieStorage storage;
+  private final transient StoragePath lockFile;
   protected LockConfiguration lockConfiguration;
   private SimpleDateFormat sdf;
   private LockInfo lockInfo;
@@ -81,13 +80,13 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
           + StoragePath.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME;
     }
     this.lockTimeoutMinutes = lockConfiguration.getConfig().getInteger(FILESYSTEM_LOCK_EXPIRE_PROP_KEY);
-    this.lockFile = new Path(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
+    this.lockFile = new StoragePath(lockDirectory + StoragePath.SEPARATOR + LOCK_FILE_NAME);
     this.lockInfo = new LockInfo();
     this.sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
-    this.fs = HadoopFSUtils.getFs(this.lockFile.toString(), configuration);
+    this.storage = HoodieStorageUtils.getStorage(this.lockFile.toString(), configuration);
     List<String> customSupportedFSs = lockConfiguration.getConfig().getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
-    if (!customSupportedFSs.contains(this.fs.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.fs.getScheme())) {
-      throw new HoodieLockException("Unsupported scheme :" + this.fs.getScheme() + ", since this fs can not support atomic creation");
+    if (!customSupportedFSs.contains(this.storage.getScheme()) && !StorageSchemes.isAtomicCreationSupported(this.storage.getScheme())) {
+      throw new HoodieLockException("Unsupported scheme :" + this.storage.getScheme() + ", since this fs can not support atomic creation");
     }
   }
 
@@ -95,7 +94,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void close() {
     synchronized (LOCK_FILE_NAME) {
       try {
-        fs.delete(this.lockFile, true);
+        storage.deleteFile(this.lockFile);
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       }
@@ -107,9 +106,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     try {
       synchronized (LOCK_FILE_NAME) {
         // Check whether lock is already expired, if so try to delete lock file
-        if (fs.exists(this.lockFile)) {
+        if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
-            fs.delete(this.lockFile, true);
+            storage.deleteFile(this.lockFile);
             LOG.warn("Delete expired lock file: " + this.lockFile);
           } else {
             reloadCurrentOwnerLockInfo();
@@ -117,7 +116,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
           }
         }
         acquireLock();
-        return fs.exists(this.lockFile);
+        return storage.exists(this.lockFile);
       }
     } catch (IOException | HoodieIOException e) {
       LOG.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -129,8 +128,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void unlock() {
     synchronized (LOCK_FILE_NAME) {
       try {
-        if (fs.exists(this.lockFile)) {
-          fs.delete(this.lockFile, true);
+        if (storage.exists(this.lockFile)) {
+          storage.deleteFile(this.lockFile);
         }
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
@@ -153,7 +152,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
       return false;
     }
     try {
-      long modificationTime = fs.getFileStatus(this.lockFile).getModificationTime();
+      long modificationTime = storage.getPathInfo(this.lockFile).getModificationTime();
       if (System.currentTimeMillis() - modificationTime > lockTimeoutMinutes * 60 * 1000L) {
         return true;
       }
@@ -164,10 +163,10 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   private void acquireLock() {
-    try (FSDataOutputStream fos = fs.create(this.lockFile, false)) {
-      if (!fs.exists(this.lockFile)) {
+    try (OutputStream os = storage.create(this.lockFile, false)) {
+      if (!storage.exists(this.lockFile)) {
         initLockInfo();
-        fos.writeBytes(lockInfo.toString());
+        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
       }
     } catch (IOException e) {
       throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -181,8 +180,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   }
 
   public void reloadCurrentOwnerLockInfo() {
-    try (InputStream is = fs.open(this.lockFile)) {
-      if (fs.exists(this.lockFile)) {
+    try (InputStream is = storage.open(this.lockFile)) {
+      if (storage.exists(this.lockFile)) {
         this.currentOwnerLockInfo = FileIOUtils.readAsUTFString(is);
       } else {
         this.currentOwnerLockInfo = "";
