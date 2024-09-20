@@ -673,7 +673,6 @@ public class HoodieTableConfig extends HoodieConfig {
         }
       }
     } else {
-      checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
       checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUDID), "Record merge strategy cannot be set if a merge payload is used");
       if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
         inferRecordMergeMode = EVENT_TIME_ORDERING;
@@ -684,6 +683,7 @@ public class HoodieTableConfig extends HoodieConfig {
         inferPayloadClassName = null;
         inferRecordMergerStrategy = null;
       } else {
+        checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;
         inferPayloadClassName = payloadClassName;
         inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUDID;

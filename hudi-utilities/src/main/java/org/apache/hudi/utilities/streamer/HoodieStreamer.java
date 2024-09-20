@@ -36,6 +36,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -264,7 +265,7 @@ public class HoodieStreamer implements Serializable {
     @Parameter(names = {"--payload-class"}, description = "Deprecated. Use --merge-mode for overwite or event time merging."
         + " Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
         + "other than overwriting existing value")
-    public String payloadClassName = null;
+    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
 
     @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
     public RecordMergeMode recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;

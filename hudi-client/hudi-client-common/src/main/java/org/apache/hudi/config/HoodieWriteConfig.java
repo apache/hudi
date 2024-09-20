@@ -2918,7 +2918,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergerStrategy(String recordMergerStrategy) {
-      writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
+      if (recordMergerStrategy != null) {
+        writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
+      }
       return this;
     }
 
