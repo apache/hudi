@@ -85,7 +85,8 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return partitionPathFields.stream().map(field -> {
         String[] fieldWithType = field.split(CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
         if (fieldWithType.length != 2) {
-          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
+          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format. "
+              + "Please specify the partition field names in format `field1:type1,field2:type2`. Example: `city:simple,ts:timestamp`");
         }
         String partitionPathField = fieldWithType[0];
         CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());

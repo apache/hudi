@@ -19,6 +19,7 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -78,7 +79,8 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return partitionPathFields.stream().map(field -> {
         Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionAndType = getPartitionFieldAndKeyType(field);
         if (partitionAndType.getRight().isEmpty()) {
-          throw new HoodieKeyException("Unable to find field names for partition path in proper format");
+          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format. "
+              + "Please specify the partition field names in format `field1:type1,field2:type2`. Example: `city:simple,ts:timestamp`");
         }
         CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight().get();
         String partitionPathField = partitionAndType.getLeft();
@@ -98,7 +100,13 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     }
   }
 
-  public static List<PartitionKeyType> getPartitionTypes(List<String> partitionPathFields) {
+  /**
+   * Returns list of partition types configured in the partition fields for custom key generator.
+   *
+   * @param tableConfig Table config where partition fields are configured
+   */
+  public static List<PartitionKeyType> getPartitionTypes(HoodieTableConfig tableConfig) {
+    List<String> partitionPathFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(Collections.emptyList());
     if (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty()) {
       return Collections.emptyList(); // Corresponds to no partition case
     } else {
@@ -112,10 +120,11 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
   /**
    * Returns the partition fields with timestamp partition type.
    *
-   * @param partitionPathFields list of partition fields
+   * @param tableConfig Table config where partition fields are configured
    * @return Optional list of partition fields with timestamp partition type
    */
-  public static Option<List<String>> getTimestampFields(List<String> partitionPathFields) {
+  public static Option<List<String>> getTimestampFields(HoodieTableConfig tableConfig) {
+    List<String> partitionPathFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(Collections.emptyList());
     if (partitionPathFields.isEmpty() || (partitionPathFields.size() == 1 && partitionPathFields.get(0).isEmpty())) {
       return Option.of(Collections.emptyList()); // Corresponds to no partition case
     } else if (getPartitionFieldAndKeyType(partitionPathFields.get(0)).getRight().isEmpty()) {

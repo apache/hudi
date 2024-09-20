@@ -20,6 +20,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -176,8 +177,9 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testCustomKeyGeneratorPartitionType() {
-    List<String> partitionFields = Arrays.asList("random:simple", "ts_ms:timestamp");
-    Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields).toArray();
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "random:simple,ts_ms:timestamp");
+    Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig).toArray();
     assertArrayEquals(new CustomAvroKeyGenerator.PartitionKeyType[] {CustomAvroKeyGenerator.PartitionKeyType.SIMPLE, CustomAvroKeyGenerator.PartitionKeyType.TIMESTAMP}, partitionTypes);
     Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionFieldAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType("random:simple");
     assertEquals(Pair.of("random", Option.of(CustomAvroKeyGenerator.PartitionKeyType.SIMPLE)), partitionFieldAndType);
