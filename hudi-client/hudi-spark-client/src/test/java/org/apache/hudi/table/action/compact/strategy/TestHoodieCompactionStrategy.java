@@ -335,6 +335,62 @@ public class TestHoodieCompactionStrategy {
 
   }
 
+  @Test
+  public void testPartitionRegexBasedCompactionStrategy() {
+    List<String> partitions = Arrays.asList(
+        "2020/01/01",
+        "2020/01/02",
+        "2020/01/03",
+        "2020/02/01",
+        "2021/01/01"
+    );
+
+    HoodieWriteConfig writeConfig = updateRegex(".*");
+    List<String> filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(5, filteredPartitions.size());
+
+    writeConfig = updateRegex("2020/01/01");
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(1, filteredPartitions.size());
+    assertEquals("2020/01/01", filteredPartitions.get(0));
+
+    writeConfig = updateRegex("2020/01/0[1-2]");
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(2, filteredPartitions.size());
+    assertEquals("2020/01/01", filteredPartitions.get(0));
+    assertEquals("2020/01/02", filteredPartitions.get(1));
+    writeConfig = updateRegex("2020/01/0[1-2]|2020/02/01");
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(3, filteredPartitions.size());
+    assertEquals("2020/01/01", filteredPartitions.get(0));
+    assertEquals("2020/01/02", filteredPartitions.get(1));
+    assertEquals("2020/02/01", filteredPartitions.get(2));
+
+
+    writeConfig = updateRegex("2020/.*/01");
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(2, filteredPartitions.size());
+    assertEquals("2020/01/01", filteredPartitions.get(0));
+    assertEquals("2020/02/01", filteredPartitions.get(1));
+
+    writeConfig = updateRegex(".*/01/.*");
+    filteredPartitions = writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitions);
+    assertEquals(4, filteredPartitions.size());
+    assertEquals("2020/01/01", filteredPartitions.get(0));
+    assertEquals("2020/01/02", filteredPartitions.get(1));
+    assertEquals("2020/01/03", filteredPartitions.get(2));
+    assertEquals("2021/01/01", filteredPartitions.get(3));
+
+  }
+
+  private HoodieWriteConfig updateRegex(String regex) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withCompactionConfig(
+        HoodieCompactionConfig.newBuilder()
+            .withCompactionStrategy(new PartitionRegexBasedCompactionStrategy())
+            .withCompactionSpecifyPartitionPathRegex(regex).build()).build();
+    return writeConfig;
+  }
+
   private List<HoodieCompactionOperation> createCompactionOperations(HoodieWriteConfig config,
                                                                      Map<Long, List<Long>> sizesMap) {
     Map<Long, String> keyToPartitionMap = sizesMap.keySet().stream()
