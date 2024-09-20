@@ -19,13 +19,8 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
-import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -45,24 +40,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     final HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
 
     Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
-    if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
-      // Record merge mode is required to dictate the merging behavior in version 8,
-      // playing the same role as the payload class config in version 7.
-      // Inferring of record merge mode from payload class here.
-      Option<String> payloadClassName = tableConfig.getPayloadClass();
-      if (payloadClassName.isPresent()) {
-        String propToAdd;
-        if (payloadClassName.get().equals(OverwriteWithLatestAvroPayload.class.getName())) {
-          propToAdd = RecordMergeMode.OVERWRITE_WITH_LATEST.toString();
-        } else if (payloadClassName.get().equals(DefaultHoodieRecordPayload.class.getName())) {
-          propToAdd = RecordMergeMode.EVENT_TIME_ORDERING.toString();
-        } else {
-          propToAdd = RecordMergeMode.CUSTOM.toString();
-        }
-        tablePropsToAdd.put(HoodieTableConfig.RECORD_MERGE_MODE, propToAdd);
-      }
-    }
-
     upgradePartitionFields(config, tableConfig, tablePropsToAdd);
 
     return tablePropsToAdd;

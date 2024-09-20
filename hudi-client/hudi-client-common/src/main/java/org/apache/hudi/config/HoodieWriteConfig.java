@@ -1221,6 +1221,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return HoodieFileFormat.valueOf(getStringOrDefault(BASE_FILE_FORMAT).toUpperCase());
   }
 
+  public String getRecordMergerStrategy() {
+    return getString(RECORD_MERGER_STRATEGY);
+  }
+
   public RecordMergeMode getRecordMergeMode() {
     return RecordMergeMode.valueOf(getString(RECORD_MERGE_MODE));
   }
@@ -1751,6 +1755,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getAvroPayloadClass() {
     return getStringOpt(HoodiePayloadConfig.PAYLOAD_CLASS_NAME).orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
+  }
+
+  public String getPayloadClass() {
+    return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {

@@ -19,10 +19,8 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -49,13 +47,11 @@ import org.apache.avro.Schema;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
-import java.util.Properties;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * A file group reader that iterates through the records in a single file group.
@@ -271,11 +267,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   public HoodieFileGroupReaderIterator<T> getClosableIterator() {
     return new HoodieFileGroupReaderIterator<>(this);
-  }
-
-  public static RecordMergeMode getRecordMergeMode(Properties props) {
-    String mergeMode = getStringWithAltKeys(props, HoodieCommonConfig.RECORD_MERGE_MODE, true).toUpperCase();
-    return RecordMergeMode.valueOf(mergeMode);
   }
 
   public static class HoodieFileGroupReaderIterator<T> implements ClosableIterator<T> {

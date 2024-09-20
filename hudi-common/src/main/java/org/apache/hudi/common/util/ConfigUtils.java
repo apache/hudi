@@ -21,6 +21,7 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -90,13 +91,17 @@ public class ConfigUtils {
     return orderField;
   }
 
+  public static RecordMergeMode getRecordMergeMode(Properties properties) {
+    return RecordMergeMode.valueOf(getStringWithAltKeys(properties, RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name()).toUpperCase());
+  }
+
   /**
    * Get payload class.
    */
   public static String getAvroPayloadClass(Properties properties) {
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     return RecordPayloadType.getPayloadClassName(hoodieConfig).orElseGet(() ->
-        HoodieRecordPayload.getAvroPayloadForMergeMode(getStringWithAltKeys(properties, RECORD_MERGE_MODE, true)));
+        HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode(properties)));
   }
 
   public static List<String> split2List(String param) {

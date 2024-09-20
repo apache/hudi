@@ -31,11 +31,11 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -261,9 +261,16 @@ public class HoodieStreamer implements Serializable {
         + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record")
     public String sourceOrderingField = "ts";
 
-    @Parameter(names = {"--payload-class"}, description = "subclass of HoodieRecordPayload, that works off "
-        + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value")
-    public String payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
+    @Parameter(names = {"--payload-class"}, description = "Deprecated. Use --merge-mode for overwite or event time merging."
+        + " Subclass of HoodieRecordPayload, that works off a GenericRecord. Implement your own, if you want to do something "
+        + "other than overwriting existing value")
+    public String payloadClassName = null;
+
+    @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
+    public RecordMergeMode recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+    
+    @Parameter(names = {"--merger-strategy", "--record-merger-strategy"}, description = "only set this if you are using custom merge mode")
+    public String recordMergerStrategy = null;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

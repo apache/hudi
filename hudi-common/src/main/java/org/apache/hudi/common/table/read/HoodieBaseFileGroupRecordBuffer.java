@@ -74,7 +74,7 @@ import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RE
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
-import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordMergeMode;
+import static org.apache.hudi.common.util.ConfigUtils.getRecordMergeMode;
 
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;

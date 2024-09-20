@@ -27,12 +27,14 @@ import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -69,6 +72,9 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.OVERWRITE_WITH_LATEST;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.INPUT_TIME_UNIT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
@@ -78,9 +84,14 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
+import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 @Immutable
 @ConfigClassProperty(name = "Hudi Table Basic Configs",
@@ -178,9 +189,9 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
 
-  public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
+  public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
-      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
+      .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING)
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
 
@@ -315,22 +326,38 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
-  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
+  public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
     LOG.info("Loading table properties from " + propertyPath);
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
       boolean needStore = false;
-      if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
-          && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
-        setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+
+      if (recordMergeMode != null && (!contains(RECORD_MERGE_MODE) || !getString(RECORD_MERGE_MODE).equalsIgnoreCase(recordMergeMode.name()))) {
+        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
       }
-      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
-          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
-        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
-        needStore = true;
+      if (recordMergeMode == null || recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
+        if (contains(PAYLOAD_CLASS_NAME) && !isNullOrEmpty(payloadClassName)
+            && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
+          setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+          needStore = true;
+        }
+        if (contains(RECORD_MERGER_STRATEGY) && !isNullOrEmpty(recordMergerStrategyId)
+            && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
+          setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+          needStore = true;
+        }
+      } else {
+        if (contains(PAYLOAD_CLASS_NAME)) {
+          clearValue(PAYLOAD_CLASS_NAME);
+          needStore = true;
+        }
+        if (contains(RECORD_MERGER_STRATEGY)) {
+          clearValue(RECORD_MERGER_STRATEGY);
+          needStore = true;
+        }
       }
       if (needStore) {
         // FIXME(vc): wonder if this can be removed. Need to look into history.
@@ -611,6 +638,58 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getAvroRecordMergerStrategy() {
     return getRecordMergerStrategy().orElseGet(() -> HoodieRecordMerger.getAvroMergerStrategyFromMergeMode(getRecordMergeMode()));
+  }
+
+  public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy) {
+    checkArgument(payloadClassName == null || !payloadClassName.equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload"), "Expression payload is being deduced!!!!!!");
+    RecordMergeMode inferRecordMergeMode;
+    String inferPayloadClassName;
+    String inferRecordMergerStrategy;
+
+    if (isNullOrEmpty(payloadClassName)) {
+      if (isNullOrEmpty(recordMergerStrategy)) {
+        checkArgument(recordMergeMode != RecordMergeMode.CUSTOM, "Custom merge mode should only be used if you set a merge strategy");
+        if (recordMergeMode == null) {
+          inferRecordMergeMode = RECORD_MERGE_MODE.defaultValue();
+        } else {
+          inferRecordMergeMode = recordMergeMode;
+        }
+        inferPayloadClassName = null;
+        inferRecordMergerStrategy = null;
+      } else {
+        if (recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+          inferRecordMergeMode = EVENT_TIME_ORDERING;
+          inferPayloadClassName = null;
+          inferRecordMergerStrategy = null;
+        } else if (recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
+          inferRecordMergeMode = OVERWRITE_WITH_LATEST;
+          inferPayloadClassName = null;
+          inferRecordMergerStrategy = null;
+        } else {
+          checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUDID), "Payload based strategy should only be used if you have a custom payload");
+          inferRecordMergeMode = CUSTOM;
+          inferPayloadClassName = null;
+          inferRecordMergerStrategy = recordMergerStrategy;
+        }
+      }
+    } else {
+      checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
+      checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUDID), "Record merge strategy cannot be set if a merge payload is used");
+      if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+        inferRecordMergeMode = EVENT_TIME_ORDERING;
+        inferPayloadClassName = null;
+        inferRecordMergerStrategy = null;
+      } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        inferRecordMergeMode = OVERWRITE_WITH_LATEST;
+        inferPayloadClassName = null;
+        inferRecordMergerStrategy = null;
+      } else {
+        inferRecordMergeMode = CUSTOM;
+        inferPayloadClassName = payloadClassName;
+        inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
+      }
+    }
+    return Triple.of(inferRecordMergeMode, inferPayloadClassName, inferRecordMergerStrategy);
   }
 
   public String getPreCombineField() {

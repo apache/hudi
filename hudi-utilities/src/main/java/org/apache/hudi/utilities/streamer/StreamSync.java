@@ -388,8 +388,9 @@ public class StreamSync implements Serializable, Closeable {
     return HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
         .setBasePath(cfg.targetBasePath)
+        .setRecordMergeMode(cfg.recordMergeMode)
         .setPayloadClassName(cfg.payloadClassName)
-        .setRecordMergerStrategy(null)
+        .setRecordMergerStrategy(cfg.recordMergerStrategy)
         .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
         .build();
   }
@@ -403,6 +404,8 @@ public class StreamSync implements Serializable, Closeable {
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
+        .setRecordMergerStrategy(cfg.recordMergerStrategy)
+        .setRecordMergeMode(cfg.recordMergeMode)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
@@ -837,6 +840,8 @@ public class StreamSync implements Serializable, Closeable {
     HoodieConfig hoodieConfig = new HoodieConfig(HoodieStreamer.Config.getProps(conf, cfg));
     hoodieConfig.setValue(DataSourceWriteOptions.TABLE_TYPE(), cfg.tableType);
     hoodieConfig.setValue(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(), cfg.payloadClassName);
+    hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGE_MODE().key(), cfg.recordMergeMode.name());
+    hoodieConfig.setValue(DataSourceWriteOptions.RECORD_MERGER_STRATEGY().key(), cfg.recordMergerStrategy);
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
     return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != InputBatch.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
@@ -1174,6 +1179,8 @@ public class StreamSync implements Serializable, Closeable {
                     .withPayloadClass(cfg.payloadClassName)
                     .withPayloadOrderingField(cfg.sourceOrderingField)
                     .build())
+            .withRecordMergeMode(cfg.recordMergeMode)
+            .withRecordMergerStrategy(cfg.recordMergerStrategy)
             .forTable(cfg.targetTableName)
             .withAutoCommit(autoCommit)
             .withProps(props);

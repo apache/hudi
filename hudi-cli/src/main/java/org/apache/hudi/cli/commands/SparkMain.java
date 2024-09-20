@@ -23,6 +23,7 @@ import org.apache.hudi.cli.ArchiveExecutorUtils;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -225,7 +226,7 @@ public class SparkMain {
           break;
         case BOOTSTRAP:
           returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-              args[11], args[12], args[13], args[14], args[15], args[16], propsFilePath, configs);
+              args[11], args[12], args[13], args[14], args[15], args[16], args[17], args[18], propsFilePath, configs);
           break;
         case UPGRADE:
         case DOWNGRADE:
@@ -479,7 +480,8 @@ public class SparkMain {
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
                                  String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
                                  String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-                                 String payloadClassName, String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
+                                 String recordMergeMode, String payloadClassName, String recordMergeStrategy, String enableHiveSync,
+                                 String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
         : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
@@ -505,6 +507,8 @@ public class SparkMain {
     cfg.schemaProviderClassName = schemaProviderClass;
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
+    cfg.recordMergeMode = RecordMergeMode.valueOf(recordMergeMode.toUpperCase());
+    cfg.recordMergerStrategy = recordMergeStrategy;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 
     new BootstrapExecutor(cfg, jsc, HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()),

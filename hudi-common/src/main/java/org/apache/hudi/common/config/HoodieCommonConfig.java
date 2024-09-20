@@ -82,7 +82,7 @@ public class HoodieCommonConfig extends HoodieConfig {
           + " operation will fail schema compatibility check. Set this option to true will make the missing "
           + " column be filled with null values to successfully complete the write operation.");
 
-  public static final ConfigProperty<String> RECORD_MERGE_MODE = HoodieTableConfig.RECORD_MERGE_MODE;
+  public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = HoodieTableConfig.RECORD_MERGE_MODE;
 
   public static final ConfigProperty<ExternalSpillableMap.DiskMapType> SPILLABLE_DISK_MAP_TYPE = ConfigProperty
       .key("hoodie.common.spillable.diskmap.type")
