@@ -1013,6 +1013,13 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    public PropertyBuilder setRecordMergeMode(Option<RecordMergeMode> recordMergeMode) {
+      if (recordMergeMode.isPresent()) {
+        this.recordMergeMode = recordMergeMode.get();
+      }
+      return this;
+    }
+
     public PropertyBuilder setPayloadClassName(String payloadClassName) {
       this.payloadClassName = payloadClassName;
       return this;

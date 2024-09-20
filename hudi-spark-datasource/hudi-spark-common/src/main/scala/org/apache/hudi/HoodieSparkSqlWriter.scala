@@ -66,6 +66,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
+import org.apache.hudi.util.JavaScalaUtils.{JavaOptional, ScalaOptional}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
@@ -325,7 +326,8 @@ class HoodieSparkSqlWriterInternal {
           .setCommitTimezone(timelineTimeZone)
           .setPayloadClassName(payloadClass)
           .setRecordMergerStrategy(recordMergerStrategy)
-          .setRecordMergeMode(RecordMergeMode.valueOf(hoodieConfig.getStringOrDefault(HoodieWriteConfig.RECORD_MERGE_MODE)))
+          .setRecordMergeMode(hoodieConfig.getStringOpt(HoodieWriteConfig.RECORD_MERGE_MODE).toScala
+            .map(modeStr => RecordMergeMode.valueOf(modeStr)).toHoodieOpt)
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 
