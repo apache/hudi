@@ -190,9 +190,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
         orderField,
         true, consistentLogicalTimestampEnabled);
-    return persistedOrderingVal == null || (persistedOrderingVal instanceof String || incomingOrderingVal instanceof String)
+    return persistedOrderingVal == null || ((persistedOrderingVal instanceof String || incomingOrderingVal instanceof String)
         ? ((Comparable) persistedOrderingVal.toString()).compareTo(incomingOrderingVal.toString()) <= 0
-        : ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0;
+        : ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) <= 0);
   }
-
 }
