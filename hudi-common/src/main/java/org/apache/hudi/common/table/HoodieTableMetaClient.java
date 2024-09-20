@@ -29,11 +29,14 @@ import org.apache.hudi.common.fs.FailSafeConsistencyGuard;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -1310,14 +1313,20 @@ public class HoodieTableMetaClient implements Serializable {
       tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
 
       if (null != payloadClassName) {
-        checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
-        tableConfig.setValue(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
-        tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
-        if (null == recordMergerStrategy) {
-          LOG.warn("{} is not set. Because record payload is set, we will infer strategy {}", RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
-          tableConfig.setValue(RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+        if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+         tableConfig.setValue(RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
+        } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+          tableConfig.setValue(RECORD_MERGE_MODE, OVERWRITE_WITH_LATEST.name());
         } else {
-          tableConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
+          checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
+          tableConfig.setValue(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+          tableConfig.setValue(HoodieTableConfig.PAYLOAD_CLASS_NAME, payloadClassName);
+          if (null == recordMergerStrategy) {
+            LOG.warn("{} is not set. Because record payload is set, we will infer strategy {}", RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+            tableConfig.setValue(RECORD_MERGER_STRATEGY, PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+          } else {
+            tableConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
+          }
         }
       } else {
         if (recordMergerStrategy != null) {
