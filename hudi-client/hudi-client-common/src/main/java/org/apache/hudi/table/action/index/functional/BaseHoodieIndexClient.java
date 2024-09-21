@@ -21,7 +21,6 @@ package org.apache.hudi.table.action.index.functional;
 
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -65,6 +64,10 @@ public abstract class BaseHoodieIndexClient {
 
   /**
    * Drop an index. By default, ignore drop if index does not exist.
+   *
+   * @param metaClient        {@link HoodieTableMetaClient} instance
+   * @param indexName         index name for the index to be dropped
+   * @param ignoreIfNotExists ignore drop if index does not exist
    */
-  public abstract void drop(HoodieTableMetaClient metaClient, String indexName, MetadataPartitionType metadataPartitionType, boolean ignoreIfNotExists);
+  public abstract void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists);
 }

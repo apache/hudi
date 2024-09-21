@@ -77,8 +77,9 @@ case class DropIndexCommand(table: CatalogTable,
     val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
     try {
-      val metadataPartitionType = MetadataPartitionType.fromPartitionPath(indexName)
-      HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, metadataPartitionType, ignoreIfNotExists)
+      // need to ensure that the index name is for a valid partition type
+      MetadataPartitionType.fromPartitionPath(indexName)
+      HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
     } catch {
       case _: IllegalArgumentException =>
         SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)

@@ -113,7 +113,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   @Override
-  public void drop(HoodieTableMetaClient metaClient, String indexName, MetadataPartitionType metadataPartitionType, boolean ignoreIfNotExists) {
+  public void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists) {
     if (!indexExists(metaClient, indexName)) {
       if (ignoreIfNotExists) {
         return;
