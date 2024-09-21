@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.model.ColumnFamilyDefinition;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -37,6 +38,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -235,5 +237,12 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertArrayEquals(Arrays.stream(partitionFields.split(BaseKeyGenerator.FIELD_SEPARATOR)).toArray(), HoodieTableConfig.getPartitionFieldsForKeyGenerator(config).get().toArray());
     assertArrayEquals(new String[] {"p1", "p2"}, HoodieTableConfig.getPartitionFields(config).get());
     assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
+  }
+
+  @Test
+  public void testGetColumnFamilyDefinitions() {
+    Map<String, String> tableConfig = buildColumnFamilyConfigExample();
+    Map<String, ColumnFamilyDefinition> cfDefinitions = HoodieTableConfig.getColumnFamilyDefinitions(tableConfig);
+    assertColumnFamilyExample(cfDefinitions);
   }
 }

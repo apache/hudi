@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.OrderedProperties;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.BootstrapIndexType;
+import org.apache.hudi.common.model.ColumnFamilyDefinition;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -61,6 +62,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -330,6 +332,23 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Absolute path where the index definitions are stored");
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
+
+  public static final String COLUMN_FAMILY_PREFIX = "hoodie.columnFamily.";
+
+  public static Map<String, ColumnFamilyDefinition> getColumnFamilyDefinitions(Map<String, String> conf) {
+    Map<String, ColumnFamilyDefinition> definitionsMap = new HashMap<>();
+    for (Map.Entry<String, String> entry: conf.entrySet()) {
+      if (entry.getKey().startsWith(COLUMN_FAMILY_PREFIX)) {
+        String name = entry.getKey().replace(COLUMN_FAMILY_PREFIX, "");
+        if (StringUtils.isNullOrEmpty(entry.getValue())) {
+          definitionsMap.put(name, null); // mark family to be deleted
+        } else {
+          definitionsMap.put(name, ColumnFamilyDefinition.fromConfig(name, entry.getValue()));
+        }
+      }
+    }
+    return definitionsMap;
+  }
 
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
