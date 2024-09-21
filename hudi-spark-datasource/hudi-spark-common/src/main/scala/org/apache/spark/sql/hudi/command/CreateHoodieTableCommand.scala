@@ -77,9 +77,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
     }
 
     try {
-      if (!validateTableSchema(table.schema, hoodieCatalogTable.tableSchemaWithoutMetaFields)) {
-        throw new HoodieValidationException("The defined schema is inconsistent with the schema in the hoodie metadata directory.")
-      }
+      validateTableSchema(table.schema, hoodieCatalogTable.tableSchemaWithoutMetaFields)
       // create catalog table for this hoodie table
       CreateHoodieTableCommand.createTableInCatalog(sparkSession, hoodieCatalogTable, ignoreIfExists, queryAsProp)
     } catch {
@@ -97,9 +95,18 @@ object CreateHoodieTableCommand {
       userDefinedSchema.fields.length != hoodieTableSchema.fields.length) {
       false
     } else if (userDefinedSchema.fields.length != 0) {
-      hoodieTableSchema.fields.zip(userDefinedSchema).forall {
+      val sortedHoodieTableFields = hoodieTableSchema.fields.sortBy(_.name)
+      val sortedUserDefinedFields = userDefinedSchema.fields.sortBy(_.name)
+      val diffResult = sortedHoodieTableFields.zip(sortedUserDefinedFields).forall {
         case (hoodieTableColumn, userDefinedColumn) =>
           hoodieTableColumn == userDefinedColumn
+      }
+      if (!diffResult) {
+        throw new HoodieValidationException(
+          s"The defined schema is inconsistent with the schema in the hoodie metadata directory," +
+            s" hoodieTableSchema: $sortedHoodieTableFields, userDefinedSchema: $sortedUserDefinedFields")
+      } else {
+        true
       }
     } else {
       true
