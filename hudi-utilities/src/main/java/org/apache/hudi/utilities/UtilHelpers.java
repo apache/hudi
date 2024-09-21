@@ -54,7 +54,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
-import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
@@ -66,7 +65,6 @@ import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
-import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
@@ -118,7 +116,6 @@ import java.util.Properties;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -556,12 +553,6 @@ public class UtilHelpers {
 
     String schemaPostProcessorClass = getStringWithAltKeys(
         cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR, true);
-    boolean enableSparkAvroPostProcessor =
-        getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
-    if (transformerClassNames != null && !transformerClassNames.isEmpty()
-        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
-      schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
-    }
 
     if (schemaPostProcessorClass == null || schemaPostProcessorClass.isEmpty()) {
       return provider;
