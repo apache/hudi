@@ -180,7 +180,7 @@ public class TestStreamSyncUnitTests {
     HoodieMultiTableStreamer multiTableStreamer = new HoodieMultiTableStreamer(cfg, jssc);
     List<TableExecutionContext> tableExecutionContextList = multiTableStreamer.getTableExecutionContexts();
     tableExecutionContextList.forEach(it -> {
-      // make sure that if set global properties then each child streamer can get also
+      // make sure that the global properties are also set in each child streamer
       assertTrue(it.getConfig().configs.containsAll(cfg.configs));
 
       // make sure that each streamer should have propsFilePath from multiStreamer configs, not default value
