@@ -1629,6 +1629,45 @@ public class ITTestHoodieDataSource {
 
   @ParameterizedTest
   @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
+  void testParquetArrayMapOfRowTypes(String operation) {
+    TableEnvironment tableEnv = batchTableEnv;
+
+    String tableDDL = "CREATE TABLE t1(\n"
+            + "  f_int INT NOT NULL,\n"
+            + "  f_array array<row(f_array_row_f0 varchar(10), f_array_row_f1 int)>,\n"
+            + "  f_map map<varchar(20), row(f_map_row_f0 int, f_map_row_f1 varchar(10))>\n"
+            + ") WITH (\n"
+            + "  'connector' = 'hudi',\n"
+            + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+            + "  'hoodie.datasource.write.recordkey.field' = 'f_int',\n"
+            + "  'write.operation' = '" + operation + "'\n"
+            + ")";
+    tableEnv.executeSql(tableDDL);
+
+//    String hoodieTableDDL = sql("t1")
+//            .field("f_int int")
+//            .field("f_array array<row(f_array_row_f0 varchar(10), f_array_row_f1 int)>")
+//            .field("f_map map<varchar(20), row(f_map_row_f0 int, f_map_row_f1 varchar(10))>")
+//            .pkField("f_int")
+//            .noPartition()
+//            .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+//            .option(FlinkOptions.OPERATION, operation)
+//            .end();
+//    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, TestSQL.ARRAY_MAP_OF_ROW_TYPE_INSERT_T1);
+
+    List<Row> result = CollectionUtil.iterableToList(
+            () -> tableEnv.sqlQuery("select * from t1").execute().collect());
+    List<Row> expected = Arrays.asList(
+            row(1, array(row("abc11", 11), row("abc12", 12), row("abc13", 13)), map("abc11", row(11, "def11"), "abc12", row(12, "def12"), "abc13", row(13, "def13"))),
+            row(2, array(row("abc21", 21), row("abc22", 22), row("abc23", 23)), map("abc21", row(21, "def21"), "abc22", row(22, "def22"), "abc23", row(23, "def23"))),
+            row(3, array(row("abc31", 31), row("abc32", 32), row("abc33", 33)), map("abc31", row(31, "def31"), "abc32", row(32, "def32"), "abc33", row(33, "def33"))));
+    assertRowsEqualsUnordered(expected, result);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"insert", "upsert", "bulk_insert"})
   void testParquetNullChildColumnsRowTypes(String operation) {
     TableEnvironment tableEnv = batchTableEnv;
 

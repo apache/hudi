@@ -170,7 +170,7 @@ public class TestHoodieTableSource {
     TestData.writeDataAsBatch(TestData.DATA_SET_ARRAY_OF_ROWS, conf);
     HoodieTableSource tableSource = new HoodieTableSource(
             SerializableSchema.create( SchemaBuilder.instance()
-            .fields(TestData.ARRAY_OF_ROWS_TYPE.getFieldNames(), TestData.ARRAY_OF_ROWS_DATA_TYPE.getChildren())
+            .fields(TestConfigurations.ARRAY_OF_ROWS_TYPE.getFieldNames(), TestConfigurations.ARRAY_OF_ROWS_DATA_TYPE.getChildren())
             .build()),
             new StoragePath(conf.getString(FlinkOptions.PATH)),
             Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
@@ -208,7 +208,7 @@ public class TestHoodieTableSource {
     TestData.writeDataAsBatch(TestData.DATA_SET_MAP_OF_ROWS, conf);
     HoodieTableSource tableSource = new HoodieTableSource(
             SerializableSchema.create( SchemaBuilder.instance()
-                    .fields(TestData.MAP_OF_ROWS_TYPE.getFieldNames(), TestData.MAP_OF_ROWS_DATA_TYPE.getChildren())
+                    .fields(TestConfigurations.MAP_OF_ROWS_TYPE.getFieldNames(), TestConfigurations.MAP_OF_ROWS_DATA_TYPE.getChildren())
                     .build()),
             new StoragePath(conf.getString(FlinkOptions.PATH)),
             Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
