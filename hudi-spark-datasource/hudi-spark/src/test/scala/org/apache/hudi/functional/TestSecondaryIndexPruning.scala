@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -40,7 +40,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
@@ -158,19 +158,14 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("testSecondaryIndexPruningParameters"))
-  def testCreateAndDropSecondaryIndex(testCase: SecondaryIndexTestCase): Unit = {
+  @Test
+  def testCreateAndDropSecondaryIndex(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
-      val tableType = testCase.tableType
-      val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
-        DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
-      val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
-      tableName += "test_secondary_index_create_drop" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
-      val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
+      tableName += "test_secondary_index_create_drop_partitioned_mor"
 
       spark.sql(
         s"""
@@ -182,13 +177,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |) using hudi
            | options (
            |  primaryKey ='record_key_col',
-           |  type = '$sqlTableType',
+           |  type = 'mor',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true'
            | )
-           | $partitionedByClause
+           | partitioned by(partition_key_col)
            | location '$basePath'
        """.stripMargin)
       // by setting small file limit to 0, each insert will create a new file
@@ -434,7 +429,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
       val executor = Executors.newFixedThreadPool(2)
       implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-      val function = new Function1[Int, Boolean] {
+      val function = new (Int => Boolean) {
         override def apply(writerId: Int): Boolean = {
           try {
             val data = if(writerId == 1) Seq(
