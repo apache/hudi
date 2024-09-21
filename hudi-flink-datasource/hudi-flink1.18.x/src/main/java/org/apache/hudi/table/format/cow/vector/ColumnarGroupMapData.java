@@ -36,7 +36,7 @@ public class ColumnarGroupMapData implements MapData {
     @Override
     public ArrayData valueArray() {
         if (valueVector instanceof HeapArrayVector) {
-            return ((HeapArrayVector) keyVector).getArray(rowId);
+            return ((HeapArrayVector) valueVector).getArray(rowId);
         } else if (valueVector instanceof HeapArrayGroupColumnVector) {
             return ((HeapArrayGroupColumnVector) valueVector).getArray(rowId);
         }
