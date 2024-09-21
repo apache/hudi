@@ -111,8 +111,9 @@ public class ConfigGroups {
             + "job configurations/tunings, so all the jobs on your cluster can utilize it. "
             + "It also works with Spark SQL DML/DDL, and helps avoid having to pass configs "
             + "inside the SQL statements.\n\n"
-            + "Hudi always loads the configuration file under default directory `file:/etc/hudi/conf` "
-            + "to set the default configs. You can specify another configuration "
+            + "Hudi always loads the configuration file under default directory "
+            + "`file:/etc/hudi/conf`, if exists, to set the default configs. "
+            + "Besides, you can specify another configuration "
             + "directory location by setting the `HUDI_CONF_DIR` environment variable. "
             + "The configs stored in `HUDI_CONF_DIR/hudi-defaults.conf` are loaded, "
             + "overriding any configs already set by the config file in the default directory.";
