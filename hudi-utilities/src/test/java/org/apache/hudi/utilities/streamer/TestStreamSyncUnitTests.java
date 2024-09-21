@@ -183,7 +183,7 @@ public class TestStreamSyncUnitTests {
       // make sure that the global properties are also set in each child streamer
       assertTrue(it.getConfig().configs.containsAll(cfg.configs));
 
-      // make sure that each streamer should have propsFilePath from multiStreamer configs, not default value
+      // make sure that each child streamer obtains the propsFilePath from multiStreamer configs, not the default value
       assertNotEquals(HoodieStreamer.Config.DEFAULT_DFS_SOURCE_PROPERTIES, it.getConfig().propsFilePath);
     });
 
