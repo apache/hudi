@@ -606,8 +606,12 @@ public class ParquetSplitReaderUtil {
           // schema evolution: read the file with a new extended field name.
           int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
           if (fieldIndex < 0) {
-            //TODO: fix
-            columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
+            if (groupType.getRepetition().equals(Type.Repetition.REPEATED) && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
+              columnVectors[i] = (WritableColumnVector) createVectorFromConstant(
+                      new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)), null, batchSize);
+            } else {
+              columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
+            }
           } else {
             if (descriptors.get(i).getMaxRepetitionLevel() > 0 && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
               columnVectors[i] =

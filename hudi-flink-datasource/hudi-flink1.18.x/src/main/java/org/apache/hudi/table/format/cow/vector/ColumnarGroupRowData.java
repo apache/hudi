@@ -38,7 +38,9 @@ public class ColumnarGroupRowData implements RowData {
 
     @Override
     public boolean isNullAt(int pos) {
-        return ((HeapArrayVector)(vector.vectors[pos])).getArray(rowId).isNullAt(index);
+        return
+                vector.vectors[pos].isNullAt(rowId)
+                || ((HeapArrayVector)(vector.vectors[pos])).getArray(rowId).isNullAt(index);
     }
 
     @Override
