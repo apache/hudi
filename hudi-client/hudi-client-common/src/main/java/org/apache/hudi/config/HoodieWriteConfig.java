@@ -1660,7 +1660,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     String[] compactionStrategyArr = compactionStrategiesStr.split(",");
     List<CompactionStrategy> compactionStrategies = Arrays.stream(compactionStrategyArr)
         .map(className -> (CompactionStrategy) ReflectionUtils.loadClass(className)).collect(Collectors.toList());
-    return new CompositeCompactionStrategy(compactionStrategies);
+    return compactionStrategies.size() == 1 ? compactionStrategies.get(0) : new CompositeCompactionStrategy(compactionStrategies);
   }
 
   public Long getTargetIOPerCompactionInMB() {
