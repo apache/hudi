@@ -20,11 +20,13 @@ package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
@@ -64,6 +66,8 @@ import org.apache.hadoop.mapred.JobConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -101,7 +105,7 @@ public class SchemaEvolutionContext {
     this.split = split;
     this.job = job;
     if (!job.getBoolean(HIVE_EVOLUTION_ENABLE, true)) {
-      LOG.info("schema evolution is disabled for split: {}", split);
+      LOG.info("Schema evolution is disabled for split: {}", split);
       internalSchemaOption = Option.empty();
       this.metaClient = null;
       return;
@@ -111,39 +115,50 @@ public class SchemaEvolutionContext {
   }
 
   public Option<InternalSchema> getInternalSchemaFromCache() throws IOException {
-    Option<InternalSchema> internalSchema = getCachedData(
+    Option<InternalSchema> internalSchemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.INTERNAL_SCHEMA_CACHE_KEY_PREFIX,
-        json -> SerDeHelper.fromJson(json)
-    );
-    if (internalSchema != null && internalSchema.isPresent()) {
-      return internalSchema;
+        SerDeHelper::fromJson);
+    if (internalSchemaOpt == null) {
+      // the code path should only be invoked in tests.
+      return new TableSchemaResolver(this.metaClient).getTableInternalSchemaFromCommitMetadata();
     }
-    return Option.empty();
+    return internalSchemaOpt;
   }
 
-  public Schema getAvroSchemaFromCache() throws IOException {
-    Schema avroSchema = getCachedData(
+  public Schema getAvroSchemaFromCache() throws Exception {
+    Option<Schema> avroSchemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.SCHEMA_CACHE_KEY_PREFIX,
-        json -> new Schema.Parser().parse(json)
-    );
-    return avroSchema;
+        json -> Option.ofNullable(new Schema.Parser().parse(json)));
+    if (avroSchemaOpt == null) {
+      // the code path should only be invoked in tests.
+      return new TableSchemaResolver(this.metaClient).getTableAvroSchema();
+    }
+    return avroSchemaOpt.orElseThrow(() -> new HoodieValidationException("The avro schema cache should always be set up together with the internal schema cache"));
   }
 
-  private <T> T getCachedData(String keyPrefix, Function<String, T> parser) throws IOException {
+  /**
+   * Returns the cache data with given key or null if the cache was never set up.
+   */
+  @Nullable
+  private <T> Option<T> getCachedData(String keyPrefix, Function<String, Option<T>> parser) throws IOException {
     Option<StoragePath> tablePath = getTablePath(job, split);
     if (!tablePath.isPresent()) {
-      return null;
+      return Option.empty();
     }
     String cacheKey = keyPrefix + "." + tablePath.get().toUri();
     String cachedJson = job.get(cacheKey);
     if (cachedJson == null) {
+      // the code path should only be invoked in tests.
       return null;
+    }
+    if (cachedJson.isEmpty()) {
+      return Option.empty();
     }
     try {
       return parser.apply(cachedJson);
     } catch (Exception e) {
-      LOG.warn(String.format("Failed to parse data from cache with key: %s", cacheKey), e);
-      return null;
+      LOG.warn("Failed to parse data from cache with key: {}", cacheKey, e);
+      return Option.empty();
     }
   }
 
@@ -157,7 +172,7 @@ public class SchemaEvolutionContext {
     return Option.empty();
   }
 
-  private HoodieTableMetaClient setUpHoodieTableMetaClient() throws IOException {
+  private HoodieTableMetaClient setUpHoodieTableMetaClient() {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
@@ -189,7 +204,7 @@ public class SchemaEvolutionContext {
           requiredColumns);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
-      List<String> partitioningFields = partitionFields.length() > 0 ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
+      List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
       Schema writerSchema = AvroInternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName());
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);

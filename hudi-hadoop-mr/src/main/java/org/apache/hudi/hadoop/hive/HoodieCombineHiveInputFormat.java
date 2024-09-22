@@ -389,10 +389,10 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     Utilities.clearWorkMapForConf(job);
 
     // build internal schema for the query
-    if (result.size() > 0) {
+    if (!result.isEmpty()) {
       ArrayList<String> uniqTablePaths = new ArrayList<>();
       Arrays.stream(paths).forEach(path -> {
-        HoodieStorage storage = null;
+        final HoodieStorage storage;
         try {
           storage = new HoodieHadoopStorage(path.getFileSystem(job));
           Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
@@ -411,13 +411,17 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           String avroSchema = schemaUtil.getTableAvroSchema().toString();
           Option<InternalSchema> internalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata();
           if (internalSchema.isPresent()) {
-            LOG.info("Set internal internalSchema and avro schema of path: " + path.toString());
+            LOG.info("Set internal and avro schema cache with path: " + path);
             job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, avroSchema);
             job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, SerDeHelper.toJson(internalSchema.get()));
+          } else {
+            // always sets up the cache so that we can distinguish with the scenario where the cache was never set(e.g. in tests).
+            job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, "");
+            job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, "");
           }
         }
       } catch (Exception e) {
-        LOG.warn("Fail to set internal schema", e);
+        LOG.warn("Fail to set schema cache", e);
       }
     }
 

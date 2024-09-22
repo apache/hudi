@@ -67,8 +67,7 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
   public FileBasedInternalSchemaStorageManager(HoodieTableMetaClient metaClient) {
     this.baseSchemaPath = new StoragePath(metaClient.getMetaPath(), SCHEMA_NAME);
     this.storage = metaClient.getStorage();
-    // the history schema files should be located into .hoodie/.schema folder.
-    this.metaClient = metaClient.getBasePath().getName().equalsIgnoreCase(SCHEMA_NAME) ? metaClient : null;
+    this.metaClient = metaClient;
   }
 
   // make metaClient build lazy
