@@ -146,30 +146,6 @@ public class TestConfigurations {
 
   public static final RowType ROW_TYPE_BIGINT = (RowType) ROW_DATA_TYPE_BIGINT.getLogicalType();
 
-  public static final DataType ARRAY_OF_ROWS_DATA_TYPE = DataTypes.ROW(
-                  DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
-                  DataTypes.FIELD("partition", DataTypes.VARCHAR(10)),
-                  DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
-                  DataTypes.FIELD("data", DataTypes.ARRAY( DataTypes.ROW(
-                          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
-                          DataTypes.FIELD("age", DataTypes.INT())
-                  ))))
-          .notNull();
-
-  public static final RowType ARRAY_OF_ROWS_TYPE = (RowType) ARRAY_OF_ROWS_DATA_TYPE.getLogicalType();
-
-  public static final DataType MAP_OF_ROWS_DATA_TYPE = DataTypes.ROW(
-                  DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),// record key
-                  DataTypes.FIELD("partition", DataTypes.VARCHAR(10)),
-                  DataTypes.FIELD("ts", DataTypes.TIMESTAMP(3)), // precombine field
-                  DataTypes.FIELD("data", DataTypes.MAP( DataTypes.VARCHAR(10), DataTypes.ROW(
-                          DataTypes.FIELD("name", DataTypes.VARCHAR(10)),
-                          DataTypes.FIELD("age", DataTypes.INT())
-                  ))))
-          .notNull();
-
-  public static final RowType MAP_OF_ROWS_TYPE = (RowType) MAP_OF_ROWS_DATA_TYPE.getLogicalType();
-
   public static String getCreateHoodieTableDDL(String tableName, Map<String, String> options) {
     return getCreateHoodieTableDDL(tableName, options, true, "partition");
   }

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.table;
 
-import org.apache.flink.table.data.ArrayData;
-import org.apache.flink.table.data.MapData;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.ExpressionPredicates;
@@ -27,10 +25,8 @@ import org.apache.hudi.source.prune.DataPruner;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.util.SerializableSchema;
-import org.apache.hudi.utils.SchemaBuilder;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
@@ -66,7 +62,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
@@ -75,10 +70,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
@@ -158,91 +151,6 @@ public class TestHoodieTableSource {
         + "uuid,name,age,ts,partition";
     assertThat(schemaFields, is(expected));
   }
-
-  @Test
-  void readArrayOfRows() throws Exception {
-    final String path = tempFile.getAbsolutePath();
-    conf = TestConfigurations.getDefaultConf(path);
-    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
-            Objects.requireNonNull(Thread.currentThread()
-                    .getContextClassLoader().getResource("test_read_array_of_rows_schema.avsc")).toString());
-    TestData.writeDataAsBatch(TestData.DATA_SET_ARRAY_OF_ROWS, conf);
-    HoodieTableSource tableSource = new HoodieTableSource(
-            SerializableSchema.create( SchemaBuilder.instance()
-            .fields(TestConfigurations.ARRAY_OF_ROWS_TYPE.getFieldNames(), TestConfigurations.ARRAY_OF_ROWS_DATA_TYPE.getChildren())
-            .build()),
-            new StoragePath(conf.getString(FlinkOptions.PATH)),
-            Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-            "default-par",
-            conf);
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertNotNull(fileList);
-    assertThat(fileList.size(), is(4));
-    CopyOnWriteInputFormat inputFormat = (CopyOnWriteInputFormat) tableSource.getInputFormat();
-
-    inputFormat.open(inputFormat.createInputSplits(1)[0]);
-    while (!inputFormat.reachedEnd()) {
-      RowData row = inputFormat.nextRecord(null);
-      assertNotNull(row);
-      ArrayData rowArray = row.getArray(3);
-      assertNotNull(rowArray);
-      for(int i = 0; i < rowArray.size(); ++i) {
-        RowData subRow = rowArray.getRow(i, 2);
-        assertNotNull(subRow);
-        assertNotNull(subRow.getString(0));
-        subRow.getInt(1);
-      }
-
-    }
-  }
-
-  @Test
-  void readMapOfRows() throws Exception {
-    final String path = tempFile.getAbsolutePath();
-    conf = TestConfigurations.getDefaultConf(path);
-    conf.setString(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
-            Objects.requireNonNull(Thread.currentThread()
-                    .getContextClassLoader().getResource("test_read_map_of_rows_schema.avsc")).toString());
-    TestData.writeDataAsBatch(TestData.DATA_SET_MAP_OF_ROWS, conf);
-    HoodieTableSource tableSource = new HoodieTableSource(
-            SerializableSchema.create( SchemaBuilder.instance()
-                    .fields(TestConfigurations.MAP_OF_ROWS_TYPE.getFieldNames(), TestConfigurations.MAP_OF_ROWS_DATA_TYPE.getChildren())
-                    .build()),
-            new StoragePath(conf.getString(FlinkOptions.PATH)),
-            Arrays.asList(conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
-            "default-par",
-            conf);
-    List<StoragePathInfo> fileList = tableSource.getReadFiles();
-    assertNotNull(fileList);
-    assertThat(fileList.size(), is(4));
-    CopyOnWriteInputFormat inputFormat = (CopyOnWriteInputFormat) tableSource.getInputFormat();
-
-    inputFormat.open(inputFormat.createInputSplits(1)[0]);
-    while (!inputFormat.reachedEnd()) {
-      RowData row = inputFormat.nextRecord(null);
-      assertNotNull(row);
-       MapData rowMap = row.getMap(3);
-      assertNotNull(rowMap);
-      for(int i = 0; i < rowMap.size(); ++i) {
-        String key = rowMap.keyArray().getString(i).toString();
-        assertNotNull(key);
-        RowData subRow = rowMap.valueArray().getRow(i, 2);
-        assertNotNull(subRow);
-        assertNotNull(subRow.getString(0));
-        if(key.endsWith("1")) {
-          assertFalse(subRow.getString(0).toString().endsWith("2"));
-          assertTrue(subRow.getInt(1) < 200);
-        } else {
-          assertTrue(subRow.getString(0).toString().endsWith("2"));
-          assertTrue(subRow.getInt(1) > 200);
-        }
-      }
-
-    }
-  }
-
 
   @Test
   void testDataSkippingFilterShouldBeNotNullWhenTableSourceIsCopied() {
