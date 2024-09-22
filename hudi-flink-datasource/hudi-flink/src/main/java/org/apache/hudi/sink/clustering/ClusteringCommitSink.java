@@ -113,9 +113,11 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   public void invoke(ClusteringCommitEvent event, Context context) throws Exception {
     final String instant = event.getInstant();
     if (event.isFailed() || event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0)) {
-      LOG.warn("Receive abnormal ClusteringCommitEvent of instant " + instant + ", task ID is " + event.getTaskID()
-          + ", is failed: " + event.isFailed() + ", error record count: "
-          + event.getWriteStatuses().stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum));
+      LOG.warn("Receive abnormal ClusteringCommitEvent of instant {}, task ID is {},"
+              + " is failed: {}, error record count: {}",
+          instant, event.getTaskID(), event.isFailed(),
+          event.getWriteStatuses().stream()
+              .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum));
     }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileIds(), event);
