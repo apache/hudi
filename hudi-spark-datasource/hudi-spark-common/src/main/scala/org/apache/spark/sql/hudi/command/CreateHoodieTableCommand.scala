@@ -29,6 +29,7 @@ import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
+import org.apache.spark.sql.catalyst.expressions.Cast
 import org.apache.spark.sql.hive.HiveClientUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog._
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils}
@@ -99,7 +100,8 @@ object CreateHoodieTableCommand {
       val sortedUserDefinedFields = userDefinedSchema.fields.sortBy(_.name)
       val diffResult = sortedHoodieTableFields.zip(sortedUserDefinedFields).forall {
         case (hoodieTableColumn, userDefinedColumn) =>
-          hoodieTableColumn == userDefinedColumn
+          hoodieTableColumn.name.equals(userDefinedColumn) &&
+          Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType)
       }
       if (!diffResult) {
         throw new HoodieValidationException(
