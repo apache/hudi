@@ -21,7 +21,9 @@ package org.apache.hudi.utilities.functional;
 
 import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
+import org.junit.platform.suite.api.Suite;
 
+@Suite
 @SelectPackages("org.apache.hudi.utilities.functional")
 @IncludeTags("functional")
 public class UtilitiesFunctionalTestSuite {

@@ -21,7 +21,9 @@ package org.apache.hudi.hive.functional;
 
 import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
+import org.junit.platform.suite.api.Suite;
 
+@Suite
 @SelectPackages("org.apache.hudi.hive.functional")
 @IncludeTags("functional")
 public class HiveSyncFunctionalTestSuite {
