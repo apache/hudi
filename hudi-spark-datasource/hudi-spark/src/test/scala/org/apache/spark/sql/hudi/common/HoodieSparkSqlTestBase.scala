@@ -214,7 +214,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
-      spark.sql(s"drop table if exists $tableName")
+      spark.sql(s"drop table if exists $tableName purge")
     }
   }
 
