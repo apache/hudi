@@ -110,7 +110,8 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   @Override
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
-        .map(EntityConversions::fromTHoodieInstant).sorted(Comparator.comparing(HoodieInstant::getTimestamp))
+        .map(EntityConversions::fromTHoodieInstant)
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .collect(Collectors.toList())).get();
   }
 
