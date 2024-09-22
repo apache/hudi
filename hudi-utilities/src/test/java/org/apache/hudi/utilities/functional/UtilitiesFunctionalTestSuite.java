@@ -19,12 +19,9 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.junit.platform.runner.JUnitPlatform;
 import org.junit.platform.suite.api.IncludeTags;
 import org.junit.platform.suite.api.SelectPackages;
-import org.junit.runner.RunWith;
 
-@RunWith(JUnitPlatform.class)
 @SelectPackages("org.apache.hudi.utilities.functional")
 @IncludeTags("functional")
 public class UtilitiesFunctionalTestSuite {
