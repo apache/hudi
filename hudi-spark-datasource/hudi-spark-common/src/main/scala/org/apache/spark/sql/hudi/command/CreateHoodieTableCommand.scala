@@ -104,7 +104,8 @@ object CreateHoodieTableCommand {
       if (!diffResult) {
         throw new HoodieValidationException(
           s"The defined schema is inconsistent with the schema in the hoodie metadata directory," +
-            s" hoodieTableSchema: $sortedHoodieTableFields, userDefinedSchema: $sortedUserDefinedFields")
+            s" hoodieTableSchema: ${hoodieTableSchema.simpleString}," +
+            s" userDefinedSchema: ${userDefinedSchema.simpleString}")
       } else {
         true
       }
