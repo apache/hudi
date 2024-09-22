@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{TimestampKeyGeneratorConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
@@ -46,10 +46,10 @@ import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.Collections
 import javax.annotation.concurrent.NotThreadSafe
-
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
@@ -405,9 +405,21 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   protected def doParsePartitionColumnValues(partitionColumns: Array[String], partitionPath: String): Array[Object] = {
-    HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
-      configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+    val tableConfig = metaClient.getTableConfig
+    if (null != tableConfig.getKeyGeneratorClassName
+      && tableConfig.getKeyGeneratorClassName.equals(classOf[org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator].getName)
+      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
+      .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
+      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
+      // EPOCHMILLISECONDS, or EPOCHMICROSECONDS,
+      // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases.
+      // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
+      Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
+    } else {
+      HoodieSparkUtils.parsePartitionColumnValues(partitionColumns, partitionPath, getBasePath, schema,
+        configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
+        sparkParsePartitionUtil, shouldValidatePartitionColumns(spark))
+    }
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =

@@ -887,7 +887,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
-    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    var (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    writeOpts += (HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
@@ -1426,7 +1427,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val options = Map[String, String](
         DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
         DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
-        HoodieTableConfig.PRECOMBINE_FIELD.key -> orderingFields,
+        DataSourceWriteOptions.PRECOMBINE_FIELD.key -> orderingFields,
         DataSourceWriteOptions.RECORDKEY_FIELD.key -> recordKeyField,
         DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
         DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
