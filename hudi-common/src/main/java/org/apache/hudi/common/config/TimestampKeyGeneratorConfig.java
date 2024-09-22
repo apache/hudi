@@ -42,7 +42,8 @@ public class TimestampKeyGeneratorConfig extends HoodieConfig {
       .withAlternatives(OLD_TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.type")
       .markAdvanced()
       .withDocumentation("Timestamp type of the field, which should be one of the timestamp types "
-          + "supported: `UNIX_TIMESTAMP`, `DATE_STRING`, `MIXED`, `EPOCHMILLISECONDS`, `SCALAR`.");
+          + "supported: `UNIX_TIMESTAMP`, `DATE_STRING`, `MIXED`, `EPOCHMILLISECONDS`,"
+          + " `EPOCHMICROSECONDS`, `SCALAR`.");
 
   public static final ConfigProperty<String> INPUT_TIME_UNIT = ConfigProperty
       .key(TIMESTAMP_KEYGEN_CONFIG_PREFIX + "timestamp.scalar.time.unit")

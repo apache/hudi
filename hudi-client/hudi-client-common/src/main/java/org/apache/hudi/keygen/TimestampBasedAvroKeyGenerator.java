@@ -41,6 +41,7 @@ import java.time.LocalDate;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
@@ -54,7 +55,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  */
 public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
   public enum TimestampType implements Serializable {
-    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, SCALAR
+    UNIX_TIMESTAMP, DATE_STRING, MIXED, EPOCHMILLISECONDS, EPOCHMICROSECONDS, SCALAR
   }
 
   private final TimeUnit timeUnit;
@@ -92,6 +93,9 @@ public class TimestampBasedAvroKeyGenerator extends SimpleAvroKeyGenerator {
     switch (this.timestampType) {
       case EPOCHMILLISECONDS:
         timeUnit = MILLISECONDS;
+        break;
+      case EPOCHMICROSECONDS:
+        timeUnit = MICROSECONDS;
         break;
       case UNIX_TIMESTAMP:
         timeUnit = SECONDS;
