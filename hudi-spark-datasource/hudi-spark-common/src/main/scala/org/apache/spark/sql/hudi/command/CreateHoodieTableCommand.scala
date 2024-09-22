@@ -100,7 +100,7 @@ object CreateHoodieTableCommand {
       val sortedUserDefinedFields = userDefinedSchema.fields.sortBy(_.name)
       val diffResult = sortedHoodieTableFields.zip(sortedUserDefinedFields).forall {
         case (hoodieTableColumn, userDefinedColumn) =>
-          hoodieTableColumn.name.equals(userDefinedColumn) &&
+          hoodieTableColumn.name.equals(userDefinedColumn.name) &&
           Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType)
       }
       if (!diffResult) {
