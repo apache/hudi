@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
-import org.apache.hudi.common.util.Option
+import org.apache.hudi.common.util.{ConfigUtils, Option}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, HiveSyncTool}
@@ -34,7 +34,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
@@ -977,10 +977,10 @@ object DataSourceOptionsHelper {
 
   def translateConfigurations(optParams: Map[String, String]): Map[String, String] = {
     val translatedOpt = scala.collection.mutable.Map[String, String]() ++= optParams
-    if (!translatedOpt.contains(HoodieTableConfig.NAME.key()) &&
-      translatedOpt.contains(DataSourceWriteOptions.TABLE_NAME.key())) {
+    if (!SparkConfigUtils.containsConfigProperty(optParams, HoodieTableConfig.NAME) &&
+      SparkConfigUtils.containsConfigProperty(optParams, DataSourceWriteOptions.TABLE_NAME)) {
       translatedOpt.put(HoodieTableConfig.NAME.key(),
-        translatedOpt(DataSourceWriteOptions.TABLE_NAME.key()))
+        SparkConfigUtils.getStringWithAltKeys(optParams, DataSourceWriteOptions.TABLE_NAME))
     }
     optParams.keySet.foreach(opt => {
       if (allAlternatives.contains(opt) && !optParams.contains(allAlternatives(opt))) {

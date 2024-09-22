@@ -102,7 +102,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing) {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -145,7 +144,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testAdditionalPartitionsinMDT(boolean testFailureCase) throws InterruptedException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -219,7 +217,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -323,7 +320,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testRliValidationFalsePositiveCase() throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
