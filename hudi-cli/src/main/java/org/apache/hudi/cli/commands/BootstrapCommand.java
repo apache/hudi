@@ -74,7 +74,7 @@ public class BootstrapCommand {
           help = "SchemaProvider to attach schemas to bootstrap source data") final String schemaProviderClass,
       @ShellOption(value = {"--payloadClass"}, defaultValue = "",
           help = "Deprecated. Use merge-mode for overwrite or event time merging. Payload Class") final String payloadClass,
-      @ShellOption(value = {"--merge-mode", "--record-merge-mode"}, defaultValue = "OVERWRITE_WITH_LATEST",
+      @ShellOption(value = {"--merge-mode", "--record-merge-mode"}, defaultValue = "",
           help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'OVERWRITE_WITH_LATEST', or 'CUSTOM' if you want to set a merge strategy") final String recordMergeMode,
       @ShellOption(value = {"--merger-strategy", "--record-merger-strategy"}, defaultValue = "",
           help = "Merge strategy to use. Only set when using 'CUSTOM' merge mode") final String recordMergerStrategy,

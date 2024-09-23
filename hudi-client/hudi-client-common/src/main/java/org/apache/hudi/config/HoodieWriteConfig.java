@@ -68,7 +68,6 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsGraphiteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsJmxConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
@@ -106,8 +105,6 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
-import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.config.HoodieCleanConfig.CLEANER_POLICY;
 import static org.apache.hudi.config.HoodieCompactionConfig.COPY_ON_WRITE_RECORD_SIZE_ESTIMATE;
@@ -2247,21 +2244,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieLogBlock.HoodieLogBlockType getLogDataBlockFormat() {
-    String logBlockTypeName = getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT);
-    if (StringUtils.isNullOrEmpty(logBlockTypeName)) {
-      HoodieFileFormat fileFormat = getBaseFileFormat();
-      switch (fileFormat) {
-        case HFILE:
-          return HFILE_DATA_BLOCK;
-        case PARQUET:
-        case ORC:
-          return AVRO_DATA_BLOCK;
-        default:
-          throw new HoodieException("Base file format " + fileFormat
-              + " does not have associated log block type");
-      }
-    }
-    return HoodieLogBlock.HoodieLogBlockType.fromId(logBlockTypeName);
+    return HoodieLogBlock.inferLogBlockWriteFormat(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT), getBaseFileFormat());
   }
 
   public long getLogFileMaxSize() {
@@ -3161,7 +3144,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergeMode(RecordMergeMode recordMergeMode) {
-      writeConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+      if (recordMergeMode != null) {
+        writeConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+      }
       return this;
     }
 

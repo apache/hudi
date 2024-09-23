@@ -34,10 +34,9 @@ class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)
-    assertEquals(3, with1.size)
+    assertEquals(2, with1.size)
     assertEquals("id", with1("primaryKey"))
     assertEquals("cow", with1("type"))
-    assertEquals(HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue, with1("mergeMode"))
 
     val ops2 = Map("primaryKey" -> "id",
       "preCombineField" -> "timestamp",

@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -152,6 +153,10 @@ public class HoodieStreamer implements Serializable {
 
   public HoodieStreamer(Config cfg, JavaSparkContext jssc, FileSystem fs, Configuration conf,
                         Option<TypedProperties> propsOverride, Option<SourceProfileSupplier> sourceProfileSupplier) throws IOException {
+    Triple<RecordMergeMode, String, String> mergingConfigs = HoodieTableConfig.inferCorrectMergingBehavior(cfg.recordMergeMode, cfg.payloadClassName, cfg.recordMergerStrategy);
+    cfg.recordMergeMode = mergingConfigs.getLeft();
+    cfg.payloadClassName = mergingConfigs.getMiddle();
+    cfg.recordMergerStrategy = mergingConfigs.getRight();
     this.properties = combineProperties(cfg, propsOverride, jssc.hadoopConfiguration());
     if (cfg.initialCheckpointProvider != null && cfg.checkpoint == null) {
       InitialCheckPointProvider checkPointProvider =
@@ -267,7 +272,7 @@ public class HoodieStreamer implements Serializable {
     public String payloadClassName = null;
 
     @Parameter(names = {"--merge-mode", "--record-merge-mode"}, description = "mode to merge records with")
-    public RecordMergeMode recordMergeMode = RecordMergeMode.OVERWRITE_WITH_LATEST;
+    public RecordMergeMode recordMergeMode = null;
     
     @Parameter(names = {"--merger-strategy", "--record-merger-strategy"}, description = "only set this if you are using custom merge mode")
     public String recordMergerStrategy = null;

@@ -18,10 +18,12 @@
 
 package org.apache.hudi.common.table.log.block;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TypeUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -45,6 +47,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -335,5 +339,21 @@ public abstract class HoodieLogBlock {
    */
   protected void deflate() {
     content = Option.empty();
+  }
+
+  public static HoodieLogBlockType inferLogBlockWriteFormat(String logBlockTypeName, HoodieFileFormat baseFileFormat) {
+    if (StringUtils.isNullOrEmpty(logBlockTypeName)) {
+      switch (baseFileFormat) {
+        case HFILE:
+          return HFILE_DATA_BLOCK;
+        case PARQUET:
+        case ORC:
+          return AVRO_DATA_BLOCK;
+        default:
+          throw new HoodieException("Base file format " + baseFileFormat
+              + " does not have associated log block type");
+      }
+    }
+    return HoodieLogBlock.HoodieLogBlockType.fromId(logBlockTypeName);
   }
 }

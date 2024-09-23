@@ -26,11 +26,13 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -137,7 +139,9 @@ public class UtilHelpers {
     List<String> recordMergerImplClasses = ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), ""));
     HoodieRecordMerger recordMerger = HoodieWriteConfig.getRecordMerger(null,
         RecordMergeMode.valueOf(props.getProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key(), HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue())),
-        EngineType.SPARK, HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK, recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
+        EngineType.SPARK, HoodieLogBlock.inferLogBlockWriteFormat(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), null),
+            HoodieFileFormat.valueOf(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.BASE_FILE_FORMAT, HoodieWriteConfig.BASE_FILE_FORMAT.defaultValue().name()))),
+        recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
 
     return recordMerger;
   }

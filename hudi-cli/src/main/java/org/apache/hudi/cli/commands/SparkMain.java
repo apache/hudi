@@ -34,7 +34,6 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -81,6 +80,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
@@ -128,7 +128,7 @@ public class SparkMain {
     }
 
     String getPropsFilePath(String[] args) {
-      return (args.length >= minArgsCount && !StringUtils.isNullOrEmpty(args[minArgsCount - 1]))
+      return (args.length >= minArgsCount && !isNullOrEmpty(args[minArgsCount - 1]))
           ? args[minArgsCount - 1] : null;
     }
   }
@@ -488,7 +488,7 @@ public class SparkMain {
 
     properties.setProperty(HoodieBootstrapConfig.BASE_PATH.key(), sourcePath);
 
-    if (!StringUtils.isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
+    if (!isNullOrEmpty(keyGenerator) && KeyGeneratorType.getNames().contains(keyGenerator.toUpperCase(Locale.ROOT))) {
       properties.setProperty(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenerator.toUpperCase(Locale.ROOT));
     } else {
       properties.setProperty(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), keyGenerator);
@@ -507,7 +507,7 @@ public class SparkMain {
     cfg.schemaProviderClassName = schemaProviderClass;
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
-    cfg.recordMergeMode = RecordMergeMode.valueOf(recordMergeMode.toUpperCase());
+    cfg.recordMergeMode = isNullOrEmpty(recordMergeMode) ? null : RecordMergeMode.valueOf(recordMergeMode.toUpperCase());
     cfg.recordMergerStrategy = recordMergeStrategy;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 

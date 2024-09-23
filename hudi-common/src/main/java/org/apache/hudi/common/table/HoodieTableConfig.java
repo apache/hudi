@@ -365,28 +365,35 @@ public class HoodieTableConfig extends HoodieConfig {
       if (recordMergeMode != null && (!contains(RECORD_MERGE_MODE) || !getString(RECORD_MERGE_MODE).equalsIgnoreCase(recordMergeMode.name()))) {
         setValue(RECORD_MERGE_MODE, recordMergeMode.name());
         needStore = true;
-      }
-      if (recordMergeMode == null || recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
-        if (contains(PAYLOAD_CLASS_NAME) && !isNullOrEmpty(payloadClassName)
-            && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
-          setValue(PAYLOAD_CLASS_NAME, payloadClassName);
-          needStore = true;
-        }
-        if (contains(RECORD_MERGER_STRATEGY) && !isNullOrEmpty(recordMergerStrategyId)
-            && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
-          setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
-          needStore = true;
-        }
-      } else {
-        if (contains(PAYLOAD_CLASS_NAME)) {
-          clearValue(PAYLOAD_CLASS_NAME);
-          needStore = true;
-        }
-        if (contains(RECORD_MERGER_STRATEGY)) {
-          clearValue(RECORD_MERGER_STRATEGY);
-          needStore = true;
+        if (recordMergeMode != CUSTOM) {
+          checkArgument(isNullOrEmpty(payloadClassName) && isNullOrEmpty(recordMergerStrategyId),
+              "Merging configs have not been inferred with HoodieTableConfig.inferCorrectMergingBehavior. This must be done to maintain table integrity!");
+          if (contains(PAYLOAD_CLASS_NAME)) {
+            clearValue(PAYLOAD_CLASS_NAME);
+          }
+          if (contains(RECORD_MERGER_STRATEGY)) {
+            clearValue(RECORD_MERGER_STRATEGY);
+          }
         }
       }
+
+      if (!isNullOrEmpty(payloadClassName) && (!contains(PAYLOAD_CLASS_NAME) || !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName))) {
+        setValue(PAYLOAD_CLASS_NAME, payloadClassName);
+        needStore = true;
+      }
+
+      if (!isNullOrEmpty(recordMergerStrategyId) && (!contains(RECORD_MERGER_STRATEGY) || !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId))) {
+        setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
+        needStore = true;
+        if (recordMergerStrategyId != PAYLOAD_BASED_MERGER_STRATEGY_UUDID) {
+          checkArgument(isNullOrEmpty(payloadClassName),
+              "Merging configs have not been inferred with HoodieTableConfig.inferCorrectMergingBehavior. This must be done to maintain table integrity!");
+          if (contains(PAYLOAD_CLASS_NAME)) {
+            clearValue(PAYLOAD_CLASS_NAME);
+          }
+        }
+      }
+
       if (needStore) {
         try (OutputStream outputStream = storage.create(propertyPath)) {
           storeProperties(props, outputStream);
