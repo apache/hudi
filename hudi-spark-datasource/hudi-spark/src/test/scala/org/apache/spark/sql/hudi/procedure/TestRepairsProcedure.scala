@@ -139,6 +139,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
           |[hoodie.datasource.write.drop.partition.columns,false,false]
           |[hoodie.datasource.write.hive_style_partitioning,true,null]
           |[hoodie.datasource.write.partitionpath.urlencode,false,null]
+          |[hoodie.record.merge.mode,EVENT_TIME_ORDERING,null]
           |[hoodie.table.checksum,,]
           |[hoodie.table.create.schema,,]
           |[hoodie.table.initial.version,8,8]
