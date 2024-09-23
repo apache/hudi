@@ -196,8 +196,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.timeline.layout.version")
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
-
-  //TODO: why is this the default? not OVERWRITE_WITH_LATEST?
+  
   public static final ConfigProperty<RecordMergeMode> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING)
