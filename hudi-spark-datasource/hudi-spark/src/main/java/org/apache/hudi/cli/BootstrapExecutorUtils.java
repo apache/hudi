@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli;
 
-import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -34,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -142,10 +141,6 @@ public class BootstrapExecutorUtils implements Serializable {
             .key()),
         HoodieTableConfig.BOOTSTRAP_BASE_PATH.key() + " must be specified.");
     this.bootstrapBasePath = properties.getString(HoodieTableConfig.BOOTSTRAP_BASE_PATH.key());
-
-    // Add more defaults if full bootstrap requested
-    this.props.putIfAbsent(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key(),
-        ConfigUtils.getAvroPayloadClass(properties));
     /*
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
@@ -158,6 +153,7 @@ public class BootstrapExecutorUtils implements Serializable {
             .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
             .withAutoCommit(true)
             .withKeyGenerator(keyGenClass)
+            .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadClass(cfg.payloadClass).build())
             .withProps(props);
 
     if (null != schemaProvider && null != schemaProvider.getTargetSchema()) {
