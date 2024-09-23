@@ -634,7 +634,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.warn("Metadata table validation failed ({}).", taskLabels);
         return false;
       }
-    } catch (HoodieValidationException e){
+    } catch (HoodieValidationException e) {
       throw e;
     } catch (Exception e) {
       LOG.warn("Error closing HoodieMetadataValidationContext, "
