@@ -21,7 +21,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.SparkSession
@@ -76,13 +76,6 @@ class BloomFiltersIndexSupport(spark: SparkSession,
 
   override def isIndexAvailable: Boolean = {
     metadataConfig.isEnabled && metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS)
-  }
-
-  /**
-   * Returns true if the query type is supported by the index.
-   */
-  override def supportsQueryType(queryType: HoodieTableQueryType): Boolean = {
-    queryType == HoodieTableQueryType.SNAPSHOT
   }
 
   override def invalidateCaches(): Unit = {
