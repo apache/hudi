@@ -100,6 +100,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -633,6 +634,8 @@ public class HoodieMetadataTableValidator implements Serializable {
         LOG.warn("Metadata table validation failed ({}).", taskLabels);
         return false;
       }
+    } catch (HoodieValidationException e){
+      throw e;
     } catch (Exception e) {
       LOG.warn("Error closing HoodieMetadataValidationContext, "
           + "ignoring the error as the validation is successful.", e);
@@ -969,8 +972,18 @@ public class HoodieMetadataTableValidator implements Serializable {
             false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords((scala.collection.mutable.Buffer<String>) JavaConverters.asScalaBuffer(metadataTableBasedContext.allColumnNameList), false);
-    JavaRDD<HoodieMetadataColumnStats> diff = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
-    ValidationUtils.checkState(diff.isEmpty());
+    JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
+    if (!diffRDD.isEmpty()) {
+      List<HoodieMetadataColumnStats> diff = diffRDD.collect();
+      Set<String> partitionPaths = diff.stream().map(HoodieMetadataColumnStats::getFileName).collect(Collectors.toSet());
+      StringBuilder statDiffMsg = new StringBuilder();
+      for (String partitionPath : partitionPaths) {
+        List<HoodieMetadataColumnStats> diffPartitionStatsColStats = partitionStatsUsingColStats.filter(stat -> stat.getFileName().equals(partitionPath)).collectAsList();
+        List<HoodieMetadataColumnStats> diffPartitionStats = partitionStats.filter(stat -> stat.getFileName().equals(partitionPath)).collectAsList();
+        statDiffMsg.append(String.format("Partition stats from MDT: %s from colstats: %s", Arrays.toString(diffPartitionStats.toArray()), Arrays.toString(diffPartitionStatsColStats.toArray())));
+      }
+      throw new HoodieValidationException(String.format("Partition stats validation failed diff: %s", statDiffMsg));
+    }
   }
 
   private HoodieData<HoodieMetadataColumnStats> getPartitionStatsUsingColStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning,
