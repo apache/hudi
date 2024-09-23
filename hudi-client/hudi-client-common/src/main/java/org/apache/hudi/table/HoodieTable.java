@@ -820,7 +820,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
-    final HoodieStorage storage = metaClient.getRawHoodieStorage();
+    final HoodieStorage storage = metaClient.getRawStorage();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
       getConsistencyGuard(storage, config.getConsistencyGuardConfig())

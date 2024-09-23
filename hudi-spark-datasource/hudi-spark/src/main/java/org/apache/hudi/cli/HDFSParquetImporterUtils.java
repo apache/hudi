@@ -68,7 +68,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 
 import scala.Tuple2;
 
@@ -156,12 +155,10 @@ public class HDFSParquetImporterUtils implements Serializable {
 
       if (!fs.exists(new Path(this.targetPath))) {
         // Initialize target hoodie table.
-        Properties properties = HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
             .setTableName(this.tableName)
             .setTableType(this.tableType)
-            .build();
-        HoodieTableMetaClient.initTableAndGetMetaClient(
-            HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), this.targetPath, properties);
+            .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), this.targetPath);
       }
 
       // Get schema.

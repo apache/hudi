@@ -27,6 +27,7 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
+import org.apache.hudi.util.CommonClientUtils;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
@@ -44,11 +45,11 @@ public final class ArchiveExecutorUtils {
   }
 
   public static int archive(JavaSparkContext jsc,
-       int minCommits,
-       int maxCommits,
-       int commitsRetained,
-       boolean enableMetadata,
-       String basePath) throws IOException {
+                            int minCommits,
+                            int maxCommits,
+                            int commitsRetained,
+                            boolean enableMetadata,
+                            String basePath) throws IOException {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
@@ -57,6 +58,7 @@ public final class ArchiveExecutorUtils {
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);
+    CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     try {
       HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
       archiver.archiveIfRequired(context, true);

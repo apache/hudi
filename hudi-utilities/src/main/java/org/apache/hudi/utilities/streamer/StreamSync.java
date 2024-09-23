@@ -75,6 +75,7 @@ import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
@@ -395,16 +396,23 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   private void initializeEmptyTable() throws IOException {
+    initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(),
+        SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props),
+        HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()));
+  }
+
+  void initializeEmptyTable(HoodieTableMetaClient.TableBuilder tableBuilder, String partitionColumns,
+                            StorageConfiguration<?> storageConf) throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
-    String partitionColumns = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props);
-    HoodieTableMetaClient.withPropertyBuilder()
-        .setTableType(cfg.tableType)
+    tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
         .setBaseFileFormat(cfg.baseFileFormat)
         .setPartitionFields(partitionColumns)
+        .setTableVersion(props.getInteger(HoodieWriteConfig.WRITE_TABLE_VERSION.key(),
+            HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
         .setRecordKeyFields(props.getProperty(DataSourceWriteOptions.RECORDKEY_FIELD().key()))
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
@@ -421,8 +429,7 @@ public class StreamSync implements Serializable, Closeable {
             Boolean.parseBoolean(HIVE_STYLE_PARTITIONING_ENABLE.defaultValue())))
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
-        .initTable(HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()),
-            cfg.targetBasePath);
+        .initTable(storageConf, cfg.targetBasePath);
   }
 
   /**

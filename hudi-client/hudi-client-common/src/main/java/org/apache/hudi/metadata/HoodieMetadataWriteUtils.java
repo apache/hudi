@@ -106,6 +106,7 @@ public class HoodieMetadataWriteUtils {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withEngineType(writeConfig.getEngineType())
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
+        .withWriteTableVersion(writeConfig.getWriteVersion().versionCode())
         .withMergeAllowDuplicateOnInserts(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()
             .withConsistencyCheckEnabled(writeConfig.getConsistencyGuardConfig().isConsistencyCheckEnabled())

@@ -106,13 +106,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   @Test

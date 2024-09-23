@@ -34,7 +34,7 @@ public enum BootstrapIndexType {
   @EnumFieldDescription("Maintains mapping in HFile format.")
   HFILE(HFileBootstrapIndex.class.getName()),
   @EnumFieldDescription("No-op, an empty implementation.")
-  NO_OP(NoOpBootstrapIndex.class.getName());
+  NONE(NoOpBootstrapIndex.class.getName());
 
   private final String className;
 
@@ -57,7 +57,7 @@ public enum BootstrapIndexType {
 
   public static String getBootstrapIndexClassName(HoodieConfig config) {
     if (!config.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      return BootstrapIndexType.NO_OP.getClassName();
+      return BootstrapIndexType.NONE.getClassName();
     }
     if (config.contains(BOOTSTRAP_INDEX_CLASS_NAME)) {
       return config.getString(BOOTSTRAP_INDEX_CLASS_NAME);
@@ -68,9 +68,13 @@ public enum BootstrapIndexType {
   }
 
   public static String getDefaultBootstrapIndexClassName(HoodieConfig config) {
+    return getBootstrapIndexType(config).getClassName();
+  }
+
+  public static BootstrapIndexType getBootstrapIndexType(HoodieConfig config) {
     if (!config.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      return BootstrapIndexType.NO_OP.getClassName();
+      return BootstrapIndexType.NONE;
     }
-    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
+    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue());
   }
 }

@@ -20,8 +20,8 @@ package org.apache.hudi.exception;
 
 public class HoodieUpgradeDowngradeException extends HoodieException {
 
-  public HoodieUpgradeDowngradeException(String msg, Throwable t) {
-    super(msg, t);
+  public HoodieUpgradeDowngradeException(String msg) {
+    super(msg);
   }
 
   public HoodieUpgradeDowngradeException(int fromVersion, int toVersion, boolean upgrade) {

@@ -99,6 +99,7 @@ import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.sources.TestParquetDFSSourceEmptyBatch;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
+import org.apache.hudi.utilities.streamer.StreamSync;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -2618,7 +2619,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TypedProperties properties = new TypedProperties();
     properties.setProperty("hoodie.datasource.write.recordkey.field", "key");
     properties.setProperty("hoodie.datasource.write.partitionpath.field", "pp");
-    TestStreamSync testDeltaSync = new TestStreamSync(cfg, sparkSession, null, properties,
+    DummyStreamSync testDeltaSync = new DummyStreamSync(cfg, sparkSession, null, properties,
         jsc, fs, jsc.hadoopConfiguration(), null);
 
     properties.put(HoodieTableConfig.NAME.key(), "sample_tbl");
@@ -2960,11 +2961,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     return baseFileStream.map(HoodieBaseFile::getFileId).collect(Collectors.toSet());
   }
 
-  class TestStreamSync extends DeltaSync {
+  static class DummyStreamSync extends StreamSync {
 
-    public TestStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
-                          JavaSparkContext jssc, FileSystem fs, Configuration conf,
-                          Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
+    public DummyStreamSync(HoodieDeltaStreamer.Config cfg, SparkSession sparkSession, SchemaProvider schemaProvider, TypedProperties props,
+                           JavaSparkContext jssc, FileSystem fs, Configuration conf,
+                           Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient) throws IOException {
       super(cfg, sparkSession, schemaProvider, props, jssc, fs, conf, onInitializingHoodieWriteClient);
     }
 

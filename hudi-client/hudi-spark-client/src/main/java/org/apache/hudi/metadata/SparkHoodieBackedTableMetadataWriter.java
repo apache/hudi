@@ -216,13 +216,13 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+  protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
-    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
   @Override

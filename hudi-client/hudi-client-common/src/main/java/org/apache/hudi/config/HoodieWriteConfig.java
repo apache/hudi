@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -134,6 +135,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
+
+  public static final ConfigProperty<Integer> WRITE_TABLE_VERSION = ConfigProperty
+      .key("hoodie.write.table.version")
+      .defaultValue(HoodieTableVersion.current().versionCode())
+      .withValidValues(
+          String.valueOf(HoodieTableVersion.SIX.versionCode()),
+          String.valueOf(HoodieTableVersion.current().versionCode())
+      )
+      .sinceVersion("1.0.0")
+      .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");
+
+  public static final ConfigProperty<Boolean> AUTO_UPGRADE_VERSION = ConfigProperty
+      .key("hoodie.write.auto.upgrade")
+      .defaultValue(true)
+      .sinceVersion("1.0.0")
+      .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
+          + "if the current table version is lower.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.tagged.record.storage.level")
@@ -1256,6 +1274,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       return getString(WRITE_SCHEMA_OVERRIDE);
     }
     return getSchema();
+  }
+
+  public HoodieTableVersion getWriteVersion() {
+    Integer versionCode = getInt(WRITE_TABLE_VERSION);
+    if (versionCode != null) {
+      WRITE_TABLE_VERSION.checkValues(versionCode.toString());
+    }
+    return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
+  }
+
+  public boolean autoUpgrade() {
+    return getBoolean(AUTO_UPGRADE_VERSION);
   }
 
   public String getTaggedRecordStorageLevel() {
@@ -2837,6 +2867,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteTableVersion(int writeVersion) {
+      writeConfig.setValue(WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.fromVersionCode(writeVersion).versionCode()));
+      return this;
+    }
+
+    public Builder withAutoUpgradeVersion(boolean enable) {
+      writeConfig.setValue(AUTO_UPGRADE_VERSION, String.valueOf(enable));
+      return this;
+    }
+
     public Builder withAvroSchemaValidate(boolean enable) {
       writeConfig.setValue(AVRO_SCHEMA_VALIDATE_ENABLE, String.valueOf(enable));
       return this;
@@ -3382,6 +3422,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void validate() {
+      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
+        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
+            + "Please expect some unexpected behavior, until its fully implemented.");
+      }
+
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));
