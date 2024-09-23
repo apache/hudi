@@ -30,6 +30,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -77,6 +78,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.common.util.hash.ColumnIndexID;
 import org.apache.hudi.common.util.hash.PartitionIndexID;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -401,8 +403,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
 
     assertTrue(metadataWriter.isPresent());
+    Triple<RecordMergeMode, String, String> inferredMergeConfs = HoodieTableConfig.inferCorrectMergingBehavior(writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(), writeConfig.getRecordMergerStrategy());
     HoodieTableConfig hoodieTableConfig =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(), writeConfig.getRecordMergerStrategy());
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), inferredMergeConfs.getLeft(), inferredMergeConfs.getMiddle(), inferredMergeConfs.getRight());
     assertFalse(hoodieTableConfig.getMetadataPartitions().isEmpty());
 
     // Turn off metadata table
@@ -419,11 +422,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Option metadataWriter2 = table2.getMetadataWriter(instant2);
     assertFalse(metadataWriter2.isPresent());
 
+    Triple<RecordMergeMode, String, String> inferredMergeConfs2 = HoodieTableConfig.inferCorrectMergingBehavior(writeConfig2.getRecordMergeMode(), writeConfig2.getPayloadClass(), writeConfig2.getRecordMergerStrategy());
     HoodieTableConfig hoodieTableConfig2 =
         new HoodieTableConfig(this.storage, metaClient.getMetaPath(),
-            writeConfig2.getRecordMergeMode(),
-            writeConfig2.getPayloadClass(),
-            writeConfig2.getRecordMergerStrategy());
+            inferredMergeConfs2.getLeft(),
+            inferredMergeConfs2.getMiddle(),
+            inferredMergeConfs2.getRight());
     assertEquals(Collections.emptySet(), hoodieTableConfig2.getMetadataPartitions());
     // Assert metadata table folder is deleted
     assertFalse(metaClient.getStorage().exists(
@@ -445,7 +449,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, true);
     assertTrue(metadataWriter3.isPresent());
     HoodieTableConfig hoodieTableConfig3 =
-        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), writeConfig.getRecordMergeMode(), writeConfig.getPayloadClass(), writeConfig.getRecordMergerStrategy());
+        new HoodieTableConfig(this.storage, metaClient.getMetaPath(), null, null, null);
     assertFalse(hoodieTableConfig3.getMetadataPartitions().isEmpty());
   }
 

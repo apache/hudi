@@ -1614,13 +1614,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()).sync();
     assertRecordCount(1000, dataSetBasePath, sqlContext);
 
-    //now create one more deltaStreamer instance and update payload class
-    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
-        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
-        true, true, DummyAvroPayload.class.getName(), null);
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
-
-    //now assert that hoodie.properties file does not have payload class prop since it is a COW table
     Properties props = new Properties();
     String metaPath = dataSetBasePath + "/.hoodie/hoodie.properties";
     FileSystem fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
@@ -1628,7 +1621,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       props.load(inputStream);
     }
 
+    //will use merge mode by default
     assertFalse(props.containsKey(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
+
+
+
+    //now create one more deltaStreamer instance and update payload class
+    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+        Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
+        true, true, DummyAvroPayload.class.getName(), null);
+    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
+
+    props = new Properties();
+    fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
+    try (InputStream inputStream = fs.open(new Path(metaPath))) {
+      props.load(inputStream);
+    }
+
+    //now using payload
+    assertEquals(DummyAvroPayload.class.getName(), props.get(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
   }
 
   @Test
