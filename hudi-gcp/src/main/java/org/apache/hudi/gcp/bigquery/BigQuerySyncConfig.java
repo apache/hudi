@@ -59,10 +59,11 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .withDocumentation("Name of the target project in BigQuery");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_BILLING_PROJECT_ID = ConfigProperty
-      .key("hoodie.gcp.bigquery.sync.project_id")
+      .key("hoodie.gcp.bigquery.sync.billing_project_id")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Name of the billing project id in BigQuery. By default it will use the BIGQUERY_SYNC_PROJECT_ID");
+      .withDocumentation("Name of the billing project id in BigQuery. By default it will use the BIGQUERY_SYNC_PROJECT_ID")
+      .sinceVersion("1.0.0");
 
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")

@@ -62,7 +62,7 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieBigQuerySyncClient {
   private static final String PROJECT_ID = "test_project";
-  private static final String BILLING_PROJECT_ID = "test_project";
+  private static final String BILLING_PROJECT_ID = "test_billing_project";
   private static final String MANIFEST_FILE_URI = "file:/manifest_file";
   private static final String SOURCE_PREFIX = "file:/manifest_file/date=*";
   private static final String TEST_TABLE = "test_table";
