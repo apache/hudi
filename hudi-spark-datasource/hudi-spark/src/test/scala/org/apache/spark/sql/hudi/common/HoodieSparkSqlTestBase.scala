@@ -202,7 +202,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         Some(conf.getConfString(k))
       } else None
     }
-    pairs.foreach { case(k, v) => conf.setConfString(k, v) }
+    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
     try f finally {
       pairs.unzip._1.zip(currentValues).foreach {
         case (key, Some(value)) => conf.setConfString(key, value)
@@ -220,7 +220,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),
-                               recordConfig: Map[HoodieRecordType, Map[String, String]]=Map.empty)(f: => Unit) {
+                               recordConfig: Map[HoodieRecordType, Map[String, String]] = Map.empty)(f: => Unit) {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
@@ -230,20 +230,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       val config = Map(
         HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> merger,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> format) ++ recordConfig.getOrElse(recordType, Map.empty)
-      withSQLConf(config.toList:_*) {
+      withSQLConf(config.toList: _*) {
         f
         // We need to clear indexed location in memory after each test.
         HoodieInMemoryHashIndex.clear()
       }
-    }
-  }
-
-  protected def getRecordType(): HoodieRecordType = {
-    val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
-    if (merger.equals(classOf[DefaultSparkRecordMerger].getName)) {
-      HoodieRecordType.SPARK
-    } else {
-      HoodieRecordType.AVRO
     }
   }
 }
