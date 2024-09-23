@@ -25,8 +25,8 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, 
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
-import org.apache.hudi.common.testutils.{HoodieCommonTestHarness, HoodieTestDataGenerator}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.TestCOWDataSource.convertColumnsToNullable
@@ -35,9 +35,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers,SparkDatasetMixin}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
 
-import org.apache.avro.Schema
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.QuickstartUtils.convertToStringList
 import org.apache.spark.sql._
@@ -48,7 +47,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
-import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
 import scala.collection.JavaConverters._
@@ -59,12 +57,11 @@ import scala.collection.JavaConverters._
 class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
     DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
-    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition_path",
+    DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
     DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
@@ -885,7 +882,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieRecordType], names = Array("SPARK"))
+  @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     // enable column stats
@@ -893,10 +890,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val records1RDD = spark.sparkContext.parallelize(HoodieCommonTestHarness.toGenericRecords(
-      records1,
-      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala.toSeq, 2)
-    val inputDF1 = AvroConversionUtils.createDataFrame(records1RDD, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, spark)
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
@@ -915,10 +909,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mkString(",")
 
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
-    val records2RDD = spark.sparkContext.parallelize(HoodieCommonTestHarness.toGenericRecords(
-      records2,
-      new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)).asScala.toSeq, 2)
-    val inputDF2 = AvroConversionUtils.createDataFrame(records2RDD, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, spark)
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
     inputDF2.write.format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)

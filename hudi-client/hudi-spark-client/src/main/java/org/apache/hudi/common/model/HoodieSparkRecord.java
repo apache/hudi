@@ -190,9 +190,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     Object[] objects = new Object[columns.length];
     for (int i = 0; i < objects.length; i++) {
-      if (columns[i].equalsIgnoreCase("fare")) {
-        System.out.println("columns[i] = " + columns[i]);
-      }
       objects[i] = getValue(structType, columns[i], data);
     }
     return objects;
