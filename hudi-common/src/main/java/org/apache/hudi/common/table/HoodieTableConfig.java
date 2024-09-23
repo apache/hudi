@@ -698,6 +698,10 @@ public class HoodieTableConfig extends HoodieConfig {
     return getPayloadClass().orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
   }
 
+  public String getAvroPayloadClassNonThrow() {
+    return getPayloadClass().orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeModeNonThrow(getRecordMergeMode()));
+  }
+
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */

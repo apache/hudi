@@ -271,7 +271,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getAvroPayloadClass,
+      recordPayloadClassName = tableConfig.getAvroPayloadClassNonThrow,
       metadataConfig = fileIndex.metadataConfig,
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = tableConfig.getAvroRecordMergerStrategy

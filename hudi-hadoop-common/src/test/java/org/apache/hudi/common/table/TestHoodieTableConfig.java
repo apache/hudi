@@ -274,7 +274,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   public void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(37, configProperties.size());
+    assertEquals(36, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());

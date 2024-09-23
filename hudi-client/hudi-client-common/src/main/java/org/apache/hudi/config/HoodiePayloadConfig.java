@@ -68,9 +68,6 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
   @Deprecated
-  public static final String DEFAULT_PAYLOAD_CLASS = PAYLOAD_CLASS_NAME.defaultValue();
-  /** @deprecated Use {@link #PAYLOAD_CLASS_NAME} and its methods instead */
-  @Deprecated
   public static final String PAYLOAD_CLASS_PROP = PAYLOAD_CLASS_NAME.key();
 
   private HoodiePayloadConfig() {

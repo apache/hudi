@@ -74,7 +74,6 @@ object HoodieOptionConfig {
     .withSqlKey("mergeMode")
     .withHoodieKey(HoodieWriteConfig.RECORD_MERGE_MODE.key)
     .withTableConfigKey(HoodieTableConfig.RECORD_MERGE_MODE.key)
-    .defaultValue(HoodieTableConfig.RECORD_MERGE_MODE.defaultValue().name())
     .build()
 
   val SQL_RECORD_MERGER_STRATEGY: HoodieSQLOption[String] = buildConf()

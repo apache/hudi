@@ -244,7 +244,7 @@ class HoodieMergeOnReadSnapshotHadoopFsRelationFactory(override val sqlContext: 
       recordKeyField = recordKeyField,
       preCombineFieldOpt = preCombineFieldOpt,
       usesVirtualKeys = !tableConfig.populateMetaFields(),
-      recordPayloadClassName = tableConfig.getAvroPayloadClass,
+      recordPayloadClassName = tableConfig.getAvroPayloadClassNonThrow,
       metadataConfig = metadataConfig,
       recordMergerImpls = recordMergerImpls,
       recordMergerStrategy = tableConfig.getAvroRecordMergerStrategy
