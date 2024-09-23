@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,21 +41,25 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
 
   private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactionPlanGenerator.class);
 
+  private final CompactionStrategy compactionStrategy;
+
   public HoodieCompactionPlanGenerator(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
+    this.compactionStrategy = writeConfig.getCompactionStrategy();
+    LOG.info("Compaction Strategy used is: " + compactionStrategy.toString());
   }
 
   @Override
   protected HoodieCompactionPlan getCompactionPlan(HoodieTableMetaClient metaClient, List<HoodieCompactionOperation> operations) {
     // Filter the compactions with the passed in filter. This lets us choose most effective
     // compactions only
-    return writeConfig.getCompactionStrategy().generateCompactionPlan(writeConfig, operations,
+    return compactionStrategy.generateCompactionPlan(writeConfig, operations,
         CompactionUtils.getAllPendingCompactionPlans(metaClient).stream().map(Pair::getValue).collect(toList()));
   }
 
   @Override
-  protected List<String> filterPartitionPathsByStrategy(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
-    return writeConfig.getCompactionStrategy().filterPartitionPaths(writeConfig, partitionPaths);
+  protected List<String> filterPartitionPathsByStrategy(List<String> partitionPaths) {
+    return compactionStrategy.filterPartitionPaths(writeConfig, partitionPaths);
   }
 
   @Override
