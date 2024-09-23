@@ -24,8 +24,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.exceptions.CatalogException;
 import org.apache.hadoop.hive.conf.HiveConf;
-
-import java.io.IOException;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Test utils for Hoodie catalog.
@@ -35,8 +34,8 @@ public class HoodieCatalogTestUtils {
       "jdbc:derby:;databaseName=%s;create=true";
 
   private static final String TEST_CATALOG_NAME = "test_catalog";
-
-  private static final org.junit.rules.TemporaryFolder TEMPORARY_FOLDER = new org.junit.rules.TemporaryFolder();
+  @TempDir
+  static java.nio.file.Path TEMP_DIR;
 
   /**
    * Create a HiveCatalog with an embedded Hive Metastore.
@@ -63,18 +62,17 @@ public class HoodieCatalogTestUtils {
   public static HiveConf createHiveConf() {
     ClassLoader classLoader = HoodieCatalogTestUtils.class.getClassLoader();
     try {
-      TEMPORARY_FOLDER.create();
-      String warehouseDir = TEMPORARY_FOLDER.newFolder().getAbsolutePath() + "/metastore_db";
+      String warehouseDir = TEMP_DIR.toAbsolutePath() + "/metastore_db";
       String warehouseUri = String.format(HIVE_WAREHOUSE_URI_FORMAT, warehouseDir);
 
       HiveConf.setHiveSiteLocation(classLoader.getResource(CatalogOptions.HIVE_SITE_FILE));
       HiveConf hiveConf = new HiveConf();
       hiveConf.setVar(
           HiveConf.ConfVars.METASTOREWAREHOUSE,
-          TEMPORARY_FOLDER.newFolder("hive_warehouse").getAbsolutePath());
+          TEMP_DIR.toAbsolutePath() + "/hive_warehouse");
       hiveConf.setVar(HiveConf.ConfVars.METASTORECONNECTURLKEY, warehouseUri);
       return hiveConf;
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new CatalogException("Failed to create test HiveConf to HiveCatalog.", e);
     }
   }
