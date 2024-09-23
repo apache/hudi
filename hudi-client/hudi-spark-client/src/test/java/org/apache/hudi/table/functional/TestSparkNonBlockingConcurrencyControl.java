@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -286,6 +287,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withSchema(jsonSchema)
         .withParallelism(2, 2)
         .withAutoCommit(false)
+        .withRecordMergeMode(RecordMergeMode.CUSTOM)
         .withPayloadConfig(
             HoodiePayloadConfig.newBuilder()
                 .withPayloadClass(PartialUpdateAvroPayload.class.getName())
