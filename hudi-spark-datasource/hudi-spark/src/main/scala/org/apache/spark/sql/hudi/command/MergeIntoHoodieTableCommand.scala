@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.{AVRO_SCHEMA_VALIDATE_ENABLE, RECORD_MERGE_MODE, SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP, TBL_NAME, WRITE_PARTIAL_UPDATE_SCHEMA}
@@ -748,6 +749,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key -> hiveSyncConfig.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS),
       SqlKeyGenerator.PARTITION_SCHEMA -> partitionSchema.toDDL,
       PAYLOAD_CLASS_NAME.key -> classOf[ExpressionPayload].getCanonicalName,
+      HoodieTableConfig.PAYLOAD_CLASS_NAME.key() -> classOf[ExpressionPayload].getCanonicalName,
       RECORD_MERGER_IMPLS.key -> classOf[HoodieAvroRecordMerger].getName,
       RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       RECORD_MERGER_STRATEGY.key() -> HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID,
