@@ -143,7 +143,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public List<HoodieRecord> generateEmptyRecords(List<HoodieKey> keys) {
     List<HoodieRecord> records = new ArrayList<>();
     for (HoodieKey key : keys) {
-      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, 1, HoodieRecord.HoodieRecordType.SPARK));
+      records.add(new HoodieEmptyRecord(key, HoodieOperation.DELETE, key.getRecordKey(), HoodieRecord.HoodieRecordType.SPARK));
     }
     return records;
   }
