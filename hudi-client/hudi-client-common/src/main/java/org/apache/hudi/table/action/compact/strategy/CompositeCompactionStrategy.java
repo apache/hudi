@@ -27,6 +27,7 @@ import java.util.List;
 
 /**
  * CompositeCompactionStrategy chains multiple compaction strategies together.
+ * Multiple strategies perform like a pipeline with `and` condition instead of `or`.
  * The order of the strategies in the chain is important as the output of one strategy is passed as input to the next.
  */
 public class CompositeCompactionStrategy extends CompactionStrategy {

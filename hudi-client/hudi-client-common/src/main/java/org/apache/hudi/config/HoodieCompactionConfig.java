@@ -146,7 +146,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Compaction strategy decides which file groups are picked up for "
           + "compaction during each compaction run. By default. Hudi picks the log file "
-          + "with most accumulated unmerged data. Support composite strategy by providing, format: strategy_class_name1,strategy_class_name2,...");
+          + "with most accumulated unmerged data. The strategy can be composed with multiple strategies by concatenating the class names with ','.");
 
   public static final ConfigProperty<String> TARGET_PARTITIONS_PER_DAYBASED_COMPACTION = ConfigProperty
       .key("hoodie.compaction.daybased.target.partitions")
@@ -412,6 +412,9 @@ public class HoodieCompactionConfig extends HoodieConfig {
       StringBuilder compactionStrategyBuilder = new StringBuilder();
       for (CompactionStrategy compactionStrategy : compactionStrategies) {
         compactionStrategyBuilder.append(compactionStrategy.getClass().getName()).append(",");
+      }
+      if (compactionStrategyBuilder.length() > 0) {
+        compactionStrategyBuilder.deleteCharAt(compactionStrategyBuilder.length() - 1);
       }
       compactionConfig.setValue(COMPACTION_STRATEGY, compactionStrategyBuilder.toString());
       return this;
