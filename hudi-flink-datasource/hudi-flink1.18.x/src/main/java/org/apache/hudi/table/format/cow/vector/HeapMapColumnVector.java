@@ -38,11 +38,11 @@ public class HeapMapColumnVector extends AbstractHeapVector
     this.values = values;
   }
 
-  public WritableColumnVector getKeys(){
+  public WritableColumnVector getKeys() {
     return keys;
   }
 
-  public WritableColumnVector getValues(){
+  public WritableColumnVector getValues() {
     return values;
   }
 
