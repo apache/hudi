@@ -173,7 +173,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
             lfs.delete(new Path(getBasePath()), true);
           }
           Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
-          HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+          HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
               .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
               .setTableName(writeConfigs.get("hoodie.table.name"))
               .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))

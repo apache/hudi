@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -87,11 +88,20 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     );
   }
 
-  @Test
-  public void testMetadataTableValidation() {
+  private static Stream<Arguments> viewStorageArgs() {
+    return Stream.of(
+        Arguments.of(null, null),
+        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.MEMORY.name()),
+        Arguments.of(FileSystemViewStorageType.SPILLABLE_DISK.name(), FileSystemViewStorageType.SPILLABLE_DISK.name()),
+        Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name())
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("viewStorageArgs")
+  public void testMetadataTableValidation(String viewStorageTypeForFSListing, String viewStorageTypeForMDTListing) {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -119,6 +129,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.basePath = basePath;
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
+    if (viewStorageTypeForFSListing != null && viewStorageTypeForMDTListing != null) {
+      config.viewStorageTypeForFSListing = viewStorageTypeForFSListing;
+      config.viewStorageTypeForMetadata = viewStorageTypeForMDTListing;
+    }
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());
@@ -130,7 +144,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testAdditionalPartitionsinMDT(boolean testFailureCase) throws InterruptedException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -204,7 +217,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
@@ -308,7 +320,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   public void testRliValidationFalsePositiveCase() throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
-    writeOptions.put("hoodie.table.name", "test_table");
     writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
     writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
     writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");

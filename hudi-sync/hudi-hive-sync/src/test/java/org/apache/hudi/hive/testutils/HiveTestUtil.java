@@ -185,7 +185,7 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -281,7 +281,7 @@ public class HiveTestUtil {
     if (fileSystem.exists(path)) {
       fileSystem.delete(path, true);
     }
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(tableName)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -381,7 +381,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -418,7 +418,7 @@ public class HiveTestUtil {
       throws IOException, URISyntaxException, InterruptedException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)

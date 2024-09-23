@@ -573,7 +573,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     // when metadata is enabled, directly instantiating write client using DataSourceUtils.createHoodieClient
     // will hit a code which tries to instantiate meta client for data table. if table does not exist, it fails.
     // hence doing an explicit instantiation here.
-    val tableMetaClientBuilder = HoodieTableMetaClient.withPropertyBuilder()
+    val tableMetaClientBuilder = HoodieTableMetaClient.newTableBuilder()
       .setTableType(tableType)
       .setTableName(hoodieFooTableName)
       .setRecordKeyFields(fooTableParams(DataSourceWriteOptions.RECORDKEY_FIELD.key))

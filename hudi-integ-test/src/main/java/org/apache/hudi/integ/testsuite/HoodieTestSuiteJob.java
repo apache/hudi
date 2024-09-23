@@ -121,7 +121,7 @@ public class HoodieTestSuiteJob {
         (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(props);
 
     if (!fs.exists(new Path(cfg.targetBasePath))) {
-      metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      metaClient = HoodieTableMetaClient.newTableBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setRecordKeyFields(this.props.getString(DataSourceWriteOptions.RECORDKEY_FIELD().key()))

@@ -65,6 +65,7 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.rollback.RollbackUtils;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
+import org.apache.hudi.util.CommonClientUtils;
 
 import com.codahale.metrics.Timer;
 import org.slf4j.Logger;
@@ -79,6 +80,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -675,7 +677,22 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     return option;
   }
 
-  protected abstract HoodieTable<?, I, ?, T> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf);
+  protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
+                                               BiFunction<HoodieWriteConfig,
+                                                   HoodieEngineContext, HoodieTable> createTableFn,
+                                               boolean skipValidation) {
+    HoodieTable table = createTableFn.apply(config, context);
+    if (!skipValidation) {
+      CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
+    }
+    return table;
+  }
+
+  protected HoodieTable<?, I, ?, T> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
+    return createTable(config, storageConf, false);
+  }
+
+  protected abstract HoodieTable<?, I, ?, T> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation);
 
   /**
    * Executes a clustering plan on a table, serially before or after an insert/upsert action.
@@ -942,6 +959,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking) {
+    rollbackFailedWrites(instantsToRollback, skipLocking, false);
+  }
+
+  protected void rollbackFailedWrites(Map<String, Option<HoodiePendingRollbackInfo>> instantsToRollback, boolean skipLocking, boolean skipVersionCheck) {
     // sort in reverse order of commit times
     LinkedHashMap<String, Option<HoodiePendingRollbackInfo>> reverseSortedRollbackInstants = instantsToRollback.entrySet()
         .stream().sorted((i1, i2) -> i2.getKey().compareTo(i1.getKey()))
@@ -956,7 +977,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
         break;
       } else {
-        rollback(entry.getKey(), entry.getValue(), skipLocking);
+        rollback(entry.getKey(), entry.getValue(), skipLocking, skipVersionCheck);
         HeartbeatUtils.deleteHeartbeatFile(storage, basePath, entry.getKey(), config);
       }
     }
@@ -1031,10 +1052,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * will be removed in future in favor of {@link BaseHoodieWriteClient#restoreToInstant(String, boolean)
    */
   @Deprecated
-  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, boolean skipLocking) throws HoodieRollbackException {
+  public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo,
+                          boolean skipLocking, boolean skipVersionCheck) throws HoodieRollbackException {
     final String rollbackInstantTime = pendingRollbackInfo.map(entry -> entry.getRollbackInstant().getTimestamp())
         .orElseGet(() -> createNewInstantTime(!skipLocking));
-    return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking);
+    return rollback(commitInstantTime, pendingRollbackInfo, rollbackInstantTime, skipLocking, skipVersionCheck);
   }
 
   /**
@@ -1047,11 +1069,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   @Deprecated
   public boolean rollback(final String commitInstantTime, Option<HoodiePendingRollbackInfo> pendingRollbackInfo, String rollbackInstantTime,
-                          boolean skipLocking) throws HoodieRollbackException {
+                          boolean skipLocking, boolean skipVersionCheck) throws HoodieRollbackException {
     LOG.info("Begin rollback of instant " + commitInstantTime);
     final Timer.Context timerContext = this.metrics.getRollbackCtx();
     try {
-      HoodieTable table = createTable(config, storageConf);
+      HoodieTable table = createTable(config, storageConf, skipVersionCheck);
       Option<HoodieInstant> commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
           .filter(instant -> HoodieActiveTimeline.EQUALS.test(instant.getTimestamp(), commitInstantTime))
           .findFirst());

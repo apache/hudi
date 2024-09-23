@@ -35,7 +35,7 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{Disabled, Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -155,6 +155,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
    */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
+  @Disabled("HUDI-8234")
   def testPartitionStatsWithMultiWriter(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),

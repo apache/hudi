@@ -114,12 +114,12 @@ public class HoodieFlinkWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context);
+    return createTableAndValidate(config, HoodieFlinkTable::create);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return HoodieFlinkTable.create(config, (HoodieFlinkEngineContext) context, metaClient);
+    return createTableAndValidate(config, metaClient, HoodieFlinkTable::create);
   }
 
   @Override

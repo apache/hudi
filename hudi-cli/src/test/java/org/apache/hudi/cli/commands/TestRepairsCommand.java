@@ -318,7 +318,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testRepairDeprecatedPartition() throws IOException {
     tablePath = tablePath + "/repair_test/";
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())
@@ -386,7 +386,7 @@ public class TestRepairsCommand extends CLIFunctionalTestHarness {
   @Test
   public void testRenamePartition() throws IOException {
     tablePath = tablePath + "/rename_partition_test/";
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())

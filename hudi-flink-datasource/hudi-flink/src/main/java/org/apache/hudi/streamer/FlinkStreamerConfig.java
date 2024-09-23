@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -116,6 +117,9 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--source-ordering-field"}, description = "Field within source record to decide how"
       + " to break ties between records with same key in input data. Default: 'ts' holding unix timestamp of record.")
   public String sourceOrderingField = "ts";
+
+  @Parameter(names = {"--write-table-version"}, description = "Version of table written")
+  public Integer writeTableVersion = HoodieTableVersion.current().versionCode();
 
   @Parameter(names = {"--payload-class"}, description = "Subclass of HoodieRecordPayload, that works off "
       + "a GenericRecord. Implement your own, if you want to do something other than overwriting existing value.")
@@ -422,6 +426,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setBoolean(FlinkOptions.INSERT_CLUSTER, config.insertCluster);
     conf.setString(FlinkOptions.OPERATION, config.operation.value());
     conf.setString(FlinkOptions.PRECOMBINE_FIELD, config.sourceOrderingField);
+    conf.setInteger(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.setString(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);
     conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY, config.recordMergerStrategy);
