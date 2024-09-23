@@ -95,6 +95,10 @@ public abstract class HoodieLogBlock {
 
   public abstract HoodieLogBlockType getBlockType();
 
+  public boolean isDataOrDeleteBlock() {
+    return getBlockType() != HoodieLogBlockType.COMMAND_BLOCK && getBlockType() != HoodieLogBlockType.CORRUPT_BLOCK;
+  }
+
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");
   }

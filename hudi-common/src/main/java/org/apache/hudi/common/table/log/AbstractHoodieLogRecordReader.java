@@ -254,11 +254,10 @@ public abstract class AbstractHoodieLogRecordReader {
         HoodieLogBlock logBlock = logFormatReaderWrapper.next();
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
-        if (logBlock.getBlockType() != CORRUPT_BLOCK
-            && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
+        if (logBlock.isDataOrDeleteBlock() && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
         )) {
-          // hit a block with instant time greater than should be processed, stop processing further
-          break;
+          // hit a data block with instant time greater than should be processed, ignore processing the block
+          continue;
         }
         if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
           if (!completedInstantsTimeline.containsOrBeforeTimelineStarts(instantTime)
