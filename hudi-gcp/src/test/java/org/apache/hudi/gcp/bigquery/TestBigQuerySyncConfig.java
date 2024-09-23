@@ -50,7 +50,7 @@ public class TestBigQuerySyncConfig {
   public void testGetConfigs() {
     Properties props = new Properties();
     props.setProperty(BIGQUERY_SYNC_PROJECT_ID.key(), "fooproject");
-    props.setProperty(BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), "fooproject");
+    props.setProperty(BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), "foobillingproject");
     props.setProperty(BIGQUERY_SYNC_DATASET_NAME.key(), "foodataset");
     props.setProperty(BIGQUERY_SYNC_DATASET_LOCATION.key(), "US");
     props.setProperty(BIGQUERY_SYNC_TABLE_NAME.key(), "footable");
@@ -63,7 +63,7 @@ public class TestBigQuerySyncConfig {
     props.setProperty(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), "true");
     BigQuerySyncConfig syncConfig = new BigQuerySyncConfig(props);
     assertEquals("fooproject", syncConfig.getString(BIGQUERY_SYNC_PROJECT_ID));
-    assertEquals("fooproject", syncConfig.getString(BIGQUERY_SYNC_BILLING_PROJECT_ID));
+    assertEquals("foobillingproject", syncConfig.getString(BIGQUERY_SYNC_BILLING_PROJECT_ID));
     assertEquals("foodataset", syncConfig.getString(BIGQUERY_SYNC_DATASET_NAME));
     assertEquals("US", syncConfig.getString(BIGQUERY_SYNC_DATASET_LOCATION));
     assertEquals("footable", syncConfig.getString(BIGQUERY_SYNC_TABLE_NAME));
