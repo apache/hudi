@@ -79,8 +79,7 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
       return partitionPathFields.stream().map(field -> {
         Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionAndType = getPartitionFieldAndKeyType(field);
         if (partitionAndType.getRight().isEmpty()) {
-          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format. "
-              + "Please specify the partition field names in format `field1:type1,field2:type2`. Example: `city:simple,ts:timestamp`");
+          throw getPartitionPathFormatException();
         }
         CustomAvroKeyGenerator.PartitionKeyType keyType = partitionAndType.getRight().get();
         String partitionPathField = partitionAndType.getLeft();
@@ -179,6 +178,11 @@ public class CustomAvroKeyGenerator extends BaseKeyGenerator {
     if (getRecordKeyFieldNames() == null || getRecordKeyFieldNames().isEmpty()) {
       throw new HoodieKeyException("Unable to find field names for record key in cfg");
     }
+  }
+
+  static HoodieKeyGeneratorException getPartitionPathFormatException() {
+    return new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format. "
+        + "Please specify the partition field names in format `field1:type1,field2:type2`. Example: `city:simple,ts:timestamp`");
   }
 
   public String getDefaultPartitionPathSeparator() {
