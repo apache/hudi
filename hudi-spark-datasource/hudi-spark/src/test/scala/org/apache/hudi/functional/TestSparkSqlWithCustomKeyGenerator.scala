@@ -457,7 +457,7 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
           val tableName = generateTableName
           val tablePath = tmp.getCanonicalPath + "/" + tableName
           val writePartitionFields = "ts:timestamp"
-          val dateFormat = "yyyy-MM-dd"
+          val dateFormat = "yyyy/MM/dd"
           val tsGenFunc = (ts: Integer) => TS_FORMATTER_FUNC_WITH_FORMAT.apply(ts, dateFormat)
           val customPartitionFunc = (ts: Integer, _: String) => tsGenFunc.apply(ts)
           val keyGenConfigs = TS_KEY_GEN_CONFIGS + ("hoodie.keygen.timebased.output.dateformat" -> dateFormat)
