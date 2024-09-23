@@ -23,6 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -92,13 +93,12 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
 
     downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
-
     // Prepare parameters.
     if (metaClient.getTableConfig().isMetadataTableAvailable()) {
       // Delete unsupported metadata partitions in table version 7.
       downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
+      UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
     }
-
     return tablePropsToAdd;
   }
 
@@ -124,19 +124,16 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
 
     // Fetch metadata partition paths.
-    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(
-        context,
+    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(context,
         hoodieStorage,
         metadataTableBasePath,
         false);
 
     // Delete partitions.
-    List<String> validPartitionPaths =
-        deleteMetadataPartition(context, metaClient, metadataPartitions);
+    List<String> validPartitionPaths = deleteMetadataPartition(context, metaClient, metadataPartitions);
 
     // Clean the configuration.
-    tablePropsToAdd.put(
-        TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
+    tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
   }
 
   static List<String> deleteMetadataPartition(HoodieEngineContext context,
@@ -160,7 +157,6 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     supportedPartitionPaths.add(COLUMN_STATS.getPartitionPath());
     supportedPartitionPaths.add(FILES.getPartitionPath());
     supportedPartitionPaths.add(RECORD_INDEX.getPartitionPath());
-
     return supportedPartitionPaths;
   }
 }

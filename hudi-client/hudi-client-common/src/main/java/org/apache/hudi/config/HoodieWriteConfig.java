@@ -150,7 +150,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(true)
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
-          + "if the current table version is not lower.");
+          + "if the current table version is lower.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.tagged.record.storage.level")

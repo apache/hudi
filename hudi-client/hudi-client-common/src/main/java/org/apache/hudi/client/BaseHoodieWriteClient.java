@@ -1262,6 +1262,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     executeUsingTxnManager(ownerInstant, () -> {
       tryUpgrade(metaClient, instantTime);
+      // TODO: this also does MT table management..
       initMetadataTable(instantTime, metaClient);
     });
   }

@@ -21,16 +21,14 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.HoodieNotSupportedException
+import org.apache.hudi.exception.{HoodieException, HoodieNotSupportedException}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.scalatest.Assertions.assertThrows
-
-import java.util.Properties
 
 class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
 
@@ -50,8 +48,9 @@ class TestMultipleTableVersionWriting extends HoodieSparkWriterTestBase {
       metaClient.getTableConfig.getTableVersion.versionCode())
 
     // should error out when writing with lower write version.
-    assertThrows[HoodieNotSupportedException] {
+    assertThrows[HoodieException] {
       df.write.format("hudi")
+        .option(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "false")
         .option(HoodieWriteConfig.WRITE_TABLE_VERSION.key, HoodieTableVersion.SIX.versionCode())
         .mode(SaveMode.Append)
         .save(basePath)
