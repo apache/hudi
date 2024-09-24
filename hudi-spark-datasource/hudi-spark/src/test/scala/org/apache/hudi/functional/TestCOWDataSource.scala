@@ -714,53 +714,27 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     }
   }
 
-  @Test
-  def testMissingRecordkeyField(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings =  Array(
+    "_row_key,non_existent_field|Record key field 'non_existent_field' does not exist in the input record",
+    "non_existent_field|recordKey value: \"null\" for field: \"non_existent_field\" cannot be null or empty.",
+    "_row_key,tip_history.non_existent_field|Record key field 'tip_history.non_existent_field' does not exist in the input record",
+    "tip_history.non_existent_field|recordKey value: \"null\" for field: \"tip_history.non_existent_field\" cannot be null or empty."))
+  def testMissingRecordkeyField(args: String): Unit = {
+    val splits = args.split('|')
+    val recordKeyFields = splits(0)
+    val errorMessage = splits(1)
     val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
-
     try {
-      inputDF1.write.format("org.apache.hudi")
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "_row_key,non_existent_field")
+      inputDF1.write.format("hudi")
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), recordKeyFields)
         .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
         .mode(SaveMode.Overwrite)
         .save(basePath)
       fail("should fail when the specified record key field does not exist")
     } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, "Record key field 'non_existent_field' does not exist in the input record"))
-    }
-
-    try {
-      inputDF1.write.format("hudi")
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "fake_field_name")
-        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-        .mode(SaveMode.Overwrite)
-        .save(basePath)
-      fail("should fail when fake field is provided for recordkey")
-    } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, "recordKey value: \"null\" for field: \"fake_field_name\" cannot be null or empty."))
-    }
-
-    try {
-      inputDF1.write.format("org.apache.hudi")
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "_row_key,tip_history.fake_field_name")
-        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-        .mode(SaveMode.Overwrite)
-        .save(basePath)
-      fail("should fail when fake field is provided for recordkey")
-    } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, "Recordkey field 'tip_history.fake_field_name' does not exist in the input record"))
-    }
-
-    try {
-      inputDF1.write.format("org.apache.hudi")
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "tip_history.non_existent_field")
-        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
-        .mode(SaveMode.Overwrite)
-        .save(basePath)
-      fail("should fail when fake field is provided for recordkey")
-    } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, "recordKey value: \"null\" for field: \"tip_history.fake_field_name\" cannot be null or empty."))
+      case e: Exception => assertTrue(containsErrorMessage(e, errorMessage))
     }
   }
 
