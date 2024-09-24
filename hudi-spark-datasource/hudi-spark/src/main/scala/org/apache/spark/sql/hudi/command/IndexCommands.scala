@@ -20,12 +20,12 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.HoodieSparkFunctionalIndexClient
+import org.apache.hudi.HoodieSparkIndexClient
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.secondary.SecondaryIndexManager
-
+import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -52,7 +52,7 @@ case class CreateIndexCommand(table: CatalogTable,
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
     if (options.contains("func") || indexType.equals("secondary_index")) {
-      HoodieSparkFunctionalIndexClient.getInstance(sparkSession).create(
+      HoodieSparkIndexClient.getInstance(sparkSession).create(
         metaClient, indexName, indexType, columnsMap, options.asJava)
     } else {
       SecondaryIndexManager.getInstance().create(
@@ -76,7 +76,14 @@ case class DropIndexCommand(table: CatalogTable,
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableId = table.identifier
     val metaClient = createHoodieTableMetaClient(tableId, sparkSession)
-    SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)
+    try {
+      // need to ensure that the index name is for a valid partition type
+      MetadataPartitionType.fromPartitionPath(indexName)
+      HoodieSparkIndexClient.getInstance(sparkSession).drop(metaClient, indexName, ignoreIfNotExists)
+    } catch {
+      case _: IllegalArgumentException =>
+        SecondaryIndexManager.getInstance().drop(metaClient, indexName, ignoreIfNotExists)
+    }
 
     // Invalidate cached table for queries do not access related table
     // through {@code DefaultSource}

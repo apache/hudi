@@ -273,7 +273,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
 
     val writeConfig = getWriteConfig(hudiOpts)
-    metadataWriter(writeConfig).dropMetadataPartitions(Collections.singletonList(MetadataPartitionType.RECORD_INDEX))
+    metadataWriter(writeConfig).dropMetadataPartitions(Collections.singletonList(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
     assertEquals(0, getFileGroupCountForRecordIndex(writeConfig))
     metaClient.getTableConfig.getMetadataPartitionsInflight
 

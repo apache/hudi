@@ -1016,9 +1016,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Drops the index and removes the metadata partitions.
    *
-   * @param partitionTypes - list of {@link MetadataPartitionType} which needs to be indexed
+   * @param metadataPartitions - list of metadata partitions which need to be dropped
    */
-  public void dropIndex(List<MetadataPartitionType> partitionTypes) {
+  public void dropIndex(List<String> metadataPartitions) {
     HoodieTable table = createTable(config);
     String dropInstant = createNewInstantTime();
     HoodieInstant ownerInstant = new HoodieInstant(true, HoodieTimeline.INDEXING_ACTION, dropInstant);
@@ -1028,7 +1028,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(dropInstant);
       if (metadataWriterOpt.isPresent()) {
         try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-          metadataWriter.dropMetadataPartitions(partitionTypes);
+          metadataWriter.dropMetadataPartitions(metadataPartitions);
         } catch (Exception e) {
           if (e instanceof HoodieException) {
             throw (HoodieException) e;
