@@ -44,6 +44,12 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
 
   def isIndexAvailable: Boolean
 
+  /**
+   * Returns true if the query type is supported by the index.
+   *
+   * TODO: The default implementation should be changed to throw
+   * an exception once time travel support for metadata table is added.
+   */
   def supportsQueryType(queryType: HoodieTableQueryType): Boolean = true
 
   def computeCandidateIsStrict(spark: SparkSession,
