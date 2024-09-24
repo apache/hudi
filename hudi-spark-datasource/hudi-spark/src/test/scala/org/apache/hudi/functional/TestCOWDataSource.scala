@@ -754,7 +754,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     try {
       inputDF1.write.format("org.apache.hudi")
-        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "tip_history.fake_field_name")
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "tip_history.non_existent_field")
         .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
         .mode(SaveMode.Overwrite)
         .save(basePath)
