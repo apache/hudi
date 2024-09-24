@@ -209,13 +209,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("When set to true, compaction service will compact the base files and log files in a sorted order. "
           + "This is useful way to speed up the compaction process.");
 
-  public static final ConfigProperty<String> EXTERNAL_SORTER_TYPE = ConfigProperty
-      .key("hoodie.compaction.external.sorter.type")
-      .defaultValue("sort_on_read")
-      .markAdvanced()
-      .sinceVersion("0.14.0")
-      .withDocumentation("When we enable sort merge compaction, we use the external-sorter with type from this property.");
-
   public static final ConfigProperty<Integer> COMPACTION_PROGRESS_LOG_INTERNAL_NUM = ConfigProperty
       .key("hoodie.compaction.progress.log.internal.num")
       .defaultValue(1000000)
@@ -230,7 +223,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
   public static final ConfigProperty<Double> MAGNIFICATION_RATION_FOR_LOG_FILE = ConfigProperty
       .key("hoodie.compaction.magnification.ratio.log.file")
-      .defaultValue(4.0)
+      .defaultValue(2.0)
       .sinceVersion("0.14.0")
       .withDocumentation("The magnification ratio for log file in sort merge compaction.");
 
