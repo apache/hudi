@@ -17,13 +17,13 @@
 
 ARG HADOOP_VERSION=2.8.4
 ARG HIVE_VERSION=2.3.3
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}:bullseye
 
 ENV ENABLE_INIT_DAEMON true
 ENV INIT_DAEMON_BASE_URI http://identifier/init-daemon
 ENV INIT_DAEMON_STEP spark_master_init
 
-ARG SPARK_VERSION=3.5.1
+ARG SPARK_VERSION=3.5.3
 ARG SPARK_HADOOP_VERSION=3
 
 ENV SPARK_VERSION ${SPARK_VERSION}
@@ -35,7 +35,7 @@ COPY finish-step.sh /
 
 # Need to do this all in one step because running separate commands doubles the image size
 RUN echo "Installing Spark-version (${SPARK_VERSION})" \
-      &&  wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+      &&  wget https://dlcdn.apache.org/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark \
       && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \

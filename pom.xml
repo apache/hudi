@@ -445,7 +445,6 @@
         <version>${maven-docker-plugin.version}</version>
         <configuration>
           <skip>${skipDocker}</skip>
-          <platform>linux/arm64</platform>
         </configuration>
       </plugin>
       <plugin>
