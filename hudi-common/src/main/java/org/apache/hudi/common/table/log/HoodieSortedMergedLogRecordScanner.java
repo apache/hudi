@@ -237,8 +237,8 @@ public class HoodieSortedMergedLogRecordScanner extends AbstractHoodieLogRecordS
     scanStart();
     scanInternal(Option.empty(), false);
     scanEnd();
-    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TotalTimeTakenToScan => {}\n" +
-        "SortedAppendOnlyExternalSpillableMap info: {}",
+    LOG.info("Scanned {} log files with stats: MaxMemoryForScan => {}, TotalTimeTakenToScan => {}\n"
+        + "SortedAppendOnlyExternalSpillableMap info: {}",
         logFilePaths.size(), maxMemoryUsageForSorting, totalTimeTakenToScanRecords, map.generateLogInfo());
   }
 
@@ -410,7 +410,6 @@ public class HoodieSortedMergedLogRecordScanner extends AbstractHoodieLogRecordS
       this.externalSorterBasePath = externalSorterBasePath;
       return this;
     }
-
 
     public Builder withSortEngine(SortEngine sortEngine) {
       this.sortEngine = sortEngine;

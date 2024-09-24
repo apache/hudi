@@ -55,8 +55,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,7 +77,6 @@ public class TestCompactionData extends HoodieClientTestBase {
   private static final String RECORD_KEY_APPEND_VALUE1 = "-EXP1";
   private static final String RECORD_KEY_APPEND_VALUE2 = "-EXP2";
   private static final String RECORD_KEY_APPEND_VALUE3 = "-EXP3";
-  private static final String RECORD_KEY_APPEND_VALUE4 = "-EXP4";
 
   private static final int PARALLELISM = 2;
   private final Random random = new Random();
@@ -268,6 +265,7 @@ public class TestCompactionData extends HoodieClientTestBase {
       writeOnExperimentTable(mainTable, experimentTable);
     }
   }
+
   private void writeOnExperimentTable(TestCompactionData.TestTableContents mainTable, TestCompactionData.TestTableContents experimentTable) throws IOException {
     String commitTime = mainTable.commitTimeOnMainTable;
     experimentTable.client.startCommitWithTime(commitTime);

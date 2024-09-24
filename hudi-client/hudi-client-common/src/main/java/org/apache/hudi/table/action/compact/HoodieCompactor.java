@@ -199,7 +199,7 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
 
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(taskContextSupplier, config);
     LOG.info("MaxMemoryPerCompaction => " + maxMemoryPerCompaction);
-    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime, ((HoodieTable) compactionHandler).isMetadataTable());
+    context.setBasicCompactionContext(maxMemoryPerCompaction, instantTime, ((HoodieTable) compactionHandler).isMetadataTable(), executionHelper instanceof LogCompactionExecutionHelper);
 
     List<String> logFiles = operation.getDeltaFileNames().stream().map(p ->
             new StoragePath(FSUtils.constructAbsolutePath(
@@ -246,7 +246,8 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     }
 
     // TODO: disable sort merge join compaction in metadata table now, consider if we need to enable it
-    if (!context.isMetadataTableCompaction() && config.isSortMergeCompactionEnabled()) {
+    // TODO: disable sort merge join compaction for log compaction now, consider if we need to enable it
+    if (!context.isMetadataTableCompaction() && !context.isLogCompaction() && config.isSortMergeCompactionEnabled()) {
       boolean trigger = config.getSortMergeCompactionTriggerStrategy().trigger(context, config);
       context.setSortMergeCompaction(trigger);
     }

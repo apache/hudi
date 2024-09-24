@@ -31,6 +31,7 @@ public class CompactionContext {
   private String compactionInstantTime;
   private long maxMemoryForCompaction;
   private boolean metadataTableCompaction;
+  private boolean logCompaction;
 
   /* ------------ sort merge join compaction context ------------ */
   private boolean sortMergeCompaction;
@@ -60,10 +61,11 @@ public class CompactionContext {
     this.baseFileSorted = baseFileSorted;
   }
 
-  public void setBasicCompactionContext(long maxMemoryForCompaction, String compactionInstantTime, boolean metadataTableCompaction) {
+  public void setBasicCompactionContext(long maxMemoryForCompaction, String compactionInstantTime, boolean metadataTableCompaction, boolean logCompaction) {
     this.maxMemoryForCompaction = maxMemoryForCompaction;
     this.compactionInstantTime = compactionInstantTime;
     this.metadataTableCompaction = metadataTableCompaction;
+    this.logCompaction = logCompaction;
   }
 
   public void setSortMergeJoinCompactionContext(boolean sortMergeCompaction, long maxMemoryForLogScanner) {
@@ -123,6 +125,10 @@ public class CompactionContext {
     return metadataTableCompaction;
   }
 
+  public boolean isLogCompaction() {
+    return logCompaction;
+  }
+
   public boolean isBaseFileSorted() {
     return baseFileSorted;
   }
@@ -157,6 +163,7 @@ public class CompactionContext {
         + "compactionInstantTime='" + compactionInstantTime + '\''
         + ", maxMemoryForCompaction=" + maxMemoryForCompaction
         + ", metadataTableCompaction=" + metadataTableCompaction
+        + ", logCompaction=" + logCompaction
         + ", sortMergeCompaction=" + sortMergeCompaction
         + ", maxMemoryForLogScanner=" + maxMemoryForLogScanner
         + ", baseFilePath=" + baseFilePath
