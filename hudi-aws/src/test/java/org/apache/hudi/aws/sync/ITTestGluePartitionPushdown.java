@@ -61,7 +61,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NA
 @Disabled("HUDI-7475 The tests do not work. Disabling them to unblock Azure CI")
 public class ITTestGluePartitionPushdown {
 
-  private static final String MOTO_ENDPOINT = "http://localhost:5000";
+  private static final String MOTO_ENDPOINT = "http://localhost:5002";
   private static final String DB_NAME = "db_name";
   private static final String TABLE_NAME = "tbl_name";
   private String basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
