@@ -727,7 +727,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .save(basePath)
       fail("should fail when the specified record key field does not exist")
     } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, "Recordkey field 'fake_field_name' does not exist in the input record"))
+      case e: Exception => assertTrue(containsErrorMessage(e, "Record key field 'non_existent_field' does not exist in the input record"))
     }
 
     try {
