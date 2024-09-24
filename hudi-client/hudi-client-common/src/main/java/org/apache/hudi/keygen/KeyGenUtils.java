@@ -158,7 +158,7 @@ public class KeyGenUtils {
       try {
         recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, false, consistentLogicalTimestampEnabled);
       } catch (HoodieException e) {
-        throw new HoodieKeyException("Recordkey field '" + recordKeyField + "' does not exist in the input record");
+        throw new HoodieKeyException("Record key field '" + recordKeyField + "' does not exist in the input record");
       }
       if (recordKeyValue == null) {
         recordKey.append(recordKeyField).append(DEFAULT_COMPOSITE_KEY_FILED_VALUE).append(NULL_RECORDKEY_PLACEHOLDER);
