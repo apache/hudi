@@ -390,7 +390,7 @@
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
     <dockerCompose.file>
-      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark351_amd64.yml
+      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark353_amd64.yml
     </dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>

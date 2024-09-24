@@ -630,7 +630,7 @@ jobs:
       matrix:
         include:
           - sparkProfile: 'spark3.5'
-            sparkArchive: 'spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz'
+            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
