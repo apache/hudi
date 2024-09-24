@@ -317,7 +317,7 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
       }
       // TODO: Suitable initial size
       this.batchRecords = new ArrayList<>();
-      while (currentReadBatchSize < batchSize) {
+      while (currentReadBatchSize <= batchSize) {
         // fetch the next record from the file, and add it to the batch
         Option<Entry> entryOpt = readEntry(reader);
         if (entryOpt.isEmpty()) {
