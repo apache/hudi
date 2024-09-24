@@ -88,6 +88,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
         "bootstrap run --targetPath %s --tableName %s --tableType %s --srcPath %s --rowKeyField %s --partitionPathField %s --sparkMaster %s",
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(), sourcePath, RECORD_KEY_FIELD, PARTITION_FIELD, "local");
     Object resultForBootstrapRun = shell.evaluate(() -> cmdStr);
+    System.out.println(resultForBootstrapRun.toString());
     assertTrue(ShellEvaluationResultUtil.isSuccess(resultForBootstrapRun));
 
     // Connect & check Hudi table exist
