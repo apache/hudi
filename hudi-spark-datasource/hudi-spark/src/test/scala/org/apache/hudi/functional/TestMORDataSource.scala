@@ -35,8 +35,7 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
-
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.QuickstartUtils.convertToStringList
 import org.apache.spark.sql._
@@ -929,6 +928,22 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .load()
 
     assertEquals(expectedCount1, hudiReadPathDF.count())
+
+    if (recordType == HoodieRecordType.SPARK) {
+      val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
+      columnStatsIndex.loadTransposed(Seq("fare", "city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
+        // fare is a nested column, so it should not have any min/max value as it is not comparable
+        assertEquals(0, emptyTransposedColStatsDF.filter("fare_minValue IS NOT NULL").count())
+        assertEquals(0, emptyTransposedColStatsDF.filter("fare_maxValue IS NOT NULL").count())
+        // city_to_state is a map column, so it should not have any min/max value as it is not comparable
+        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_minValue IS NOT NULL").count())
+        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_maxValue IS NOT NULL").count())
+        // rider is a simple string field, so it should have a min/max value
+        assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
+      }
+    }
   }
 
   @ParameterizedTest
