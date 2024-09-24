@@ -94,7 +94,14 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
   } else {
     //it's custom keygen
-    CustomAvroKeyGenerator.getTimestampFields(HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())).asScala.toSeq
+    val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
+    if (timestampFieldsOpt.isPresent) {
+      timestampFieldsOpt.get().asScala.toSeq
+    } else {
+      // timestamp fields above are determined using partition type
+      // For older tables the partition type may not be available so falling back to partition fields in those cases
+      tableConfig.getPartitionFields.orElse(Array.empty).toSeq
+    }
   }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {

@@ -526,7 +526,7 @@ object HoodieFileIndex extends Logging {
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PRECOMBINE_FIELD.key, Option(tableConfig.getPreCombineField).getOrElse(""))
-      properties.setProperty(PARTITIONPATH_FIELD.key, tableConfig.getPartitionFields.orElse(Array.apply("")).mkString(","))
+      properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
     }
 
     properties
@@ -625,8 +625,7 @@ object HoodieFileIndex extends Logging {
       Set(0)
     } else if (keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM.getClassName)
       || keyGeneratorClassName.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName)) {
-      val partitionFields = HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())
-      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields)
+      val partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig)
       var partitionIndexes: Set[Int] = Set.empty
       for (i <- 0 until partitionTypes.size()) {
         if (partitionTypes.get(i).equals(PartitionKeyType.TIMESTAMP)) {
