@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.{HoodieException, HoodieValidationException}
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
@@ -101,7 +102,9 @@ object CreateHoodieTableCommand {
       val diffResult = sortedHoodieTableFields.zip(sortedUserDefinedFields).forall {
         case (hoodieTableColumn, userDefinedColumn) =>
           hoodieTableColumn.name.equals(userDefinedColumn.name) &&
-          Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType)
+            (Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType) ||
+              SchemaConverters.toAvroType(hoodieTableColumn.dataType)
+                .equals(SchemaConverters.toAvroType(userDefinedColumn.dataType)))
       }
       if (!diffResult) {
         throw new HoodieValidationException(
