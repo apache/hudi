@@ -243,7 +243,6 @@
             <plugin>
                 <groupId>io.fabric8</groupId>
                 <artifactId>docker-maven-plugin</artifactId>
-                <version>${maven-docker-plugin.version}</version>
                 <executions>
                     <execution>
                         <id>prepare-it-database</id>
