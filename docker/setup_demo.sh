@@ -36,5 +36,5 @@ sleep 15
 docker exec -it adhoc-1 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
 docker exec -it adhoc-2 /bin/bash /var/hoodie/ws/docker/demo/setup_demo_container.sh
 
-docker cp $WS_ROOT/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0-SNAPSHOT.jar  adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-utilities-slim.jar
-docker cp $WS_ROOT/packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0-SNAPSHOT.jar adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark.jar
+#docker cp $WS_ROOT/packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle_2.12-1.0.0-SNAPSHOT.jar  adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-utilities-slim.jar
+#docker cp $WS_ROOT/packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-1.0.0-SNAPSHOT.jar adhoc-2:/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark.jar

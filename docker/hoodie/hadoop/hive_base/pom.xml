@@ -87,7 +87,7 @@
               <pullNewerImage>false</pullNewerImage>
               <repository>apachehudi/hudi-hadoop_${docker.hadoop.version}-hive_${docker.hive.version}</repository>
               <force>true</force>
-              <tag>latest</tag>
+              <tag>bullseye</tag>
             </configuration>
           </execution>
           <execution>
