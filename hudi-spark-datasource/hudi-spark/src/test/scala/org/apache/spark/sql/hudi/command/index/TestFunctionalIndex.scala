@@ -424,6 +424,78 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Enable and Disable Functional Index") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        // create a simple partitioned mor table and insert some records
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = 'mor',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(ts)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        // create functional index and verify
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+        val metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        var functionalIndexMetadata = metaClient.getIndexMetadata.get()
+        assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+        assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+        // verify functional index records by querying metadata table
+        val result2DF = spark.sql(
+          s"select * from hudi_metadata('$tableName') where type=3"
+        )
+        assert(result2DF.count() == 1)
+
+        // disable functional index
+        spark.sql("set hoodie.metadata.functional.index.enable=false")
+        // do another insert after initializing the index
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 10000000)")
+        // check query result
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'")(
+          Seq(4, "a4")
+        )
+        // verify there are no new updates to functional index
+        val result3DF = spark.sql(
+          s"select * from hudi_metadata('$tableName') where type=3"
+        )
+        assert(result3DF.count() == 1)
+
+        // enable functional index
+        spark.sql("set hoodie.metadata.functional.index.enable=true")
+        // do another insert after initializing the index
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 10000000)")
+        // check query result
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'")(
+          Seq(4, "a4"),
+          Seq(5, "a5")
+        )
+        // verify there are new updates to functional index
+        val result4DF = spark.sql(
+          s"select * from hudi_metadata('$tableName') where type=3"
+        )
+        assert(result4DF.count() == 2)
+      }
+    }
+  }
+
   private def assertTableIdentifier(catalogTable: CatalogTable,
                                     expectedDatabaseName: String,
                                     expectedTableName: String): Unit = {
