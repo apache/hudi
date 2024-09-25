@@ -950,26 +950,15 @@ public class HoodieMetadataTableValidator implements Serializable {
     validate(metadataBasedColStats, fsBasedColStats, partitionPath, "column stats");
   }
 
-  private void validatePartitionStats(
-      HoodieMetadataValidationContext metadataTableBasedContext,
-      Set<String> baseDataFilesForCleaning,
-      List<String> allPartitions) throws Exception {
+  private void validatePartitionStats(HoodieMetadataValidationContext metadataTableBasedContext, Set<String> baseDataFilesForCleaning, List<String> allPartitions) throws Exception {
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
         baseDataFilesForCleaning, allPartitions, engineContext);
 
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    boolean enableMetadataTable = true;
-    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .enable(enableMetadataTable)
-        .withMetadataIndexBloomFilter(enableMetadataTable)
-        .withMetadataIndexColumnStats(enableMetadataTable)
-        .withEnableRecordIndex(enableMetadataTable)
-        .build();
-    PartitionStatsIndexSupport partitionStatsIndexSupport =
-        new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(), AvroConversionUtils.convertAvroSchemaToStructType(schemaResolver.getTableAvroSchema()), metadataConfig, metaClient,
-            false);
+    PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
+        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchemaResolver().getTableAvroSchema()), metadataTableBasedContext.getMetadataConfig(),
+        metaClient, false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), false);
     JavaRDD<HoodieMetadataColumnStats> diffRDD = HoodieJavaRDD.getJavaRDD(partitionStats).subtract(HoodieJavaRDD.getJavaRDD(partitionStatsUsingColStats));
@@ -1537,6 +1526,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private final Properties props;
     private final HoodieTableMetaClient metaClient;
+    private final HoodieMetadataConfig metadataConfig;
+    private final TableSchemaResolver schemaResolver;
     private final HoodieTableFileSystemView fileSystemView;
     private final HoodieTableMetadata tableMetadata;
     private final boolean enableMetadataTable;
@@ -1548,8 +1539,9 @@ public class HoodieMetadataTableValidator implements Serializable {
       this.props = new Properties();
       this.props.putAll(props);
       this.metaClient = metaClient;
+      this.schemaResolver = new TableSchemaResolver(metaClient);
       this.enableMetadataTable = enableMetadataTable;
-      HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+      this.metadataConfig = HoodieMetadataConfig.newBuilder()
           .enable(enableMetadataTable)
           .withMetadataIndexBloomFilter(enableMetadataTable)
           .withMetadataIndexColumnStats(enableMetadataTable)
@@ -1587,6 +1579,14 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     public HoodieTableMetaClient getMetaClient() {
       return metaClient;
+    }
+
+    public HoodieMetadataConfig getMetadataConfig() {
+      return metadataConfig;
+    }
+
+    public TableSchemaResolver getSchemaResolver() {
+      return schemaResolver;
     }
 
     public HoodieTableMetadata getTableMetadata() {
@@ -1660,7 +1660,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     private List<String> getAllColumnNames() {
-      TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
       try {
         return schemaResolver.getTableAvroSchema().getFields().stream()
             .map(Schema.Field::name).collect(Collectors.toList());
