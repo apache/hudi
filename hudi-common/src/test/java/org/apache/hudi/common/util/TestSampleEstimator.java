@@ -31,7 +31,7 @@ public class TestSampleEstimator {
   @Test
   public void testSampleEstimator() {
     final AtomicLong returnValue = new AtomicLong(100);
-    SampleEstimator estimator = new SampleEstimator(100, 0.1, (r) -> returnValue.get());
+    SampleEstimator estimator = new SampleEstimator((r) -> returnValue.get(), 100, 0.1);
     long estimatedSize = 0;
     for (int i = 0; i < 1000; i++) {
       estimatedSize = estimator.sizeEstimate(i);

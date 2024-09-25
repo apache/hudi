@@ -171,6 +171,7 @@ public class CompactionContext {
         + ", estimatedBaseFileSize=" + estimatedBaseFileSize
         + ", baseFileSorted=" + baseFileSorted
         + ", estimatedLogFileSize=" + estimatedLogFileSize
+        + ", logFileNum=" + logFilePaths.size()
         + ", logFilePaths=" + logFilePaths
         + ", logFilesRealSize=" + logFilesRealSize
         + '}';

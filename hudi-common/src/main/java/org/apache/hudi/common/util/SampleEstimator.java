@@ -38,15 +38,15 @@ public class SampleEstimator<R> implements SizeEstimator<R> {
   private int sampleCount;
 
   public SampleEstimator(SizeEstimator<R> underlyingEstimator) {
-    this(DEFAULT_TRIGGER_SAMPLE_THRESHOLD, DEFAULT_SAMPLE_WRIGHT, underlyingEstimator);
+    this(underlyingEstimator, DEFAULT_TRIGGER_SAMPLE_THRESHOLD);
   }
 
   public SampleEstimator(SizeEstimator<R> underlyingEstimator, int triggerSampleThreshold) {
-    this(triggerSampleThreshold, DEFAULT_SAMPLE_WRIGHT, underlyingEstimator);
+    this(underlyingEstimator, triggerSampleThreshold, DEFAULT_SAMPLE_WRIGHT);
   }
 
   // TODO: configure the triggerSampleThreshold and sampleWeight in the write config
-  public SampleEstimator(int triggerSampleThreshold, double sampleWeight, SizeEstimator<R> underlyingEstimator) {
+  public SampleEstimator(SizeEstimator<R> underlyingEstimator, int triggerSampleThreshold, double sampleWeight) {
     this.triggerSampleThreshold = triggerSampleThreshold;
     this.sampleWeight = sampleWeight;
     this.underlyingEstimator = underlyingEstimator;
@@ -56,7 +56,7 @@ public class SampleEstimator<R> implements SizeEstimator<R> {
   }
 
   public SampleEstimator<R> newInstance() {
-    return new SampleEstimator<>(triggerSampleThreshold, sampleWeight, underlyingEstimator);
+    return new SampleEstimator<>(underlyingEstimator, triggerSampleThreshold, sampleWeight);
   }
 
   public long getPerEstimatedSize() {

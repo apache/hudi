@@ -411,10 +411,10 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
     }
   }
 
-  class MemoryCombinedMap {
+  private class MemoryCombinedMap {
     Map<K, V> map;
     CombineFunc<K, V, V> combineFunc;
-    long currentMemorySize;
+    long estimatedAverageKeyValueSize;
 
     public MemoryCombinedMap(Option<CombineFunc<K, V, V>> func) {
       this.map = new HashMap<K, V>();
@@ -429,14 +429,19 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
       map.compute(key, (k, oldValue) -> {
         if (oldValue == null) {
           V initValue = combineFunc.initCombine(key, value);
-          long estimatedSize = keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(initValue);
-          currentMemorySize += estimatedSize;
+          sampleSize(key, initValue);
           return initValue;
         } else {
-          return combineFunc.combine(key, value, oldValue);
+          V combined = combineFunc.combine(key, value, oldValue);
+          sampleSize(key, combined);
+          return combined;
         }
       });
       return map.get(key);
+    }
+
+    private void sampleSize(K k, V v) {
+      estimatedAverageKeyValueSize = keySizeEstimator.sizeEstimate(k) + valueSizeEstimator.sizeEstimate(v);
     }
 
     public V get(K key) {
@@ -445,6 +450,7 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
 
     public void clear() {
       map.clear();
+      map = null;
     }
 
     public int size() {
@@ -452,7 +458,7 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
     }
 
     public long getCurrentMemorySize() {
-      return currentMemorySize;
+      return map.size() * estimatedAverageKeyValueSize;
     }
 
     public Iterator<V> getSortedIterator() {
@@ -467,7 +473,11 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
   @Override
   public void close() throws IOException {
     long lifeTime = lifeCycleTimer.endTimer();
+    this.totalMemorySize += this.memoryEntries.getCurrentMemorySize();
+    this.totalEntryCount += this.memoryEntries.size();
     LOG.info("SortedAppendOnlyExternalSpillableMap closed. {} \n LifeTime: {}", generateLogInfo(), lifeTime);
+    this.totalMemorySize = 0;
+    this.totalEntryCount = 0;
     this.memoryEntries.clear();
     this.fileManager.clear();
   }
@@ -484,7 +494,11 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
   @Override
   public void clear() {
     long liftTime = lifeCycleTimer.endTimer();
+    this.totalMemorySize += this.memoryEntries.getCurrentMemorySize();
+    this.totalEntryCount += this.memoryEntries.size();
     LOG.info("SortedAppendOnlyExternalSpillableMap cleared. {} \n LifeTime: {}", generateLogInfo(), liftTime);
+    this.totalMemorySize = 0;
+    this.totalEntryCount = 0;
     // clear memory entries
     this.memoryEntries.clear();
     // clear spilled files
@@ -542,6 +556,7 @@ public class SortedAppendOnlyExternalSpillableMap<K extends Serializable, V exte
       diskFileWriter.close();
       // renew the memory entries
       this.totalMemorySize += this.memoryEntries.getCurrentMemorySize();
+      this.totalEntryCount += this.memoryEntries.size();
       this.memoryEntries.clear();
       this.memoryEntries = new MemoryCombinedMap(this.combineFuncOpt);
       success = true;
