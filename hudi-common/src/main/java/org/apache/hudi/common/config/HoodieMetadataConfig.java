@@ -320,8 +320,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".functional.index.enable")
       .defaultValue(false)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable functional index within the Metadata Table. This is an uber config to enable/disable all functional indexes. "
-          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands. ");
+      .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
+          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
 
   public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.file.group.count")
