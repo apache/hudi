@@ -85,27 +85,36 @@ The below visualization shows the flow for cancellable table service plans (step
 
 ![cancel table service lifecycle with lock (3)](https://github.com/user-attachments/assets/b882a79d-b582-45f5-874d-57e255d13ff0)
 
+Having this new .hoodie/.cancel folder in addition to the .aborted state is needed not only to guarantee an instant can be forcibily blocked from being comitted but also to avoid a table service writer attempt having to unecessairly attempt execution of the instant if the previous attempt has been cancelled (but had failed during cancellation). The below visualized scenario shows how this next attempt will "short circut" in this manner. This scenario also includes an example of concurrent writers to show how transaction and heartbeating in the above proposed flow will allow correct behavior even in the face of concurrent writers attempting to execute and/or cancel the instant.
 
-A new pair of cancel APIs request_cancel and execute_cancel can be used by writers to request an instant to be cancelled (by adding it to /.cancel) and transition instant to the terminal .aborted state, respectively.
+![cancel flow table serivce](https://github.com/user-attachments/assets/aa8a363c-48f7-4a6c-ae51-cc0c126983f2)
 
-The new cancel API request_cancel will be added that a writer can use to request an inflight (cancellable table service) instant to be cancelled. This will perform the following steps
+
+Aside from modifications to the table flow, a new pair of cancel APIs request_cancel and execute_cancel will be added for all writers to use. They will allow a writer to request an instant to be cancelled (by adding it to /.cancel) and transition an instant to the terminal .aborted state, respectively.
+
+The new cancel API request_cancel will perform the following steps
+
 1. Start a transaction
 2. If instant is already comitted, abort
 3. If instant is already aborted, exit without throwing exception
 4. create a file under /.cancel with the target instant name
 5. End the transaction
+   
+If this call succeeds, then the call can assume that the target instant will not be commited and can only transitioned to .aborted state from that point onwards.
 
-If this call succeeds, then the call can assume that the target instant will not be commited and will be transitioned to .aborted state at some point in the future
+The other API execute_cancel will be added which allows a writer to explictly abort the target instant that has already had its cancellation requested (by adding the instant under /.cancel). Note that this API will also do cleaning up all leftover files in the process. Unlike request_cancel though, it cannot be completed if another writer is still executing the instant. In order to enforce this, heartbeating will be used to allow writers to infer whether another instant is being executed by a table service writer. The execute_cancel API will perform the following steps
 
-The other API execute_cancel will be added which allows a writer to explictly abort the target instant. Unlike request_cancel though, it cannot be called if another writer is executing the instant still. In order to enforce this, heartbeating will be used to allow writers to infer whether another instant is being executed by a table service writer. The execute_cancel API will perform the following steps
 1. Start a transaction
-2. If instant has an active heartbeat, abort
-3. End transaction
-4. Rollback target instant without deleting plan
-5. Start a transaction
-6. Transition instant to .aborted
-7. Delete the file for instant under /.cancel
-8. End the transaction
+2. If instant has been already aborted, exit without throwing exception. Cleanup file from /.cancel if still present
+3. If instant has an active heartbeat, abort
+4. End transaction
+5. Rollback target instant without deleting plan
+6. Start a transaction
+7. Transition instant to .aborted
+8. Delete the file for instant under /.cancel
+9. End the transaction
+
+Note that similar to the proposed table service flow, this API will check for heartbeats within a transaction (to guarantee there are no writers still working on this instant) and will transition the state to .aborted within a transaction.
 
 
 Although any user can invoke request_cancel and execute_cancel, the clean operation will be required to use these APIs in order to cancel any inflight plans that have satisfied their cancellation policy. This is analagous to how clean schedules and executes the rollback of any failed ingestion writes. Specifically, clean will now preform the following steps
