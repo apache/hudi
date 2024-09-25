@@ -21,7 +21,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.util.JFunction
@@ -50,7 +50,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * TODO: The default implementation should be changed to throw
    * an exception once time travel support for metadata table is added.
    */
-  def supportsQueryType(queryType: HoodieTableQueryType): Boolean = true
+  def supportsQueryType(options: Map[String, String]): Boolean = true
 
   def computeCandidateIsStrict(spark: SparkSession,
                                fileIndex: HoodieFileIndex,

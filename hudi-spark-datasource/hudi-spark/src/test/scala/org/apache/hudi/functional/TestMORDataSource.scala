@@ -1435,6 +1435,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       HoodieMetadataConfig.ENABLE.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
     )
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
     // Create a MOR table and add three records to the table.
     val records = recordsToStrings(dataGen.generateInserts("000", 3)).asScala.toSeq
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
@@ -1480,5 +1481,17 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(2, snapshotDF.count())
     // deleted record should NOT show in snapshot view
     assertEquals(0, snapshotDF.where(s"_row_key = '$recordKey'").count())
+
+    // get the first instant on the timeline
+    val firstInstant = metaClient.reloadActiveTimeline().filterCompletedInstants().firstInstant().get()
+    // do a time travel query with data skipping enabled
+    val timeTravelDF = spark.read.format("hudi")
+      .options(readOpts)
+      .option("as.of.instant", firstInstant.getTimestamp)
+      .load(basePath)
+    // there should still be 3 records in time travel view
+    assertEquals(3, timeTravelDF.count())
+    // deleted record should still show in time travel view
+    assertEquals(1, timeTravelDF.where(s"_row_key = '$recordKey'").count())
   }
 }
