@@ -79,7 +79,7 @@ Having this new .hoodie/.cancel folder (in addition to just the .aborted state) 
 ![cancel flow table serivce](https://github.com/user-attachments/assets/aa8a363c-48f7-4a6c-ae51-cc0c126983f2)
 
 
-Aside from modifications to the table flow, a new pair of cancel APIs request_cancel and execute_cancel will be added for all writers to use. They will allow a writer to request an instant to be cancelled (by adding it to /.cancel) and transition an instant to the terminal .aborted state, respectively.
+Aside from modifications to the table service execution flow, a new pair of cancel APIs request_cancel and execute_cancel will be added for all writers to use. They will allow a writer to request an instant to be cancelled (by adding it to /.cancel) and transition an instant to the terminal .aborted state, respectively.
 
 The new cancel API request_cancel will perform the following steps
 
