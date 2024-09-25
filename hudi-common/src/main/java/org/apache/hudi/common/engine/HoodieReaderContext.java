@@ -233,7 +233,7 @@ public abstract class HoodieReaderContext<T> {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent()) {
+    if (!recordOption.isPresent() || orderingFieldName == null) {
       return orderingFieldDefault;
     }
 
