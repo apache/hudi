@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -71,30 +72,34 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     return metadata;
   }
 
+  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config) throws IOException {
+    return runCleaner(config, Option.empty());
+  }
+
   /**
    * Helper to run cleaner and collect Clean Stats.
    *
    * @param config HoodieWriteConfig
    */
-  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config) throws IOException {
-    return runCleaner(config, false, false, 1, false);
+  protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, Option<Functions.Function0<String>> commitTimeGenerationFunc) throws IOException {
+    return runCleaner(config, false, false, 1, false, commitTimeGenerationFunc);
   }
 
   protected List<HoodieCleanStat> runCleanerWithInstantFormat(HoodieWriteConfig config, boolean needInstantInHudiFormat) throws IOException {
-    return runCleaner(config, false, false, 1, needInstantInHudiFormat);
+    return runCleaner(config, false, false, 1, needInstantInHudiFormat, Option.empty());
   }
 
   protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, int firstCommitSequence, boolean needInstantInHudiFormat) throws IOException {
-    return runCleaner(config, false, false, firstCommitSequence, needInstantInHudiFormat);
+    return runCleaner(config, false, false, firstCommitSequence, needInstantInHudiFormat, Option.empty());
   }
 
   protected List<HoodieCleanStat> runCleaner(HoodieWriteConfig config, boolean simulateRetryFailure) throws IOException {
-    return runCleaner(config, simulateRetryFailure, false, 1, false);
+    return runCleaner(config, simulateRetryFailure, false, 1, false, Option.empty());
   }
 
   protected List<HoodieCleanStat> runCleaner(
       HoodieWriteConfig config, boolean simulateRetryFailure, boolean simulateMetadataFailure) throws IOException {
-    return runCleaner(config, simulateRetryFailure, simulateMetadataFailure, 1, false);
+    return runCleaner(config, simulateRetryFailure, simulateMetadataFailure, 1, false, Option.empty());
   }
 
   /**
@@ -104,9 +109,10 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
    */
   protected List<HoodieCleanStat> runCleaner(
       HoodieWriteConfig config, boolean simulateRetryFailure, boolean simulateMetadataFailure,
-      Integer firstCommitSequence, boolean needInstantInHudiFormat) throws IOException {
+      Integer firstCommitSequence, boolean needInstantInHudiFormat, Option<Functions.Function0<String>> commitTimeGenerationFunc) throws IOException {
     SparkRDDWriteClient<?> writeClient = getHoodieWriteClient(config);
-    String cleanInstantTs = needInstantInHudiFormat ? makeNewCommitTime(firstCommitSequence, "%014d") : makeNewCommitTime(firstCommitSequence, "%09d");
+    String cleanInstantTs = commitTimeGenerationFunc.isPresent() ? commitTimeGenerationFunc.get().apply() :
+        (needInstantInHudiFormat ? makeNewCommitTime(firstCommitSequence, "%014d") : makeNewCommitTime(firstCommitSequence, "%09d"));
     HoodieCleanMetadata cleanMetadata1 = writeClient.clean(cleanInstantTs);
 
     if (null == cleanMetadata1) {

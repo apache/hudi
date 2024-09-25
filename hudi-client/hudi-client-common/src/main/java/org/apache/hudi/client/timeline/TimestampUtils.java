@@ -29,7 +29,7 @@ public class TimestampUtils {
     if (!metaClient.isMetadataTable()) { // lets validate data table that timestamps are generated in monotically increasing order. 
       HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
       reloadedMetaClient.getActiveTimeline().getWriteTimeline().lastInstant().ifPresent(entry -> {
-        ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(entry.getTimestamp(), HoodieTimeline.LESSER_THAN, instantTime),
+        ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(entry.getTimestamp(), HoodieTimeline.LESSER_THAN_OR_EQUALS, instantTime),
             "Found later commit time " + entry + ", compared to the current instant " + instantTime + ", hence failing to create requested commit meta file");
       });
     }
