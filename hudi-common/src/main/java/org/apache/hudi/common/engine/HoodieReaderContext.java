@@ -238,8 +238,9 @@ public abstract class HoodieReaderContext<T> {
     }
 
     Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    return value != null ?  castValue((Comparable) value, orderingFieldType) : orderingFieldDefault;
-
+    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldType) : orderingFieldDefault;
+    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
+    return finalOrderingVal;
   }
 
   /**
