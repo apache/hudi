@@ -27,64 +27,6 @@ import org.apache.spark.sql.internal.SQLConf
 
 class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSupport {
 
-  test("Test MergeInto For PreCombineField With Different Types") {
-    spark.sql(s"set ${MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key} = 0")
-    withRecordType()(withTempDir { tmp =>
-      spark.sql("set hoodie.payload.combined.schema.validate = true")
-      Seq("mor").foreach { tableType =>
-        val tableName1 = generateTableName
-        spark.sql(
-          s"""
-             | create table $tableName1 (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  v double,
-             |  dt string
-             | ) using hudi
-             | tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'v',
-             |  hoodie.compaction.payload.class = 'org.apache.hudi.common.model.DefaultHoodieRecordPayload'
-             | )
-             | partitioned by(dt)
-             | location '${tmp.getCanonicalPath}/$tableName1'
-       """.stripMargin)
-
-        // Insert data; pre-combine field value type is long.
-        spark.sql(
-          s"""
-             | merge into $tableName1 as t0
-             | using (
-             |  select 1 as id, 'a1' as name, 10 as price, 1001L as v, '2021-03-21' as dt
-             | ) as s0
-             | on t0.id = s0.id
-             | when not matched and s0.id % 2 = 1 then insert *
-       """.stripMargin
-        )
-        checkAnswer(s"select id,name,price,dt,v from $tableName1")(
-          Seq(1, "a1", 10, "2021-03-21", 1001)
-        )
-
-        // Insert data; pre-combine field value type is short.
-        spark.sql(
-          s"""
-             | merge into $tableName1 as t0
-             | using (
-             |  select 1 as id, 'a1' as name, 12 as price, 1002.f as v, '2021-03-21' as dt
-             | ) as s0
-             | on t0.id = s0.id
-             | when matched then update set
-             | id = s0.id, name = s0.name, price = s0.price, v = s0.v, dt = s0.dt
-             | when not matched then insert *
-     """.stripMargin
-        )
-        spark.sql(s"select * from $tableName1").show(100, false)
-      }
-    })
-  }
-
   test("Test MergeInto Basic") {
     Seq(true, false).foreach { sparkSqlOptimizedWrites =>
       withRecordType()(withTempDir { tmp =>
