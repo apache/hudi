@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -95,11 +95,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = recordMerger;
     this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
-    if (this.orderingFieldName == null) {
-      this.orderingFieldType = Schema.Type.INT;
-    } else {
-      this.orderingFieldType = HoodieAvroUtils.getActualSchemaFromUnion(readerSchema.getField(orderingFieldName).schema(), null).getType();
-    }
+    this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.INT);
     this.orderingFieldDefault = readerContext.castValue(0, orderingFieldType);
     //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
     if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {

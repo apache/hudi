@@ -1300,7 +1300,7 @@ public class HoodieAvroUtils {
     return julianDays;
   }
 
-  public static Schema getActualSchemaFromUnion(Schema schema, Object data) {
+  private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
     Schema actualSchema;
     if (schema.getType() != UNION) {
       return schema;
