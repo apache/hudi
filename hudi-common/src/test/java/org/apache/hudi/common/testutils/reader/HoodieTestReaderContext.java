@@ -19,9 +19,9 @@
 
 package org.apache.hudi.common.testutils.reader;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieDeleteRecord;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -113,26 +112,6 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Comparable getOrderingValue(
-      Option<IndexedRecord> recordOpt,
-      Map<String, Object> metadataMap,
-      Schema schema,
-      TypedProperties props
-  ) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-    }
-
-    if (!recordOpt.isPresent()) {
-      return 0;
-    }
-
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
-    Object value = getFieldValueFromIndexedRecord(recordOpt.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
-  }
-
-  @Override
   public HoodieRecord constructHoodieRecord(
       Option<IndexedRecord> recordOpt,
       Map<String, Object> metadataMap
@@ -209,6 +188,26 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
       }
       return outputRecord;
     };
+  }
+
+  @Override
+  public Comparable castValue(Comparable value, Schema.Type newType) {
+    Schema newSchema = Schema.create(newType);
+    Schema oldType;
+    if (value instanceof Integer) {
+      oldType = Schema.create(Schema.Type.INT);
+    } else if (value instanceof Long) {
+      oldType = Schema.create(Schema.Type.LONG);
+    } else if (value instanceof Float) {
+      oldType = Schema.create(Schema.Type.FLOAT);
+    } else if (value instanceof Double) {
+      oldType = Schema.create(Schema.Type.DOUBLE);
+    } else if (value instanceof String) {
+      oldType = Schema.create(Schema.Type.STRING);
+    } else {
+      throw new UnsupportedOperationException("Cast from " + value.getClass() + " to " + newType + " is not supported");
+    }
+    return (Comparable) HoodieAvroUtils.rewritePrimaryType(value, oldType, newSchema);
   }
 
   @Override

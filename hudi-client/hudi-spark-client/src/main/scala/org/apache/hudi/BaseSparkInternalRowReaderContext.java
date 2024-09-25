@@ -19,18 +19,13 @@
 
 package org.apache.hudi;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -67,24 +62,6 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
   @Override
   public String getRecordKey(InternalRow row, Schema schema) {
     return getFieldValueFromInternalRow(row, schema, RECORD_KEY_METADATA_FIELD).toString();
-  }
-
-  @Override
-  public Comparable getOrderingValue(Option<InternalRow> rowOption,
-                                     Map<String, Object> metadataMap,
-                                     Schema schema,
-                                     TypedProperties props) {
-    if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
-      return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
-    }
-
-    if (!rowOption.isPresent()) {
-      return 0;
-    }
-
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
-    Object value = getFieldValueFromInternalRow(rowOption.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
   }
 
   @Override

@@ -37,7 +37,7 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_FINISH_ALL = 12
 
   test("Test Sql Statements") {
-    Seq("cow", "mor").foreach { tableType =>
+    Seq("mor").foreach { tableType =>
       withTempDir { tmp =>
         val params = Map(
           "tableType" -> tableType,

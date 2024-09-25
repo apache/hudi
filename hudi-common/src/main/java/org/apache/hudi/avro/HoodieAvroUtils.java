@@ -1019,7 +1019,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
-  private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:
@@ -1300,7 +1300,7 @@ public class HoodieAvroUtils {
     return julianDays;
   }
 
-  private static Schema getActualSchemaFromUnion(Schema schema, Object data) {
+  public static Schema getActualSchemaFromUnion(Schema schema, Object data) {
     Schema actualSchema;
     if (schema.getType() != UNION) {
       return schema;
