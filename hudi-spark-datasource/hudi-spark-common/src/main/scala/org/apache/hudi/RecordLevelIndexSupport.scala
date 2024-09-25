@@ -21,8 +21,9 @@ import org.apache.hudi.DataSourceReadOptions.{QUERY_TYPE, TIME_TRAVEL_AS_OF_INST
 import org.apache.hudi.RecordLevelIndexSupport.getPrunedStoragePaths
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
+import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
+import org.apache.hudi.common.model.HoodieTableQueryType.SNAPSHOT
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline.{GREATER_THAN_OR_EQUALS, compareTimestamps}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
@@ -98,17 +99,22 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * Returns true if the query type is supported by the index.
    */
   override def supportsQueryType(options: Map[String, String]): Boolean = {
-    options.get(TIME_TRAVEL_AS_OF_INSTANT.key)
-      .fold {
-        // if the as.of.instant is None, check QUERY_TYPE is snapshot
-        options.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue).equalsIgnoreCase(HoodieTableQueryType.SNAPSHOT.name)
-        false
-      } { instant =>
-        // check if the as.of.instant is greater than or equal to the last completed instant
-        // can still use record index for data skipping for the latest snapshot
-        compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
-          GREATER_THAN_OR_EQUALS, metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant.get.getTimestamp)
-      }
+    if (!options.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue).equalsIgnoreCase(SNAPSHOT.name)) {
+      // Disallow RLI for non-snapshot query types
+      false
+    } else {
+      // Now handle the time-travel case for snapshot queries
+      options.get(TIME_TRAVEL_AS_OF_INSTANT.key)
+        .fold {
+          // No time travel instant specified, so allow if it's a snapshot query
+          true
+        } { instant =>
+          // Check if the as.of.instant is greater than or equal to the last completed instant.
+          // We can still use RLI for data skipping for the latest snapshot.
+          compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
+            GREATER_THAN_OR_EQUALS, metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant.get.getTimestamp)
+        }
+    }
   }
 }
 

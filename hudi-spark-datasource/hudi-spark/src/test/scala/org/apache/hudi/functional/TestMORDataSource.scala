@@ -1419,10 +1419,10 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   /**
-   * Test Read-Optimized query on MOR table with RECORD_INDEX enabled.
+   * Test Read-Optimized and time travel query on MOR table with RECORD_INDEX enabled.
    */
   @Test
-  def testReadOptimizedQueryWithRecordIndex(): Unit = {
+  def testReadOptimizedAndTimeTravelWithRecordIndex(): Unit = {
     var (writeOpts, readOpts) = getWriterReaderOpts()
     writeOpts = writeOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
