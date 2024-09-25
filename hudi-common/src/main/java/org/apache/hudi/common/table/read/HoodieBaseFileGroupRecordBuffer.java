@@ -36,12 +36,10 @@ import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
@@ -163,27 +161,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   @Override
   public void close() {
     records.clear();
-  }
-
-  /**
-   * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
-   * If one of the {@link Comparable}s is a String, assumes that both are String values for comparison.
-   *
-   * @param readerContext {@link HoodieReaderContext} instance.
-   * @param o1 {@link Comparable} object.
-   * @param o2 other {@link Comparable} object to compare to.
-   * @return comparison result.
-   */
-  @VisibleForTesting
-  static int compareTo(HoodieReaderContext readerContext, Comparable o1, Comparable o2) {
-    // TODO(HUDI-7848): fix the delete records to contain the correct ordering value type
-    //  so this util with the number comparison is not necessary.
-    try {
-      return o1.compareTo(o2);
-    } catch (ClassCastException e) {
-      throw new HoodieException("Cannot compare values: "
-          + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
-    }
   }
 
   /**
