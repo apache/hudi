@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
+import org.apache.hudi.common.util.Option;
 
 /**
  * Key generator configs.
@@ -34,18 +35,29 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig;
     description = "")
 public class KeyGeneratorOptions extends HoodieConfig {
 
-  public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
-      .key("hoodie.datasource.write.partitionpath.urlencode")
-      .defaultValue("false")
-      .markAdvanced()
-      .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");
-
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = ConfigProperty
       .key("hoodie.datasource.write.hive_style_partitioning")
       .defaultValue("false")
       .withDocumentation("Flag to indicate whether to use Hive style partitioning.\n"
           + "If set true, the names of partition folders follow <partition_column_name>=<partition_value> format.\n"
           + "By default false (the names of partition folders are only partition values)");
+
+  public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = ConfigProperty
+      .key("hoodie.datasource.write.partitionpath.urlencode")
+      .defaultValue("false")
+      .markAdvanced()
+      // If hive style partitioning is enabled, then url encoding is also enabled.
+      // We need to do so otherwise the partition structure is awkward in some cases.
+      // For example, a `partition` field with value like "dd/mm/yy" will be written as
+      // three level directory where the first level is `partition=dd` and then its child is `mm`,
+      // and then `yy`. With URL encoding enabled, it will be "partition=dd%2Fmm%2Fyy".
+      .withInferFunction(cfg -> {
+        if (cfg.getStringOrDefault(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
+          return Option.of("true");
+        }
+        return Option.empty();
+      })
+      .withDocumentation("Should we url encode the partition path value, before creating the folder structure.");
 
   public static final ConfigProperty<String> RECORDKEY_FIELD_NAME = ConfigProperty
       .key("hoodie.datasource.write.recordkey.field")

@@ -27,7 +27,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieWriteConflictException
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
@@ -214,7 +213,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     inputDF.write.partitionBy("partition").format("hudi")
       .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key, "true")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 

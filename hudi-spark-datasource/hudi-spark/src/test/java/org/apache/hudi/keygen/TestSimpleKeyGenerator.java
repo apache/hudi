@@ -25,6 +25,8 @@ import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.testutils.KeyGeneratorTestUtilities;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -144,6 +146,27 @@ public class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
 
     InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
     Assertions.assertEquals(UTF8String.fromString("timestamp=4357686"), keyGenerator.getPartitionPath(internalRow, row.schema()));
+  }
+
+  @Test
+  public void testInferUrlEncodingWithHiveStylePartitioning() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ts_ms");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
+    properties.put(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(), "true");
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(properties);
+
+    GenericRecord record = new GenericData.Record(new Schema.Parser().parse(EXAMPLE_SCHEMA));
+    record.put("timestamp", 4357686L);
+    record.put("_row_key", "key1");
+    record.put("ts_ms", "2020/03/21");
+    record.put("pii_col", "pi");
+    record.put("nested_col", getNestedColRecord("val1", 10L));
+
+    HoodieKey key = keyGenerator.getKey(record);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("ts_ms=2020%2F03%2F21", key.getPartitionPath());
   }
 
   private static Stream<GenericRecord> nestedColTestRecords() {
