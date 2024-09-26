@@ -957,7 +957,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         baseDataFilesForCleaning, allPartitions, engineContext);
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
-        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchemaResolver().getTableAvroSchema()), metadataTableBasedContext.getMetadataConfig(),
+        AvroConversionUtils.convertAvroSchemaToStructType(metadataTableBasedContext.getSchema()), metadataTableBasedContext.getMetadataConfig(),
         metaClient, false);
     HoodieData<HoodieMetadataColumnStats> partitionStats =
         partitionStatsIndexSupport.loadColumnStatsIndexRecords(JavaConverters.asScalaBufferConverter(metadataTableBasedContext.allColumnNameList).asScala().toSeq(), false);
@@ -1527,7 +1527,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     private final Properties props;
     private final HoodieTableMetaClient metaClient;
     private final HoodieMetadataConfig metadataConfig;
-    private final TableSchemaResolver schemaResolver;
+    private final Schema schema;
     private final HoodieTableFileSystemView fileSystemView;
     private final HoodieTableMetadata tableMetadata;
     private final boolean enableMetadataTable;
@@ -1536,27 +1536,31 @@ public class HoodieMetadataTableValidator implements Serializable {
     public HoodieMetadataValidationContext(
         HoodieEngineContext engineContext, Properties props, HoodieTableMetaClient metaClient,
         boolean enableMetadataTable, String viewStorageType) {
-      this.props = new Properties();
-      this.props.putAll(props);
-      this.metaClient = metaClient;
-      this.schemaResolver = new TableSchemaResolver(metaClient);
-      this.enableMetadataTable = enableMetadataTable;
-      this.metadataConfig = HoodieMetadataConfig.newBuilder()
-          .enable(enableMetadataTable)
-          .withMetadataIndexBloomFilter(enableMetadataTable)
-          .withMetadataIndexColumnStats(enableMetadataTable)
-          .withEnableRecordIndex(enableMetadataTable)
-          .build();
-      props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), viewStorageType);
-      FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
-      ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
-      HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
-      this.fileSystemView = getFileSystemView(engineContext,
-          metaClient, metadataConfig, viewConf, commonConfig);
-      this.tableMetadata = HoodieTableMetadata.create(
-          engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
-      if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
-        this.allColumnNameList = getAllColumnNames();
+      try {
+        this.props = new Properties();
+        this.props.putAll(props);
+        this.metaClient = metaClient;
+        this.schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+        this.enableMetadataTable = enableMetadataTable;
+        this.metadataConfig = HoodieMetadataConfig.newBuilder()
+            .enable(enableMetadataTable)
+            .withMetadataIndexBloomFilter(enableMetadataTable)
+            .withMetadataIndexColumnStats(enableMetadataTable)
+            .withEnableRecordIndex(enableMetadataTable)
+            .build();
+        props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), viewStorageType);
+        FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
+        ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
+        HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
+        this.fileSystemView = getFileSystemView(engineContext,
+            metaClient, metadataConfig, viewConf, commonConfig);
+        this.tableMetadata = HoodieTableMetadata.create(
+            engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
+        if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
+          this.allColumnNameList = getAllColumnNames();
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Failed to initialize metadata validation context for " + metaClient.getBasePath());
       }
     }
 
@@ -1585,8 +1589,8 @@ public class HoodieMetadataTableValidator implements Serializable {
       return metadataConfig;
     }
 
-    public TableSchemaResolver getSchemaResolver() {
-      return schemaResolver;
+    public Schema getSchema() {
+      return schema;
     }
 
     public HoodieTableMetadata getTableMetadata() {
@@ -1661,7 +1665,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     private List<String> getAllColumnNames() {
       try {
-        return schemaResolver.getTableAvroSchema().getFields().stream()
+        return schema.getFields().stream()
             .map(Schema.Field::name).collect(Collectors.toList());
       } catch (Exception e) {
         throw new HoodieException("Failed to get all column names for " + metaClient.getBasePath());

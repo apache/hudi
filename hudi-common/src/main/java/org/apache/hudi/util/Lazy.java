@@ -20,7 +20,6 @@ package org.apache.hudi.util;
 
 import javax.annotation.concurrent.ThreadSafe;
 
-import java.io.Serializable;
 import java.util.function.Supplier;
 
 /**
@@ -29,7 +28,7 @@ import java.util.function.Supplier;
  * @param <T> type of the object being held by {@link Lazy}
  */
 @ThreadSafe
-public class Lazy<T> implements Serializable {
+public class Lazy<T> {
 
   private volatile boolean initialized;
 
