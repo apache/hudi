@@ -1851,9 +1851,15 @@ public class HoodieTableMetadataUtil {
   }
 
   public static Schema getProjectedSchemaForFunctionalIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableSchema = schemaResolver.getTableAvroSchema();
-    return addMetadataFields(getSchemaForFields(tableSchema, indexDefinition.getSourceFields()));
+    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    List<String> partitionFields = metaClient.getTableConfig().getPartitionFields()
+        .map(Arrays::asList)
+        .orElse(Collections.emptyList());
+    List<String> sourceFields = indexDefinition.getSourceFields();
+    List<String> mergedFields = new ArrayList<>(partitionFields.size() + sourceFields.size());
+    mergedFields.addAll(partitionFields);
+    mergedFields.addAll(sourceFields);
+    return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
   }
 
   public static HoodieData<HoodieRecord> readSecondaryKeysFromBaseFiles(HoodieEngineContext engineContext,

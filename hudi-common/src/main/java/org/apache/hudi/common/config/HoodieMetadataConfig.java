@@ -317,7 +317,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
   public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
-      .key(METADATA_PREFIX + ".functional.index.enable")
+      .key(METADATA_PREFIX + ".index.functional.enable")
       .defaultValue(false)
       .sinceVersion("1.0.0")
       .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "

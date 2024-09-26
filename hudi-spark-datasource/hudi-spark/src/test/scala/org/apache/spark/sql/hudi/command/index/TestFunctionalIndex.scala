@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -434,64 +434,68 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           s"""
              |create table $tableName (
              |  id int,
-             |  name string,
              |  price double,
-             |  ts long
+             |  ts long,
+             |  name string
              |) using hudi
              | options (
              |  primaryKey ='id',
              |  type = 'mor',
              |  preCombineField = 'ts'
              | )
-             | partitioned by(ts)
+             | partitioned by(name)
              | location '$basePath'
        """.stripMargin)
-        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
-        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
+        spark.sql(s"insert into $tableName values(1, 10, 1601098924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
+        spark.sql(s"insert into $tableName values(2, 10, 1632634924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+        spark.sql(s"insert into $tableName values(3, 10, 1664170924, 'a2')")
         // create functional index and verify
         spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
         val metaClient = createMetaClient(spark, basePath)
         assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
         assertTrue(metaClient.getIndexMetadata.isPresent)
-        var functionalIndexMetadata = metaClient.getIndexMetadata.get()
-        assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
-        assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+        assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
 
         // verify functional index records by querying metadata table
-        val result2DF = spark.sql(
-          s"select * from hudi_metadata('$tableName') where type=3"
+        val metadataSql = s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=3"
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"), // for file in name=a1
+          Seq("2022-09-26", "2022-09-26") // for file in name=a2
         )
-        assert(result2DF.count() == 1)
 
         // disable functional index
-        spark.sql("set hoodie.metadata.functional.index.enable=false")
-        // do another insert after initializing the index
-        spark.sql(s"insert into $tableName values(4, 'a4', 10, 10000000)")
+        spark.sql(s"set ${HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key}=false")
+        // do another insert after disabling the index
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+        spark.sql(s"insert into $tableName values(4, 10, 1664170924, 'a2')")
         // check query result
-        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'")(
-          Seq(4, "a4")
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-26'")(
+          Seq(4, "a2")
         )
         // verify there are no new updates to functional index
-        val result3DF = spark.sql(
-          s"select * from hudi_metadata('$tableName') where type=3"
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"),
+          Seq("2022-09-26", "2022-09-26")
         )
-        assert(result3DF.count() == 1)
 
         // enable functional index
-        spark.sql("set hoodie.metadata.functional.index.enable=true")
+        spark.sql(s"set ${HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key}=true")
         // do another insert after initializing the index
-        spark.sql(s"insert into $tableName values(5, 'a5', 10, 10000000)")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2024-09-26
+        spark.sql(s"insert into $tableName values(5, 10, 1727329324, 'a3')")
         // check query result
-        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '1970-04-26'")(
-          Seq(4, "a4"),
-          Seq(5, "a5")
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2024-09-26'")(
+          Seq(5, "a3")
         )
         // verify there are new updates to functional index
-        val result4DF = spark.sql(
-          s"select * from hudi_metadata('$tableName') where type=3"
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"),
+          Seq("2022-09-26", "2022-09-26"),
+          Seq("2024-09-26", "2024-09-26") // for file in name=a3
         )
-        assert(result4DF.count() == 2)
       }
     }
   }
