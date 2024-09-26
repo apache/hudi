@@ -56,6 +56,7 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -71,7 +72,7 @@ import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
  * Helper class to read schema from data files and log files and to convert it between different formats.
  */
 @ThreadSafe
-public class TableSchemaResolver {
+public class TableSchemaResolver implements Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(TableSchemaResolver.class);
 
