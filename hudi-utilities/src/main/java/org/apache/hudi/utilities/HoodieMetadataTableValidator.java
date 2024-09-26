@@ -1014,7 +1014,7 @@ public class HoodieMetadataTableValidator implements Serializable {
    * @param partitionPath Provided partition path
    * @param colStats Column stat records for the partition
    */
-  private static TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregateColumnStats(String partitionPath, List<HoodieColumnRangeMetadata<Comparable>> colStats) {
+  static TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregateColumnStats(String partitionPath, List<HoodieColumnRangeMetadata<Comparable>> colStats) {
     TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = new TreeSet<>(Comparator.comparing(HoodieColumnRangeMetadata::getColumnName));
     for (HoodieColumnRangeMetadata<Comparable> colStat : colStats) {
       HoodieColumnRangeMetadata<Comparable> partitionStat = HoodieColumnRangeMetadata.create(partitionPath, colStat.getColumnName(),
@@ -1610,10 +1610,10 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public List<HoodieColumnRangeMetadata<Comparable>> getSortedColumnStatsList(
-        String partitionPath, List<String> baseFileNameList) {
+        String partitionPath, List<String> fileNames) {
       LOG.info("All column names for getting column stats: {}", allColumnNameList);
       if (enableMetadataTable) {
-        List<Pair<String, String>> partitionFileNameList = baseFileNameList.stream()
+        List<Pair<String, String>> partitionFileNameList = fileNames.stream()
             .map(filename -> Pair.of(partitionPath, filename)).collect(Collectors.toList());
         return allColumnNameList.stream()
             .flatMap(columnName ->
@@ -1626,7 +1626,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       } else {
         FileFormatUtils formatUtils = HoodieIOFactory.getIOFactory(metaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET);
-        return baseFileNameList.stream().flatMap(filename ->
+        return fileNames.stream().flatMap(filename ->
                 formatUtils.readColumnStatsFromMetadata(
                         metaClient.getStorage(),
                         new StoragePath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath), filename),
