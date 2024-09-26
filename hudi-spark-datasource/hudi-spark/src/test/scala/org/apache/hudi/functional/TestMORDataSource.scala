@@ -933,15 +933,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
       val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
       columnStatsIndex.loadTransposed(Seq("fare", "city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
-        // fare is a nested column, so it should not have any min/max value as it is not comparable
+        // fare is a nested column, so it should not have any min/max value as it is not comparable, but still have nullCount
         assertEquals(0, emptyTransposedColStatsDF.filter("fare_minValue IS NOT NULL").count())
         assertEquals(0, emptyTransposedColStatsDF.filter("fare_maxValue IS NOT NULL").count())
-        // city_to_state is a map column, so it should not have any min/max value as it is not comparable
+        assertTrue(emptyTransposedColStatsDF.filter("fare_nullCount IS NOT NULL").count() > 0)
+        // city_to_state is a map column, so it should not have any min/max value as it is not comparable, but still have nullCount
         assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_minValue IS NOT NULL").count())
         assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_maxValue IS NOT NULL").count())
-        // rider is a simple string field, so it should have a min/max value
+        assertTrue(emptyTransposedColStatsDF.filter("city_to_state_nullCount IS NOT NULL").count() > 0)
+        // rider is a simple string field, so it should have a min/max value as well as nullCount
         assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
         assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_nullCount IS NOT NULL").count() > 0)
       }
     }
   }
