@@ -472,7 +472,8 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
         spark.sql(s"insert into $tableName values(4, 10, 1664170924, 'a2')")
         // check query result
-        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2023-09-26'")(
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2022-09-26'")(
+          Seq(3, "a2"),
           Seq(4, "a2")
         )
         // verify there are no new updates to functional index
@@ -486,8 +487,10 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         // do another insert after initializing the index
         // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2024-09-26
         spark.sql(s"insert into $tableName values(5, 10, 1727329324, 'a3')")
-        // check query result
-        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2024-09-26'")(
+        // check query result for predicates including values when functional index was disabled
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') IN ('2024-09-26', '2022-09-26')")(
+          Seq(3, "a2"),
+          Seq(4, "a2"),
           Seq(5, "a3")
         )
         // verify there are new updates to functional index

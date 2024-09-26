@@ -150,7 +150,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
-    LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
+    LOG.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
@@ -185,15 +185,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
       String partition = entry.getKey();
       List<FileSlice> fileSlices = entry.getValue();
       List<HoodieRecord> recordsForPartition = Collections.emptyList();
-      // For functional index using column_stats
       if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, fileSlices, basePath, partition, functionalIndex, columnToIndex, sqlContext);
+        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext);
+      } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext, metadataWriteConfig);
       }
-      // For functional index using bloom_filters
-      if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, fileSlices, basePath, partition, functionalIndex, columnToIndex, sqlContext, metadataWriteConfig);
-      }
-      // Accumulate records
       allRecords.addAll(recordsForPartition);
     }
     return HoodieJavaRDD.of(allRecords, sparkEngineContext, parallelism);
