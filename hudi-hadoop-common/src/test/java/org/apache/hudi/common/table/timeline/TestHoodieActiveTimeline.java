@@ -134,11 +134,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         timeline.getCommitAndReplaceTimeline().filterCompletedInstants().getInstantsAsStream(),
         "Check the instants stream");
     assertStreamEquals(Stream.of(instant5),
-        timeline.getCommitAndReplaceTimeline().filterPendingExcludingMajorAndMinorCompaction().getInstantsAsStream(),
+        timeline.getCommitAndReplaceTimeline().filterPendingExcludingCompactionAndLogCompaction().getInstantsAsStream(),
         "Check the instants stream");
 
     // Backwards compatibility testing for reading compaction plans
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_0)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
@@ -199,7 +199,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
             .getInstantsAsStream().map(HoodieInstant::getTimestamp),
         "findInstantsBefore 07 should return 3 instants");
     assertFalse(timeline.empty());
-    assertFalse(timeline.getCommitAndReplaceTimeline().filterPendingExcludingMajorAndMinorCompaction().empty());
+    assertFalse(timeline.getCommitAndReplaceTimeline().filterPendingExcludingCompactionAndLogCompaction().empty());
     assertEquals(12, timeline.countInstants());
     assertEquals("01", timeline.firstInstant(
         HoodieTimeline.COMMIT_ACTION, State.COMPLETED).get().getTimestamp());
@@ -336,7 +336,7 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
   @Test
   public void testTimelineGetOperations() {
     List<HoodieInstant> allInstants = getAllInstants();
-    Supplier<Stream<HoodieInstant>> sup = allInstants::stream;
+    Supplier<Stream<HoodieInstant>> allInstantsSup = allInstants::stream;
     timeline = new HoodieActiveTimeline(metaClient, true);
     timeline.setInstants(allInstants);
 
@@ -346,8 +346,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
      * @param actions The actions that should be present in the timeline being checked
      */
     BiConsumer<HoodieTimeline, Set<String>> checkTimeline = (HoodieTimeline timeline, Set<String> actions) -> {
-      sup.get().filter(i -> actions.contains(i.getAction())).forEach(i -> assertTrue(timeline.containsInstant(i)));
-      sup.get().filter(i -> !actions.contains(i.getAction())).forEach(i -> assertFalse(timeline.containsInstant(i)));
+      List<HoodieInstant> expectedInstants = allInstantsSup.get().filter(i -> actions.contains(i.getAction())).collect(Collectors.toList());
+      List<HoodieInstant> unexpectedInstants = allInstantsSup.get().filter(i -> !actions.contains(i.getAction())).collect(Collectors.toList());
+
+      // The test set is the instant of all actions and states, so the instants returned by the timeline get operation cannot be empty.
+      // At the same time, it helps to detect errors such as incomplete test sets
+      assertFalse(expectedInstants.isEmpty());
+      expectedInstants.forEach(i -> assertTrue(timeline.containsInstant(i)));
+      unexpectedInstants.forEach(i -> assertFalse(timeline.containsInstant(i)));
     };
 
     // Test that various types of getXXX operations from HoodieActiveTimeline
@@ -355,7 +361,8 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getCommitsTimeline(), CollectionUtils.createSet(
         HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getWriteTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION,
+        HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getCommitAndReplaceTimeline(),  CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION));
     checkTimeline.accept(timeline.getDeltaCommitTimeline(), Collections.singleton(HoodieTimeline.DELTA_COMMIT_ACTION));
     checkTimeline.accept(timeline.getCleanerTimeline(), Collections.singleton(HoodieTimeline.CLEAN_ACTION));
@@ -363,14 +370,14 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     checkTimeline.accept(timeline.getRestoreTimeline(), Collections.singleton(HoodieTimeline.RESTORE_ACTION));
     checkTimeline.accept(timeline.getSavePointTimeline(), Collections.singleton(HoodieTimeline.SAVEPOINT_ACTION));
     checkTimeline.accept(timeline.getAllCommitsTimeline(), CollectionUtils.createSet(
-        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION,
+        HoodieTimeline.COMMIT_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.CLEAN_ACTION, HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION,
         HoodieTimeline.REPLACE_COMMIT_ACTION, HoodieTimeline.CLUSTERING_ACTION, HoodieTimeline.SAVEPOINT_ACTION, HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.INDEXING_ACTION));
 
     // Get some random Instants
     Random rand = new Random();
-    Set<String> randomInstants = sup.get().filter(i -> rand.nextBoolean())
+    Set<String> randomActions = allInstantsSup.get().filter(i -> rand.nextBoolean())
                                           .map(HoodieInstant::getAction).collect(Collectors.toSet());
-    checkTimeline.accept(timeline.getTimelineOfActions(randomInstants), randomInstants);
+    checkTimeline.accept(timeline.getTimelineOfActions(randomActions), randomActions);
   }
 
   @Test
@@ -738,20 +745,17 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
         // Following are not valid combinations of actions and state so we should
         // not be generating them.
         if (state == State.REQUESTED) {
-          if (action.equals(HoodieTimeline.SAVEPOINT_ACTION) || action.equals(HoodieTimeline.RESTORE_ACTION)
-              || action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
+          if (action.equals(HoodieTimeline.SAVEPOINT_ACTION) || action.equals(HoodieTimeline.RESTORE_ACTION)) {
             continue;
           }
-        }
-        if (state == State.INFLIGHT && action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          continue;
-        }
-        if (state == State.COMPLETED && action.equals(HoodieTimeline.ROLLBACK_ACTION)) {
-          continue;
         }
         // Compaction complete is called commit complete
         if (state == State.COMPLETED && action.equals(HoodieTimeline.COMPACTION_ACTION)) {
           action = HoodieTimeline.COMMIT_ACTION;
+        }
+        // LogCompaction complete is called deltacommit complete
+        if (state == State.COMPLETED && action.equals(HoodieTimeline.LOG_COMPACTION_ACTION)) {
+          action = HoodieTimeline.DELTA_COMMIT_ACTION;
         }
         // Cluster complete is called replacecommit complete
         if (state == State.COMPLETED && action.equals(HoodieTimeline.CLUSTERING_ACTION)) {
@@ -769,11 +773,11 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
       HoodieStorage storage = metaClient.getStorage();
       FileSystem fs = (FileSystem) storage.getFileSystem();
       HoodieWrapperFileSystem newFs = new HoodieWrapperFileSystem(fs, new NoOpConsistencyGuard());
-      metaClient.setHoodieStorage(new HoodieHadoopStorage(newFs));
+      metaClient.setStorage(new HoodieHadoopStorage(newFs));
       try {
         fun.accept(metaClient);
       } finally {
-        metaClient.setHoodieStorage(storage);
+        metaClient.setStorage(storage);
       }
       return;
     }

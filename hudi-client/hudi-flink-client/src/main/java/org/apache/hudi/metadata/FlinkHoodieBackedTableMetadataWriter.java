@@ -99,7 +99,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
 
@@ -109,12 +109,13 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void bulkCommit(String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records, int fileGroupCount) {
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.empty());
+  protected void bulkCommit(String instantTime, String partitionName, HoodieData<HoodieRecord> records, int fileGroupCount) {
+    // TODO: functional and secondary index are not supported with Flink yet, but we should fix the partition name when we support them.
+    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.empty());
   }
 
   @Override
-  protected void commitInternal(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
+  protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
     ValidationUtils.checkState(metadataMetaClient != null, "Metadata table is not fully initialized yet.");
     HoodieData<HoodieRecord> preppedRecords = prepRecords(partitionRecordsMap);
@@ -194,7 +195,7 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+  protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieFlinkTable.create(writeConfig, engineContext, metaClient);
   }
 

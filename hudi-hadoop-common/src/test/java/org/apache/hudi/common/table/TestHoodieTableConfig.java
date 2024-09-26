@@ -18,10 +18,13 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.ConfigProperty;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -35,6 +38,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -42,11 +47,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -218,5 +225,59 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
     HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
     assertArrayEquals(new String[] {"p1", "p2"}, config.getPartitionFields().get());
     assertEquals("p1,p2", config.getPartitionFieldProp());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"p1:simple,p2:timestamp", "p1,p2"})
+  public void testPartitionFieldAPIs(String partitionFields) {
+    Properties updatedProps = new Properties();
+    updatedProps.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), partitionFields);
+    HoodieTableConfig.update(storage, metaPath, updatedProps);
+
+    HoodieTableConfig config = new HoodieTableConfig(storage, metaPath, null, null);
+    assertEquals(partitionFields, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(config).get());
+    assertEquals("p1,p2", HoodieTableConfig.getPartitionFieldProp(config).get());
+    assertArrayEquals(Arrays.stream(partitionFields.split(BaseKeyGenerator.FIELD_SEPARATOR)).toArray(), HoodieTableConfig.getPartitionFieldsForKeyGenerator(config).get().toArray());
+    assertArrayEquals(new String[] {"p1", "p2"}, HoodieTableConfig.getPartitionFields(config).get());
+    assertEquals("p1", HoodieTableConfig.getPartitionFieldWithoutKeyGenPartitionType(partitionFields.split(",")[0], config));
+  }
+
+  @Test
+  public void testValidateConfigVersion() {
+    assertTrue(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.EIGHT));
+    assertTrue(HoodieTableConfig.validateConfigVersion(ConfigProperty.key("").noDefaultValue().withDocumentation(""),
+        HoodieTableVersion.SIX));
+    assertFalse(HoodieTableConfig.validateConfigVersion(HoodieTableConfig.INITIAL_VERSION, HoodieTableVersion.SIX));
+  }
+
+  @Test
+  public void testDropInvalidConfigs() {
+    // test invalid configs are dropped
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    config.setValue(HoodieTableConfig.INITIAL_VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue());
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+    assertTrue(config.contains(HoodieTableConfig.VERSION));
+    assertFalse(config.contains(HoodieTableConfig.INITIAL_VERSION));
+    assertFalse(config.contains(RECORD_MERGE_MODE));
+
+    // test valid ones are not dropped
+    config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    config.setValue(RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue());
+    HoodieTableConfig.dropInvalidConfigs(config);
+    assertTrue(config.contains(RECORD_MERGE_MODE));
+  }
+
+  @Test
+  public void testDefinedTableConfigs() {
+    List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
+    assertEquals(37, configProperties.size());
+    configProperties.forEach(c -> {
+      assertNotNull(c);
+      assertFalse(c.doc().isEmpty());
+    });
   }
 }

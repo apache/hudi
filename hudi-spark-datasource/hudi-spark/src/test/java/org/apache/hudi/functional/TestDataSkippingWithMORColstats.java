@@ -24,6 +24,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -91,7 +92,10 @@ public class TestDataSkippingWithMORColstats extends HoodieSparkClientTestBase {
     Properties props = new Properties();
     props.putAll(options);
     try {
-      metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath.toString(), props);
+      metaClient = HoodieTableMetaClient.newTableBuilder()
+          .fromProperties(props)
+          .setTableType(HoodieTableType.MERGE_ON_READ.name())
+          .initTable(storageConf.newInstance(), basePath.toString());
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

@@ -39,7 +39,7 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 
 class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestHarness {
   private val PARQUET_FORMAT = "parquet"
-  private val SPARK_MERGER = "org.apache.hudi.HoodieSparkRecordMerger"
+  private val SPARK_MERGER = "org.apache.hudi.DefaultSparkRecordMerger"
 
   @BeforeEach
   def setUp(): Unit = {

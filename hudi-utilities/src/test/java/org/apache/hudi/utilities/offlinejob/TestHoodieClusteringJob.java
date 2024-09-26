@@ -58,14 +58,12 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = getWriteConfig(tableBasePath);
     props.putAll(config.getProps());
-    Properties metaClientProps = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
 
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);
@@ -97,14 +95,11 @@ public class TestHoodieClusteringJob extends HoodieOfflineJobTestBase {
     Properties props = getPropertiesForKeyGen(true);
     HoodieWriteConfig config = getWriteConfig(tableBasePath);
     props.putAll(config.getProps());
-    Properties metaClientProps = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-
-    metaClient = HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath, metaClientProps);
+        .initTable(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()), tableBasePath);
     client = new SparkRDDWriteClient(context, config);
 
     writeData(false, client.createNewInstantTime(), 100, true);

@@ -50,11 +50,6 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-hadoop-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-aws</artifactId>
       <version>${project.version}</version>
       <scope>provided</scope>
@@ -179,7 +174,11 @@
         </exclusion>
       </exclusions>
     </dependency>
-
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-inline</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

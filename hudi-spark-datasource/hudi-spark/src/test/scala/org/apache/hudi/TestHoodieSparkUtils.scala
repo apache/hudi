@@ -196,7 +196,7 @@ class TestHoodieSparkUtils {
     } catch {
       case e: Exception =>
         if (HoodieSparkUtils.gteqSpark3_3) {
-          assertTrue(e.getMessage.contains("null value for (non-nullable) string at test_struct_name.nullableInnerStruct[nullableInnerStruct].new_nested_col"))
+          assertTrue(e.getMessage.contains("Field nullableInnerStruct.new_nested_col has no default value and is non-nullable"))
         } else {
           assertTrue(e.getMessage.contains("null of string in field new_nested_col of test_namespace.test_struct_name.nullableInnerStruct of union"))
         }

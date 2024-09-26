@@ -86,7 +86,6 @@ import org.apache.hudi.table.storage.HoodieLayoutFactory;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -774,7 +773,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       if (!invalidDataPaths.isEmpty()) {
         LOG.info("Removing duplicate files created due to task retries before committing. Paths=" + invalidDataPaths);
         Map<String, List<Pair<String, String>>> invalidPathsByPartition = invalidDataPaths.stream()
-            .map(dp -> Pair.of(new Path(basePath, dp).getParent().toString(), new Path(basePath, dp).toString()))
+            .map(dp ->
+                Pair.of(new StoragePath(basePath, dp).getParent().toString(),
+                    new StoragePath(basePath, dp).toString()))
             .collect(Collectors.groupingBy(Pair::getKey));
 
         // Ensure all files in delete list is actually present. This is mandatory for an eventually consistent FS.
@@ -819,7 +820,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   private boolean waitForCondition(String partitionPath, Stream<Pair<String, String>> partitionFilePaths, FileVisibility visibility) {
-    final HoodieStorage storage = metaClient.getRawHoodieStorage();
+    final HoodieStorage storage = metaClient.getRawStorage();
     List<String> fileList = partitionFilePaths.map(Pair::getValue).collect(Collectors.toList());
     try {
       getConsistencyGuard(storage, config.getConsistencyGuardConfig())

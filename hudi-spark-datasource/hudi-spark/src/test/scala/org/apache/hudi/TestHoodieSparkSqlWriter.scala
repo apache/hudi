@@ -267,9 +267,7 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
 @Test
 def testBulkInsertForDropPartitionColumn(): Unit = {
-  //create a new table
-  val tableName = "trips_table"
-  val basePath = "file:///tmp/trips_table"
+  // create a new table
   val columns = Seq("ts", "uuid", "rider", "driver", "fare", "city")
   val data =
     Seq((1695159649087L, "334e26e9-8355-45cc-97c6-c31daf0df330", "rider-A", "driver-K", 19.10, "san_francisco"),
@@ -278,10 +276,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       (1695516137016L, "e3cf430c-889d-4015-bc98-59bdce1e530c", "rider-F", "driver-P", 34.15, "sao_paulo"),
       (1695115999911L, "c8abbe79-8d89-47ea-b4ce-4d224bae5bfa", "rider-J", "driver-T", 17.85, "chennai"));
 
-  var inserts = spark.createDataFrame(data).toDF(columns: _*)
+  val inserts = spark.createDataFrame(data).toDF(columns: _*)
   inserts.write.format("hudi").
     option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "city").
-    option(HoodieWriteConfig.TABLE_NAME, tableName).
+    option(HoodieWriteConfig.TBL_NAME.key(), hoodieFooTableName).
     option("hoodie.datasource.write.recordkey.field", "uuid").
     option("hoodie.datasource.write.precombine.field", "rider").
     option("hoodie.datasource.write.operation", "bulk_insert").
@@ -289,10 +287,10 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     option("hoodie.populate.meta.fields", "false").
     option("hoodie.datasource.write.drop.partition.columns", "true").
     mode(SaveMode.Overwrite).
-    save(basePath)
+    save(tempBasePath)
 
   // Ensure the partition column (i.e 'city') can be read back
-  val tripsDF = spark.read.format("hudi").load(basePath)
+  val tripsDF = spark.read.format("hudi").load(tempBasePath)
   tripsDF.show()
   tripsDF.select("city").foreach(row => {
     assertNotNull(row)
@@ -302,7 +300,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   val partitions = Seq("city=san_francisco", "city=chennai", "city=sao_paulo")
   val partitionPaths = new Array[String](3)
   for (i <- partitionPaths.indices) {
-    partitionPaths(i) = String.format("%s/%s/*", basePath, partitions(i))
+    partitionPaths(i) = String.format("%s/%s/*", tempBasePath, partitions(i))
   }
   val rawFileDf = spark.sqlContext.read.parquet(partitionPaths(0), partitionPaths(1), partitionPaths(2))
   rawFileDf.show()
@@ -487,7 +485,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val recordsSeq = convertRowListToSeq(records)
     val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = false, initBasePath = true)
-    val client = spy(DataSourceUtils.createHoodieClient(
+    val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
       new JavaSparkContext(sc), modifiedSchema.toString, tempBasePath, hoodieFooTableName,
       fooTableParams.asJava).asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]])
 
@@ -545,7 +543,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       val fooTableParams = HoodieWriterUtils.parametersWithWriteDefaults(fooTableModifier)
       initializeMetaClientForBootstrap(fooTableParams, tableType, addBootstrapPath = true, initBasePath = false)
 
-      val client = spy(DataSourceUtils.createHoodieClient(
+      val client = spy[SparkRDDWriteClient[_]](DataSourceUtils.createHoodieClient(
         new JavaSparkContext(sc),
         null,
         tempBasePath,
@@ -575,7 +573,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     // when metadata is enabled, directly instantiating write client using DataSourceUtils.createHoodieClient
     // will hit a code which tries to instantiate meta client for data table. if table does not exist, it fails.
     // hence doing an explicit instantiation here.
-    val tableMetaClientBuilder = HoodieTableMetaClient.withPropertyBuilder()
+    val tableMetaClientBuilder = HoodieTableMetaClient.newTableBuilder()
       .setTableType(tableType)
       .setTableName(hoodieFooTableName)
       .setRecordKeyFields(fooTableParams(DataSourceWriteOptions.RECORDKEY_FIELD.key))
@@ -1173,7 +1171,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .option(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key, classOf[SimpleKeyGenerator].getName)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
+      case _: Throwable => fail("Switching from no keygen to explicit SimpleKeyGenerator should not fail");
     }
   }
 
@@ -1206,7 +1204,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
         .option(HoodieWriteConfig.TBL_NAME.key, tableName1)
         .mode(SaveMode.Append).save(tablePath1)
     } catch {
-      case _ => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
+      case _: Throwable => fail("Switching from  explicit SimpleKeyGenerator to default keygen should not fail");
     }
   }
 

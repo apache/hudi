@@ -25,6 +25,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -51,8 +52,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StorageSchemes;
+import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 import org.apache.hudi.utilities.checkpointing.InitialCheckPointProvider;
-import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.SchemaProviderPostProcessorConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSchemaPostProcessException;
@@ -64,7 +66,6 @@ import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProviderWithPostProcessor;
-import org.apache.hudi.utilities.schema.SparkAvroPostProcessor;
 import org.apache.hudi.utilities.schema.postprocessor.ChainedSchemaPostProcessor;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
@@ -116,7 +117,6 @@ import java.util.Properties;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -393,9 +393,10 @@ public class UtilHelpers {
    */
   public static SparkRDDWriteClient<HoodieRecordPayload> createHoodieClient(JavaSparkContext jsc, String basePath, String schemaStr,
       int parallelism, Option<String> compactionStrategyClass, TypedProperties properties) {
-    HoodieCompactionConfig compactionConfig = compactionStrategyClass
+    Option<CompactionStrategy> strategyOpt = compactionStrategyClass.map(ReflectionUtils::loadClass);
+    HoodieCompactionConfig compactionConfig = strategyOpt
         .map(strategy -> HoodieCompactionConfig.newBuilder().withInlineCompaction(false)
-            .withCompactionStrategy(ReflectionUtils.loadClass(strategy)).build())
+            .withCompactionStrategy(strategy).build())
         .orElse(HoodieCompactionConfig.newBuilder().withInlineCompaction(false).build());
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder().withPath(basePath)
@@ -554,12 +555,6 @@ public class UtilHelpers {
 
     String schemaPostProcessorClass = getStringWithAltKeys(
         cfg, SchemaProviderPostProcessorConfig.SCHEMA_POST_PROCESSOR, true);
-    boolean enableSparkAvroPostProcessor =
-        getBooleanWithAltKeys(cfg, HoodieSchemaProviderConfig.SPARK_AVRO_POST_PROCESSOR_ENABLE);
-    if (transformerClassNames != null && !transformerClassNames.isEmpty()
-        && enableSparkAvroPostProcessor && StringUtils.isNullOrEmpty(schemaPostProcessorClass)) {
-      schemaPostProcessorClass = SparkAvroPostProcessor.class.getName();
-    }
 
     if (schemaPostProcessorClass == null || schemaPostProcessorClass.isEmpty()) {
       return provider;
@@ -610,9 +605,12 @@ public class UtilHelpers {
         .build();
   }
 
-  public static void addLockOptions(String basePath, TypedProperties props) {
+  public static void addLockOptions(String basePath, String schema, TypedProperties props) {
     if (!props.containsKey(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key())) {
-      props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
+      List<String> customSupportedFSs = props.getStringList(HoodieCommonConfig.HOODIE_FS_ATOMIC_CREATION_SUPPORT.key(), ",", new ArrayList<>());
+      if (schema == null || customSupportedFSs.contains(schema) || StorageSchemes.isAtomicCreationSupported(schema)) {
+        props.putAll(FileSystemBasedLockProvider.getLockConfig(basePath));
+      }
     }
   }
 

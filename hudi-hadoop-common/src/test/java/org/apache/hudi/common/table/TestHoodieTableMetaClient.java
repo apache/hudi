@@ -30,7 +30,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 
+import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
@@ -81,7 +84,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void checkSerDe() {
+  public void testSerDe() {
     // check if this object is serialized and de-serialized, we are able to read from the file system
     HoodieTableMetaClient deserializedMetaClient =
         HoodieTestUtils.serializeDeserialize(metaClient, HoodieTableMetaClient.class);
@@ -99,7 +102,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void checkCommitTimeline() {
+  public void testCommitTimeline() {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     HoodieTimeline activeCommitTimeline = activeTimeline.getCommitAndReplaceTimeline();
     assertTrue(activeCommitTimeline.empty(), "Should be empty commit timeline");
@@ -186,7 +189,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
                                        Option<String> payloadType,
                                        Option<String> recordMergerStrategy,
                                        RecordMergeMode expectedRecordMergeMode) {
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table_name");
     if (payloadClassName.isPresent()) {
@@ -235,7 +238,7 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
                                                   Option<String> recordMergerStrategy,
                                                   RecordMergeMode recordMergeMode,
                                                   String expectedErrorMessage) {
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table_name")
         .setRecordMergeMode(recordMergeMode);
@@ -257,7 +260,6 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   public void testEquals() throws IOException {
     HoodieTableMetaClient metaClient1 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
-    assertEquals(metaClient1, metaClient1);
     assertEquals(metaClient1, metaClient2);
     assertNotEquals(metaClient1, null);
     assertNotEquals(metaClient1, new Object());
@@ -269,5 +271,103 @@ public class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.init(tempDir.toAbsolutePath().toString(), getTableType());
     assertEquals(metaClient1.toString(), metaClient2.toString());
     assertNotEquals(metaClient1.toString(), new Object().toString());
+  }
+
+  @Test
+  public void testTableVersion() throws IOException {
+    final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
+    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .setTableName("table-version-test")
+        .setTableVersion(HoodieTableVersion.SIX.versionCode())
+        .initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
+
+    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
+        .setConf(this.metaClient.getStorageConf())
+        .setBasePath(basePath)
+        .build();
+    assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
+  }
+
+  @Test
+  public void testGenerateFromAnotherMetaClient() throws IOException {
+    final String basePath1 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t2A";
+    final String basePath2 = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t2B";
+
+    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .setTableName("table-version-test")
+        .setTableVersion(HoodieTableVersion.SIX.versionCode())
+        .initTable(this.metaClient.getStorageConf(), basePath1);
+
+    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.newTableBuilder()
+        .fromMetaClient(metaClient1)
+        .initTable(this.metaClient.getStorageConf(), basePath2);
+
+    assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
+    assertEquals(metaClient1.getTableConfig().getTableVersion(), metaClient2.getTableConfig().getTableVersion());
+    assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
+  }
+
+  @Test
+  public void testTableBuilderRequiresTableNameAndType() {
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableMetaClient.builder()
+          .setConf(this.metaClient.getStorageConf())
+          .build();
+    });
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableMetaClient.newTableBuilder()
+          .setTableName("test-table")
+          .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "failing2");
+    });
+    assertThrows(IllegalArgumentException.class, () -> {
+      HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "failing3");
+    });
+  }
+
+  @Test
+  public void testCreateMetaClientFromProperties() throws IOException {
+    final String basePath = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t5";
+    Properties props = new Properties();
+    props.setProperty(HoodieTableConfig.NAME.key(), "test-table");
+    props.setProperty(HoodieTableConfig.TYPE.key(), HoodieTableType.COPY_ON_WRITE.name());
+    props.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "timestamp");
+
+    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(props)
+        .initTable(this.metaClient.getStorageConf(),basePath);
+
+    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
+        .setConf(this.metaClient.getStorageConf())
+        .setBasePath(basePath)
+        .build();
+
+    // test table name and type and precombine field also match
+    assertEquals(metaClient1.getTableConfig().getTableName(), metaClient2.getTableConfig().getTableName());
+    assertEquals(metaClient1.getTableConfig().getTableType(), metaClient2.getTableConfig().getTableType());
+    assertEquals(metaClient1.getTableConfig().getPreCombineField(), metaClient2.getTableConfig().getPreCombineField());
+    // default table version should be current version
+    assertEquals(HoodieTableVersion.current(), metaClient2.getTableConfig().getTableVersion());
+  }
+
+  @Test
+  public void testCreateLayoutInStorage() throws IOException {
+    final String basePath = tempDir.toAbsolutePath().toString() + Path.SEPARATOR + "t6";
+    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table-layout-test")
+        .initTable(this.metaClient.getStorageConf(), basePath);
+
+    // test the folder structure
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.AUXILIARYFOLDER_NAME));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.TEMPFOLDER_NAME));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue()));
+    this.metaClient.getRawStorage().exists(new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME
+        + Path.SEPARATOR + "hoodie.properties"));
   }
 }

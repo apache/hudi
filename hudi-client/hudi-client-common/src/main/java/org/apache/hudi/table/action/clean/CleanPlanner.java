@@ -180,7 +180,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils
                   .deserializeHoodieCleanMetadata(hoodieTable.getActiveTimeline().getInstantDetails(lastClean.get()).get());
           if ((cleanMetadata.getEarliestCommitToRetain() != null)
-                  && (cleanMetadata.getEarliestCommitToRetain().length() > 0)
+                  && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
                   && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
             return getPartitionPathsForIncrementalCleaning(cleanMetadata, instantToRetain);
           }
@@ -204,9 +204,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       LOG.info("Since savepoints have been removed compared to previous clean, triggering clean planning for all partitions");
       return getPartitionPathsForFullCleaning();
     } else {
-      LOG.info("Incremental Cleaning mode is enabled. Looking up partition-paths that have since changed "
-          + "since last cleaned at " + cleanMetadata.getEarliestCommitToRetain()
-          + ". New Instant to retain : " + newInstantToRetain);
+      LOG.info(
+          "Incremental Cleaning mode is enabled. Looking up partition-paths that have changed "
+              + "since last clean at {}. New Instant to retain {}.",
+          cleanMetadata.getEarliestCommitToRetain(),
+          newInstantToRetain);
 
       return hoodieTable.getCompletedCommitsTimeline().getInstantsAsStream()
           .filter(instant -> HoodieTimeline.compareTimestamps(instant.getTimestamp(), HoodieTimeline.GREATER_THAN_OR_EQUALS,
@@ -288,8 +290,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * single file (i.e., run it with versionsRetained = 1)
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
-    LOG.info("Cleaning " + partitionPath + ", retaining latest " + config.getCleanerFileVersionsRetained()
-        + " file versions. ");
+    LOG.info(
+        "Cleaning {}, retaining latest {} file versions.",
+        partitionPath,
+        config.getCleanerFileVersionsRetained());
+
     List<CleanFileInfo> deletePaths = new ArrayList<>();
     // Collect all the datafiles savepointed by all the savepoints
     List<String> savepointedFiles = hoodieTable.getSavepointTimestamps().stream()

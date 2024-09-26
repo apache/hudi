@@ -30,7 +30,6 @@ import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,8 +48,8 @@ public class UpgradeDowngrade {
   private HoodieTableMetaClient metaClient;
   protected HoodieWriteConfig config;
   protected HoodieEngineContext context;
-  private Path updatedPropsFilePath;
-  private Path propsFilePath;
+  private StoragePath updatedPropsFilePath;
+  private StoragePath propsFilePath;
 
   public UpgradeDowngrade(
       HoodieTableMetaClient metaClient, HoodieWriteConfig config, HoodieEngineContext context,
@@ -58,15 +57,21 @@ public class UpgradeDowngrade {
     this.metaClient = metaClient;
     this.config = config;
     this.context = context;
-    this.updatedPropsFilePath = new Path(metaClient.getMetaPath().toString(), HOODIE_UPDATED_PROPERTY_FILE);
-    this.propsFilePath = new Path(metaClient.getMetaPath().toString(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
+    this.updatedPropsFilePath = new StoragePath(metaClient.getMetaPath(), HOODIE_UPDATED_PROPERTY_FILE);
+    this.propsFilePath = new StoragePath(metaClient.getMetaPath(), HoodieTableConfig.HOODIE_PROPERTIES_FILE);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
   }
 
-  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toVersion) {
-    HoodieTableVersion fromVersion = metaClient.getTableConfig().getTableVersion();
-    // Ensure versions are same
-    return toVersion.versionCode() != fromVersion.versionCode();
+  public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+    HoodieTableVersion fromTableVersion = metaClient.getTableConfig().getTableVersion();
+
+    if (!config.autoUpgrade() && fromTableVersion.versionCode() < toWriteVersion.versionCode()) {
+      throw new HoodieUpgradeDowngradeException(String.format("Table version mismatch. "
+              + "Please upgrade table from version %s to %s. ", fromTableVersion, toWriteVersion));
+    }
+
+    // allow upgrades/downgrades otherwise.
+    return toWriteVersion.versionCode() != fromTableVersion.versionCode();
   }
 
   /**
@@ -137,14 +142,14 @@ public class UpgradeDowngrade {
     if (fromVersion.versionCode() < toVersion.versionCode()) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
-        HoodieTableVersion nextVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() + 1);
+        HoodieTableVersion nextVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() + 1);
         tableProps.putAll(upgrade(fromVersion, nextVersion, instantTime));
         fromVersion = nextVersion;
       }
     } else {
       // downgrade
       while (fromVersion.versionCode() > toVersion.versionCode()) {
-        HoodieTableVersion prevVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() - 1);
+        HoodieTableVersion prevVersion = HoodieTableVersion.fromVersionCode(fromVersion.versionCode() - 1);
         tableProps.putAll(downgrade(fromVersion, prevVersion, instantTime));
         fromVersion = prevVersion;
       }

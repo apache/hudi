@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.fs;
 
+import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.avro.model.HoodiePath;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -603,6 +605,31 @@ public class FSUtils {
       throw new HoodieIOException(ioe.getMessage(), ioe);
     }
     return false;
+  }
+
+  public static HoodiePath fromStoragePath(StoragePath path) {
+    if (null == path) {
+      return null;
+    }
+    return HoodiePath.newBuilder().setUri(path.toString()).build();
+  }
+
+  public static HoodieFileStatus fromPathInfo(StoragePathInfo pathInfo) {
+    if (null == pathInfo) {
+      return null;
+    }
+
+    HoodieFileStatus fStatus = new HoodieFileStatus();
+
+    fStatus.setPath(fromStoragePath(pathInfo.getPath()));
+    fStatus.setLength(pathInfo.getLength());
+    fStatus.setIsDir(pathInfo.isDirectory());
+    fStatus.setBlockReplication((int) pathInfo.getBlockReplication());
+    fStatus.setBlockSize(pathInfo.getBlockSize());
+    fStatus.setModificationTime(pathInfo.getModificationTime());
+    fStatus.setAccessTime(pathInfo.getModificationTime());
+
+    return fStatus;
   }
 
   /**

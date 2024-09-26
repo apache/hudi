@@ -21,6 +21,7 @@ package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.hive.HiveSyncConfigHolder._
@@ -99,7 +100,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           tool.syncHoodieTable()
 
           // assert table created and no partition metadata
-          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig)
+          val hiveClient = new HoodieHiveSyncClient(HiveTestUtil.getHiveSyncConfig, metaClient)
           assertTrue(hiveClient.tableExists("h0_ro"))
           assertTrue(hiveClient.tableExists("h0_rt"))
           assertEquals(0, hiveClient.getAllPartitions("h0_ro").size())
@@ -244,6 +245,75 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           // [HUDI-7472] After creating functional index, the existing MDT partitions should still be available
           assert(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
         }
+      }
+    }
+  }
+
+  test("Test Drop Functional Index") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        val databaseName = "default"
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = 'mor',
+             |  preCombineField = 'ts',
+             |  hoodie.metadata.record.index.enable = 'true',
+             |  hoodie.datasource.write.recordkey.field = 'id'
+             | )
+             | partitioned by(ts)
+             | location '$basePath'
+       """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+        var metaClient = createMetaClient(spark, basePath)
+
+        assert(metaClient.getTableConfig.isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX))
+
+        val sqlParser: ParserInterface = spark.sessionState.sqlParser
+        val analyzer: Analyzer = spark.sessionState.analyzer
+
+        val logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+        val resolvedLogicalPlan = analyzer.execute(logicalPlan)
+        assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
+
+        // create functional index
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+        metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        var functionalIndexMetadata = metaClient.getIndexMetadata.get()
+        assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+        assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+        // Verify one can create more than one functional index
+        spark.sql(s"create index name_lower on $tableName using column_stats(ts) options(func='identity')")
+        metaClient = createMetaClient(spark, basePath)
+        functionalIndexMetadata = metaClient.getIndexMetadata.get()
+        assertEquals(2, functionalIndexMetadata.getIndexDefinitions.size())
+        assertEquals("func_index_name_lower", functionalIndexMetadata.getIndexDefinitions.get("func_index_name_lower").getIndexName)
+
+        // Ensure that both the indexes are tracked correctly in metadata partition config
+        val mdtPartitions = metaClient.getTableConfig.getMetadataPartitions
+        assert(mdtPartitions.contains("func_index_name_lower") && mdtPartitions.contains("func_index_idx_datestr"))
+
+        // drop functional index
+        spark.sql(s"drop index func_index_idx_datestr on $tableName")
+        // validate table config
+        metaClient = HoodieTableMetaClient.reload(metaClient)
+        assert(!metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
+        // assert that the lower(name) index is still present
+        assert(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_name_lower"))
       }
     }
   }

@@ -20,6 +20,8 @@
 package org.apache.hudi.gcp.bigquery;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncTool;
@@ -27,6 +29,7 @@ import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
 import com.google.cloud.bigquery.Schema;
+import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,14 +70,18 @@ public class BigQuerySyncTool extends HoodieSyncTool {
   private final BigQuerySchemaResolver bqSchemaResolver;
 
   public BigQuerySyncTool(Properties props) {
+    this(props, HadoopConfigUtils.createHadoopConf(props), Option.empty());
+  }
+
+  public BigQuerySyncTool(Properties props, Configuration configuration, Option<HoodieTableMetaClient> metaClientOption) {
     // will build file writer, client, etc. from configs
-    super(props);
+    super(props, configuration);
     this.config = new BigQuerySyncConfig(props);
     this.tableName = config.getString(BIGQUERY_SYNC_TABLE_NAME);
     this.manifestTableName = tableName + SUFFIX_MANIFEST;
     this.versionsTableName = tableName + SUFFIX_VERSIONS;
     this.snapshotViewName = tableName;
-    this.bqSyncClient = new HoodieBigQuerySyncClient(config);
+    this.bqSyncClient = new HoodieBigQuerySyncClient(config, metaClientOption.orElseGet(() -> buildMetaClient(config)));
     // reuse existing meta client if not provided (only test cases will provide their own meta client)
     this.metaClient = bqSyncClient.getMetaClient();
     this.manifestFileWriter = buildManifestFileWriterFromConfig(metaClient, config);

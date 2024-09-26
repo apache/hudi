@@ -23,6 +23,7 @@ import org.apache.hudi.async.HoodieAsyncService;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
@@ -48,12 +49,16 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -283,6 +288,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--validate-all-file-groups"}, description = "Validate all file groups, and all file slices within file groups.", required = false)
     public boolean validateAllFileGroups = false;
 
+    @Parameter(names = {"--validate-last-n-file-slices"}, description = "Validate just the last N file slices for all file groups. Specify N.", required = false)
+    public Integer validateLastNFileSlices = null;
+
     @Parameter(names = {"--validate-all-column-stats"}, description = "Validate column stats for all columns in the schema", required = false)
     public boolean validateAllColumnStats = false;
 
@@ -305,6 +313,18 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Number of error samples to show for record index validation",
         required = false)
     public int numRecordIndexErrorSamples = 100;
+
+    @Parameter(names = {"--view-storage-type-fs-listing"},
+        description = "View storage type to use for File System based listing. "
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
+    public String viewStorageTypeForFSListing = FileSystemViewStorageType.MEMORY.name();
+
+    @Parameter(names = {"--view-storage-type-mdt"},
+        description = "View storage type to use for metadata table based listing. "
+            + "Supported values are MEMORY (by default) and SPILLABLE_DISK.",
+        required = false)
+    public String viewStorageTypeForMetadata = FileSystemViewStorageType.MEMORY.name();
 
     @Parameter(names = {"--min-validate-interval-seconds"},
         description = "the min validate interval of each validate when set --continuous, default is 10 minutes.")
@@ -348,11 +368,14 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-latest-file-slices " + validateLatestFileSlices + ", \n"
           + "   --validate-latest-base-files " + validateLatestBaseFiles + ", \n"
           + "   --validate-all-file-groups " + validateAllFileGroups + ", \n"
+          + "   --validate-last-n-file-slices " + validateLastNFileSlices + ", \n"
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
           + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
+          + "   --view-storage-type-fs-listing " + viewStorageTypeForFSListing + ", \n"
+          + "   --view-storage-type-mdt " + viewStorageTypeForMetadata + ", \n"
           + "   --continuous " + continuous + ", \n"
           + "   --skip-data-files-for-cleaning " + skipDataFilesForCleaning + ", \n"
           + "   --ignore-failed " + ignoreFailed + ", \n"
@@ -386,6 +409,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
+          && Objects.equals(viewStorageTypeForFSListing, config.viewStorageTypeForFSListing)
+          && Objects.equals(viewStorageTypeForMetadata, config.viewStorageTypeForMetadata)
           && Objects.equals(numRecordIndexErrorSamples, config.numRecordIndexErrorSamples)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
@@ -403,6 +428,7 @@ public class HoodieMetadataTableValidator implements Serializable {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validateBloomFilters,
           validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
           sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
     }
@@ -525,9 +551,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     try (HoodieMetadataValidationContext metadataTableBasedContext =
-             new HoodieMetadataValidationContext(engineContext, props, metaClient, true);
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, true, cfg.viewStorageTypeForMetadata);
          HoodieMetadataValidationContext fsBasedContext =
-             new HoodieMetadataValidationContext(engineContext, props, metaClient, false)) {
+             new HoodieMetadataValidationContext(engineContext, props, metaClient, false, cfg.viewStorageTypeForFSListing)) {
       Set<String> finalBaseFilesForCleaning = baseFilesForCleaning;
       List<Pair<Boolean, ? extends Exception>> result = new ArrayList<>(
           engineContext.parallelize(allPartitions, allPartitions.size()).map(partitionPath -> {
@@ -782,6 +808,17 @@ public class HoodieMetadataTableValidator implements Serializable {
           .getSortedAllFileGroupList(partitionPath).stream()
           .flatMap(HoodieFileGroup::getAllFileSlices).sorted(new FileSliceComparator())
           .collect(Collectors.toList());
+    }
+    if (cfg.validateLastNFileSlices != null) {
+      int lastNFileSlices = cfg.validateLastNFileSlices;
+      int allFileSlicesFromFSCount = allFileSlicesFromFS.size();
+      if (allFileSlicesFromFSCount > lastNFileSlices) {
+        allFileSlicesFromFS = allFileSlicesFromFS.subList(allFileSlicesFromFSCount - lastNFileSlices, allFileSlicesFromFSCount);
+      }
+      int allFileSlicesFromMetaCount = allFileSlicesFromMeta.size();
+      if (allFileSlicesFromMetaCount > lastNFileSlices) {
+        allFileSlicesFromMeta = allFileSlicesFromMeta.subList(allFileSlicesFromMetaCount - lastNFileSlices, allFileSlicesFromMetaCount);
+      }
     }
 
     LOG.debug("All file slices from metadata: {}. For partitions {}", allFileSlicesFromMeta, partitionPath);
@@ -1130,6 +1167,11 @@ public class HoodieMetadataTableValidator implements Serializable {
           mismatch = true;
           break;
         }
+        // test for log files equality
+        if (!fileSlice1.getLogFiles().collect(Collectors.toList()).equals(fileSlice2.getLogFiles().collect(Collectors.toList()))) {
+          mismatch = true;
+          break;
+        }
         if (!areFileSliceCommittedLogFilesMatching(
             fileSlice1, fileSlice2, metaClient, committedFilesMap)) {
           mismatch = true;
@@ -1376,8 +1418,9 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     public HoodieMetadataValidationContext(
         HoodieEngineContext engineContext, Properties props, HoodieTableMetaClient metaClient,
-        boolean enableMetadataTable) {
-      this.props = props;
+        boolean enableMetadataTable, String viewStorageType) {
+      this.props = new Properties();
+      this.props.putAll(props);
       this.metaClient = metaClient;
       this.enableMetadataTable = enableMetadataTable;
       HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
@@ -1386,12 +1429,33 @@ public class HoodieMetadataTableValidator implements Serializable {
           .withMetadataIndexColumnStats(enableMetadataTable)
           .withEnableRecordIndex(enableMetadataTable)
           .build();
-      this.fileSystemView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-          metaClient, metadataConfig);
+      props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), viewStorageType);
+      FileSystemViewStorageConfig viewConf = FileSystemViewStorageConfig.newBuilder().fromProperties(props).build();
+      ValidationUtils.checkArgument(viewConf.getStorageType().name().equals(viewStorageType), "View storage type not reflected");
+      HoodieCommonConfig commonConfig = HoodieCommonConfig.newBuilder().fromProperties(props).build();
+      this.fileSystemView = getFileSystemView(engineContext,
+          metaClient, metadataConfig, viewConf, commonConfig);
       this.tableMetadata = HoodieTableMetadata.create(
           engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
       if (metaClient.getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
         this.allColumnNameList = getAllColumnNames();
+      }
+    }
+
+    private HoodieTableFileSystemView getFileSystemView(HoodieEngineContext context,
+                                                        HoodieTableMetaClient metaClient, HoodieMetadataConfig metadataConfig,
+                                                        FileSystemViewStorageConfig viewConf, HoodieCommonConfig commonConfig) {
+      HoodieTimeline timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+      switch (viewConf.getStorageType()) {
+        case SPILLABLE_DISK:
+          LOG.debug("Creating Spillable Disk based Table View");
+          return new SpillableMapBasedFileSystemView(metaClient, timeline, viewConf, commonConfig);
+        case MEMORY:
+          LOG.debug("Creating in-memory based Table View");
+          return FileSystemViewManager.createInMemoryFileSystemView(context,
+              metaClient, metadataConfig);
+        default:
+          throw new HoodieException("Unsupported storage type " + viewConf.getStorageType() + ", used with HoodieMetadataTableValidator");
       }
     }
 

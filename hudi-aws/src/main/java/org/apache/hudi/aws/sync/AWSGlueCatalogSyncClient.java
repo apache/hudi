@@ -22,6 +22,7 @@ import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.aws.sync.util.GluePartitionFilterGenerator;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -147,19 +148,13 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   private final int changedPartitionsReadParallelism;
   private final int changeParallelism;
 
-  public AWSGlueCatalogSyncClient(HiveSyncConfig config) {
-    super(config);
-    try {
-      GlueAsyncClientBuilder awsGlueBuilder = GlueAsyncClient.builder()
-              .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(config.getProps()));
-      awsGlueBuilder = config.getString(AWS_GLUE_ENDPOINT) == null ? awsGlueBuilder :
-              awsGlueBuilder.endpointOverride(new URI(config.getString(AWS_GLUE_ENDPOINT)));
-      awsGlueBuilder = config.getString(AWS_GLUE_REGION) == null ? awsGlueBuilder :
-              awsGlueBuilder.region(Region.of(config.getString(AWS_GLUE_REGION)));
-      this.awsGlue = awsGlueBuilder.build();
-    } catch (URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
+  public AWSGlueCatalogSyncClient(HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    this(buildAsyncClient(config), config, metaClient);
+  }
+
+  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config, HoodieTableMetaClient metaClient) {
+    super(config, metaClient);
+    this.awsGlue = awsGlue;
     this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
     this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
     this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
@@ -168,15 +163,18 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
     this.changeParallelism = config.getIntOrDefault(PARTITION_CHANGE_PARALLELISM);
   }
 
-  AWSGlueCatalogSyncClient(GlueAsyncClient awsGlue, HiveSyncConfig config) {
-    super(config);
-    this.awsGlue = awsGlue;
-    this.databaseName = config.getStringOrDefault(META_SYNC_DATABASE_NAME);
-    this.skipTableArchive = config.getBooleanOrDefault(GlueCatalogSyncClientConfig.GLUE_SKIP_TABLE_ARCHIVE);
-    this.enableMetadataTable = Boolean.toString(config.getBoolean(GLUE_METADATA_FILE_LISTING)).toUpperCase();
-    this.allPartitionsReadParallelism = config.getIntOrDefault(ALL_PARTITIONS_READ_PARALLELISM);
-    this.changedPartitionsReadParallelism = config.getIntOrDefault(CHANGED_PARTITIONS_READ_PARALLELISM);
-    this.changeParallelism = config.getIntOrDefault(PARTITION_CHANGE_PARALLELISM);
+  private static GlueAsyncClient buildAsyncClient(HiveSyncConfig config) {
+    try {
+      GlueAsyncClientBuilder awsGlueBuilder = GlueAsyncClient.builder()
+          .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(config.getProps()));
+      awsGlueBuilder = config.getString(AWS_GLUE_ENDPOINT) == null ? awsGlueBuilder :
+          awsGlueBuilder.endpointOverride(new URI(config.getString(AWS_GLUE_ENDPOINT)));
+      awsGlueBuilder = config.getString(AWS_GLUE_REGION) == null ? awsGlueBuilder :
+          awsGlueBuilder.region(Region.of(config.getString(AWS_GLUE_REGION)));
+      return awsGlueBuilder.build();
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private List<Partition> getPartitionsSegment(Segment segment, String tableName) {

@@ -20,13 +20,18 @@ package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
@@ -35,10 +40,18 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
+import static org.apache.hudi.metadata.MetadataPartitionType.BLOOM_FILTERS;
+import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
+import static org.apache.hudi.metadata.MetadataPartitionType.FILES;
+import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
@@ -47,6 +60,7 @@ import static org.apache.hudi.common.table.timeline.HoodieInstant.UNDERSCORE;
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
+  private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
   public Map<ConfigProperty, String> downgrade(HoodieWriteConfig config, HoodieEngineContext context, String instantTime, SupportsUpgradeDowngrade upgradeDowngradeHelper) {
@@ -79,10 +93,18 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     }
 
     downgradePartitionFields(config, context, upgradeDowngradeHelper, tablePropsToAdd);
+    // Prepare parameters.
+    if (metaClient.getTableConfig().isMetadataTableAvailable()) {
+      // Delete unsupported metadata partitions in table version 7.
+      downgradeMetadataPartitions(context, metaClient.getStorage(), metaClient, tablePropsToAdd);
+      UpgradeDowngradeUtils.updateMetadataTableVersion(context, HoodieTableVersion.SEVEN, metaClient);
+    }
     return tablePropsToAdd;
   }
 
-  private static void downgradePartitionFields(HoodieWriteConfig config, HoodieEngineContext context, SupportsUpgradeDowngrade upgradeDowngradeHelper,
+  private static void downgradePartitionFields(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               SupportsUpgradeDowngrade upgradeDowngradeHelper,
                                                Map<ConfigProperty, String> tablePropsToAdd) {
     HoodieTableConfig tableConfig = upgradeDowngradeHelper.getTable(config, context).getMetaClient().getTableConfig();
     String keyGenerator = tableConfig.getKeyGeneratorClassName();
@@ -91,5 +113,50 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
         && (keyGenerator.equals(KeyGeneratorType.CUSTOM.getClassName()) || keyGenerator.equals(KeyGeneratorType.CUSTOM_AVRO.getClassName()))) {
       tablePropsToAdd.put(HoodieTableConfig.PARTITION_FIELDS, tableConfig.getPartitionFieldProp());
     }
+  }
+
+  static void downgradeMetadataPartitions(HoodieEngineContext context,
+                                          HoodieStorage hoodieStorage,
+                                          HoodieTableMetaClient metaClient,
+                                          Map<ConfigProperty, String> tablePropsToAdd) {
+    // Get base path for metadata table.
+    StoragePath metadataTableBasePath =
+        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+
+    // Fetch metadata partition paths.
+    List<String> metadataPartitions = FSUtils.getAllPartitionPaths(context,
+        hoodieStorage,
+        metadataTableBasePath,
+        false);
+
+    // Delete partitions.
+    List<String> validPartitionPaths = deleteMetadataPartition(context, metaClient, metadataPartitions);
+
+    // Clean the configuration.
+    tablePropsToAdd.put(TABLE_METADATA_PARTITIONS, String.join(",", validPartitionPaths));
+  }
+
+  static List<String> deleteMetadataPartition(HoodieEngineContext context,
+                                              HoodieTableMetaClient metaClient,
+                                              List<String> metadataPartitions) {
+    metadataPartitions.stream()
+        .filter(metadataPath -> !SUPPORTED_METADATA_PARTITION_PATHS.contains(metadataPath))
+        .forEach(metadataPath ->
+            HoodieTableMetadataUtil.deleteMetadataTablePartition(
+                metaClient, context, metadataPath, true)
+        );
+
+    return metadataPartitions.stream()
+        .filter(SUPPORTED_METADATA_PARTITION_PATHS::contains)
+        .collect(Collectors.toList());
+  }
+
+  private static Set<String> getSupportedMetadataPartitionPaths() {
+    Set<String> supportedPartitionPaths = new HashSet<>();
+    supportedPartitionPaths.add(BLOOM_FILTERS.getPartitionPath());
+    supportedPartitionPaths.add(COLUMN_STATS.getPartitionPath());
+    supportedPartitionPaths.add(FILES.getPartitionPath());
+    supportedPartitionPaths.add(RECORD_INDEX.getPartitionPath());
+    return supportedPartitionPaths;
   }
 }

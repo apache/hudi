@@ -21,7 +21,7 @@ package org.apache.spark.sql.execution.benchmark
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.{HoodieSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
@@ -116,12 +116,12 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
    *  pref insert overwrite:                               Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
    *  -----------------------------------------------------------------------------------------------------------------------------------
    *  org.apache.hudi.common.model.HoodieAvroRecordMerger          16714          17107         353          0.1       16714.5       1.0X
-   *  org.apache.hudi.HoodieSparkRecordMerger                      12654          13924        1100          0.1       12653.8       1.3X
+   *  org.apache.hudi.DefaultSparkRecordMerger                      12654          13924        1100          0.1       12653.8       1.3X
    */
   private def overwriteBenchmark(): Unit = {
     val df = createComplexDataFrame(1000000)
     val benchmark = new HoodieBenchmark("pref insert overwrite", 1000000, 3)
-    Seq(classOf[HoodieAvroRecordMerger].getName, classOf[HoodieSparkRecordMerger].getName).zip(Seq(avroTable, sparkTable)).foreach {
+    Seq(classOf[HoodieAvroRecordMerger].getName, classOf[DefaultSparkRecordMerger].getName).zip(Seq(avroTable, sparkTable)).foreach {
       case (merger, tableName) => benchmark.addCase(merger) { _ =>
         withTempDir { f =>
           prepareHoodieTable(tableName, new Path(f.getCanonicalPath, tableName).toUri.toString, "mor", merger, df)
@@ -137,18 +137,18 @@ object ReadAndWriteWithoutAvroBenchmark extends HoodieBenchmarkBase {
    * pref upsert:                                         Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
    * -----------------------------------------------------------------------------------------------------------------------------------
    * org.apache.hudi.common.model.HoodieAvroRecordMerger           6108           6383         257          0.0      610785.6       1.0X
-   * org.apache.hudi.HoodieSparkRecordMerger                       4833           5468         614          0.0      483300.0       1.3X
+   * org.apache.hudi.DefaultSparkRecordMerger                       4833           5468         614          0.0      483300.0       1.3X
    *
    * Java HotSpot(TM) 64-Bit Server VM 1.8.0_211-b12 on Mac OS X 10.16
    * Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
    * pref read:                                           Best Time(ms)   Avg Time(ms)   Stdev(ms)    Rate(M/s)   Per Row(ns)   Relative
    * -----------------------------------------------------------------------------------------------------------------------------------
    * org.apache.hudi.common.model.HoodieAvroRecordMerger            813            818           8          0.0       81302.1       1.0X
-   * org.apache.hudi.HoodieSparkRecordMerger                        604            616          18          0.0       60430.1       1.3X
+   * org.apache.hudi.DefaultSparkRecordMerger                        604            616          18          0.0       60430.1       1.3X
    */
   private def upsertThenReadBenchmark(): Unit = {
     val avroMergerImpl = classOf[HoodieAvroRecordMerger].getName
-    val sparkMergerImpl = classOf[HoodieSparkRecordMerger].getName
+    val sparkMergerImpl = classOf[DefaultSparkRecordMerger].getName
     val df = createComplexDataFrame(10000)
     withTempDir { avroPath =>
       withTempDir { sparkPath =>

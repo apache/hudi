@@ -35,9 +35,9 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkRecordMerger, SparkDatasetMixin}
-
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.QuickstartUtils.convertToStringList
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -46,10 +46,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
-import org.slf4j.LoggerFactory
 
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 
 /**
@@ -58,7 +56,6 @@ import scala.collection.JavaConverters._
 class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin {
 
   var spark: SparkSession = null
-  private val log = LoggerFactory.getLogger(classOf[TestMORDataSource])
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -68,7 +65,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test"
   )
   val sparkOpts = Map(
-    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+    HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
     HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
   )
 
@@ -243,7 +240,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
       .load(basePath)
-    assertEquals(200, hudiIncDF4SkipMerge.count())
+    assertEquals(250, hudiIncDF4SkipMerge.count())
 
     // Fourth Operation:
     // Insert records to a new partition. Produced a new parquet file.
@@ -887,12 +884,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @EnumSource(value = classOf[HoodieRecordType], names = Array("AVRO", "SPARK"))
   def testReadPathsForOnlyLogFiles(recordType: HoodieRecordType): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    // enable column stats
+    val hudiOpts = writeOpts ++ Map(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true")
 
     initMetaClient(HoodieTableType.MERGE_ON_READ)
     val records1 = dataGen.generateInsertsContainsAllPartitions("000", 20)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
-      .options(writeOpts)
+      .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       // Use InMemoryIndex to generate log only mor table.
@@ -911,7 +910,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val records2 = dataGen.generateInsertsContainsAllPartitions("000", 20)
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
     inputDF2.write.format("hudi")
-      .options(writeOpts)
+      .options(hudiOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
       // Use InMemoryIndex to generate log only mor table.
@@ -929,6 +928,25 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .load()
 
     assertEquals(expectedCount1, hudiReadPathDF.count())
+
+    if (recordType == HoodieRecordType.SPARK) {
+      val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true).build()
+      val columnStatsIndex = new ColumnStatsIndexSupport(spark, inputDF1.schema, metadataConfig, metaClient)
+      columnStatsIndex.loadTransposed(Seq("fare", "city_to_state", "rider"), shouldReadInMemory = true) { emptyTransposedColStatsDF =>
+        // fare is a nested column, so it should not have any min/max value as it is not comparable, but still have nullCount
+        assertEquals(0, emptyTransposedColStatsDF.filter("fare_minValue IS NOT NULL").count())
+        assertEquals(0, emptyTransposedColStatsDF.filter("fare_maxValue IS NOT NULL").count())
+        assertTrue(emptyTransposedColStatsDF.filter("fare_nullCount IS NOT NULL").count() > 0)
+        // city_to_state is a map column, so it should not have any min/max value as it is not comparable, but still have nullCount
+        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_minValue IS NOT NULL").count())
+        assertEquals(0, emptyTransposedColStatsDF.filter("city_to_state_maxValue IS NOT NULL").count())
+        assertTrue(emptyTransposedColStatsDF.filter("city_to_state_nullCount IS NOT NULL").count() > 0)
+        // rider is a simple string field, so it should have a min/max value as well as nullCount
+        assertTrue(emptyTransposedColStatsDF.filter("rider_minValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_maxValue IS NOT NULL").count() > 0)
+        assertTrue(emptyTransposedColStatsDF.filter("rider_nullCount IS NOT NULL").count() > 0)
+      }
+    }
   }
 
   @ParameterizedTest
@@ -1019,7 +1037,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq
@@ -1061,7 +1079,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       "hoodie.datasource.write.row.writer.enable" -> "false"
     )
     if (recordType.equals(HoodieRecordType.SPARK)) {
-      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName,
+      writeOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
         HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet") ++ writeOpts
     }
     val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toSeq
@@ -1192,14 +1210,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
       .load(pathForROQuery)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/01'").count, 50)
-      assertEquals(readOptimizedQueryRes.where("partition = '2022/01/02'").count, 60)
-    } else {
-      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
-      assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
-    }
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-01'").count, 50)
+    assertEquals(readOptimizedQueryRes.where("partition = '2022-01-02'").count, 60)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -1423,5 +1435,82 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
     assertEquals(metaClient.getTableConfig.getRecordMergerStrategy, mergerStrategyName)
+  }
+
+  /**
+   * Test Read-Optimized and time travel query on MOR table with RECORD_INDEX enabled.
+   */
+  @Test
+  def testReadOptimizedAndTimeTravelWithRecordIndex(): Unit = {
+    var (writeOpts, readOpts) = getWriterReaderOpts()
+    writeOpts = writeOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
+      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key -> IndexType.RECORD_INDEX.name()
+    )
+    readOpts = readOpts ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true"
+    )
+    initMetaClient(HoodieTableType.MERGE_ON_READ)
+    // Create a MOR table and add three records to the table.
+    val records = recordsToStrings(dataGen.generateInserts("000", 3)).asScala.toSeq
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    var roDf = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath)
+    // assert count
+    assertEquals(3, roDf.count())
+
+    // choose a record to delete
+    val deleteRecord = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 1)).asScala.toSeq
+    // get the record key from the deleted record records2
+    val recordKey = deleteRecord.head.split(",")(1).split(":")(1).trim.replace("\"", "")
+    // delete the record
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(deleteRecord, 1))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    // load RO view again with data skipping enabled
+    roDf = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
+      .load(basePath)
+
+    // There should still be 3 records in RO view
+    assertEquals(3, roDf.count())
+    // deleted record should still show in RO view
+    assertEquals(1, roDf.where(s"_row_key = '$recordKey'").count())
+
+    // load snapshot view
+    val snapshotDF = spark.read.format("hudi")
+      .options(readOpts)
+      .load(basePath)
+    // There should be only 2 records in snapshot view
+    assertEquals(2, snapshotDF.count())
+    // deleted record should NOT show in snapshot view
+    assertEquals(0, snapshotDF.where(s"_row_key = '$recordKey'").count())
+
+    // get the first instant on the timeline
+    val firstInstant = metaClient.reloadActiveTimeline().filterCompletedInstants().firstInstant().get()
+    // do a time travel query with data skipping enabled
+    val timeTravelDF = spark.read.format("hudi")
+      .options(readOpts)
+      .option("as.of.instant", firstInstant.getTimestamp)
+      .load(basePath)
+    // there should still be 3 records in time travel view
+    assertEquals(3, timeTravelDF.count())
+    // deleted record should still show in time travel view
+    assertEquals(1, timeTravelDF.where(s"_row_key = '$recordKey'").count())
   }
 }

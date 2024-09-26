@@ -348,10 +348,10 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
       //TODO: [HUDI-8086] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
-        toScalaOption(record.getData.getInsertValue(null, null))
-          .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
-          .orNull
-      }))
+          toScalaOption(record.getData.getInsertValue(null, null))
+            .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
+            .orNull
+        }))
         .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords

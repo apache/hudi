@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
-import org.apache.hudi.{DataSourceWriteOptions, HoodieSparkRecordMerger, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, ScalaAssertionSupport}
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
@@ -58,7 +58,7 @@ class TestSparkDataSourceDAGExecution extends HoodieSparkClientTestBase with Sca
     HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
     HoodieMetadataConfig.ENABLE.key -> "false"
   )
-  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[HoodieSparkRecordMerger].getName)
+  val sparkOpts = Map(HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName)
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"

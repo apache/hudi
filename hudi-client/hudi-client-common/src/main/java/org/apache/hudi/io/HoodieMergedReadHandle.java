@@ -52,6 +52,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
 
   protected final Schema readerSchema;
+  protected final Schema baseFileReaderSchema;
   private final Option<FileSlice> fileSliceOpt;
 
   public HoodieMergedReadHandle(HoodieWriteConfig config,
@@ -68,6 +69,8 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
                                 Option<FileSlice> fileSliceOption) {
     super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
+    // config.getSchema is not canonicalized, while config.getWriteSchema is canonicalized. So, we have to use the canonicalized schema to read the existing data.
+    baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
     fileSliceOpt = fileSliceOption.isPresent() ? fileSliceOption : getLatestFileSlice();
   }
 
@@ -153,7 +156,7 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
     if (baseFileReaderOpt.isPresent()) {
       HoodieFileReader baseFileReader = baseFileReaderOpt.get();
       HoodieRecordMerger recordMerger = config.getRecordMerger();
-      ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(readerSchema);
+      ClosableIterator<HoodieRecord<T>> baseFileItr = baseFileReader.getRecordIterator(baseFileReaderSchema);
       HoodieTableConfig tableConfig = hoodieTable.getMetaClient().getTableConfig();
       Option<Pair<String, String>> simpleKeyGenFieldsOpt =
           tableConfig.populateMetaFields() ? Option.empty() : Option.of(Pair.of(tableConfig.getRecordKeyFieldProp(), tableConfig.getPartitionFieldProp()));

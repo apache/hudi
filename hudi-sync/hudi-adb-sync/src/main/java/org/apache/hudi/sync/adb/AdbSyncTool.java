@@ -19,7 +19,9 @@
 package org.apache.hudi.sync.adb;
 
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HadoopConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.SchemaDifference;
@@ -30,6 +32,7 @@ import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hudi.sync.common.util.SparkDataSourceTableUtils;
 
 import com.beust.jcommander.JCommander;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe;
 import org.apache.parquet.schema.MessageType;
@@ -82,11 +85,15 @@ public class AdbSyncTool extends HoodieSyncTool {
   private final Option<String> roTableTableName;
 
   public AdbSyncTool(Properties props) {
-    super(props);
+    this(props, HadoopConfigUtils.createHadoopConf(props), Option.empty());
+  }
+
+  public AdbSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
+    super(props, hadoopConf);
     this.config = new AdbSyncConfig(props);
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     this.tableName = config.getString(META_SYNC_TABLE_NAME);
-    this.syncClient = new HoodieAdbJdbcClient(config);
+    this.syncClient = new HoodieAdbJdbcClient(config, metaClientOption.orElseGet(() -> buildMetaClient(config)));
     switch (syncClient.getTableType()) {
       case COPY_ON_WRITE:
         this.snapshotTableName = tableName;

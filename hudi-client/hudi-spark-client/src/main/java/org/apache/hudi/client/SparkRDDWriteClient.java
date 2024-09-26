@@ -70,17 +70,6 @@ public class SparkRDDWriteClient<T> extends
     this(context, clientConfig, Option.empty());
   }
 
-  @Deprecated
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending) {
-    this(context, writeConfig, Option.empty());
-  }
-
-  @Deprecated
-  public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig, boolean rollbackPending,
-                             Option<EmbeddedTimelineService> timelineService) {
-    this(context, writeConfig, timelineService);
-  }
-
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
@@ -106,12 +95,12 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return HoodieSparkTable.create(config, context);
+    return createTableAndValidate(config, HoodieSparkTable::create);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return HoodieSparkTable.create(config, context, metaClient);
+    return createTableAndValidate(config, metaClient, HoodieSparkTable::create);
   }
 
   @Override

@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -83,6 +84,7 @@ import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
+import org.apache.hudi.table.action.compact.strategy.CompositeCompactionStrategy;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.apache.orc.CompressionKind;
@@ -133,6 +135,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key(HoodieTableConfig.HOODIE_TABLE_NAME_KEY)
       .noDefaultValue()
       .withDocumentation("Table name that will be used for registering with metastores like HMS. Needs to be same across runs.");
+
+  public static final ConfigProperty<Integer> WRITE_TABLE_VERSION = ConfigProperty
+      .key("hoodie.write.table.version")
+      .defaultValue(HoodieTableVersion.current().versionCode())
+      .withValidValues(
+          String.valueOf(HoodieTableVersion.SIX.versionCode()),
+          String.valueOf(HoodieTableVersion.current().versionCode())
+      )
+      .sinceVersion("1.0.0")
+      .withDocumentation("The table version this writer is storing the table in. This should match the current table version.");
+
+  public static final ConfigProperty<Boolean> AUTO_UPGRADE_VERSION = ConfigProperty
+      .key("hoodie.write.auto.upgrade")
+      .defaultValue(true)
+      .sinceVersion("1.0.0")
+      .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
+          + "if the current table version is lower.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.tagged.record.storage.level")
@@ -292,6 +311,17 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Columns to sort the data by when use org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner as user defined partitioner during bulk_insert. "
           + "For example 'column1,column2'");
+
+  public static final ConfigProperty<Boolean> BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS = ConfigProperty
+      .key("hoodie.bulkinsert.sort.suffix.record_key")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation(
+          "When using user defined sort columns there can be possibility of skew because spark's RangePartitioner used in sort can reduce the number of outputSparkPartitions"
+              + "if the sampled dataset has a low cardinality on the provided sort columns. This can cause an increase in commit durations as we are not leveraging the original parallelism."
+              + "Enabling this config suffixes the record key at the end to avoid skew."
+              + "This config is used by RowCustomColumnsSortPartitioner, RDDCustomColumnsSortPartitioner and JavaCustomColumnsSortPartitioner");
 
   public static final ConfigProperty<String> BULKINSERT_USER_DEFINED_PARTITIONER_CLASS_NAME = ConfigProperty
       .key("hoodie.bulkinsert.user.defined.partitioner.class")
@@ -1246,6 +1276,18 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getSchema();
   }
 
+  public HoodieTableVersion getWriteVersion() {
+    Integer versionCode = getInt(WRITE_TABLE_VERSION);
+    if (versionCode != null) {
+      WRITE_TABLE_VERSION.checkValues(versionCode.toString());
+    }
+    return HoodieTableVersion.fromVersionCode(getIntOrDefault(WRITE_TABLE_VERSION));
+  }
+
+  public boolean autoUpgrade() {
+    return getBoolean(AUTO_UPGRADE_VERSION);
+  }
+
   public String getTaggedRecordStorageLevel() {
     return getString(TAGGED_RECORD_STORAGE_LEVEL_VALUE);
   }
@@ -1644,7 +1686,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public CompactionStrategy getCompactionStrategy() {
-    return ReflectionUtils.loadClass(getString(HoodieCompactionConfig.COMPACTION_STRATEGY));
+    String compactionStrategiesStr = getString(HoodieCompactionConfig.COMPACTION_STRATEGY);
+    String[] compactionStrategyArr = compactionStrategiesStr.split(",");
+    List<CompactionStrategy> compactionStrategies = Arrays.stream(compactionStrategyArr)
+        .map(className -> (CompactionStrategy) ReflectionUtils.loadClass(className)).collect(Collectors.toList());
+    return compactionStrategies.size() == 1 ? compactionStrategies.get(0) : new CompositeCompactionStrategy(compactionStrategies);
   }
 
   public Long getTargetIOPerCompactionInMB() {
@@ -1723,6 +1769,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public HoodieFailedWritesCleaningPolicy getFailedWritesCleanPolicy() {
     return HoodieFailedWritesCleaningPolicy
         .valueOf(getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY));
+  }
+
+  public String getCompactionSpecifyPartitionPathRegex() {
+    return getString(HoodieCompactionConfig.COMPACTION_SPECIFY_PARTITION_PATH_REGEX);
   }
 
   /**
@@ -2136,10 +2186,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean parquetDictionaryEnabled() {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
-  }
-
-  public String parquetWriteLegacyFormatEnabled() {
-    return getString(HoodieStorageConfig.PARQUET_WRITE_LEGACY_FORMAT_ENABLED);
   }
 
   public String parquetOutputTimestampType() {
@@ -2821,6 +2867,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteTableVersion(int writeVersion) {
+      writeConfig.setValue(WRITE_TABLE_VERSION, String.valueOf(HoodieTableVersion.fromVersionCode(writeVersion).versionCode()));
+      return this;
+    }
+
+    public Builder withAutoUpgradeVersion(boolean enable) {
+      writeConfig.setValue(AUTO_UPGRADE_VERSION, String.valueOf(enable));
+      return this;
+    }
+
     public Builder withAvroSchemaValidate(boolean enable) {
       writeConfig.setValue(AVRO_SCHEMA_VALIDATE_ENABLE, String.valueOf(enable));
       return this;
@@ -3366,6 +3422,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     private void validate() {
+      if (HoodieTableVersion.SIX.equals(writeConfig.getWriteVersion())) {
+        LOG.warn("HoodieTableVersion.SIX is not yet fully supported by the writer. "
+            + "Please expect some unexpected behavior, until its fully implemented.");
+      }
+
       String layoutVersion = writeConfig.getString(TIMELINE_LAYOUT_VERSION_NUM);
       // Ensure Layout Version is good
       new TimelineLayoutVersion(Integer.parseInt(layoutVersion));

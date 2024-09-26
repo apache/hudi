@@ -44,7 +44,7 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
     HoodieTableType.values().foreach { tableType =>
       withTempDir { inputDir =>
         val tablePath = s"${inputDir.getCanonicalPath}/test_stream_${tableType.name()}"
-        HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setTableName(s"test_stream_${tableType.name()}")
           .setPayloadClassName(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.defaultValue)

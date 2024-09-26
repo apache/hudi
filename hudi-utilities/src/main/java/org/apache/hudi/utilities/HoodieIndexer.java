@@ -306,7 +306,8 @@ public class HoodieIndexer {
   }
 
   private int dropIndex(JavaSparkContext jsc) throws Exception {
-    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty());
+    List<String> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty())
+        .stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);

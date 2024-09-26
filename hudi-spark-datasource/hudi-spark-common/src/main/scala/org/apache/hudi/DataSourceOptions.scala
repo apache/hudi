@@ -34,7 +34,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
@@ -76,16 +76,9 @@ object DataSourceReadOptions {
       "When set to 'latest_state', it returns the latest records' values." +
       "When set to 'cdc', it returns the cdc data.")
 
-  val REALTIME_SKIP_MERGE_OPT_VAL = "skip_merge"
-  val REALTIME_PAYLOAD_COMBINE_OPT_VAL = "payload_combine"
-  val REALTIME_MERGE: ConfigProperty[String] = ConfigProperty
-    .key("hoodie.datasource.merge.type")
-    .defaultValue(REALTIME_PAYLOAD_COMBINE_OPT_VAL)
-    .withValidValues(REALTIME_SKIP_MERGE_OPT_VAL, REALTIME_PAYLOAD_COMBINE_OPT_VAL)
-    .markAdvanced()
-    .withDocumentation("For Snapshot query on merge on read table, control whether we invoke the record " +
-      s"payload implementation to merge (${REALTIME_PAYLOAD_COMBINE_OPT_VAL}) or skip merging altogether" +
-      s"${REALTIME_SKIP_MERGE_OPT_VAL}")
+  val REALTIME_SKIP_MERGE_OPT_VAL = HoodieReaderConfig.REALTIME_SKIP_MERGE
+  val REALTIME_PAYLOAD_COMBINE_OPT_VAL = HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE
+  val REALTIME_MERGE: ConfigProperty[String] = HoodieReaderConfig.MERGE_TYPE
 
   val READ_PATHS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.paths")
@@ -157,7 +150,7 @@ object DataSourceReadOptions {
 
   val ENABLE_DATA_SKIPPING: ConfigProperty[Boolean] = ConfigProperty
     .key("hoodie.enable.data.skipping")
-    .defaultValue(false)
+    .defaultValue(true)
     .markAdvanced()
     .sinceVersion("0.10.0")
     .withDocumentation("Enables data-skipping allowing queries to leverage indexes to reduce the search space by " +
@@ -984,6 +977,11 @@ object DataSourceOptionsHelper {
 
   def translateConfigurations(optParams: Map[String, String]): Map[String, String] = {
     val translatedOpt = scala.collection.mutable.Map[String, String]() ++= optParams
+    if (!SparkConfigUtils.containsConfigProperty(optParams, HoodieTableConfig.NAME) &&
+      SparkConfigUtils.containsConfigProperty(optParams, DataSourceWriteOptions.TABLE_NAME)) {
+      translatedOpt.put(HoodieTableConfig.NAME.key(),
+        SparkConfigUtils.getStringWithAltKeys(optParams, DataSourceWriteOptions.TABLE_NAME))
+    }
     optParams.keySet.foreach(opt => {
       if (allAlternatives.contains(opt) && !optParams.contains(allAlternatives(opt))) {
         log.warn(opt + " is deprecated and will be removed in a later release; Please use " + allAlternatives(opt))
@@ -1013,8 +1011,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRawRecordKeyFieldProp != null) {
       missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRawRecordKeyFieldProp)
     }
-    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
-      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).isPresent) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).get())
     }
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)

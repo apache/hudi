@@ -85,7 +85,6 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hadoop.fs.Path;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -690,7 +689,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
       String markerName = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
                       markerFolderPath, storage, context, 1).values().stream()
               .flatMap(Collection::stream).findFirst().get();
-      partitionPath = new Path(markerFolderPath, markerName).getParent().toString();
+      partitionPath = new StoragePath(markerFolderPath, markerName).getParent().toString();
     } else {
       partitionPath = storage.globEntries(
                       new StoragePath(String.format("%s/*/*/*/*", markerFolderPath)), path ->
@@ -1089,7 +1088,10 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     HoodieWriteConfig.Builder cfgBuilder = getConfigBuilder();
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     HoodieWriteConfig hoodieWriteConfig = cfgBuilder.withMergeAllowDuplicateOnInserts(true).withTimelineLayoutVersion(VERSION_0).build();
-    HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
+
+    HoodieTableMetaClient.newTableBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
@@ -1154,8 +1156,11 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     addConfigsForPopulateMetaFields(cfgBuilder, populateMetaFields);
     // Force using older timeline layout
     HoodieWriteConfig config = cfgBuilder.withTimelineLayoutVersion(VERSION_0).build();
-    HoodieTableMetaClient.withPropertyBuilder().fromMetaClient(metaClient).setTimelineLayoutVersion(VERSION_0)
-        .setPopulateMetaFields(populateMetaFields).initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+    HoodieTableMetaClient.newTableBuilder()
+        .fromMetaClient(metaClient)
+        .setTimelineLayoutVersion(VERSION_0)
+        .setPopulateMetaFields(populateMetaFields)
+        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     BaseHoodieWriteClient client = getHoodieWriteClient(config);
 

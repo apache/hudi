@@ -25,7 +25,6 @@ import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -33,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
@@ -103,12 +103,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected boolean useTransformer;
   protected boolean userProvidedSchema;
 
-  protected Map<String, String> readOpts = new HashMap<String, String>() {
-    {
-      put(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
-    }
-  };
-
   @BeforeAll
   public static void initKafka() {
     defaultSchemaProviderClassName = TestSchemaProvider.class.getName();
@@ -125,6 +119,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     sourceSchemaFile = "";
     targetSchemaFile = "";
     topicName = "topic" + testNum;
+    if (HoodieSparkUtils.gteqSpark3_3()) {
+      sparkSession.conf().set("spark.sql.parquet.enableNestedColumnVectorizedReader", "false");
+    }
   }
 
   @AfterEach
@@ -325,6 +322,17 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static void resetTargetSchema() {
       TestSchemaProvider.targetSchema = null;
+    }
+  }
+
+  public static class TestErrorTableV1 extends TestErrorTable {
+    public TestErrorTableV1(HoodieStreamer.Config cfg,
+                            SparkSession sparkSession,
+                            TypedProperties props,
+                            HoodieSparkEngineContext hoodieSparkContext,
+                            FileSystem fs,
+                            Option<HoodieIngestionMetrics> metrics) {
+      super(cfg, sparkSession, props, hoodieSparkContext, fs);
     }
   }
 

@@ -28,6 +28,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -267,10 +268,10 @@ public class SparkMain {
 
   protected static int deleteMarker(JavaSparkContext jsc, String instantTime, String basePath) {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
-
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
+      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;
@@ -471,7 +472,7 @@ public class SparkMain {
     metaClient.getTableConfig().getProps().forEach((k, v) -> propsMap.put(k.toString(), v.toString()));
     propsMap.put(HoodieWriteConfig.SKIP_DEFAULT_PARTITION_VALIDATION.key(), "true");
     propsMap.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), metaClient.getTableConfig().getRecordKeyFieldProp());
-    propsMap.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), metaClient.getTableConfig().getPartitionFieldProp());
+    propsMap.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig()).orElse(""));
     propsMap.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), metaClient.getTableConfig().getKeyGeneratorClassName());
     return propsMap;
   }

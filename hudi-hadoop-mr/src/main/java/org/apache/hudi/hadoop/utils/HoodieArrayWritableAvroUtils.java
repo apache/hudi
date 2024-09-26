@@ -27,23 +27,11 @@ import org.apache.avro.Schema;
 import org.apache.hadoop.hive.ql.io.parquet.serde.ArrayWritableObjectInspector;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.mapred.JobConf;
 
 import java.util.List;
 import java.util.function.UnaryOperator;
 
 public class HoodieArrayWritableAvroUtils {
-
-  private static final Cache<String, ObjectInspectorCache>
-      OBJECT_INSPECTOR_TABLE_CACHE = Caffeine.newBuilder().maximumSize(1000).build();
-
-  public static ObjectInspectorCache getCacheForTable(String table, Schema tableSchema, JobConf jobConf) {
-    ObjectInspectorCache cache = OBJECT_INSPECTOR_TABLE_CACHE.getIfPresent(table);
-    if (cache == null) {
-      cache = new ObjectInspectorCache(tableSchema, jobConf);
-    }
-    return cache;
-  }
 
   private static final Cache<Pair<Schema, Schema>, int[]>
       PROJECTION_CACHE = Caffeine.newBuilder().maximumSize(1000).build();

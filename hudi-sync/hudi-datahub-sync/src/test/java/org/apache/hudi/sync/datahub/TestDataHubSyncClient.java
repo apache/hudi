@@ -19,6 +19,7 @@
 
 package org.apache.hudi.sync.datahub;
 
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.datahub.config.DataHubSyncConfig;
@@ -45,6 +46,7 @@ import java.util.concurrent.CompletableFuture;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -70,8 +72,10 @@ public class TestDataHubSyncClient {
     Properties props = new Properties();
     props.put("hoodie.table.name", "some_table");
     tableBasePath = Paths.get(tmpDir.toString(), "some_table").toString();
-    HoodieTableMetaClient.initTableAndGetMetaClient(
-        HadoopFSUtils.getStorageConf(new Configuration()), tableBasePath, props);
+    HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(props)
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .initTable(HadoopFSUtils.getStorageConf(new Configuration()), tableBasePath);
   }
 
   @BeforeEach
@@ -106,7 +110,7 @@ public class TestDataHubSyncClient {
   public class DataHubSyncClientStub extends DataHubSyncClient {
 
     public DataHubSyncClientStub(DataHubSyncConfig config) {
-      super(config);
+      super(config, mock(HoodieTableMetaClient.class));
     }
 
     @Override
