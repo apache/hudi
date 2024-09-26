@@ -72,4 +72,16 @@ public class HoodieReaderConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
+
+  public static final String REALTIME_SKIP_MERGE = "skip_merge";
+  public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
+  public static final ConfigProperty<String> MERGE_TYPE = ConfigProperty
+      .key("hoodie.datasource.merge.type")
+      .defaultValue(REALTIME_PAYLOAD_COMBINE)
+      .markAdvanced()
+      .withValidValues(REALTIME_PAYLOAD_COMBINE, REALTIME_SKIP_MERGE)
+      .withDocumentation("For Snapshot query on merge on read table. Use this key to define how the payloads are merged, in\n"
+          + "1) skip_merge: read the base file records plus the log file records without merging;\n"
+          + "2) payload_combine: read the base file records first, for each record in base file, checks whether the key is in the\n"
+          + "   log file records (combines the two records with same key for base and log file records), then read the left log file records");
 }

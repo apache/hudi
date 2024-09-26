@@ -18,6 +18,8 @@
 
 package org.apache.hudi.aws.sync;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HiveSyncConfig;
 
 import org.apache.hadoop.conf.Configuration;
@@ -32,11 +34,11 @@ class MockAwsGlueCatalogSyncTool extends AwsGlueCatalogSyncTool {
   private GlueAsyncClient mockAwsGlue;
 
   public MockAwsGlueCatalogSyncTool(Properties props, Configuration hadoopConf) {
-    super(props, hadoopConf);
+    super(props, hadoopConf, Option.empty());
   }
 
   @Override
-  protected void initSyncClient(HiveSyncConfig hiveSyncConfig) {
-    syncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig);
+  protected void initSyncClient(HiveSyncConfig hiveSyncConfig, HoodieTableMetaClient metaClient) {
+    syncClient = new AWSGlueCatalogSyncClient(mockAwsGlue, hiveSyncConfig, metaClient);
   }
 }

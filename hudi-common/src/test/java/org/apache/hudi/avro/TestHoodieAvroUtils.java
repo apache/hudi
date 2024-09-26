@@ -82,6 +82,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -730,5 +731,32 @@ public class TestHoodieAvroUtils {
     } else {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
     }
+  }
+
+  @Test
+  void testHasListOrMapField() {
+    Schema nestedList = Schema.createRecord("nestedList", null, null, false, Arrays.asList(
+        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+        new Schema.Field("nested", Schema.createRecord("nestedSchema", null, null, false, Collections.singletonList(
+            new Schema.Field("listField", Schema.createArray(Schema.create(Schema.Type.INT)), null, null)
+        )), null, null)
+    ));
+    Schema nestedMap = Schema.createRecord("nestedMap", null, null, false, Arrays.asList(
+        new Schema.Field("intField", Schema.create(Schema.Type.INT), null, null),
+        new Schema.Field("nested", Schema.createUnion(Schema.create(Schema.Type.NULL),
+            Schema.createRecord("nestedSchema", null, null, false,
+                Collections.singletonList(new Schema.Field("mapField", Schema.createMap(Schema.create(Schema.Type.INT)), null, null)
+                ))), null, null)
+    ));
+    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedList));
+    assertTrue(HoodieAvroUtils.hasListOrMapField(nestedMap));
+    assertFalse(HoodieAvroUtils.hasListOrMapField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
+  }
+
+  @Test
+  void testHasSmallPrecisionDecimalField() {
+    assertTrue(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES)));
+    assertFalse(HoodieAvroUtils.hasSmallPrecisionDecimalField(new Schema.Parser().parse(EXAMPLE_SCHEMA)));
   }
 }

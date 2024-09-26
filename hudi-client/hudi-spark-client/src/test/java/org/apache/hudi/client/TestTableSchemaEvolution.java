@@ -165,7 +165,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     tableType = HoodieTableType.MERGE_ON_READ;
 
     // Create the table
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setRecordMergeMode(RecordMergeMode.valueOf(RECORD_MERGE_MODE.defaultValue()))
@@ -255,7 +255,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   @ValueSource(booleans = {false, true})
   public void testCopyOnWriteTable(boolean shouldAllowDroppedColumns) throws Exception {
     // Create the table
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
         .setTimelineLayoutVersion(VERSION_1)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());

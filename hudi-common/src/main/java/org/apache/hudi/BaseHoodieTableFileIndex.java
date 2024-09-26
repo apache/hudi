@@ -195,6 +195,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     resetTableMetadata(null);
   }
 
+  public HoodieTableQueryType getQueryType() {
+    return queryType;
+  }
+
   protected String[] getPartitionColumns() {
     return partitionColumns;
   }

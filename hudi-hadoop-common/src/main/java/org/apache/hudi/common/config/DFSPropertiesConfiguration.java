@@ -117,15 +117,14 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
       }
     }
     // Try loading the external config file from local file system
+    try {
+      conf.addPropsFromFile(DEFAULT_PATH);
+    } catch (Exception e) {
+      LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
+    }
     Option<StoragePath> defaultConfPath = getConfPathFromEnv();
     if (defaultConfPath.isPresent()) {
       conf.addPropsFromFile(defaultConfPath.get());
-    } else {
-      try {
-        conf.addPropsFromFile(DEFAULT_PATH);
-      } catch (Exception e) {
-        LOG.warn("Cannot load default config file: " + DEFAULT_PATH, e);
-      }
     }
     return conf.getProps();
   }
