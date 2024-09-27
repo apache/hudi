@@ -85,7 +85,8 @@ class TestDefaultSparkRecordMerger {
   }
 
   /**
-   * New record has higher ordering value than old record.
+   * If the new record has higher ordering value than old record,
+   * then the merged record is the new one.
    */
   @Test
   void testMergerWithNewRecordAccepted() throws IOException {
@@ -111,7 +112,8 @@ class TestDefaultSparkRecordMerger {
   }
 
   /**
-   * The ordering value of old record smaller than or equal to that of new record,
+   * If the ordering value of the old record smaller than or equal to that of the new record,
+   * the merged record is the old record.
    */
   @Test
   void testMergerWithOldRecordAccepted() throws IOException {
@@ -137,7 +139,7 @@ class TestDefaultSparkRecordMerger {
   }
 
   /**
-   * If new record is a delete record, merged record is empty.
+   * If the new record is a delete record, the merged record is empty.
    */
   @Test
   void testMergerWithNewRecordIsDeleteRecord() throws IOException {
@@ -158,7 +160,7 @@ class TestDefaultSparkRecordMerger {
   }
 
   /**
-   * If old record is delete record, merged record is new record.
+   * If the old record is a delete record, the merged record is the new record.
    */
   @Test
   void testMergerWithOldRecordIsDeleteRecord() throws IOException {
