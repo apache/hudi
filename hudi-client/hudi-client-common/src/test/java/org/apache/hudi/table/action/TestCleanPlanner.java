@@ -87,15 +87,12 @@ public class TestCleanPlanner {
 
   private final HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);
 
-  private SyncableFileSystemView mockFsView;
-  private static String PARTITION1 = "partition1";
-  private static String PARTITION2 = "partition2";
-  private static String PARTITION3 = "partition3";
+  private static final String PARTITION1 = "partition1";
+  private static final String PARTITION2 = "partition2";
+  private static final String PARTITION3 = "partition3";
 
   @BeforeEach
   void setUp() {
-    mockFsView = mock(SyncableFileSystemView.class);
-    when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
     SyncableFileSystemView sliceView = mock(SyncableFileSystemView.class);
     when(mockHoodieTable.getSliceView()).thenReturn(sliceView);
     when(sliceView.getPendingCompactionOperations()).thenReturn(Stream.empty());
@@ -114,6 +111,9 @@ public class TestCleanPlanner {
   void testGetDeletePaths(HoodieWriteConfig config, String earliestInstant, List<HoodieFileGroup> allFileGroups, List<Pair<String, Option<byte[]>>> savepoints,
                           List<HoodieFileGroup> replacedFileGroups, Pair<Boolean, List<CleanFileInfo>> expected) throws IOException {
 
+    SyncableFileSystemView mockFsView = mock(SyncableFileSystemView.class);
+    when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView);
+
     // setup savepoint mocks
     Set<String> savepointTimestamps = savepoints.stream().map(Pair::getLeft).collect(Collectors.toSet());
     when(mockHoodieTable.getSavepointTimestamps()).thenReturn(savepointTimestamps);
@@ -128,6 +128,7 @@ public class TestCleanPlanner {
     String partitionPath = "partition1";
     // setup replaced file groups mocks
     if (config.getCleanerPolicy() == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
+      when(mockHoodieTable.getHoodieView()).thenReturn(mockFsView); // requires extra reference when looking up latest versions
       when(mockFsView.getAllReplacedFileGroups(partitionPath)).thenReturn(replacedFileGroups.stream());
     } else {
       when(mockFsView.getReplacedFileGroupsBefore(earliestInstant, partitionPath)).thenReturn(replacedFileGroups.stream());
