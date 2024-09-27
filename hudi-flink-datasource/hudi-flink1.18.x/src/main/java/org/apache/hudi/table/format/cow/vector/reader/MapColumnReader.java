@@ -21,6 +21,7 @@ package org.apache.hudi.table.format.cow.vector.reader;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
+import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 
 import java.io.IOException;
@@ -42,8 +43,14 @@ public class MapColumnReader implements ColumnReader<WritableColumnVector> {
   @Override
   public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {
     HeapMapColumnVector mapColumnVector = (HeapMapColumnVector) vector;
+    AbstractHeapVector keyArrayColumnVector = (AbstractHeapVector) (mapColumnVector.getKeys());
     keyReader.readToVector(readNumber, mapColumnVector.getKeys());
     valueReader.readToVector(readNumber, mapColumnVector.getValues());
+    for (int i = 0; i < keyArrayColumnVector.getLen(); i++) {
+      if (keyArrayColumnVector.isNullAt(i)) {
+        mapColumnVector.setNullAt(i);
+      }
+    }
   }
 }
 
