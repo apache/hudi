@@ -18,7 +18,7 @@ page presents insights on how "rollback" in Hudi can automatically clean up hand
 manual input from users.
 
 ### Handling partially failed commits
-Hudi has a lot of platformization built in so as to ease the operationalization of lakehouse tables. One such feature 
+Hudi has a lot of platformization built in so as to ease the operationalization of [lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) tables. One such feature 
 is the automatic cleanup of partially failed commits. Users don’t need to run any additional commands to clean up dirty 
 data or the data produced by failed commits. If you continue to write to hudi tables, one of your future commits will 
 take care of cleaning up older data that failed midway during a write/commit. We call this cleanup of a failed commit a 

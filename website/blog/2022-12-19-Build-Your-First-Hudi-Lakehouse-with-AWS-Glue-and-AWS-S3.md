@@ -17,7 +17,7 @@ tags:
 
 # Build Your First Hudi Lakehouse with AWS S3 and AWS Glue
 
-Soumil Shah is a Hudi community champion building [YouTube content](https://www.youtube.com/@SoumilShah/playlists) so developers can easily get started incorporating a lakehouse into their data infrastructure. In this [video](https://www.youtube.com/watch?v=5zF4jc_3rFs&list=PLL2hlSFBmWwwbMpcyMjYuRn8cN99gFSY6), Soumil shows you how to get started with AWS Glue, AWS S3, Hudi and Athena.
+Soumil Shah is a Hudi community champion building [YouTube content](https://www.youtube.com/@SoumilShah/playlists) so developers can easily get started incorporating a [lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) into their data infrastructure. In this [video](https://www.youtube.com/watch?v=5zF4jc_3rFs&list=PLL2hlSFBmWwwbMpcyMjYuRn8cN99gFSY6), Soumil shows you how to get started with AWS Glue, AWS S3, Hudi and Athena.
 
 In this tutorial, you’ll learn how to:
 -   Create and configure AWS Glue

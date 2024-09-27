@@ -40,7 +40,7 @@ Cons of Parquet:
 * Small Data Sets: Parquet may not be the best choice for small datasets because the advantages of its columnar storage model aren’t as pronounced.
 
 Use Cases for Parquet:
-* Parquet is an excellent choice when dealing with large, complex, and nested data structures, especially for read-heavy workloads. Its columnar storage approach makes it an excellent choice for data lakehouse solutions where aggregation queries are common.
+* Parquet is an excellent choice when dealing with large, complex, and nested data structures, especially for read-heavy workloads. Its columnar storage approach makes it an excellent choice for [data lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) solutions where aggregation queries are common.
 
 ### Optimized Row Columnar (ORC)
 [Apache ORC](https://orc.apache.org/) is another popular file format that is self-describing, and type-aware columnar file format.
