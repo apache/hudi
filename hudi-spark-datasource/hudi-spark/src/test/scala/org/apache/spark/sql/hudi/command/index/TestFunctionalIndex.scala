@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.command.index
 
 import org.apache.hudi.HoodieSparkUtils
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
@@ -420,6 +420,85 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
             Seq(1, "a1", 10, 1000, "1970-01-01")
           )
         }
+      }
+    }
+  }
+
+  test("Test Enable and Disable Functional Index") {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      withTempDir { tmp =>
+        // create a simple partitioned mor table and insert some records
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  price double,
+             |  ts long,
+             |  name string
+             |) using hudi
+             | options (
+             |  primaryKey ='id',
+             |  type = 'mor',
+             |  preCombineField = 'ts'
+             | )
+             | partitioned by(name)
+             | location '$basePath'
+       """.stripMargin)
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2020-09-26
+        spark.sql(s"insert into $tableName values(1, 10, 1601098924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2021-09-26
+        spark.sql(s"insert into $tableName values(2, 10, 1632634924, 'a1')")
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+        spark.sql(s"insert into $tableName values(3, 10, 1664170924, 'a2')")
+        // create functional index and verify
+        spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+        val metaClient = createMetaClient(spark, basePath)
+        assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains("func_index_idx_datestr"))
+        assertTrue(metaClient.getIndexMetadata.isPresent)
+        assertEquals(1, metaClient.getIndexMetadata.get.getIndexDefinitions.size())
+
+        // verify functional index records by querying metadata table
+        val metadataSql = s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=3"
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"), // for file in name=a1
+          Seq("2022-09-26", "2022-09-26") // for file in name=a2
+        )
+
+        // disable functional index
+        spark.sql(s"set ${HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key}=false")
+        // do another insert after disabling the index
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2022-09-26
+        spark.sql(s"insert into $tableName values(4, 10, 1664170924, 'a2')")
+        // check query result
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') = '2022-09-26'")(
+          Seq(3, "a2"),
+          Seq(4, "a2")
+        )
+        // verify there are no new updates to functional index
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"),
+          Seq("2022-09-26", "2022-09-26")
+        )
+
+        // enable functional index
+        spark.sql(s"set ${HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key}=true")
+        // do another insert after initializing the index
+        // a record with from_unixtime(ts, 'yyyy-MM-dd') = 2024-09-26
+        spark.sql(s"insert into $tableName values(5, 10, 1727329324, 'a3')")
+        // check query result for predicates including values when functional index was disabled
+        checkAnswer(s"select id, name from $tableName where from_unixtime(ts, 'yyyy-MM-dd') IN ('2024-09-26', '2022-09-26')")(
+          Seq(3, "a2"),
+          Seq(4, "a2"),
+          Seq(5, "a3")
+        )
+        // verify there are new updates to functional index
+        checkAnswer(metadataSql)(
+          Seq("2020-09-26", "2021-09-26"),
+          Seq("2022-09-26", "2022-09-26"),
+          Seq("2024-09-26", "2024-09-26") // for file in name=a3
+        )
       }
     }
   }
