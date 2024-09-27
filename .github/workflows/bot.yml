@@ -55,13 +55,13 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Hudi Utilties Unit Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
+          mvn test -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
           WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
@@ -110,7 +110,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
+          mvn test -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
           WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
@@ -159,7 +159,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
+          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
           WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')
@@ -208,7 +208,7 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
           export JAVA_HOME="${{env.JAVA_HOME_17_X64}}"
           WORKING_DIR="/home/runner/work/hudi-internal/hudi-internal"
           jacoco_xml_report_files=$(find ${WORKING_DIR} -name 'jacoco.xml' | awk '{printf "%s%s",sep,$0; sep=","} END{print ""}')

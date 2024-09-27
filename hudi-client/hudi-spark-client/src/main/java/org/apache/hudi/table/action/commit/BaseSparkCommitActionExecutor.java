@@ -72,6 +72,7 @@ import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -329,7 +330,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconciledMetadataAndAdditionalWriteStats = appendMetadataForMissingFiles(metadata);
       metadata = reconciledMetadataAndAdditionalWriteStats.getKey();
       if (!reconciledMetadataAndAdditionalWriteStats.getValue().isEmpty()) {
-        List<HoodieWriteStat> reconciledWriteStatsList = result.getWriteStats().get();
+        List<HoodieWriteStat> reconciledWriteStatsList = new ArrayList<>(result.getWriteStats().get());
         reconciledWriteStatsList.addAll(reconciledMetadataAndAdditionalWriteStats.getValue());
         result.setWriteStats(reconciledWriteStatsList);
       }

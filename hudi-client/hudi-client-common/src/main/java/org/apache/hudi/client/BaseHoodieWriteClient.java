@@ -95,6 +95,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -231,7 +232,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     Pair<HoodieCommitMetadata, List<HoodieWriteStat>> reconcileCommitMetadataAndAdditionalWriteStats =
         reconcileCommitMetadataAndWriteStatsForAdditionalLogFiles(table, commitActionType, instantTime, originalMetadata);
     HoodieCommitMetadata metadata = reconcileCommitMetadataAndAdditionalWriteStats.getKey();
-    stats.addAll(reconcileCommitMetadataAndAdditionalWriteStats.getValue()); // add any additional write stats
+    List<HoodieWriteStat> reconciledWriteStatsList = new ArrayList<>(stats);
+    reconciledWriteStatsList.addAll(reconcileCommitMetadataAndAdditionalWriteStats.getValue()); // add any additional write stats
 
     this.txnManager.beginTransaction(Option.of(inflightInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
@@ -240,7 +242,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (extraPreCommitFunc.isPresent()) {
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
-      commit(table, commitActionType, instantTime, metadata, stats, writeStatuses);
+      commit(table, commitActionType, instantTime, metadata, reconciledWriteStatsList, writeStatuses);
       postCommit(table, metadata, instantTime, extraMetadata);
       LOG.info("Committed " + instantTime);
     } catch (IOException e) {
