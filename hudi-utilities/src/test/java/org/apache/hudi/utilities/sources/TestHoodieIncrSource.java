@@ -157,31 +157,31 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       // Pair<InstantStartTime, Records>
-      Pair<String, List<HoodieRecord>> insert1 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
-      Pair<String, List<HoodieRecord>> insert2 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
-      Pair<String, List<HoodieRecord>> insert3 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
-      Pair<String, List<HoodieRecord>> insert4 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
-      Pair<String, List<HoodieRecord>> insert5 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert1 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert2 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert3 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert4 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert5 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
 
       // read everything upto latest
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, insert5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, insert5.getCompletionTime());
 
       // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert1.getKey()), 400, insert5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert1.getCompletionTime()), 400, insert5.getCompletionTime());
 
       // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert4.getKey()), 100, insert5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert4.getCompletionTime()), 100, insert5.getCompletionTime());
 
       // read just the latest
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, insert5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.empty(), 100, insert5.getCompletionTime());
 
       // ensure checkpoint does not move
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getKey()), 0, insert5.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getCompletionTime()), 0, insert5.getCompletionTime());
 
-      Pair<String, List<HoodieRecord>> insert6 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult insert6 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
 
       // insert new batch and ensure the checkpoint moves
-      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(inserts5.getKey()), 100, inserts6.getKey());
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST, Option.of(insert5.getCompletionTime()), 100, insert6.getCompletionTime());
 
       if (useSourceProfile) {
         verify(metrics, times(5)).updateStreamerSourceBytesToBeIngestedInSyncRound(Long.MAX_VALUE);
@@ -216,7 +216,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+      List<WriteResult> inserts = new ArrayList<>();
 
       for (int i = 0; i < 6; i++) {
         inserts.add(writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime()));
@@ -226,7 +226,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // The checkpoint should not go past this commit
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
       HoodieInstant instant4 = activeTimeline
-          .filter(instant -> instant.getTimestamp().equals(inserts.get(4).getKey())).firstInstant().get();
+          .filter(instant -> instant.getTimestamp().equals(inserts.get(4).getInstantTime())).firstInstant().get();
       Option<byte[]> instant4CommitData = activeTimeline.getInstantDetails(instant4);
       activeTimeline.revertToInflight(instant4);
       metaClient.reloadActiveTimeline();
@@ -236,46 +236,46 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           400,
-          inserts.get(3).getKey());
+          inserts.get(3).getCompletionTime());
 
       // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(0).getKey()),
+          Option.of(inserts.get(0).getCompletionTime()),
           300,
-          inserts.get(3).getKey());
+          inserts.get(3).getCompletionTime());
 
       // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(2).getKey()),
+          Option.of(inserts.get(2).getCompletionTime()),
           100,
-          inserts.get(3).getKey());
+          inserts.get(3).getCompletionTime());
 
       // Reads just the latest
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.empty(),
           100,
-          inserts.get(3).getKey());
+          inserts.get(3).getCompletionTime());
 
       // Ensures checkpoint does not move
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(inserts.get(3).getKey()),
+          Option.of(inserts.get(3).getCompletionTime()),
           0,
-          inserts.get(3).getKey());
+          inserts.get(3).getCompletionTime());
 
       activeTimeline.reload().saveAsComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getKey()),
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getCompletionTime()),
           instant4CommitData);
 
       // After the inflight commit completes, the checkpoint should move on after incremental pull
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(inserts.get(3).getKey()),
+          Option.of(inserts.get(3).getCompletionTime()),
           200,
-          inserts.get(5).getKey());
+          inserts.get(5).getCompletionTime());
     }
   }
 
@@ -296,7 +296,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .build();
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      List<Pair<String, List<HoodieRecord>>> dataBatches = new ArrayList<>();
+      List<WriteResult> dataBatches = new ArrayList<>();
 
       // For COW:
       //   0: bulk_insert of 100 records
@@ -319,7 +319,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       //   6: bulk_insert of 100 records
       for (int i = 0; i < 6; i++) {
         WriteOperationType opType = i < 4 ? BULK_INSERT : UPSERT;
-        List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRight();
+        List<HoodieRecord> recordsForUpdate = i < 4 ? null : dataBatches.get(3).getRecords();
         dataBatches.add(writeRecords(writeClient, opType, recordsForUpdate, writeClient.createNewInstantTime()));
         if (tableType == COPY_ON_WRITE) {
           if (i == 2) {
@@ -336,7 +336,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       }
       dataBatches.add(writeRecords(writeClient, BULK_INSERT, null, writeClient.createNewInstantTime()));
 
-      String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getKey();
+      String latestCommitTimestamp = dataBatches.get(dataBatches.size() - 1).getInstantTime();
       // Pending clustering exists
       Option<HoodieInstant> clusteringInstant =
           metaClient.getActiveTimeline().filterPendingClusteringTimeline()
@@ -358,7 +358,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          dataBatches.get(0).getKey(),
+          dataBatches.get(0).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
 
       // The pending tables services should not block the incremental pulls
@@ -367,28 +367,28 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           500,
-          dataBatches.get(6).getKey());
+          dataBatches.get(6).getCompletionTime());
 
       // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(dataBatches.get(2).getKey()),
+          Option.of(dataBatches.get(2).getCompletionTime()),
           200,
-          dataBatches.get(6).getKey());
+          dataBatches.get(6).getCompletionTime());
 
       // Reads just the latest
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.empty(),
           100,
-          dataBatches.get(6).getKey());
+          dataBatches.get(6).getCompletionTime());
 
       // Ensures checkpoint does not move
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(dataBatches.get(6).getKey()),
+          Option.of(dataBatches.get(6).getCompletionTime()),
           0,
-          dataBatches.get(6).getKey());
+          dataBatches.get(6).getCompletionTime());
     }
   }
 
@@ -414,12 +414,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      Pair<String, List<HoodieRecord>> inserts = writeRecords(writeClient, INSERT, null, "100");
-      Pair<String, List<HoodieRecord>> inserts2 = writeRecords(writeClient, INSERT, null, "200");
+      WriteResult inserts = writeRecords(writeClient, INSERT, null, "100");
+      WriteResult inserts2 = writeRecords(writeClient, INSERT, null, "200");
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          inserts.getKey(),
+          inserts.getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
     }
   }
@@ -439,7 +439,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
                 .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
         .build();
-    List<Pair<String, List<HoodieRecord>>> inserts = new ArrayList<>();
+    List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
       inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "100", DEFAULT_PARTITION_PATHS[0]));
       inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "200", DEFAULT_PARTITION_PATHS[1]));
@@ -503,7 +503,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     readAndAssert(missingCheckpointStrategy, checkpointToPull, expectedCount, expectedCheckpoint, Option.empty(), new TypedProperties());
   }
 
-  private Pair<String, List<HoodieRecord>> writeRecords(SparkRDDWriteClient writeClient,
+  private WriteResult writeRecords(SparkRDDWriteClient writeClient,
                                                         WriteOperationType writeOperationType,
                                                         List<HoodieRecord> insertRecords,
                                                         String commit) throws IOException {
@@ -516,10 +516,16 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         : writeClient.upsert(jsc().parallelize(records, 1), commit);
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
-    return Pair.of(commit, records);
+    metaClient.reloadActiveTimeline();
+    return new WriteResult(
+        metaClient
+          .getCommitsAndCompactionTimeline()
+          .filterCompletedInstants()
+          .lastInstant().get(),
+        records);
   }
 
-  private Pair<String, List<HoodieRecord>> writeRecordsForPartition(SparkRDDWriteClient writeClient,
+  private WriteResult writeRecordsForPartition(SparkRDDWriteClient writeClient,
                                                                     WriteOperationType writeOperationType,
                                                                     String commit,
                                                                     String partitionPath) {
@@ -530,7 +536,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         : writeClient.upsert(jsc().parallelize(records, 1), commit);
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
-    return Pair.of(commit, records);
+    return new WriteResult(metaClient.getActiveTimeline().lastInstant().get(), records);
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {
@@ -592,6 +598,32 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     @Override
     public Integer getSourceSpecificContext() {
       return numInstantsPerFetch;
+    }
+  }
+
+  static class WriteResult {
+    private HoodieInstant instant;
+    private List<HoodieRecord> records;
+
+    WriteResult(HoodieInstant instant, List<HoodieRecord> records) {
+      this.instant = instant;
+      this.records = records;
+    }
+
+    public HoodieInstant getInstant() {
+      return instant;
+    }
+
+    public String getInstantTime() {
+      return instant.getTimestamp();
+    }
+
+    public String getCompletionTime() {
+      return instant.getCompletionTime();
+    }
+
+    public List<HoodieRecord> getRecords() {
+      return records;
     }
   }
 }

@@ -236,14 +236,14 @@ public class HoodieIncrSource extends RowSource {
             getHollowCommitHandleMode(props))
         .lastInstant();
     String endTime = lastCompletedInstant.isPresent()
-        ? lastCompletedInstant.get().getTimestamp()
+        ? lastCompletedInstant.get().getCompletionTime()
         : startTime;
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
         .startTime(startTime)
-        .endTime(endTime)  // scan from the checkpoint to the last completed commit
-        .rangeType(RangeType.CLOSED_CLOSED)
+        .endTime(endTime)
+        .rangeType(RangeType.OPEN_CLOSED)
         .limit(numInstantsPerFetch)
         .build();
 
@@ -251,7 +251,7 @@ public class HoodieIncrSource extends RowSource {
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
     if (queryContext.isEmpty()
-        || (instantRange.isPresent() && startTime.equals(instantRange.get().getEndInstant().orElse(null)))) {
+        || (instantRange.isPresent() && startTime.equals(endTime))) {
       LOG.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), startTime);
     }
@@ -278,10 +278,11 @@ public class HoodieIncrSource extends RowSource {
       }
       source = snapshot
           // add filtering so that only interested records are returned.
-          .filter(String.format("%s > '%s'",
-              HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTime))
+          // completion time comparison uses ( , ], but when comparing start time we need to use [, ]
+          .filter(String.format("%s >= '%s'",
+              HoodieRecord.COMMIT_TIME_METADATA_FIELD, queryContext.getStartInstant().get()))
           .filter(String.format("%s <= '%s'",
-              HoodieRecord.COMMIT_TIME_METADATA_FIELD, endTime));
+              HoodieRecord.COMMIT_TIME_METADATA_FIELD, queryContext.getEndInstant().get()));
       // TODO add predicateFilter back
     } else {
       // normal incremental query
@@ -289,7 +290,7 @@ public class HoodieIncrSource extends RowSource {
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
           .option(BEGIN_INSTANTTIME().key(), startTime)
-          .option(END_INSTANTTIME().key(), instantRange.get().getEndInstant().orElse(endTime))
+          .option(END_INSTANTTIME().key(), endTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))

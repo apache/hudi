@@ -43,7 +43,7 @@ import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory
 import java.util.stream.{Collector, Collectors}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.reflect.internal.util.TableDef.Column
 
 /**
  * Relation, that implements the Hoodie incremental view.
@@ -298,12 +299,13 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
+                val commitTimesToReturn = commitsToReturn.map(_.getTimestamp)
                 df = df.union(sqlContext.read.options(sOpts)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                   .load(filteredRegularFullPaths.toList: _*)
-                  .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitsToReturn)))
+                  .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*)))
               } catch {
                 case e : AnalysisException =>
                   if (e.getMessage.contains("Path does not exist")) {
