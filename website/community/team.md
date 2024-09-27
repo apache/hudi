@@ -50,6 +50,7 @@ Here is the list of PMC and Committers who have contributed to the project. For 
 | Tao Meng             | xiarixiaoyao     | [mengtao](https://people.apache.org/committer-index.html#mengtao)                   |
 | Vinoth Govindarajan  | vingov           | [vino](https://people.apache.org/committer-index.html#vino)                         |
 | Voon Hous            | voonhous         | [vhs](https://people.apache.org/committer-index.html#vhs)                           |
+| Vova Kolmakov        | wombatu-kun      | [wombatukun](https://people.apache.org/committer-index.html#wombatukun)             |
 | Wei Li               | lw309637554      | [liway](https://people.apache.org/committer-index.html#liway)                       |
 | Wenning Ding         | zhedoubushishi   | [wenningd](https://people.apache.org/committer-index.html#wenningd)                 |
 | Xianghu Wang         | wangxianghu      | [wangxianghu](https://people.apache.org/committer-index.html#wangxianghu)           |
