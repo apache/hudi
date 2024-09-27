@@ -103,7 +103,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
   @Test
   public void readLocalWriteHDFS() throws Exception {
     // Initialize table and filesystem
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(TABLE_TYPE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -113,7 +113,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
     HoodieWriteConfig cfg = getHoodieWriteConfig(dfsBasePath);
     HoodieWriteConfig localConfig = getHoodieWriteConfig(tablePath);
 
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(TABLE_TYPE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)
@@ -140,7 +140,7 @@ public class TestMultiFS extends HoodieSparkClientTestHarness {
       assertEquals(readRecords.count(), records.size());
 
       // Write to local
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
           .setTableType(TABLE_TYPE)
           .setTableName(TABLE_NAME)
           .setPayloadClass(HoodieAvroPayload.class)

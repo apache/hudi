@@ -371,8 +371,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val tableConfig = metaClient.getTableConfig
     if (null != tableConfig.getKeyGeneratorClassName
       && tableConfig.getKeyGeneratorClassName.equals(KeyGeneratorType.TIMESTAMP.getClassName)
-      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key()).matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS")) {
-      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP or EPOCHMILLISECONDS,
+      && tableConfig.propsMap.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
+      .matches("SCALAR|UNIX_TIMESTAMP|EPOCHMILLISECONDS|EPOCHMICROSECONDS")) {
+      // For TIMESTAMP key generator when TYPE is SCALAR, UNIX_TIMESTAMP,
+      // EPOCHMILLISECONDS, or EPOCHMICROSECONDS,
       // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting in most cases.
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))

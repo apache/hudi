@@ -59,6 +59,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_METAFILE_
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.TIMELINE_TIMEZONE;
 import static org.apache.hudi.config.HoodieWriteConfig.PRECOMBINE_FIELD_NAME;
+import static org.apache.hudi.config.HoodieWriteConfig.WRITE_TABLE_VERSION;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
@@ -204,13 +205,14 @@ public class BootstrapExecutor implements Serializable {
       throw new IllegalArgumentException("Bootstrap source base path and Hudi table base path must be different");
     }
 
-    HoodieTableMetaClient.PropertyBuilder builder = HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
         .setPreCombineField(props.getString(
             PRECOMBINE_FIELD_NAME.key(), PRECOMBINE_FIELD_NAME.defaultValue()))
+        .setTableVersion(props.getInteger(WRITE_TABLE_VERSION.key(), WRITE_TABLE_VERSION.defaultValue()))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
         .setArchiveLogFolder(props.getString(

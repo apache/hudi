@@ -193,7 +193,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
             recordMergerStrategy = HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
           }
           Map<String, Object> initConfigs = new HashMap<>(writeConfigs);
-          HoodieTableMetaClient.withPropertyBuilder()
+          HoodieTableMetaClient.newTableBuilder()
               .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
               .setTableName(writeConfigs.get("hoodie.table.name"))
               .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))

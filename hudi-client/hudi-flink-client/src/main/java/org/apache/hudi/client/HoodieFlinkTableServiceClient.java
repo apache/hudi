@@ -72,7 +72,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   @Override
   protected HoodieWriteMetadata<List<WriteStatus>> compact(String compactionInstantTime, boolean shouldComplete) {
     // only used for metadata table, the compaction happens in single thread
-    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = getHoodieTable().compact(context, compactionInstantTime);
+    HoodieWriteMetadata<List<WriteStatus>> compactionMetadata = createTable(config, storageConf).compact(context, compactionInstantTime);
     commitCompaction(compactionInstantTime, compactionMetadata.getCommitMetadata().get(), Option.empty());
     return compactionMetadata;
   }
@@ -186,12 +186,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   @Override
-  protected HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf) {
-    return HoodieFlinkTable.create(config, context);
-  }
-
-  public HoodieFlinkTable<?> getHoodieTable() {
-    return HoodieFlinkTable.create(config, context);
+  protected HoodieTable createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
+    return createTableAndValidate(config, HoodieFlinkTable::create, skipValidation);
   }
 
   /**
@@ -204,7 +200,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
   }
 
   public void initMetadataTable() {
-    HoodieFlinkTable<?> table = getHoodieTable();
+    HoodieFlinkTable<?> table = (HoodieFlinkTable<?>) createTable(config, storageConf, false);
     if (config.isMetadataTableEnabled()) {
       Option<String> latestPendingInstant = table.getActiveTimeline()
           .filterInflightsAndRequested().lastInstant().map(HoodieInstant::getTimestamp);

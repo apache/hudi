@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -110,6 +111,7 @@ public class HoodieMetaserverClientImp implements HoodieMetaserverClient {
   public List<HoodieInstant> listInstants(String db, String tb, int commitNum) {
     return exceptionWrapper(() -> this.client.listInstants(db, tb, commitNum).stream()
         .map(EntityConversions::fromTHoodieInstant)
+        .sorted(Comparator.comparing(HoodieInstant::getTimestamp).reversed())
         .collect(Collectors.toList())).get();
   }
 

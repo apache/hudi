@@ -157,11 +157,12 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
   @Test
   def testPartitionSchemaWithoutKeyGenerator(): Unit = {
     val metaClient = HoodieTestUtils.init(
-      storageConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.withPropertyBuilder()
+      storageConf, basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(this.metaClient)
         .setRecordKeyFields("_row_key")
         .setPartitionFields("partition_path")
-        .setTableName("hoodie_test").build())
+        .setTableName("hoodie_test")
+        .build())
     val props = Map(
       "hoodie.insert.shuffle.parallelism" -> "4",
       "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -839,6 +840,12 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     // Without custom key generator handling, timestamp partition field f2 would have input schema type
     assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
       schema, shouldUseStringTypeForTimestampPartitionKeyType = false))
+
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1,f2")
+    expectedPartitionSchema = StructType.apply(List(fields(0), fields(1)))
+    // With custom key generator handling, timestamp partition field f2 would have input schema type with old partition format
+    assertEquals(expectedPartitionSchema, SparkAdapterSupport.sparkAdapter.getSparkParsePartitionUtil.getPartitionSchema(tableConfig,
+      schema, shouldUseStringTypeForTimestampPartitionKeyType = true))
 
     tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, KeyGeneratorType.COMPLEX.name())
     tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, "f1,f2")

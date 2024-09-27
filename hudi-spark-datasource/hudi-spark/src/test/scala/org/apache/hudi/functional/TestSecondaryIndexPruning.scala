@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
@@ -40,7 +40,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, E
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.{DataFrame, Row}
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
@@ -155,6 +155,65 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         Seq("cde", "row2"),
         Seq("def", "row3")
       )
+    }
+  }
+
+  @Test
+  def testCreateAndDropSecondaryIndex(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts + (
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+      tableName += "test_secondary_index_create_drop_partitioned_mor"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  type = 'mor',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.metadata.record.index.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // by setting small file limit to 0, each insert will create a new file
+      // need to generate more file for non-partitioned table to test data skipping
+      // as the partitioned table will have only one file per partition
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+      spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
+      // create secondary index
+      spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      // validate index created successfully
+      metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(HoodieTestUtils.getDefaultStorageConf)
+        .build()
+      assert(metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // validate the secondary index records themselves
+      checkAnswer(s"select key, SecondaryIndexMetadata.recordKey from hudi_metadata('$basePath') where type=7")(
+        Seq("abc", "row1"),
+        Seq("cde", "row2"),
+        Seq("def", "row3")
+      )
+      // drop secondary index
+      spark.sql(s"drop index secondary_index_idx_not_record_key_col on $tableName")
+      // validate index dropped successfully
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assert(!metaClient.getTableConfig.getMetadataPartitions.contains("secondary_index_idx_not_record_key_col"))
+      // query metadata table and check no records for secondary index
+      assert(spark.sql(s"select * from hudi_metadata('$basePath') where type=7").count() == 0)
     }
   }
 
@@ -370,7 +429,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
       val executor = Executors.newFixedThreadPool(2)
       implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-      val function = new Function1[Int, Boolean] {
+      val function = new (Int => Boolean) {
         override def apply(writerId: Int): Boolean = {
           try {
             val data = if(writerId == 1) Seq(

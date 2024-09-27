@@ -169,7 +169,7 @@ public class HoodieTestTable implements AutoCloseable {
                             HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
     ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath().toString()));
     ValidationUtils.checkArgument(Objects.equals(
-        storage.getFileSystem(), metaClient.getRawHoodieStorage().getFileSystem()));
+        storage.getFileSystem(), metaClient.getRawStorage().getFileSystem()));
     this.basePath = basePath;
     this.storage = storage;
     this.fs = (FileSystem) storage.getFileSystem();
@@ -180,7 +180,7 @@ public class HoodieTestTable implements AutoCloseable {
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieTestTable(metaClient.getBasePath().toString(), metaClient.getRawHoodieStorage(), metaClient);
+    return new HoodieTestTable(metaClient.getBasePath().toString(), metaClient.getRawStorage(), metaClient);
   }
 
   public void setNonPartitioned() {

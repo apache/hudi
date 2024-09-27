@@ -88,7 +88,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     int allPartitionSize = partitionPaths.size();
 
     // filter the partition paths if needed to reduce list status
-    partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
+    partitionPaths = filterPartitionPathsByStrategy(partitionPaths);
     LOG.info("Strategy: {} matched {} partition paths from all {} partitions",
         writeConfig.getCompactionStrategy().getClass().getSimpleName(), partitionPaths.size(), allPartitionSize);
     if (partitionPaths.isEmpty()) {
@@ -185,7 +185,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
   protected abstract boolean filterLogCompactionOperations();
 
-  protected List<String> filterPartitionPathsByStrategy(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
+  protected List<String> filterPartitionPathsByStrategy(List<String> partitionPaths) {
     return partitionPaths;
   }
 

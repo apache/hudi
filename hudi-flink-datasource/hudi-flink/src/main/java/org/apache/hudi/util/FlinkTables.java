@@ -20,6 +20,7 @@ package org.apache.hudi.util;
 
 import org.apache.hudi.client.FlinkTaskContextSupplier;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -36,6 +37,12 @@ public class FlinkTables {
   private FlinkTables() {
   }
 
+  private static HoodieFlinkTable<?> createTableInternal(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(writeConfig, context);
+    CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
+    return table;
+  }
+
   /**
    * Creates the hoodie flink table.
    *
@@ -46,7 +53,7 @@ public class FlinkTables {
         HadoopFSUtils.getStorageConf(getHadoopConf(conf)),
         new FlinkTaskContextSupplier(runtimeContext));
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true);
-    return HoodieFlinkTable.create(writeConfig, context);
+    return createTableInternal(writeConfig, context);
   }
 
   /**
@@ -61,7 +68,7 @@ public class FlinkTables {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConfWithCopy(hadoopConf),
         new FlinkTaskContextSupplier(runtimeContext));
-    return HoodieFlinkTable.create(writeConfig, context);
+    return createTableInternal(writeConfig, context);
   }
 
   /**
@@ -71,6 +78,6 @@ public class FlinkTables {
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
-    return HoodieFlinkTable.create(writeConfig, HoodieFlinkEngineContext.DEFAULT);
+    return createTableInternal(writeConfig, HoodieFlinkEngineContext.DEFAULT);
   }
 }

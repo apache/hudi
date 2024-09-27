@@ -34,7 +34,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGeneratorClassNameFromType, inferKeyGeneratorTypeFromWriteConfig}
 import org.apache.hudi.keygen.{CustomKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator}
 import org.apache.hudi.sync.common.HoodieSyncConfig
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.slf4j.LoggerFactory
@@ -977,6 +977,11 @@ object DataSourceOptionsHelper {
 
   def translateConfigurations(optParams: Map[String, String]): Map[String, String] = {
     val translatedOpt = scala.collection.mutable.Map[String, String]() ++= optParams
+    if (!SparkConfigUtils.containsConfigProperty(optParams, HoodieTableConfig.NAME) &&
+      SparkConfigUtils.containsConfigProperty(optParams, DataSourceWriteOptions.TABLE_NAME)) {
+      translatedOpt.put(HoodieTableConfig.NAME.key(),
+        SparkConfigUtils.getStringWithAltKeys(optParams, DataSourceWriteOptions.TABLE_NAME))
+    }
     optParams.keySet.foreach(opt => {
       if (allAlternatives.contains(opt) && !optParams.contains(allAlternatives(opt))) {
         log.warn(opt + " is deprecated and will be removed in a later release; Please use " + allAlternatives(opt))
@@ -1006,8 +1011,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key()) && tableConfig.getRawRecordKeyFieldProp != null) {
       missingWriteConfigs ++= Map(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key() -> tableConfig.getRawRecordKeyFieldProp)
     }
-    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && tableConfig.getPartitionFieldProp != null) {
-      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> tableConfig.getPartitionFieldProp)
+    if (!params.contains(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key()) && HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).isPresent) {
+      missingWriteConfigs ++= Map(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() -> HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).get())
     }
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)

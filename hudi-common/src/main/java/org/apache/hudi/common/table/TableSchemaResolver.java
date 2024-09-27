@@ -311,7 +311,7 @@ public class TableSchemaResolver {
   }
 
   private Schema readSchemaFromLogFile(StoragePath path) throws IOException {
-    return readSchemaFromLogFile(metaClient.getRawHoodieStorage(), path);
+    return readSchemaFromLogFile(metaClient.getRawStorage(), path);
   }
 
   /**

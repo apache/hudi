@@ -78,7 +78,7 @@ public class TestHoodieBigQuerySyncClient {
   @BeforeAll
   static void setupOnce() throws Exception {
     basePath = tempDir.toString();
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TEST_TABLE)
         .setPayloadClass(HoodieAvroPayload.class)

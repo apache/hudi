@@ -68,7 +68,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
 
   @Test
   public void testMetadataDelete() throws Exception {
-    HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
         .setArchiveLogFolder(HoodieTableConfig.ARCHIVELOG_FOLDER.defaultValue())

@@ -238,11 +238,11 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     List<Long> bytesPerPartition = Arrays.asList(10L, 100L, -1L);
     setMockQueryRunner(inputDs);
 
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, bytesPerPartition.get(0)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, 0, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1"), 100L, "1#path/to/file1" + extension, typedProperties);
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, bytesPerPartition.get(1)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(100L, 0, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file1" + extension), 100L, "1#path/to/file2" + extension, typedProperties);
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(1000L, bytesPerPartition.get(2)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(1000L, 0, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file2" + extension), 1000L, "2#path/to/file5" + extension, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     List<Integer> numPartitions = Arrays.asList(12, 2, 1);
@@ -280,18 +280,20 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(null);
     List<Long> bytesPerPartition = Arrays.asList(10L, 20L, -1L, 1000L * 1000L * 1000L);
 
+    // If the computed number of partitions based on bytes is less than this value, it should use this value for num partitions.
+    int sourcePartitions = 2;
     //1. snapshot query, read all records
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, bytesPerPartition.get(0)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, sourcePartitions, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, bytesPerPartition.get(1)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, sourcePartitions, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(2)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
     typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(3)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(3)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -300,9 +302,9 @@ public class TestGcsEventsHoodieIncrSource extends SparkClientFunctionalTestHarn
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
-      numPartitions = Arrays.asList(12, 3, 1);
+      numPartitions = Arrays.asList(12, 3, sourcePartitions);
     } else {
-      numPartitions = Arrays.asList(23, 1);
+      numPartitions = Arrays.asList(23, sourcePartitions);
     }
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
     Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
