@@ -48,7 +48,7 @@
 </ul>
 <p>Use Cases for Parquet:</p>
 <ul>
-<li>Parquet is an excellent choice when dealing with large, complex, and nested data structures, especially for read-heavy workloads. Its columnar storage approach makes it an excellent choice for data lakehouse solutions where aggregation queries are common.</li>
+<li>Parquet is an excellent choice when dealing with large, complex, and nested data structures, especially for read-heavy workloads. Its columnar storage approach makes it an excellent choice for <a href="https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/" target="_blank" rel="noopener noreferrer">data lakehouse</a> solutions where aggregation queries are common.</li>
 </ul>
 <h3 class="anchor anchorWithStickyNavbar_LWe7" id="optimized-row-columnar-orc">Optimized Row Columnar (ORC)<a href="https://hudi.apache.org/blog/2024/07/31/hudi-file-formats#optimized-row-columnar-orc" class="hash-link" aria-label="Direct link to Optimized Row Columnar (ORC)" title="Direct link to Optimized Row Columnar (ORC)">​</a></h3>
 <p><a href="https://orc.apache.org/" target="_blank" rel="noopener noreferrer">Apache ORC</a> is another popular file format that is self-describing, and type-aware columnar file format.</p>
