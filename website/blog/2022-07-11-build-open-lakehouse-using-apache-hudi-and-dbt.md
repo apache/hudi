@@ -11,7 +11,7 @@ tags:
 - apache hudi
 ---
 
-The focus of this blog is to show you how to build an open lakehouse leveraging incremental data processing and performing field-level updates. We are excited to announce that you can now use Apache Hudi + dbt for building open data lakehouses.
+The focus of this blog is to show you how to build an open lakehouse leveraging incremental data processing and performing field-level updates. We are excited to announce that you can now use Apache Hudi + dbt for building open [data lakehouses](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/).
 
 ![/assets/images/blog/hudi_dbt_lakehouse.png](/assets/images/blog/hudi_dbt_lakehouse.png)
 
@@ -20,7 +20,7 @@ Let's first clarify a few terminologies used in this blog before we dive into th
 
 ## What is Apache Hudi?
 
-Apache Hudi brings ACID transactions, record-level updates/deletes, and change streams to data lakehouses.
+Apache Hudi brings ACID transactions, record-level updates/deletes, and change streams to [data lakehouses](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/).
 
 Apache Hudi is an open-source data management framework used to simplify incremental data processing and data pipeline development. This framework more efficiently manages business requirements like data lifecycle and improves data quality.
 

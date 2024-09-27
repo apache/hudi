@@ -9,7 +9,7 @@ Database indices contain auxiliary data structures to quickly locate records nee
 from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different 
 write patterns, Hudi considers [indexing](#indexing) as an integral part of its design and has uniquely supported 
 [indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed 
-up upserts on the Data Lakehouse. While Hudi's indices has benefited writers for fast upserts and deletes, Hudi's metadata table 
+up upserts on the [Data Lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/). While Hudi's indices has benefited writers for fast upserts and deletes, Hudi's metadata table 
 aims to tap these benefits more generally for both the readers and writers. The metadata table implemented as a single 
 internal Hudi Merge-On-Read table hosts different types of indices containing table metadata and is designed to be
 serverless and independent of compute and query engines. This is similar to common practices in databases where metadata

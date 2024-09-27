@@ -115,7 +115,7 @@ as well as Flink 1.16, 1.17, and 1.18.
 While Apache Hudi continues its strong growth momentum, some members of the community also decided it is time to 
 start building interoperability bridges across Lakehouse table formats with Delta Lake and Iceberg. The 
 [recent announcement about OneTable becoming open source](https://www.onehouse.ai/blog/onetable-is-now-open-source)
-marks a big leap forward for all developers looking to build a data lakehouse architecture. This development not 
+marks a big leap forward for all developers looking to build a [data lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/) architecture. This development not 
 only emphasizes Hudi's commitment to openness but also enables a wider range of users to experience the 
 technological advantages offered by Hudi.
 
