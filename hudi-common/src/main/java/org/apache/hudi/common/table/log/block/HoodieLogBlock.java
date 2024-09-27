@@ -177,6 +177,14 @@ public abstract class HoodieLogBlock {
     public static HoodieLogBlockType fromId(String id) {
       return ID_TO_ENUM_MAP.get(id);
     }
+
+    /**
+     * @param logBlockType log block type to be inspected.
+     * @returns true if the log block type refers to data or delete block. false otherwise.
+     */
+    public static boolean isDataOrDeleteBlock(HoodieLogBlockType logBlockType) {
+      return logBlockType != HoodieLogBlockType.COMMAND_BLOCK && logBlockType != HoodieLogBlockType.CORRUPT_BLOCK;
+    }
   }
 
   /**
