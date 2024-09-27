@@ -631,7 +631,7 @@ public class ParquetSchemaConverter {
         LogicalType elementType = arrayType.getElementType();
 
         Types.GroupBuilder<GroupType> arrayGroupBuilder = Types.repeatedGroup();
-        if (elementType.is(LogicalTypeRoot.ROW)) {
+        if (elementType.getTypeRoot() == LogicalTypeRoot.ROW) {
           RowType rowType = (RowType) elementType;
           rowType.getFields().forEach(field ->
                   arrayGroupBuilder.addField(convertToParquetType(field.getName(), field.getType(), repetition)));
