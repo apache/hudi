@@ -34,14 +34,7 @@ if [ -z "$CLIENT_JAR" ]; then
   echo "client jar location not set"
 fi
 
-#OTHER_JARS=`ls -1 $DIR/target/lib/*jar | grep -v 'hadoop-common-2' | grep -v 'hadoop-auth-2' | grep -v 'jackson-core-asl-1' | grep -v 'jackson-mapper-asl-1' | grep -v 'jackson-jaxrs-1' | grep -v 'jackson-xc-1' | tr '\n' ':'`
-OTHER_JARS=`ls -1 $DIR/target/lib/*jar | grep -e 'slf4j' -e 'log4j' \
-  -e 'lib/jcommander' -e 'lib/spark' -e 'lib/scala-' -e 'lib/hudi' -e 'lib/hadoop-common' \
-  -e 'lib/common' -e 'lib/kryo' | tr '\n' ':'`
-#OTHER_JARS=`ls -1 $DIR/target/lib/*jar | grep -v 'hadoop-common-2' | grep -v 'hadoop-auth-2' | \
-#  grep -v 'jackson-core-asl-1' | grep -v 'jackson-mapper-asl-1' | grep -v 'jackson-jaxrs-1' | \
-#  grep -v 'jackson-xc-1' | grep -v 'SNAPSHOT.jar' | tr '\n' ':'`
-
+OTHER_JARS=`ls -1 $DIR/target/lib/*jar | grep -v '*avro*-1.' | tr '\n' ':'`
 #TODO - Need to move TestDataGenerator and HoodieJavaApp out of tests
-echo "Running command : java -cp $DIR/target/test-classes/:$DIR/../hudi-client/target/test-classes/:${HADOOP_CONF_DIR}:${CLIENT_JAR}:$OTHER_JARS:$SPARK_HOME/jars:$HUDI_JAR $@"
-java -Xmx1G -cp $DIR/target/test-classes/:$DIR/../hudi-client/target/test-classes/:${HADOOP_CONF_DIR}:${CLIENT_JAR}:$OTHER_JARS:$SPARK_HOME/jars:$HUDI_JAR HoodieJavaGenerateApp "$@"
+echo "Running command : java -cp $DIR/target/test-classes/:$DIR/../hudi-client/target/test-classes/:${HADOOP_CONF_DIR}:$HUDI_JAR:${CLIENT_JAR}:$OTHER_JARS $@"
+java -Xmx1G -cp $DIR/target/test-classes/:$DIR/../hudi-client/target/test-classes/:${HADOOP_CONF_DIR}:$HUDI_JAR:${CLIENT_JAR}:$OTHER_JARS HoodieJavaGenerateApp "$@"

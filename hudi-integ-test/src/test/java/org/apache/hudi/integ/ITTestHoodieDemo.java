@@ -118,17 +118,19 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     // batch 1
     ingestFirstBatchAndHiveSync();
-    // testHiveAfterFirstBatch();
+    testHiveAfterFirstBatch();
+    // TODO(HUDI-8269, HUDI-8270): fix integration tests with Presto and Trino
     // testPrestoAfterFirstBatch();
     // testTrinoAfterFirstBatch();
     testSparkSQLAfterFirstBatch();
 
     // batch 2
     ingestSecondBatchAndHiveSync();
-    // testHiveAfterSecondBatch();
+    testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
+    // TODO(HUDI-8271, HUDI-8272): fix incremental queries in integration tests on Hive and Spark
     // testIncrementalHiveQueryBeforeCompaction();
     // testIncrementalSparkSQLQuery();
 
@@ -449,6 +451,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testSparkSQLAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH2_COMMANDS, true);
+    // TODO(HUDI-8273): fix RO queries on bootstrapped MOR tables
     assertStdOutContains(stdOutErrPair,
         "+------+-------------------+\n|GOOG  |2018-08-31 10:59:00|\n+------+-------------------+", 5);
 
