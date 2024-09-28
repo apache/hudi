@@ -72,7 +72,7 @@ class TestDefaultSparkRecordMerger {
    * If the input records are not Spark record, it throws.
    */
   @Test
-  void testMergerWithArvroRecord() {
+  void testMergerWithAvroRecord() {
     try (HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(0L)) {
       List<HoodieRecord> records = dataGenerator.generateInserts("001", 2);
       DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
@@ -142,7 +142,7 @@ class TestDefaultSparkRecordMerger {
    * If the new record is a delete record, the merged record is empty.
    */
   @Test
-  void testMergerWithNewRecordIsDeleteRecord() throws IOException {
+  void testMergerWithNewRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
     HoodieRecord<InternalRow> oldRecord =
@@ -163,7 +163,7 @@ class TestDefaultSparkRecordMerger {
    * If the old record is a delete record, the merged record is the new record.
    */
   @Test
-  void testMergerWithOldRecordIsDeleteRecord() throws IOException {
+  void testMergerWithOldRecordAsDelete() throws IOException {
     HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
     Row newValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
     HoodieRecord<InternalRow> oldRecord = new HoodieEmptyRecord<>(key, SPARK);
