@@ -49,21 +49,37 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
    * @return Pair object, with left as boolean indicating if the parsing was successful and right as the
    * BigDecimal value.
    */
-  protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj) {
+  protected static Pair<Boolean, BigDecimal> parseObjectToBigDecimal(Object obj, Schema schema) {
+    BigDecimal bigDecimal = null;
     if (obj instanceof Number) {
-      return Pair.of(true, BigDecimal.valueOf(((Number) obj).doubleValue()));
+      bigDecimal = BigDecimal.valueOf(((Number) obj).doubleValue());
     }
 
     // Case 2: Object is a number in String format.
     if (obj instanceof String) {
-      BigDecimal bigDecimal = null;
       try {
         bigDecimal = new BigDecimal(((String) obj));
       } catch (java.lang.NumberFormatException ignored) {
         /* ignore */
       }
-      return Pair.of(bigDecimal != null, bigDecimal);
     }
-    return Pair.of(false, null);
+
+    if (bigDecimal == null) {
+      return Pair.of(false, null);
+    }
+    // As we don't do rounding, the validation will enforce the scale part and the integer part are all within the
+    // limit. As a result, if scale is 2 precision is 5, we only allow 3 digits for the integer.
+    // Allowed: 123.45, 123, 0.12
+    // Disallowed: 1234 (4 digit integer while the scale has already reserved 2 digit out of the 5 digit precision)
+    //             123456, 0.12345
+    LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
+    if (bigDecimal.scale() > decimalType.getScale()
+        || (bigDecimal.precision() - bigDecimal.scale()) > (decimalType.getPrecision() - decimalType.getScale())) {
+      // Correspond to case
+      // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 5 as scale 2 without rounding.
+      // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 3 as scale 2 without rounding
+      return Pair.of(false, null);
+    }
+    return Pair.of(true, bigDecimal);
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -83,13 +84,26 @@ public class TestJsonDFSSource extends AbstractDFSSourceTestBase {
     assertTrue(batch.getBatch().isPresent());
     Throwable t = assertThrows(Exception.class,
         () -> batch.getBatch().get().show(30));
-    while (t != null) {
-      if (t instanceof SchemaCompatibilityException) {
+    verifyException(t, SchemaCompatibilityException.class);
+    // check for exception when sanitization is enabled.
+    props.setProperty(HoodieStreamerConfig.ROW_THROW_EXPLICIT_EXCEPTIONS.key(), "true");
+    props.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    props.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
+    sourceFormatAdapter = new SourceFormatAdapter(prepareDFSSource(props), Option.empty(), Option.of(props));
+    InputBatch<Dataset<Row>> batch2 = sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    t = assertThrows(Exception.class,
+        () -> batch2.getBatch().get().show(30));
+    verifyException(t, HoodieSchemaException.class);
+  }
+
+  private void verifyException(Throwable throwable, Class<? extends Throwable> expectedExceptionClass) {
+    while (throwable != null) {
+      if (expectedExceptionClass.isInstance(throwable)) {
         return;
       }
-      t = t.getCause();
+      throwable = throwable.getCause();
     }
-    throw new AssertionError("Exception does not have SchemaCompatibility in its trace", t);
+    throw new AssertionError("Exception does not have " + expectedExceptionClass.getSimpleName() + " in its trace", throwable);
   }
 
   protected void corruptFile(Path path) throws IOException {

@@ -304,24 +304,11 @@ public class MercifulJsonConverter {
 
       // Case 2: Input is a number or String number.
       LogicalTypes.Decimal decimalType = (LogicalTypes.Decimal) schema.getLogicalType();
-      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value);
+      Pair<Boolean, BigDecimal> parseResult = parseObjectToBigDecimal(value, schema);
       if (Boolean.FALSE.equals(parseResult.getLeft())) {
         return Pair.of(false, null);
       }
       BigDecimal bigDecimal = parseResult.getRight();
-
-      // As we don't do rounding, the validation will enforce the scale part and the integer part are all within the
-      // limit. As a result, if scale is 2 precision is 5, we only allow 3 digits for the integer.
-      // Allowed: 123.45, 123, 0.12
-      // Disallowed: 1234 (4 digit integer while the scale has already reserved 2 digit out of the 5 digit precision)
-      //             123456, 0.12345
-      if (bigDecimal.scale() > decimalType.getScale()
-          || (bigDecimal.precision() - bigDecimal.scale()) > (decimalType.getPrecision() - decimalType.getScale())) {
-        // Correspond to case
-        // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 5 as scale 2 without rounding.
-        // org.apache.avro.AvroTypeException: Cannot encode decimal with scale 3 as scale 2 without rounding
-        return Pair.of(false, null);
-      }
 
       switch (schema.getType()) {
         case BYTES:
