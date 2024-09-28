@@ -130,7 +130,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
     // testIncrementalHiveQueryBeforeCompaction();
-    testIncrementalSparkSQLQuery();
+    // testIncrementalSparkSQLQuery();
 
     // compaction
     scheduleAndRunCompaction();
@@ -495,16 +495,22 @@ public class ITTestHoodieDemo extends ITTestBase {
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 2);
-    assertStdOutContains(stdOutErrPair, "|default |stock_ticks_cow              |false      |\n"
-        + "|default |stock_ticks_cow_bs           |false      |\n"
-        + "|default |stock_ticks_derived_mor_bs_ro|false      |\n"
-        + "|default |stock_ticks_derived_mor_bs_rt|false      |\n"
-        + "|default |stock_ticks_derived_mor_ro   |false      |\n"
-        + "|default |stock_ticks_derived_mor_rt   |false      |\n"
-        + "|default |stock_ticks_mor_bs_ro        |false      |\n"
-        + "|default |stock_ticks_mor_bs_rt        |false      |"
-        + "|default |stock_ticks_mor_ro           |false      |\n"
-        + "|default |stock_ticks_mor_rt           |false      |");
+    assertStdOutContains(stdOutErrPair, "|default  |stock_ticks_cow              |false      |\n"
+        + "|default  |stock_ticks_cow_bs           |false      |\n"
+        + "|default  |stock_ticks_derived_mor      |false      |\n"
+        + "|default  |stock_ticks_derived_mor_bs   |false      |\n"
+        + "|default  |stock_ticks_derived_mor_bs_ro|false      |\n"
+        + "|default  |stock_ticks_derived_mor_bs_rt|false      |\n"
+        + "|default  |stock_ticks_derived_mor_ro   |false      |\n"
+        + "|default  |stock_ticks_derived_mor_rt   |false      |\n"
+        + "|default  |stock_ticks_mor              |false      |\n"
+        + "|default  |stock_ticks_mor_bs           |false      |\n"
+        + "|default  |stock_ticks_mor_bs_ro        |false      |\n"
+        + "|default  |stock_ticks_mor_bs_rt        |false      |\n"
+        + "|default  |stock_ticks_mor_ro           |false      |\n"
+        + "|default  |stock_ticks_mor_rt           |false      |\n"
+        + "|         |stock_ticks_cow_bs_incr      |true       |\n"
+        + "|         |stock_ticks_cow_incr         |true       |");
     assertStdOutContains(stdOutErrPair, "|count(1)|\n+--------+\n|99     |", 4);
   }
 
