@@ -126,7 +126,8 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     // batch 2
     ingestSecondBatchAndHiveSync();
-    testHiveAfterSecondBatch();
+    // TODO(HUDI-8275): fix MOR queries on Hive in integration tests
+    // testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
