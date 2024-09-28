@@ -340,3 +340,8 @@ d68f36112f4 [ENG-12764][HUDI-8090] Add new zookeeper based lock provider (#877)
 2cff3d74c86 [AUDIT-953] Changelog for release-v1.32.0 (#917)
 5918ecab770 [AUDIT-953]: Changelog for release-v1.32.1 (#918)
 318d0b94e46 [ENG-12228][HUDI-8124] Allow reuse of meta client in Meta Sync path (#890)
+
+---[2024-09-27 19:46:06] [release-v1.35.0] ---
+5a8a4442822 [ENG-14965][HUDI-8266] Ensure CleanPlanner is serializable (#935)
+e4f7f69d87a [ENG-14372][HUDI-8248] Fixing Log Record reader to include rollback blocks with timestamps > maxInstant times (#930)
+09ecdbb1022 [ENG-13527][INTERNAL] immutable collection causes runtime issue (#934)
