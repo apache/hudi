@@ -170,7 +170,7 @@ public abstract class ITTestBase {
       TestExecStartResultCallback resultCallback =
           executeCommandStringInDocker(fromContainerName, command, false, true);
       String stderrString = resultCallback.getStderr().toString().trim();
-      if (!stderrString.contains("open")) {
+      if (!stderrString.contains("succeeded")) {
         Thread.sleep(1000);
         return false;
       }
@@ -368,7 +368,7 @@ public abstract class ITTestBase {
     }
 
     if (times != count) {
-      saveUpLogs();
+      // saveUpLogs();
     }
 
     assertEquals(times, count, "Did not find output the expected number of times.");
