@@ -368,6 +368,7 @@ public abstract class ITTestBase {
     }
 
     if (times != count) {
+      // TODO(HUDI-8268): fix the command with pipe
       // saveUpLogs();
     }
 

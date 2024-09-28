@@ -95,7 +95,7 @@
 
     <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
-    <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
+    <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
     <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
@@ -109,7 +109,7 @@
     <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.13.1</parquet.version>
+    <parquet.version>1.10.1</parquet.version>
     <junit.jupiter.version>5.8.2</junit.jupiter.version>
     <junit.vintage.version>5.8.2</junit.vintage.version>
     <junit.platform.version>1.8.2</junit.platform.version>
@@ -168,7 +168,7 @@
     <spark35.version>3.5.1</spark35.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
-    <avro.version>1.11.2</avro.version>
+    <avro.version>1.8.2</avro.version>
     <bijection-avro.version>0.9.7</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
@@ -230,7 +230,6 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
-    <project.build.architecture>amd64</project.build.architecture>
   </properties>
 
   <scm>
@@ -2360,6 +2359,21 @@
         <skipITs>true</skipITs>
       </properties>
       <activation>
+        <property>
+          <name>spark2.4</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>m1-mac</id>
+      <properties>
+        <spark2.version>2.4.8</spark2.version>
+      </properties>
+      <activation>
+        <os>
+          <family>mac</family>
+          <arch>aarch64</arch>
+        </os>
         <property>
           <name>spark2.4</name>
         </property>

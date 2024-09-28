@@ -118,7 +118,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     // batch 1
     ingestFirstBatchAndHiveSync();
-    //testHiveAfterFirstBatch();
+    // testHiveAfterFirstBatch();
     // testPrestoAfterFirstBatch();
     // testTrinoAfterFirstBatch();
     testSparkSQLAfterFirstBatch();
