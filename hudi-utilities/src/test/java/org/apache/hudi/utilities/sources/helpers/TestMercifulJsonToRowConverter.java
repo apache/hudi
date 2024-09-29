@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -153,14 +154,18 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
    */
   @ParameterizedTest
   @MethodSource("decimalBadCases")
-  void decimalLogicalTypeInvalidCaseTest(String avroFile, String strInput, Double numInput) throws IOException {
+  void decimalLogicalTypeInvalidCaseTest(String avroFile, String strInput, Double numInput, boolean testFixedByteArray) throws IOException {
     Schema schema = SchemaTestUtil.getSchema(avroFile);
 
     Map<String, Object> data = new HashMap<>();
     if (strInput != null) {
       data.put("decimalField", strInput);
-    } else {
+    } else if (numInput != null) {
       data.put("decimalField", numInput);
+    } else if (testFixedByteArray) {
+      // Convert the fixed value to int array, which is used as json value literals.
+      int[] intArray = {0, 0, 48, 57};
+      data.put("decimalField", intArray);
     }
     String json = MAPPER.writeValueAsString(data);
 
@@ -250,19 +255,14 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
 
   @ParameterizedTest
   @MethodSource("durationBadCases")
-  void durationLogicalTypeBadTest(Long months, Long days, Long millis) throws IOException {
+  void durationLogicalTypeBadTest(String schemaFile, Object input) throws IOException {
     // As duration uses 12 byte fixed type to store 3 unsigned int numbers, Long.MAX would cause overflow.
     // Verify it is gracefully handled.
-    List<Long> num = new ArrayList<>();
-    num.add(months);
-    num.add(days);
-    num.add(millis);
-
     Map<String, Object> data = new HashMap<>();
-    data.put("duration", num);
+    data.put("duration", input);
     String json = MAPPER.writeValueAsString(data);
 
-    Schema schema = SchemaTestUtil.getSchema(DURATION_AVRO_FILE_PATH);
+    Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(schemaFile);
     // Schedule with timestamp same as that of committed instant
     assertThrows(HoodieJsonToRowConversionException.class, () -> {
       CONVERTER.convertToRow(json, schema);
@@ -442,17 +442,26 @@ class TestMercifulJsonToRowConverter extends MercifulJsonConverterTestBase {
 
   @ParameterizedTest
   @MethodSource("timeBadCaseProvider")
-  void timeLogicalTypeBadCaseTest(Object timeMilli, Object timeMicro) throws IOException {
+  void timeLogicalTypeBadCaseTest(Object invalidInput) throws IOException {
+    String validInput = "00:00:00";
     // Define the schema for the date logical type
-    Schema schema = SchemaTestUtil.getSchema(TIME_AVRO_FILE_PATH);
+    Schema schema = SchemaTestUtil.getSchemaFromResourceFilePath(TIME_AVRO_FILE_PATH);
 
+    // Only give one of the field invalid value at a time so that both processor type can have coverage.
     Map<String, Object> data = new HashMap<>();
-    data.put("timeMicroField", timeMicro);
-    data.put("timeMillisField", timeMilli);
-    String json = MAPPER.writeValueAsString(data);
+    data.put("timeMicroField", validInput);
+    data.put("timeMillisField", invalidInput);
+    // Schedule with timestamp same as that of committed instant
+    assertThrows(HoodieJsonToRowConversionException.class, () -> {
+      CONVERTER.convertToRow(MAPPER.writeValueAsString(data), schema);
+    });
 
-    assertThrows(Exception.class, () -> {
-      CONVERTER.convertToRow(json, schema);
+    data.clear();
+    data.put("timeMicroField", invalidInput);
+    data.put("timeMillisField", validInput);
+    // Schedule with timestamp same as that of committed instant
+    assertThrows(HoodieJsonToRowConversionException.class, () -> {
+      CONVERTER.convertToRow(MAPPER.writeValueAsString(data), schema);
     });
   }
 
