@@ -279,10 +279,14 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   @Override
-  public void close() throws Exception {
-    super.close();
-    if (executorService != null) {
-      executorService.shutdown();
+  public void close() {
+    try {
+      super.close();
+      if (executorService != null) {
+        executorService.shutdown();
+      }
+    } catch (Exception e) {
+      LOG.error("Failed to close lakeview sync tool", e);
     }
   }
 }
