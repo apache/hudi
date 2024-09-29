@@ -8,7 +8,9 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,6 +18,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,39 +35,49 @@ class LakeviewSyncToolTest {
     hadoopConf = fileSystem.getConf();
   }
 
-  @Test
-  void getParserConfig() throws Exception {
+  private static Stream<Arguments> getArguments() {
+    return Stream.of(Arguments.of("s3"), Arguments.of("gcs"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getArguments")
+  void testSyncTool(String fileSystem) throws Exception {
     List<ParserConfig> expectedParserConfigs = new ArrayList<>();
     expectedParserConfigs.add(ParserConfig.builder()
         .lake("lake-1")
         .databases(Arrays.asList(Database.builder()
                 .name("database-1")
-                .basePaths(Arrays.asList("s3://user-bucket/lake-1/database-1/table-1",
-                    "s3://user-bucket/lake-1/database-1/table-2"))
+                .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-1/database-1/table-1",
+                    fileSystem + "://user-bucket/lake-1/database-1/table-2"))
                 .build(),
             Database.builder()
                 .name("database-2")
-                .basePaths(Arrays.asList("s3://user-bucket/lake-1/database-2/table-1",
-                    "s3://user-bucket/lake-1/database-2/table-2"))
+                .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-1/database-2/table-1",
+                    fileSystem + "://user-bucket/lake-1/database-2/table-2"))
                 .build()))
         .build());
     expectedParserConfigs.add(ParserConfig.builder()
         .lake("lake-2")
         .databases(Collections.singletonList(Database.builder()
             .name("database-1")
-            .basePaths(Arrays.asList("s3://user-bucket/lake-2/database-1/table-1",
-                "s3://user-bucket/lake-2/database-1/table-2"))
+            .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-2/database-1/table-1",
+                fileSystem + "://user-bucket/lake-2/database-1/table-2"))
             .build()))
         .build());
 
     Properties properties = new Properties();
-    properties.load(this.getClass().getResourceAsStream("/lakeview-sync-s3.properties"));
+    properties.load(this.getClass().getResourceAsStream(String.format("/lakeview-sync-%s.properties", fileSystem)));
     TypedProperties typedProperties = new TypedProperties(properties);
     try (LakeviewSyncTool lakeviewSyncTool = new LakeviewSyncTool(typedProperties, hadoopConf)) {
       Config config = lakeviewSyncTool.getConfig();
       assertNotNull(config);
       assertEquals(new HashSet<>(expectedParserConfigs),
           new HashSet<>(config.getMetadataExtractorConfig().getParserConfig()));
+      if (fileSystem.equals("s3")) {
+        assertNotNull(config.getFileSystemConfiguration().getS3Config());
+      } else {
+        assertNotNull(config.getFileSystemConfiguration().getGcsConfig());
+      }
     }
   }
 }
