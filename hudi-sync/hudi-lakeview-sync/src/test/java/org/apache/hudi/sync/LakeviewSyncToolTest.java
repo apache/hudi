@@ -1,5 +1,6 @@
 package org.apache.hudi.sync;
 
+import ai.onehouse.config.Config;
 import ai.onehouse.config.models.configv1.Database;
 import ai.onehouse.config.models.configv1.ParserConfig;
 import org.apache.hadoop.conf.Configuration;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class LakeviewSyncToolTest {
 
@@ -59,7 +61,10 @@ class LakeviewSyncToolTest {
     properties.load(this.getClass().getResourceAsStream("/lakeview-sync-s3.properties"));
     TypedProperties typedProperties = new TypedProperties(properties);
     try (LakeviewSyncTool lakeviewSyncTool = new LakeviewSyncTool(typedProperties, hadoopConf)) {
-      assertEquals(new HashSet<>(expectedParserConfigs), new HashSet<>(lakeviewSyncTool.getParserConfig()));
+      Config config = lakeviewSyncTool.getConfig();
+      assertNotNull(config);
+      assertEquals(new HashSet<>(expectedParserConfigs),
+          new HashSet<>(config.getMetadataExtractorConfig().getParserConfig()));
     }
   }
 }
