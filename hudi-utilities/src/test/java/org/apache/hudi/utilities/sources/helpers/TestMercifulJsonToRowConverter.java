@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.avro.MercifulJsonConverterTestBase;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.exception.HoodieJsonToAvroConversionException;
 import org.apache.hudi.utilities.exception.HoodieJsonToRowConversionException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
