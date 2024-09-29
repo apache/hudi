@@ -26,9 +26,9 @@ public class LakeviewSyncConfigHolder {
   // this class holds static config fields
   private LakeviewSyncConfigHolder() {}
 
-  public static final ConfigProperty<String> LAKEVIEW_SYNC_ENABLED = ConfigProperty
+  public static final ConfigProperty<Boolean> LAKEVIEW_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.lakeview_sync.enable")
-      .defaultValue("false")
+      .defaultValue(false)
       .withDocumentation("When set to true, register/sync the table to Lakeview.");
 
   public static final ConfigProperty<String> LAKEVIEW_VERSION = ConfigProperty
@@ -92,7 +92,7 @@ public class LakeviewSyncConfigHolder {
 
   public static final ConfigProperty<String> LAKEVIEW_METADATA_EXTRACTOR_PATH_EXCLUSION_PATTERNS = ConfigProperty
       .key("hoodie.meta.sync.lakeview.metadataExtractor.pathExclusionPatterns")
-      .noDefaultValue()
+      .defaultValue("")
       .markAdvanced()
       .withDocumentation("List of pattens to be ignored by lakeview metadata extractor");
 
@@ -109,4 +109,19 @@ public class LakeviewSyncConfigHolder {
       .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Lake name & database name that should be applied to specified list of table base paths in lakeview metadata extractor");
+
+  public static final ConfigProperty<Integer> LAKEVIEW_HTTP_CLIENT_TIMEOUT_SECONDS = ConfigProperty
+      .key("hoodie.datasource.lakeview_sync.http.client.timeout")
+      .defaultValue(15)
+      .withDocumentation("Timeout set to http client used by lakeview sync tool");
+
+  public static final ConfigProperty<Integer> LAKEVIEW_HTTP_CLIENT_MAX_RETRIES = ConfigProperty
+      .key("hoodie.datasource.lakeview_sync.http.client.retries")
+      .defaultValue(3)
+      .withDocumentation("Max retries by http client used by lakeview sync tool");
+
+  public static final ConfigProperty<Integer> LAKEVIEW_HTTP_CLIENT_RETRY_DELAY_MS = ConfigProperty
+      .key("hoodie.datasource.lakeview_sync.http.client.retry.delay.ms")
+      .defaultValue(1000)
+      .withDocumentation("Delay between retries of http client used by lakeview sync tool");
 }

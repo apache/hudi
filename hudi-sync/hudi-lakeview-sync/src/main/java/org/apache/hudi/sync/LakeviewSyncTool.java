@@ -50,6 +50,7 @@ import com.google.common.annotations.VisibleForTesting;
 import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.slf4j.Logger;
@@ -78,7 +79,7 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private static final Logger LOG = LoggerFactory.getLogger(LakeviewSyncTool.class);
   private static final Pattern LAKEVIEW_METADATA_EXTRACTOR_LAKE_PATHS_PATTERN = Pattern.compile("([^.]+)\\.databases\\.([^.]+)\\.basePaths");
-  // TODO: configs
+
   private static final int HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS = 15;
   private static final int HTTP_CLIENT_MAX_RETRIES = 3;
   private static final long HTTP_CLIENT_RETRY_DELAY_MS = 1000;
@@ -90,52 +91,59 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   private final ExecutorService executorService;
   @Nullable
   private final TableDiscoveryAndUploadJob tableDiscoveryAndUploadJob;
+  private final int httpClientTimeoutSeconds;
+  private final int httpClientMaxRetries;
+  private final long httpClientRetryDelayMs;
 
   public LakeviewSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    this.isLakeviewSyncToolEnabled = Boolean.TRUE.toString().equalsIgnoreCase(
-        props.getOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_SYNC_ENABLED.key(),
-            LakeviewSyncConfigHolder.LAKEVIEW_SYNC_ENABLED.defaultValue()).toString());
+    HoodieConfig hoodieConfig = new HoodieConfig(props);
+    this.isLakeviewSyncToolEnabled = hoodieConfig.getBooleanOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_SYNC_ENABLED);
     if (isLakeviewSyncToolEnabled) {
-      this.config = getConfig(props);
+      this.config = getConfig(hoodieConfig);
       this.executorService = Executors.newFixedThreadPool(1);
       this.tableDiscoveryAndUploadJob = getTableDiscoveryAndUploadJob(this.config, this.executorService);
+      this.httpClientTimeoutSeconds = hoodieConfig.getIntOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_TIMEOUT_SECONDS);
+      this.httpClientMaxRetries = hoodieConfig.getIntOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_MAX_RETRIES);
+      this.httpClientRetryDelayMs = hoodieConfig.getLongOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_RETRY_DELAY_MS);
     } else {
       this.config = null;
       this.executorService = null;
       this.tableDiscoveryAndUploadJob = null;
+      this.httpClientTimeoutSeconds = HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS;
+      this.httpClientMaxRetries = HTTP_CLIENT_MAX_RETRIES;
+      this.httpClientRetryDelayMs = HTTP_CLIENT_RETRY_DELAY_MS;
     }
   }
 
-  private Config getConfig(Properties props) {
+  private Config getConfig(HoodieConfig hoodieConfig) {
     MetadataExtractorConfig metadataExtractorConfig = MetadataExtractorConfig.builder()
         .parserConfig(getParserConfig())
-        .pathExclusionPatterns(getPathsToExclude(props))
+        .pathExclusionPatterns(getPathsToExclude(hoodieConfig))
         .jobRunMode(MetadataExtractorConfig.JobRunMode.ONCE)
         .build();
     OnehouseClientConfig onehouseClientConfig = OnehouseClientConfig.builder()
-        .projectId(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_PROJECT_ID.key()))
-        .apiKey(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_API_KEY.key()))
-        .apiSecret(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_API_SECRET.key()))
-        .userId(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_USERID.key()))
+        .projectId(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_PROJECT_ID))
+        .apiKey(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_API_KEY))
+        .apiSecret(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_API_SECRET))
+        .userId(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_USERID))
         .build();
-    FileSystemConfiguration fileSystemConfiguration = getFileSystemConfiguration(props);
+    FileSystemConfiguration fileSystemConfiguration = getFileSystemConfiguration(hoodieConfig);
     return ConfigV1.builder()
-        .version(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_VERSION.key(),
-            LakeviewSyncConfigHolder.LAKEVIEW_VERSION.defaultValue()))
+        .version(hoodieConfig.getStringOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_VERSION))
         .metadataExtractorConfig(metadataExtractorConfig)
         .onehouseClientConfig(onehouseClientConfig)
         .fileSystemConfiguration(fileSystemConfiguration)
         .build();
   }
 
-  private FileSystemConfiguration getFileSystemConfiguration(Properties props) {
+  private FileSystemConfiguration getFileSystemConfiguration(HoodieConfig hoodieConfig) {
     FileSystemConfiguration.FileSystemConfigurationBuilder fileSystemConfigurationBuilder = FileSystemConfiguration.builder();
-    Optional<S3Config> s3Config = getS3Config(props);
+    Optional<S3Config> s3Config = getS3Config(hoodieConfig);
     if (s3Config.isPresent()) {
       fileSystemConfigurationBuilder.s3Config(s3Config.get());
     } else {
-      Optional<GCSConfig> gcsConfig = getGCSConfig(props);
+      Optional<GCSConfig> gcsConfig = getGCSConfig(hoodieConfig);
       if (gcsConfig.isPresent()) {
         fileSystemConfigurationBuilder.gcsConfig(gcsConfig.get());
       } else {
@@ -147,33 +155,33 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
     return fileSystemConfigurationBuilder.build();
   }
 
-  private Optional<S3Config> getS3Config(Properties props) {
-    String region = props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_S3_REGION.key());
+  private Optional<S3Config> getS3Config(HoodieConfig hoodieConfig) {
+    String region = hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_REGION);
     if (!StringUtils.isNullOrEmpty(region)) {
       return Optional.of(S3Config.builder()
           .region(region)
-          .accessKey(Optional.ofNullable(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_KEY.key())))
-          .accessSecret(Optional.ofNullable(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_SECRET.key())))
+          .accessKey(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_KEY)))
+          .accessSecret(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_SECRET)))
           .build());
     } else {
       return Optional.empty();
     }
   }
 
-  private Optional<GCSConfig> getGCSConfig(Properties props) {
-    String gcsProjectId = props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_GCS_PROJECT_ID.key());
+  private Optional<GCSConfig> getGCSConfig(HoodieConfig hoodieConfig) {
+    String gcsProjectId = hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_GCS_PROJECT_ID);
     if (!StringUtils.isNullOrEmpty(gcsProjectId)) {
       return Optional.of(GCSConfig.builder()
           .projectId(Optional.of(gcsProjectId))
-          .gcpServiceAccountKeyPath(Optional.ofNullable(props.getProperty(LakeviewSyncConfigHolder.LAKEVIEW_GCS_SERVICE_ACCOUNT_KEY_PATH.key())))
+          .gcpServiceAccountKeyPath(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_GCS_SERVICE_ACCOUNT_KEY_PATH)))
           .build());
     } else {
       return Optional.empty();
     }
   }
 
-  private Optional<List<String>> getPathsToExclude(Properties props) {
-    String pathsToExclude = props.getProperty(LAKEVIEW_METADATA_EXTRACTOR_PATH_EXCLUSION_PATTERNS.key());
+  private Optional<List<String>> getPathsToExclude(HoodieConfig hoodieConfig) {
+    String pathsToExclude = hoodieConfig.getStringOrDefault(LAKEVIEW_METADATA_EXTRACTOR_PATH_EXCLUSION_PATTERNS);
     if (StringUtils.isNullOrEmpty(pathsToExclude)) {
       return Optional.empty();
     } else {
@@ -245,13 +253,13 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   private AsyncHttpClientWithRetry getAsyncHttpClientWithRetry(@Nonnull ExecutorService executorService) {
     Dispatcher dispatcher = new Dispatcher(executorService);
     OkHttpClient okHttpClient = new OkHttpClient.Builder()
-        .readTimeout(HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .writeTimeout(HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .connectTimeout(HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(httpClientTimeoutSeconds, TimeUnit.SECONDS)
+        .writeTimeout(httpClientTimeoutSeconds, TimeUnit.SECONDS)
+        .connectTimeout(httpClientTimeoutSeconds, TimeUnit.SECONDS)
         .dispatcher(dispatcher)
         .build();
     return new AsyncHttpClientWithRetry(
-        HTTP_CLIENT_MAX_RETRIES, HTTP_CLIENT_RETRY_DELAY_MS, okHttpClient);
+        httpClientMaxRetries, httpClientRetryDelayMs, okHttpClient);
   }
 
   @VisibleForTesting
@@ -262,8 +270,11 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   @Override
   public void syncHoodieTable() {
     if (isLakeviewSyncToolEnabled && tableDiscoveryAndUploadJob != null) {
-      // TODO: handle timeout
-      tableDiscoveryAndUploadJob.runOnce();
+      try {
+        tableDiscoveryAndUploadJob.runOnce();
+      } catch (Exception e) {
+        LOG.error("Failed to perform sync operation in lakeview", e);
+      }
     }
   }
 
