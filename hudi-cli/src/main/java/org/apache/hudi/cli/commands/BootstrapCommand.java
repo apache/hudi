@@ -93,9 +93,7 @@ public class BootstrapCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    String cmd = SparkCommand.BOOTSTRAP.toString();
-
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
+    SparkMain.addAppArgs(sparkLauncher, SparkCommand.BOOTSTRAP, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
         partitionPathField, String.valueOf(parallelism), schemaProviderClass, bootstrapIndexClass, selectorClass,
         keyGeneratorClass, fullBootstrapInputProvider, payloadClass, String.valueOf(enableHiveSync), propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
