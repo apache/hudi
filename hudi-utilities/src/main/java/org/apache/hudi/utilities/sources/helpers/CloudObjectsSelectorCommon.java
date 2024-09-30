@@ -100,6 +100,7 @@ public class CloudObjectsSelectorCommon {
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
   private static final String SPACE_DELIMTER = " ";
+  private static final String PATH_DELIMITER = "/";
   private static final String GCS_PREFIX = "gs://";
 
   private final TypedProperties properties;
@@ -157,7 +158,7 @@ public class CloudObjectsSelectorCommon {
     final Configuration configuration = storageConf.unwrapCopy();
 
     String bucket = row.getString(0);
-    String filePath = storageUrlSchemePrefix + bucket + "/" + row.getString(1);
+    String filePath = storageUrlSchemePrefix + bucket + PATH_DELIMITER + row.getString(1);
 
     try {
       String filePathUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
@@ -224,7 +225,7 @@ public class CloudObjectsSelectorCommon {
       String prefix = selectRelativePathPrefix.orElse("");
       String regex = selectRelativePathRegex.get();
 
-      String updatedPathRegex = prefix.isEmpty() || prefix.endsWith("/") ? prefix + regex : prefix + "/" + regex;
+      String updatedPathRegex = prefix.isEmpty() || prefix.endsWith(PATH_DELIMITER) ? prefix + regex : prefix + PATH_DELIMITER + regex;
 
       filter.append(SPACE_DELIMTER).append(String.format("and %s rlike '%s'", objectKey, updatedPathRegex));
     }
@@ -336,7 +337,7 @@ public class CloudObjectsSelectorCommon {
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
         LOG.info(String.format("Adding column %s to dataset", partitionKey));
-        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), "/").getItem(0));
+        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), PATH_DELIMITER).getItem(0));
       }
     }
     dataset = coalesceOrRepartition(dataset, numPartitions);
