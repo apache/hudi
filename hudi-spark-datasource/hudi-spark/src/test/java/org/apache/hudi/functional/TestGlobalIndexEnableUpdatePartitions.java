@@ -31,6 +31,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.hadoop.fs.Path;
@@ -156,8 +157,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     final String p3 = "p3";
     List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
     List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0.subList(0, 4), p2, 5, payloadClass);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
 
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // 1st batch: inserts
       String commitTimeAtEpoch0 = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(commitTimeAtEpoch0);
@@ -177,7 +178,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
       }
       // simuate crash. delete latest completed dc.
       String latestCompletedDeltaCommit = metaClient.reloadActiveTimeline().getCommitsAndCompactionTimeline().lastInstant().get().getFileName();
-      metaClient.getFs().delete(new Path(metaClient.getBasePathV2() + "/.hoodie/" + latestCompletedDeltaCommit));
+      metaClient.getStorage().deleteFile(new StoragePath(metaClient.getBasePath() + "/.hoodie/" + latestCompletedDeltaCommit));
     }
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {

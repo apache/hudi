@@ -190,7 +190,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     dataOrDeleteBlocks.add(HoodieLogBlockType.CDC_DATA_BLOCK);
 
     Arrays.stream(HoodieLogBlockType.values()).forEach(logBlockType -> {
-      assertEquals(HoodieLogBlockType.isDataOrDeleteBlock(logBlockType), dataOrDeleteBlocks.contains(logBlockType));
+      assertEquals(dataOrDeleteBlocks.contains(logBlockType), logBlockType.isDataOrDeleteBlock());
     });
   }
 
@@ -778,7 +778,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   private void readAndValidate(Schema schema, String maxCommitTime, List<HoodieLogFile> logFiles, List<IndexedRecord> expectedRecords) throws IOException {
-     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
+    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
@@ -793,17 +793,17 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
         .withBitCaskDiskMapCompressionEnabled(false)
         .withOptimizedLogBlocksScan(false)
-        .build();
+        .build()) {
 
-    List<IndexedRecord> scannedRecords = new ArrayList<>();
-    for (HoodieRecord record : scanner) {
-      scannedRecords.add((IndexedRecord)
-          ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+      List<IndexedRecord> scannedRecords = new ArrayList<>();
+      for (HoodieRecord record : scanner) {
+        scannedRecords.add((IndexedRecord)
+            ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
+      }
+
+      assertEquals(sort(expectedRecords), sort(scannedRecords),
+          "Scanner records count should be the same as appended records");
     }
-
-    assertEquals(sort(expectedRecords), sort(scannedRecords),
-        "Scanner records count should be the same as appended records");
-    scanner.close();
   }
 
   private Pair<List<IndexedRecord>, Set<HoodieLogFile>> appendAndValidate(Schema schema, SchemaTestUtil testUtil, ExternalSpillableMap.DiskMapType diskMapType,
