@@ -35,7 +35,6 @@ import org.mockito.MockedConstruction;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -70,8 +69,8 @@ class LakeviewSyncToolTest {
   private static Stream<Arguments> getArguments() {
     return Stream.of(Arguments.of("s3", false),
         Arguments.of("s3", true),
-        Arguments.of("gcs", false),
-        Arguments.of("gcs", true));
+        Arguments.of("gs", false),
+        Arguments.of("gs", true));
   }
 
   @ParameterizedTest
@@ -80,23 +79,9 @@ class LakeviewSyncToolTest {
     List<ParserConfig> expectedParserConfigs = new ArrayList<>();
     expectedParserConfigs.add(ParserConfig.builder()
         .lake("lake-1")
-        .databases(Arrays.asList(Database.builder()
-                .name("database-1")
-                .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-1/database-1/table-1",
-                    fileSystem + "://user-bucket/lake-1/database-1/table-2"))
-                .build(),
-            Database.builder()
-                .name("database-2")
-                .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-1/database-2/table-1",
-                    fileSystem + "://user-bucket/lake-1/database-2/table-2"))
-                .build()))
-        .build());
-    expectedParserConfigs.add(ParserConfig.builder()
-        .lake("lake-2")
         .databases(Collections.singletonList(Database.builder()
             .name("database-1")
-            .basePaths(Arrays.asList(fileSystem + "://user-bucket/lake-2/database-1/table-1",
-                fileSystem + "://user-bucket/lake-2/database-1/table-2"))
+            .basePaths(Collections.singletonList(fileSystem + "://user-bucket/lake-1/database-1/table-2"))
             .build()))
         .build());
 
@@ -143,14 +128,22 @@ class LakeviewSyncToolTest {
     }
   }
 
-  @Test
-  void testSyncToolInvalidConfig() throws IOException {
+  private static Stream<Arguments> getIncorrectProperties() {
+    return Stream.of(Arguments.of("lakeview-sync-no-fs.properties",
+            "Couldn't find any properties related to file system"),
+        Arguments.of("lakeview-sync-no-lake.properties",
+            "Couldn't find any lake/database associated with the current table in the configuration"));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getIncorrectProperties")
+  void testSyncToolInvalidConfig(String propertiesFile, String errorMessage) throws IOException {
     Properties properties = new Properties();
-    properties.load(this.getClass().getResourceAsStream("/lakeview-sync-no-fs.properties"));
+    properties.load(this.getClass().getResourceAsStream("/" + propertiesFile));
     try (LakeviewSyncTool ignored = new LakeviewSyncTool(properties, hadoopConf)) {
       fail("Exception is expected");
     } catch (IllegalArgumentException e) {
-      assertEquals("Couldn't find any properties related to file system", e.getMessage());
+      assertEquals(errorMessage, e.getMessage());
     }
   }
 }

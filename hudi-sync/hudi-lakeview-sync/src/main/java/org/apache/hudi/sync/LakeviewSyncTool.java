@@ -60,6 +60,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,10 +69,12 @@ import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 import static org.apache.hudi.sync.LakeviewSyncConfigHolder.LAKEVIEW_METADATA_EXTRACTOR_LAKE_PATHS;
 import static org.apache.hudi.sync.LakeviewSyncConfigHolder.LAKEVIEW_METADATA_EXTRACTOR_PATH_EXCLUSION_PATTERNS;
 
@@ -117,8 +120,36 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   }
 
   private Config getConfig(HoodieConfig hoodieConfig) {
+    List<ParserConfig> parserConfigList = getParserConfig();
+    AtomicReference<String> lakeNameRef = new AtomicReference<>();
+    AtomicReference<String> databaseNameRef = new AtomicReference<>();
+    String tableBasePath = hoodieConfig.getString(BASE_PATH);
+    // identify the lake & database to which the current table base path belongs to
+    parserConfigList
+        .forEach(parserConfig -> parserConfig.getDatabases()
+            .forEach(database -> {
+              for (String basePath : database.getBasePaths()) {
+                if (tableBasePath.startsWith(basePath) && lakeNameRef.get() == null) {
+                  lakeNameRef.set(parserConfig.getLake());
+                  databaseNameRef.set(database.getName());
+                  break;
+                }
+              }
+            }));
+    if (lakeNameRef.get() != null) {
+      ParserConfig parserConfig = ParserConfig.builder()
+          .lake(lakeNameRef.get())
+          .databases(Collections.singletonList(Database.builder()
+              .name(databaseNameRef.get())
+              .basePaths(Collections.singletonList(tableBasePath))
+              .build()))
+          .build();
+      parserConfigList = Collections.singletonList(parserConfig);
+    } else {
+      throw new IllegalArgumentException("Couldn't find any lake/database associated with the current table in the configuration");
+    }
     MetadataExtractorConfig metadataExtractorConfig = MetadataExtractorConfig.builder()
-        .parserConfig(getParserConfig())
+        .parserConfig(parserConfigList)
         .pathExclusionPatterns(getPathsToExclude(hoodieConfig))
         .jobRunMode(MetadataExtractorConfig.JobRunMode.ONCE)
         .build();
