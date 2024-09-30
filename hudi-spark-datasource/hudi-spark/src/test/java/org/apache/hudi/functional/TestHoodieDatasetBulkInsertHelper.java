@@ -17,10 +17,10 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileIOUtils;
@@ -33,43 +33,39 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
+
+import org.apache.avro.Schema;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import scala.Tuple2;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import scala.Tuple2;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Tests {@link HoodieDatasetBulkInsertHelper}.
  */
 @Tag("functional")
-public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase {
+class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase {
 
   private String schemaStr;
   private transient Schema schema;
@@ -95,7 +91,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   @Test
-  public void testBulkInsertHelperConcurrently() {
+  void testBulkInsertHelperConcurrently() {
     IntStream.range(0, 2).parallel().forEach(i -> {
       if (i % 2 == 0) {
         testBulkInsertHelperFor(SimpleKeyGenerator.class.getName(), "_row_key");
@@ -114,7 +110,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
   @ParameterizedTest
   @MethodSource("provideKeyGenArgs")
-  public void testBulkInsertHelper(String keyGenClass) {
+  void testBulkInsertHelper(String keyGenClass) {
     testBulkInsertHelperFor(keyGenClass, "_row_key");
   }
 
@@ -134,7 +130,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
         new NonSortPartitionerWithRows(), "0000000001");
     StructType resultSchema = result.schema();
 
-    assertEquals(result.count(), 10);
+    assertEquals(10, result.count());
     assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
 
     for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
@@ -163,11 +159,11 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    assertTrue(dataset.except(trimmedOutput).count() == 0);
+    assertEquals(0, dataset.except(trimmedOutput).count());
   }
 
   @Test
-  public void testBulkInsertHelperNoMetaFields() {
+  void testBulkInsertHelperNoMetaFields() {
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     HoodieWriteConfig config = getConfigBuilder(schemaStr)
         .withProps(getPropsAllSet("_row_key"))
@@ -178,29 +174,29 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
         new NonSortPartitionerWithRows(), "000001111");
     StructType resultSchema = result.schema();
 
-    assertEquals(result.count(), 10);
+    assertEquals(10, result.count());
     assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
 
     for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
-      assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
+      assertEquals(entry.getValue(), resultSchema.fieldIndex(entry.getKey()));
     }
 
     result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
+      assertEquals("", entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+      assertEquals("", entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
+      assertEquals("", entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+      assertEquals("", entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
+      assertEquals("", entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
         .drop(HoodieRecord.FILENAME_METADATA_FIELD).drop(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).drop(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    assertTrue(dataset.except(trimmedOutput).count() == 0);
+    assertEquals(0, dataset.except(trimmedOutput).count());
   }
 
   @ParameterizedTest
   @MethodSource("providePreCombineArgs")
-  public void testBulkInsertPreCombine(boolean enablePreCombine) {
+  void testBulkInsertPreCombine(boolean enablePreCombine) {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).withProps(getPropsAllSet("_row_key"))
             .combineInput(enablePreCombine, enablePreCombine)
             .withPreCombineField("ts").build();
@@ -219,7 +215,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     assertEquals(resultSchema.fieldNames().length, structType.fieldNames().length + HoodieRecord.HOODIE_META_COLUMNS.size());
 
     for (Map.Entry<String, Integer> entry : HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.entrySet()) {
-      assertTrue(resultSchema.fieldIndex(entry.getKey()) == entry.getValue());
+      assertEquals(entry.getValue(), resultSchema.fieldIndex(entry.getKey()));
     }
 
     int metadataRecordKeyIndex = resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD);
@@ -231,11 +227,11 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     result.toJavaRDD()
         .collect()
         .forEach(entry -> {
-          assertTrue(entry.get(metadataRecordKeyIndex).equals(entry.getAs("_row_key")));
-          assertTrue(entry.get(metadataPartitionPathIndex).equals(entry.getAs("partition")));
-          assertTrue(entry.get(metadataCommitSeqNoIndex).equals(""));
-          assertTrue(entry.get(metadataCommitTimeIndex).equals(""));
-          assertTrue(entry.get(metadataFilenameIndex).equals(""));
+          assertEquals(entry.getAs("_row_key"), entry.get(metadataRecordKeyIndex));
+          assertEquals(entry.getAs("partition"), entry.get(metadataPartitionPathIndex));
+          assertEquals("", entry.get(metadataCommitSeqNoIndex));
+          assertEquals("", entry.get(metadataCommitTimeIndex));
+          assertEquals("", entry.get(metadataFilenameIndex));
         });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
@@ -310,7 +306,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   @Test
-  public void testNoPropsSet() {
+  void testNoPropsSet() {
     HoodieWriteConfig config = getConfigBuilder(schemaStr).build();
     List<Row> rows = DataSourceTestUtils.generateRandomRows(10);
     Dataset<Row> dataset = sqlContext.createDataFrame(rows, structType);
@@ -349,10 +345,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
   }
 
   private ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 }

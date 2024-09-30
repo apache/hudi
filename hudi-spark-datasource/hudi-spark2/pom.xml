@@ -197,6 +197,14 @@
       <optional>true</optional>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
+      <version>${spark2.version}</version>
+      <scope>provided</scope>
+      <optional>true</optional>
+    </dependency>
+
     <!-- Hoodie - Test -->
     <dependency>
       <groupId>org.apache.hudi</groupId>

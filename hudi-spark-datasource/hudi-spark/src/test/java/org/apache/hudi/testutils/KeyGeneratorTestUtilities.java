@@ -18,27 +18,23 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.SparkAdapterSupport$;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.spark.package$;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer$;
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
-import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
 import org.apache.spark.sql.types.StructType;
-import scala.Function1;
-import scala.collection.JavaConversions;
-import scala.collection.JavaConverters;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.stream.Collectors;
+
+import scala.Function1;
 
 public class KeyGeneratorTestUtilities {
 
@@ -51,8 +47,6 @@ public class KeyGeneratorTestUtilities {
       + "{\"name\": \"nested_col\",\"type\": [\"null\", " + NESTED_COL_SCHEMA + "]}"
       + "]}";
 
-  public static final String TEST_STRUCTNAME = "test_struct_name";
-  public static final String TEST_RECORD_NAMESPACE = "test_record_namespace";
   public static Schema schema = new Schema.Parser().parse(EXAMPLE_SCHEMA);
   public static StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
 
@@ -77,13 +71,13 @@ public class KeyGeneratorTestUtilities {
     return record;
   }
 
-  public static Row getRow(GenericRecord record) {
-    return getRow(record, schema, structType);
+  public static Row getRow(GenericRecord genericRecord) {
+    return getRow(genericRecord, schema, structType);
   }
 
-  public static Row getRow(GenericRecord record, Schema schema, StructType structType) {
+  public static Row getRow(GenericRecord genericRecord, Schema schema, StructType structType) {
     Function1<GenericRecord, Row> converterFn = AvroConversionUtils.createConverterToRow(schema, structType);
-    Row row = converterFn.apply(record);
+    Row row = converterFn.apply(genericRecord);
     int fieldCount = structType.fieldNames().length;
     Object[] values = new Object[fieldCount];
     for (int i = 0; i < fieldCount; i++) {
@@ -101,11 +95,7 @@ public class KeyGeneratorTestUtilities {
   }
 
   private static ExpressionEncoder getEncoder(StructType schema) {
-    List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
-        .map(Attribute::toAttribute).collect(Collectors.toList());
-    return RowEncoder.apply(schema)
-        .resolveAndBind(JavaConverters.asScalaBufferConverter(attributes).asScala().toSeq(),
-            SimpleAnalyzer$.MODULE$);
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().getCatalystExpressionUtils().getEncoder(schema);
   }
 
   public static InternalRow getInternalRow(Row row, ExpressionEncoder<Row> encoder) throws ClassNotFoundException, InvocationTargetException, IllegalAccessException, NoSuchMethodException {

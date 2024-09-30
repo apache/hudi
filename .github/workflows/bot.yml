@@ -215,7 +215,7 @@ jobs:
           echo "Jacoco xml reports: ${jacoco_xml_report_files}"
           if [ ${{ github.event_name }} == 'pull_request' ]; then
             mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
-              -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
+              -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,hudi-spark-datasource/**/ReflectUtil.java,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
               -Dsonar.pullrequest.key=${{ github.event.number }} \
@@ -224,7 +224,7 @@ jobs:
               -Dsonar.pullrequest.github.repository=https://github.com/onehouseinc/hudi-internal
           else
             mvn sonar:sonar -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" $MVN_ARGS -Dsonar.projectName="hudi-internal-spark-tests" -Dsonar.projectKey=onehouseinc_hudi-internal_spark-tests \
-              -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,packaging/**/*" \
+              -Dsonar.exclusions="hudi-aws/**/*,hudi-cli/**/*,hudi-client/**/*,hudi-common/**/*,hudi-examples/**/*,hudi-flink-datasource/**/*,hudi-gcp/**/*,hudi-hadoop-mr/**/*,hudi-kafka-connect/**/*,hudi-sync/**/*,hudi-tests-common/**/*,hudi-timeline-service/**/*,hudi-utilities/**/*,hudi-spark-datasource/**/ReflectUtil.java,packaging/**/*" \
               -Dsonar.token=${{ secrets.SONAR_CLOUD_TOKEN }} \
               -Dsonar.coverage.jacoco.xmlReportPaths="${jacoco_xml_report_files}" \
               -Dsonar.branch.name=${{ github.HEAD_REF }}

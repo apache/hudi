@@ -196,12 +196,6 @@
       <version>${spark32.version}</version>
       <scope>provided</scope>
       <optional>true</optional>
-      <exclusions>
-        <exclusion>
-          <groupId>*</groupId>
-          <artifactId>*</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
 
     <dependency>
@@ -315,6 +309,8 @@
       <type>test-jar</type>
       <scope>test</scope>
     </dependency>
+
+    <!-- Parquet -->
     <dependency>
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
