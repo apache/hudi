@@ -293,7 +293,7 @@ public class ParquetSplitReaderUtil {
             arrayGroup.fillWithNulls();
             return arrayGroup;
           } else {
-            throw new UnsupportedOperationException("Unsupported create row with default value.");
+            throw new UnsupportedOperationException("Unsupported create array with default value.");
           }
         } else {
           HeapArrayVector arrayVector = new HeapArrayVector(batchSize);
@@ -463,6 +463,13 @@ public class ParquetSplitReaderUtil {
           if (fieldIndex < 0) {
             fieldReaders.add(new EmptyColumnReader());
           } else {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
             if (descriptors.get(fieldIndex).getMaxRepetitionLevel() > 0 && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
               fieldReaders.add(
                   createColumnReader(
@@ -615,6 +622,13 @@ public class ParquetSplitReaderUtil {
           // schema evolution: read the file with a new extended field name.
           int fieldIndex = getFieldIndexInPhysicalType(rowType.getFields().get(i).getName(), groupType);
           if (fieldIndex < 0) {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
             if (groupType.getRepetition().equals(Type.Repetition.REPEATED) && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
               columnVectors[i] = (WritableColumnVector) createVectorFromConstant(
                   new ArrayType(rowType.getTypeAt(i).isNullable(), rowType.getTypeAt(i)), null, batchSize);
@@ -622,6 +636,13 @@ public class ParquetSplitReaderUtil {
               columnVectors[i] = (WritableColumnVector) createVectorFromConstant(rowType.getTypeAt(i), null, batchSize);
             }
           } else {
+            // Check for nested row in array with atomic field type.
+
+            // This is done to meet the Parquet field algorithm that pushes multiplicity and structures down to individual fields.
+            // In Parquet, an array of rows is stored as separate arrays for each field.
+
+            // Limitations: It won't work for multiple nested arrays and maps.
+            // The main problem is that the Flink classes and interface don't follow that pattern.
             if (descriptors.get(fieldIndex).getMaxRepetitionLevel() > 0 && !rowType.getTypeAt(i).is(LogicalTypeRoot.ARRAY)) {
               columnVectors[i] =
                   createWritableColumnVector(
