@@ -50,7 +50,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
     if (newer instanceof HoodieSparkRecord) {
       HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDeleted()) {
+      if (newSparkRecord.isDelete(newSchema, props)) {
         // Delete record
         return Option.empty();
       }
@@ -63,7 +63,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
     if (older instanceof HoodieSparkRecord) {
       HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDeleted()) {
+      if (oldSparkRecord.isDelete(oldSchema, props)) {
         // use natural order for delete record
         return Option.of(Pair.of(newer, newSchema));
       }
@@ -87,7 +87,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
     if (newer instanceof HoodieSparkRecord) {
       HoodieSparkRecord newSparkRecord = (HoodieSparkRecord) newer;
-      if (newSparkRecord.isDeleted()) {
+      if (newSparkRecord.isDelete(newSchema, props)) {
         // Delete record
         return Option.empty();
       }
@@ -100,7 +100,7 @@ public class DefaultSparkRecordMerger extends HoodieSparkRecordMerger {
 
     if (older instanceof HoodieSparkRecord) {
       HoodieSparkRecord oldSparkRecord = (HoodieSparkRecord) older;
-      if (oldSparkRecord.isDeleted()) {
+      if (oldSparkRecord.isDelete(oldSchema, props)) {
         // use natural order for delete record
         return Option.of(Pair.of(newer, newSchema));
       }

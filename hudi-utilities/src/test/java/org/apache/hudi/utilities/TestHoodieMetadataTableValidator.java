@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -61,10 +62,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -95,6 +98,47 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         Arguments.of(FileSystemViewStorageType.SPILLABLE_DISK.name(), FileSystemViewStorageType.SPILLABLE_DISK.name()),
         Arguments.of(FileSystemViewStorageType.MEMORY.name(), FileSystemViewStorageType.SPILLABLE_DISK.name())
     );
+  }
+
+  @Test
+  public void testAggregateColumnStats() {
+    HoodieColumnRangeMetadata<Comparable> fileColumn1Range1 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file1", "col1", 1, 5, 0, 10, 100, 200);
+    HoodieColumnRangeMetadata<Comparable> fileColumn1Range2 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file1", "col1", 1, 10, 5, 10, 100, 200);
+    HoodieColumnRangeMetadata<Comparable> fileColumn2Range1 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file1", "col2", 3, 8, 1, 15, 120, 250);
+    HoodieColumnRangeMetadata<Comparable> fileColumn2Range2 = HoodieColumnRangeMetadata.<Comparable>create(
+        "path/to/file1", "col2", 5, 9, 4, 5, 80, 150);
+    List<HoodieColumnRangeMetadata<Comparable>> colStats = new ArrayList<>();
+    colStats.add(fileColumn1Range1);
+    colStats.add(fileColumn1Range2);
+    colStats.add(fileColumn2Range1);
+    colStats.add(fileColumn2Range2);
+
+    int col1Count = 0;
+    int col2Count = 0;
+    // Ensure merge logic for column stats is correct and aggregate logic creates two entries for two columns
+    TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedStats = HoodieMetadataTableValidator.aggregateColumnStats("path/to/file1", colStats);
+    assertEquals(2, aggregatedStats.size());
+    for (HoodieColumnRangeMetadata<Comparable> stat : aggregatedStats) {
+      if (stat.getColumnName().equals("col1")) {
+        assertEquals(1, stat.getMinValue());
+        assertEquals(10, stat.getMaxValue());
+        col1Count++;
+      } else if (stat.getColumnName().equals("col2")) {
+        assertEquals(3, stat.getMinValue());
+        assertEquals(9, stat.getMaxValue());
+        col2Count++;
+      }
+
+      assertEquals(5, stat.getNullCount());
+      assertEquals(20, stat.getValueCount());
+      assertEquals(200, stat.getTotalSize());
+      assertEquals(400, stat.getTotalUncompressedSize());
+    }
+    assertEquals(1, col1Count);
+    assertEquals(1, col2Count);
   }
 
   @ParameterizedTest
@@ -133,6 +177,50 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       config.viewStorageTypeForFSListing = viewStorageTypeForFSListing;
       config.viewStorageTypeForMetadata = viewStorageTypeForMDTListing;
     }
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  @Test
+  public void testPartitionStatsValidation() {
+    // TODO: Add validation for compaction and clustering cases
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition_path");
+    writeOptions.put(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+
+    Dataset<Row> inserts = makeInsertDf("000", 5);
+    inserts.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.BULK_INSERT.value())
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+    // validate MDT partition stats
+    validatePartitionStats();
+
+    Dataset<Row> updates = makeUpdateDf("001", 5);
+    updates.write().format("hudi").options(writeOptions)
+        .option(DataSourceWriteOptions.OPERATION().key(), WriteOperationType.UPSERT.value())
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // validate MDT partition stats
+    validatePartitionStats();
+  }
+
+  private void validatePartitionStats() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = false;
+    config.validateAllFileGroups = false;
+    config.validatePartitionStats = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());

@@ -43,6 +43,7 @@ import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS;
+import static org.apache.hudi.common.config.HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
@@ -176,9 +177,7 @@ public enum MetadataPartitionType {
   FUNCTIONAL_INDEX(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX, "func-index-", -1) {
     @Override
     public boolean isMetadataPartitionEnabled(TypedProperties writeConfig) {
-      // Functional index is created via sql and not via write path.
-      // HUDI-7662 tracks adding a separate config to enable/disable functional index.
-      return false;
+      return getBooleanWithAltKeys(writeConfig, FUNCTIONAL_INDEX_ENABLE_PROP);
     }
 
     @Override
