@@ -20,6 +20,8 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -37,8 +39,6 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,11 +175,31 @@ public class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
   @Test
   public void testCustomKeyGeneratorPartitionType() {
-    List<String> partitionFields = Arrays.asList("random:simple", "ts_ms:timestamp");
-    Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(partitionFields).toArray();
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "random:simple,ts_ms:timestamp");
+    Object[] partitionTypes = CustomAvroKeyGenerator.getPartitionTypes(tableConfig).toArray();
     assertArrayEquals(new CustomAvroKeyGenerator.PartitionKeyType[] {CustomAvroKeyGenerator.PartitionKeyType.SIMPLE, CustomAvroKeyGenerator.PartitionKeyType.TIMESTAMP}, partitionTypes);
-    Pair<String, CustomAvroKeyGenerator.PartitionKeyType> partitionFieldAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType("random:simple");
-    assertEquals(Pair.of("random", CustomAvroKeyGenerator.PartitionKeyType.SIMPLE), partitionFieldAndType);
+    Pair<String, Option<CustomAvroKeyGenerator.PartitionKeyType>> partitionFieldAndType = CustomAvroKeyGenerator.getPartitionFieldAndKeyType("random:simple");
+    assertEquals(Pair.of("random", Option.of(CustomAvroKeyGenerator.PartitionKeyType.SIMPLE)), partitionFieldAndType);
+  }
+
+  @Test
+  public void testCustomKeyGeneratorTimestampFieldsAPI() {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "simple1:simple,ts1:timestamp,ts2:timestamp");
+    Object[] timestampFields = CustomAvroKeyGenerator.getTimestampFields(tableConfig).get().toArray();
+    // Only two timestamp fields are returned
+    assertArrayEquals(new String[] {"ts1", "ts2"}, timestampFields);
+
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "simple1,ts1,ts2");
+    Option<?> timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig);
+    // Empty option is returned since no partition type is available
+    assertTrue(timestampFieldsOpt.isEmpty());
+
+    tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "simple1:simple,simple2:simple,simple3:simple");
+    timestampFields = CustomAvroKeyGenerator.getTimestampFields(tableConfig).get().toArray();
+    // No timestamp partitions
+    assertEquals(0, timestampFields.length);
   }
 
   public void testTimestampBasedKeyGenerator(TypedProperties props) throws IOException {

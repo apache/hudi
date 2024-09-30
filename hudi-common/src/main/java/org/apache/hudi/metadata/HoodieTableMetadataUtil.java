@@ -233,7 +233,7 @@ public class HoodieTableMetadataUtil {
         }
 
         colStats.valueCount++;
-        if (fieldValue != null && canCompare(fieldSchema)) {
+        if (fieldValue != null && canCompare(fieldSchema, record.getRecordType())) {
           // Set the min value of the field
           if (colStats.minValue == null
               || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema) < 0) {
@@ -1354,7 +1354,11 @@ public class HoodieTableMetadataUtil {
     }
   }
 
-  private static boolean canCompare(Schema schema) {
+  private static boolean canCompare(Schema schema, HoodieRecordType recordType) {
+    // if recordType is SPARK then we cannot compare RECORD and ARRAY types in addition to MAP type
+    if (recordType == HoodieRecordType.SPARK) {
+      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+    }
     return schema.getType() != Schema.Type.MAP;
   }
 
@@ -1847,9 +1851,15 @@ public class HoodieTableMetadataUtil {
   }
 
   public static Schema getProjectedSchemaForFunctionalIndex(HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient) throws Exception {
-    TableSchemaResolver schemaResolver = new TableSchemaResolver(metaClient);
-    Schema tableSchema = schemaResolver.getTableAvroSchema();
-    return addMetadataFields(getSchemaForFields(tableSchema, indexDefinition.getSourceFields()));
+    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    List<String> partitionFields = metaClient.getTableConfig().getPartitionFields()
+        .map(Arrays::asList)
+        .orElse(Collections.emptyList());
+    List<String> sourceFields = indexDefinition.getSourceFields();
+    List<String> mergedFields = new ArrayList<>(partitionFields.size() + sourceFields.size());
+    mergedFields.addAll(partitionFields);
+    mergedFields.addAll(sourceFields);
+    return addMetadataFields(getSchemaForFields(tableSchema, mergedFields));
   }
 
   public static HoodieData<HoodieRecord> readSecondaryKeysFromBaseFiles(HoodieEngineContext engineContext,

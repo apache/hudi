@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
@@ -70,7 +71,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config(sparkConf())
     .getOrCreate()
 
-  private var tableId = 0
+  private var tableId = new AtomicInteger(0)
 
   private var extraConf = Map[String, String]()
 
@@ -113,9 +114,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    val name = s"h$tableId"
-    tableId = tableId + 1
-    name
+    s"h${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -215,7 +214,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
-      spark.sql(s"drop table if exists $tableName")
+      spark.sql(s"drop table if exists $tableName purge")
     }
   }
 

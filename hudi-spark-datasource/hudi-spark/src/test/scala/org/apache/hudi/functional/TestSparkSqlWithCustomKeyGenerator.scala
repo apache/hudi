@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.functional.TestSparkSqlWithCustomKeyGenerator._
@@ -52,22 +52,27 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
               "(ts=202401, segment='cat2')", "202401/cat2",
               Seq("202312/cat2", "202312/cat4", "202401/cat1", "202401/cat3", "202402/cat1", "202402/cat3", "202402/cat5"),
               TS_FORMATTER_FUNC,
-              (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment),
+              (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment, false),
             Seq("MERGE_ON_READ", "segment:simple",
               "(segment='cat3')", "cat3",
               Seq("cat1", "cat2", "cat4", "cat5"),
               TS_TO_STRING_FUNC,
-              (_: Integer, segment: String) => segment),
+              (_: Integer, segment: String) => segment, false),
             Seq("MERGE_ON_READ", "ts:timestamp",
               "(ts=202312)", "202312",
               Seq("202401", "202402"),
               TS_FORMATTER_FUNC,
-              (ts: Integer, _: String) => TS_FORMATTER_FUNC.apply(ts)),
+              (ts: Integer, _: String) => TS_FORMATTER_FUNC.apply(ts), false),
             Seq("MERGE_ON_READ", "ts:timestamp,segment:simple",
               "(ts=202401, segment='cat2')", "202401/cat2",
               Seq("202312/cat2", "202312/cat4", "202401/cat1", "202401/cat3", "202402/cat1", "202402/cat3", "202402/cat5"),
               TS_FORMATTER_FUNC,
-              (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment)
+              (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment, false),
+            Seq("MERGE_ON_READ", "ts:timestamp,segment:simple",
+              "(ts=202401, segment='cat2')", "202401/cat2",
+              Seq("202312/cat2", "202312/cat4", "202401/cat1", "202401/cat3", "202402/cat1", "202402/cat3", "202402/cat5"),
+              TS_FORMATTER_FUNC,
+              (ts: Integer, segment: String) => TS_FORMATTER_FUNC.apply(ts) + "/" + segment, true)
           ).foreach { testParams =>
             withTable(generateTableName) { tableName =>
               LOG.warn("Testing with parameters: " + testParams)
@@ -89,10 +94,20 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
               } else {
                 ""
               }
+              val useOlderPartitionFieldFormat = testParams(7).asInstanceOf[Boolean]
 
               prepareTableWithKeyGenerator(
                 tableName, tablePath, tableType,
                 CUSTOM_KEY_GEN_CLASS_NAME, writePartitionFields, timestampKeyGeneratorConfig)
+
+              if (useOlderPartitionFieldFormat) {
+                var metaClient = createMetaClient(spark, tablePath)
+                val props = new TypedProperties()
+                props.put(HoodieTableConfig.PARTITION_FIELDS.key(), metaClient.getTableConfig.getPartitionFieldProp)
+                HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, props)
+                metaClient = createMetaClient(spark, tablePath)
+                assertEquals(metaClient.getTableConfig.getPartitionFieldProp, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).orElse(""))
+              }
 
               // SQL CTAS with table properties containing key generator write configs
               createTableWithSql(tableName, tablePath,
@@ -244,6 +259,10 @@ class TestSparkSqlWithCustomKeyGenerator extends HoodieSparkSqlTestBase {
 
               // Validate ts field is still of type int in the table
               validateTsFieldSchema(tablePath, "ts", Schema.Type.INT)
+              if (useOlderPartitionFieldFormat) {
+                val metaClient = createMetaClient(spark, tablePath)
+                assertEquals(metaClient.getTableConfig.getPartitionFieldProp, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(metaClient.getTableConfig).orElse(""))
+              }
             }
           }
         }

@@ -66,6 +66,7 @@ import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 
@@ -710,6 +711,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       } finally {
         countDownLatch.countDown()
       }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings =  Array(
+    "_row_key,non_existent_field|Record key field 'non_existent_field' does not exist in the input record",
+    "non_existent_field|recordKey value: \"null\" for field: \"non_existent_field\" cannot be null or empty.",
+    "_row_key,tip_history.non_existent_field|Record key field 'tip_history.non_existent_field' does not exist in the input record",
+    "tip_history.non_existent_field|recordKey value: \"null\" for field: \"tip_history.non_existent_field\" cannot be null or empty."))
+  def testMissingRecordkeyField(args: String): Unit = {
+    val splits = args.split('|')
+    val recordKeyFields = splits(0)
+    val errorMessage = splits(1)
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    try {
+      inputDF1.write.format("hudi")
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), recordKeyFields)
+        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+      fail("should fail when the specified record key field does not exist")
+    } catch {
+      case e: Exception => assertTrue(containsErrorMessage(e, errorMessage))
+    }
+  }
+
+  @tailrec
+  private def containsErrorMessage(e: Throwable, message: String): Boolean = {
+    if (e != null) {
+      if (e.getMessage.contains(message)) {
+        true
+      } else {
+        containsErrorMessage(e.getCause, message)
+      }
+    } else {
+      false
     }
   }
 

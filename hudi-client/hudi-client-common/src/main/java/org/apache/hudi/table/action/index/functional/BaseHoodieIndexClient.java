@@ -28,11 +28,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
-public abstract class BaseHoodieFunctionalIndexClient {
+public abstract class BaseHoodieIndexClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieFunctionalIndexClient.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseHoodieIndexClient.class);
 
-  public BaseHoodieFunctionalIndexClient() {
+  public BaseHoodieIndexClient() {
   }
 
   /**
@@ -61,4 +61,13 @@ public abstract class BaseHoodieFunctionalIndexClient {
    * Create a functional index.
    */
   public abstract void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options);
+
+  /**
+   * Drop an index. By default, ignore drop if index does not exist.
+   *
+   * @param metaClient        {@link HoodieTableMetaClient} instance
+   * @param indexName         index name for the index to be dropped
+   * @param ignoreIfNotExists ignore drop if index does not exist
+   */
+  public abstract void drop(HoodieTableMetaClient metaClient, String indexName, boolean ignoreIfNotExists);
 }
