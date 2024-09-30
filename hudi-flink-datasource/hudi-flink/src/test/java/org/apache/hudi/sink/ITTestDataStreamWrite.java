@@ -329,7 +329,7 @@ public class ITTestDataStreamWrite extends TestLogger {
       JobClient client = execEnv.executeAsync(jobName);
       if (client.getJobStatus().get() != JobStatus.FAILED) {
         try {
-          TimeUnit.SECONDS.sleep(20); // wait long enough for the compaction to finish
+          TimeUnit.SECONDS.sleep(35); // wait long enough for the compaction to finish
           client.cancel();
         } catch (Throwable var1) {
           // ignored
