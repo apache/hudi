@@ -7,14 +7,13 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.apache.hudi.client.utils;
@@ -38,7 +37,9 @@ import org.mockito.MockitoAnnotations;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -80,10 +81,8 @@ public class TestAbortTxnOnConcurrentSchemaEvolution {
     HoodieInstant instantAtTxnValidation = schemaAtTxnValidation != null
         ? new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002") : null;
 
-    // Setup for lastCompletedTxnOwnerInstant
     when(commitsTimeline.lastInstant()).thenReturn(Option.ofNullable(instantAtTxnStart));
 
-    // Setup for lastCompletedInstantsAtTxnValidation
     HoodieActiveTimeline reloadedActiveTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline reloadedCommitsTimeline = mock(HoodieTimeline.class);
     when(metaClient.reloadActiveTimeline()).thenReturn(reloadedActiveTimeline);
@@ -92,7 +91,6 @@ public class TestAbortTxnOnConcurrentSchemaEvolution {
     when(reloadedCommitsTimeline.lastInstant()).thenReturn(
         instantAtTxnValidation == null ? Option.empty() : Option.of(instantAtTxnValidation));
 
-    // Mock TableSchemaResolver
     when(schemaResolver.getTableAvroSchema(any(HoodieInstant.class), eq(false)))
         .thenAnswer(invocation -> {
           HoodieInstant arg = invocation.getArgument(0);
@@ -107,7 +105,6 @@ public class TestAbortTxnOnConcurrentSchemaEvolution {
 
     when(config.getWriteSchema()).thenReturn(schemaOfTxn);
 
-    // Create a concrete JSON string for commit metadata
     String commitMetadataJson = String.format("{\"" + HoodieCommitMetadata.SCHEMA_KEY + "\":\"%s\"}",
         schemaAtTxnValidation != null ? schemaAtTxnValidation.replace("\"", "\\\"") : "");
     byte[] commitMetadataBytes = commitMetadataJson.getBytes(StandardCharsets.UTF_8);
@@ -115,7 +112,6 @@ public class TestAbortTxnOnConcurrentSchemaEvolution {
     when(commitsTimeline.getInstantDetails(any(HoodieInstant.class)))
         .thenReturn(Option.of(commitMetadataBytes));
 
-    // Mock the HoodieTable to return our mocked objects
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
     when(table.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
@@ -124,38 +120,42 @@ public class TestAbortTxnOnConcurrentSchemaEvolution {
   @Test
   public void testNoConflictFirstCommit() throws Exception {
     setupMocks(null, null, SCHEMA1);
-    assertDoesNotThrow(() -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, Option.empty(), schemaResolver));
+    Schema result = assertDoesNotThrow(() -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, Option.empty(), schemaResolver));
+    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
   }
 
   @Test
   public void testConflictSecondCommitDifferentSchema() throws Exception {
     setupMocks(null, SCHEMA1, SCHEMA2);
     assertThrows(HoodieWriteConflictException.class,
-        () -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, Option.empty(), schemaResolver));
+        () -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, Option.empty(), schemaResolver));
   }
 
   @Test
   public void testNoConflictSameSchema() throws Exception {
     setupMocks(SCHEMA1, SCHEMA1, SCHEMA1);
-    assertDoesNotThrow(() -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    Schema result = assertDoesNotThrow(() -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    assertEquals(new Schema.Parser().parse(SCHEMA1), result);
   }
 
   @Test
   public void testNoConflictBackwardsCompatible() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA1);
-    assertDoesNotThrow(() -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    Schema result = assertDoesNotThrow(() -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    assertEquals(new Schema.Parser().parse(SCHEMA2), result);
   }
 
   @Test
   public void testNoConflictConcurrentEvolutionSameSchema() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA2);
-    assertDoesNotThrow(() -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    Schema result = assertDoesNotThrow(() -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+    assertEquals(new Schema.Parser().parse(SCHEMA2), result);
   }
 
   @Test
   public void testConflictConcurrentEvolutionDifferentSchemas() throws Exception {
     setupMocks(SCHEMA1, SCHEMA2, SCHEMA3);
     assertThrows(HoodieWriteConflictException.class,
-        () -> TransactionUtils.abortTxnOnConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
+        () -> TransactionUtils.resolveConcurrentSchemaEvolution(table, config, LAST_COMPLETED_TXN_OWNER_INSTANT, schemaResolver));
   }
 }

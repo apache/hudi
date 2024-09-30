@@ -82,8 +82,6 @@ public class TransactionUtils {
           table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
               completedInstantsDuringCurrentWriteOperation);
 
-      abortTxnOnConcurrentSchemaEvolution(table, config, lastCompletedTxnOwnerInstant, new TableSchemaResolver(table.getMetaClient()));
-
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));
       instantStream.forEach(instant -> {
         try {
@@ -99,12 +97,30 @@ public class TransactionUtils {
       });
       LOG.info("Successfully resolved conflicts, if any");
 
+      // Resolve schema.
+      Schema schemaOfCommitMetadata = resolveConcurrentSchemaEvolution(
+          table, config, lastCompletedTxnOwnerInstant, new TableSchemaResolver(table.getMetaClient()));
+      if (thisCommitMetadata.isPresent()) {
+        thisCommitMetadata.get().addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaOfCommitMetadata.toString());
+      }
+      thisOperation.getCommitMetadataOption().get().addMetadata(
+          HoodieCommitMetadata.SCHEMA_KEY, schemaOfCommitMetadata.toString());
       return thisOperation.getCommitMetadataOption();
     }
     return thisCommitMetadata;
   }
 
-  static void abortTxnOnConcurrentSchemaEvolution(
+  /**
+   * Resolve concurrent schema evolution. If it is resolvable, return the schema to be set in the commit metadata.
+   * Otherwise, throw a {@link HoodieWriteConflictException}.
+   *
+   * @param table The Hoodie table.
+   * @param config The Hoodie write configuration.
+   * @param lastCompletedTxnOwnerInstant The last completed transaction owner instant.
+   * @param schemaResolver The table schema resolver.
+   * @throws HoodieWriteConflictException If there is a concurrent schema evolution.
+   */
+  static Schema resolveConcurrentSchemaEvolution(
       HoodieTable table,
       HoodieWriteConfig config,
       Option<HoodieInstant> lastCompletedTxnOwnerInstant,
@@ -130,10 +146,11 @@ public class TransactionUtils {
 
     // Case 1:
     // We (curr txn) are the first to commit ever on this table, no conflict could happen.
+    // We should use the current writer schema in commit metadata.
     // curr txn: |--read write--|--validate & commit--|
     if (lastCompletedInstantsAtTxnValidation == null) {
       // Implies lastCompletedInstantsAtTxnStart is null as well.
-      return;
+      return schemaOfTxn;
     }
 
     // Case 2:
@@ -152,7 +169,8 @@ public class TransactionUtils {
             "Not exists as no commited txn at that time", schemaAtTxnValidation, schemaOfTxn);
         throw new HoodieWriteConflictException(concurrentSchemaEvolutionError);
       }
-      return;
+      // No schema evolution here as both txn uses the same schema.
+      return schemaOfTxn;
     }
 
     // Case 3
@@ -175,6 +193,24 @@ public class TransactionUtils {
               + "schema the transaction tries to commit with %s", schemaAtTxnStart, schemaAtTxnValidation, schemaOfTxn);
       throw new HoodieWriteConflictException(concurrentSchemaEvolutionError);
     }
+
+    // Compatible cases:
+
+    // txn1 use schema s1, no txn2, curr txn use s1 => curr txn should tag s1 in its commit metadata.
+    // txn1 use schema s1, no txn2, curr txn use s2 => curr txn should tag s2 in its commit metadata.
+    if (lastCompletedInstantsAtTxnStart.equals(lastCompletedInstantsAtTxnValidation)) {
+      return schemaOfTxn;
+    }
+
+    // txn1 use schema s1, txn2 use s1, curr txn use s1 => curr txn should tag s1 in its commit metadata.
+    // txn1 use schema s1, txn2 use s1, curr txn use s2 => curr txn should tag s2 in its commit metadata.
+    if (schemaAtTxnStart.equals(schemaAtTxnValidation)) {
+      return schemaOfTxn;
+    }
+
+    // txn1 use schema s1, txn2 use s2, curr txn use s1 => curr txn should tag s2 in its commit metadata.
+    // txn1 use schema s1, txn2 use s2, curr txn use s2 => curr txn should tag s2 in its commit metadata.
+    return schemaAtTxnValidation;
   }
 
   /**

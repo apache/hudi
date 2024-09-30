@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -61,6 +62,7 @@ import org.apache.hudi.table.marker.SimpleTransactionDirectMarkerBasedDetectionS
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.timeline.service.handlers.marker.AsyncTimelineServerBasedDetectionStrategy;
 
+import org.apache.avro.Schema;
 import org.apache.curator.test.TestingServer;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
@@ -181,7 +183,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
   @ParameterizedTest
   @MethodSource("concurrentAlterSchemaTestDimension")
   void testHoodieClientConcurrentAlterSchemaConflictDetection(
-      boolean padWithInitialCommit, HoodieTableType tableType, String concurrentAlterSchema1, String concurrentAlterSchema2, boolean shouldConflict) throws Exception {
+      boolean padWithInitialCommit,
+      HoodieTableType tableType,
+      String concurrentAlterSchema1,
+      String concurrentAlterSchema2,
+      boolean shouldConflict,
+      String schemaOfLastCompletedInstantInTheEnd) throws Exception {
     if (tableType.equals(MERGE_ON_READ)) {
       setUpMORTestTable();
     }
@@ -261,6 +268,11 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     if (!shouldConflict) {
       assertTrue(completedInstant.contains(nextCommitTime3));
     }
+
+    // Validate table schema in the end.
+    TableSchemaResolver r = new TableSchemaResolver(metaClient);
+    Schema s = r.getTableAvroSchema(false);
+    assertEquals(s, new Schema.Parser().parse(schemaOfLastCompletedInstantInTheEnd));
 
     FileIOUtils.deleteDirectory(new File(basePath));
     client1.close();
@@ -1259,22 +1271,22 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             // committed->|------------------------------------------------------------------- padding commit (optional)
 
             // No schema evolution, no conflict.
-            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false},
-            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false},
+            {true, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
+            {false, MERGE_ON_READ, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA},
             // No concurrent schema evolution, no conflict.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false},
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // If there is a padding commits defining table schema to TRIP_EXAMPLE_SCHEMA.
             // as long as txn 2 stick to that schema, backwards compatibility handles everything.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false},
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // In case no padding commits, table schema is not really predefined.
             // It means are effectively having 2 concurrent txn trying to define table schema
             // differently in this case.
-            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true},
+            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // Concurrent schema evolution into the same schema does not conflict.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false},
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, false, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
             // Concurrent schema evolution into different schemas conflicts.
-            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true},
-            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true},
+            {true, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
+            {false, COPY_ON_WRITE, TRIP_EXAMPLE_SCHEMA_EVOLVED_1, TRIP_EXAMPLE_SCHEMA_EVOLVED_2, true, TRIP_EXAMPLE_SCHEMA_EVOLVED_1},
         };
     return Stream.of(data).map(Arguments::of);
   }
