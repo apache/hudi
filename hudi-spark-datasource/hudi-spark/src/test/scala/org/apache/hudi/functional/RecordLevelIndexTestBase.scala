@@ -28,11 +28,11 @@ import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{col, not}
@@ -41,7 +41,6 @@ import org.junit.jupiter.api._
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.collection.{JavaConverters, mutable}
 
@@ -178,11 +177,26 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()
-    latestBatchDf.write.format("org.apache.hudi")
-      .options(hudiOpts)
-      .option(DataSourceWriteOptions.OPERATION.key, operation)
-      .mode(saveMode)
-      .save(basePath)
+    var counter = 0
+    var succeeded = false
+    while (!succeeded && counter < 5) {
+      try {
+        latestBatchDf.write.format("org.apache.hudi")
+          .options(hudiOpts)
+          .option(DataSourceWriteOptions.OPERATION.key, operation)
+          .mode(saveMode)
+          .save(basePath)
+        succeeded = true;
+      } catch {
+        case e: IllegalArgumentException => {  // with HUDI-7507, we might get illegal argument exception with multi-writers.
+          // Hence adding retries.
+          if (!e.getMessage.toString.contains("Found later commit time")) {
+            throw new HoodieException("Unexpected Exception thrown ", e)
+          }
+          counter += 1
+        }
+      }
+    }
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
     if (validate) {
