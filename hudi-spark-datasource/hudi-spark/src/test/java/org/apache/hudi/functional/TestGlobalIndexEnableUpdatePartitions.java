@@ -156,8 +156,8 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
     final String p3 = "p3";
     List<HoodieRecord> insertsAtEpoch0 = getInserts(totalRecords, p1, 0, payloadClass);
     List<HoodieRecord> updatesAtEpoch5 = getUpdates(insertsAtEpoch0.subList(0, 4), p2, 5, payloadClass);
-    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
 
+    try (SparkRDDWriteClient client = getHoodieWriteClient(writeConfig)) {
       // 1st batch: inserts
       String commitTimeAtEpoch0 = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(commitTimeAtEpoch0);
