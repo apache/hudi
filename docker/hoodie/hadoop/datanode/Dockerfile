@@ -17,7 +17,7 @@
 
 ARG HADOOP_VERSION=2.8.4 
 ARG HADOOP_DN_PORT=50075
-FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:bullseye
+FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
 ENV HADOOP_DN_PORT ${HADOOP_DN_PORT}
 

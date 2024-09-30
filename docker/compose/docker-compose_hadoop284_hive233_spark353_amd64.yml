@@ -36,7 +36,7 @@ services:
       retries: 3
 
   datanode1:
-    image: apachehudi/hudi-hadoop_2.8.4-datanode:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
     platform: linux/amd64
     container_name: datanode1
     hostname: datanode1
@@ -61,7 +61,7 @@ services:
       - namenode
 
   historyserver:
-    image: apachehudi/hudi-hadoop_2.8.4-history:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-history:latest
     platform: linux/amd64
     hostname: historyserver
     container_name: historyserver
@@ -91,7 +91,7 @@ services:
     container_name: hive-metastore-postgresql
 
   hivemetastore:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     platform: linux/amd64
     hostname: hivemetastore
     container_name: hivemetastore
@@ -117,7 +117,7 @@ services:
       - "namenode"
 
   hiveserver:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3:latest
     platform: linux/amd64
     hostname: hiveserver
     container_name: hiveserver
@@ -139,7 +139,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   sparkmaster:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_3.5.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkmaster_3.5.3:latest
     platform: linux/amd64
     hostname: sparkmaster
     container_name: sparkmaster
@@ -159,7 +159,7 @@ services:
       - "namenode"
 
   spark-worker-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_3.5.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkworker_3.5.3:latest
     platform: linux/amd64
     hostname: spark-worker-1
     container_name: spark-worker-1
@@ -286,7 +286,7 @@ services:
       - 8126:8126
 
   adhoc-1:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_3.5.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_3.5.3:latest
     platform: linux/amd64
     hostname: adhoc-1
     container_name: adhoc-1
@@ -311,7 +311,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   adhoc-2:
-    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_3.5.3:bullseye
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.3-sparkadhoc_3.5.3:latest
     platform: linux/amd64
     hostname: adhoc-2
     container_name: adhoc-2
