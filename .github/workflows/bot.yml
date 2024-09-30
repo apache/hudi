@@ -639,7 +639,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
