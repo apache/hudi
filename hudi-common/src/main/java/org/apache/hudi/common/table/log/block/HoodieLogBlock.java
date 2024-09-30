@@ -98,6 +98,10 @@ public abstract class HoodieLogBlock {
 
   public abstract HoodieLogBlockType getBlockType();
 
+  public boolean isDataOrDeleteBlock() {
+    return getBlockType().isDataOrDeleteBlock();
+  }
+
   public long getLogBlockLength() {
     throw new HoodieException("No implementation was provided");
   }
@@ -179,11 +183,10 @@ public abstract class HoodieLogBlock {
     }
 
     /**
-     * @param logBlockType log block type to be inspected.
      * @returns true if the log block type refers to data or delete block. false otherwise.
      */
-    public static boolean isDataOrDeleteBlock(HoodieLogBlockType logBlockType) {
-      return logBlockType != HoodieLogBlockType.COMMAND_BLOCK && logBlockType != HoodieLogBlockType.CORRUPT_BLOCK;
+    public boolean isDataOrDeleteBlock() {
+      return this != HoodieLogBlockType.COMMAND_BLOCK && this != HoodieLogBlockType.CORRUPT_BLOCK;
     }
   }
 
