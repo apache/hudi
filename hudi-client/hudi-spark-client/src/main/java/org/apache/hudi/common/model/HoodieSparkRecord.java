@@ -87,10 +87,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
    */
   private final transient StructType schema;
 
-  /**
-   * Record is considered deleted if data is null.
-   */
-  private boolean isDeleted;
   public HoodieSparkRecord(UnsafeRow data) {
     this(data, null);
   }
@@ -101,7 +97,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = false;
     this.schema = schema;
-    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(HoodieKey key, UnsafeRow data, boolean copy) {
@@ -114,7 +109,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
-    isDeleted = data == null;
   }
 
   private HoodieSparkRecord(HoodieKey key, InternalRow data, StructType schema, HoodieOperation operation, boolean copy) {
@@ -123,7 +117,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     validateRow(data, schema);
     this.copy = copy;
     this.schema = schema;
-    isDeleted = data == null;
   }
 
   public HoodieSparkRecord(
@@ -137,10 +130,6 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
     super(key, data, operation, currentLocation, newLocation);
     this.copy = copy;
     this.schema = schema;
-  }
-
-  public boolean isDeleted() {
-    return isDeleted;
   }
 
   @Override
