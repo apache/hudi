@@ -75,6 +75,7 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_REGEX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
@@ -193,6 +194,7 @@ public class CloudObjectsSelectorCommon {
     Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
+    Option<String> selectRelativePathRegex = getPropVal(props, SELECT_RELATIVE_PATH_REGEX);
 
     String objectKey;
     String objectSizeKey;
@@ -217,6 +219,14 @@ public class CloudObjectsSelectorCommon {
     }
     if (ignoreRelativePathSubStr.isPresent()) {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
+    }
+    if (selectRelativePathRegex.isPresent()) {
+      String prefix = selectRelativePathPrefix.orElse("");
+      String regex = selectRelativePathRegex.get();
+
+      String updatedPathRegex = prefix.isEmpty() || prefix.endsWith("/") ? prefix + regex : prefix + "/" + regex;
+
+      filter.append(SPACE_DELIMTER).append(String.format("and %s rlike '%s'", objectKey, updatedPathRegex));
     }
 
     // Match files with a given extension, or use the fileFormat as the default.
