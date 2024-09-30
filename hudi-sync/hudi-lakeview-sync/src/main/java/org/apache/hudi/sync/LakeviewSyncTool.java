@@ -46,6 +46,7 @@ import ai.onehouse.storage.S3AsyncStorageClient;
 import ai.onehouse.storage.StorageUtils;
 import ai.onehouse.storage.providers.GcsClientProvider;
 import ai.onehouse.storage.providers.S3AsyncClientProvider;
+import com.beust.jcommander.JCommander;
 import com.google.common.annotations.VisibleForTesting;
 import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
@@ -318,6 +319,21 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
       }
     } catch (Exception e) {
       LOG.error("Failed to close lakeview sync tool", e);
+    }
+  }
+
+  public static void main(String[] args) {
+    final LakeviewSyncConfigHolder.LakeviewSyncConfigParams params = new LakeviewSyncConfigHolder.LakeviewSyncConfigParams();
+    JCommander cmd = JCommander.newBuilder()
+        .addObject(params)
+        .build();
+    cmd.parse(args);
+    if (params.isHelp()) {
+      cmd.usage();
+    } else {
+      try (LakeviewSyncTool lakeviewSyncTool = new LakeviewSyncTool(params.toProps(), new Configuration())) {
+        lakeviewSyncTool.syncHoodieTable();
+      }
     }
   }
 }

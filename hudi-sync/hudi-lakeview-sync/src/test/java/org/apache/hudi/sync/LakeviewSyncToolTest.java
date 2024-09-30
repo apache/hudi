@@ -146,4 +146,29 @@ class LakeviewSyncToolTest {
       assertEquals(errorMessage, e.getMessage());
     }
   }
+
+  @Test
+  void testRunner() {
+    LakeviewSyncTool.main(new String[]{"--help"});
+    try (MockedConstruction<TableDiscoveryAndUploadJob> mockedConstruction =
+             mockConstruction(TableDiscoveryAndUploadJob.class, (tableDiscoveryAndUploadJob, context) ->
+                 doNothing().when(tableDiscoveryAndUploadJob).runOnce())) {
+
+      assertDoesNotThrow(() -> LakeviewSyncTool.main(new String[]{
+          "--project-id", "xyz",
+          "--api-key", "my-api-key",
+          "--api-secret", "my-api-secret",
+          "--userid", "my-userid",
+          "--lake-paths", "lake1.databases.database1.basePaths=s3://user-bucket/lake-1/database-1/table-1,s3://user-bucket/lake-1/database-1/table-2",
+          "--lake-paths", "lake1.databases.database2.basePaths=s3://user-bucket/lake-1/database-2/table-1,s3://user-bucket/lake-1/database-2/table-2",
+          "--base-path", "s3://user-bucket/lake-1/database-1/table-2",
+          "--s3-region", "us-west-2"
+      }));
+
+      List<TableDiscoveryAndUploadJob> constructedObjects = mockedConstruction.constructed();
+      assertEquals(1, constructedObjects.size());
+      TableDiscoveryAndUploadJob tableDiscoveryAndUploadJob = constructedObjects.get(0);
+      verify(tableDiscoveryAndUploadJob, times(1)).runOnce();
+    }
+  }
 }
