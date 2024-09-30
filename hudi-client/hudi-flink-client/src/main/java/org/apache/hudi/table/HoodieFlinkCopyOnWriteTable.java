@@ -92,6 +92,11 @@ public class HoodieFlinkCopyOnWriteTable<T>
     super(config, context, metaClient);
   }
 
+  @Override
+  public void validateForLatestTimestamp(String instantTime) {
+    // no-op
+  }
+
   /**
    * Upsert a batch of new records into Hoodie table at the supplied instantTime.
    *

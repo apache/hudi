@@ -30,7 +30,6 @@ import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
-import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -331,6 +330,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf);
 
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient);
+
+  /**
+   * Validate timestamp for new commits.
+   * @param metaClient instance of{@link HoodieTableMetaClient} to be used.
+   * @param instantTime instant time of the current commit thats in progress.
+   */
+  protected abstract void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime);
 
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {
     if (writeTimer != null) {
@@ -937,7 +943,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     this.txnManager.beginTransaction(Option.of(requestedInstant),
         lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
     try {
-      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+      validateTimestamp(metaClient, instantTime);
     } finally {
       txnManager.endTransaction(Option.of(requestedInstant));
     }
