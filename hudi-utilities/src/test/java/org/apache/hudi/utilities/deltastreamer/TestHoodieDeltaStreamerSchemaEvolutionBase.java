@@ -21,12 +21,15 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.HoodieSparkUtils;
+import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -74,6 +77,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -191,6 +195,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
       extraProps.setProperty("hoodie.base.path", tableBasePath);
     }
+
+    // Schema evolution
+    extraProps.setProperty(RECORD_MERGER_IMPLS.key(),
+        HoodieAvroRecordMerger.class.getCanonicalName()
+            + "," + DefaultSparkRecordMerger.class.getName()
+            + "," + OverwriteWithLatestSparkRecordMerger.class.getSimpleName());
 
     List<String> transformerClassNames = new ArrayList<>();
     Collections.addAll(transformerClassNames, transformerClasses);
