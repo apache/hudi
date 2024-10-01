@@ -30,6 +30,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -77,6 +78,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.LOG_FILE_FORMAT;
 import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
@@ -201,6 +203,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
         HoodieAvroRecordMerger.class.getCanonicalName()
             + "," + DefaultSparkRecordMerger.class.getName()
             + "," + OverwriteWithLatestSparkRecordMerger.class.getSimpleName());
+    extraProps.setProperty(LOG_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name());
 
     List<String> transformerClassNames = new ArrayList<>();
     Collections.addAll(transformerClassNames, transformerClasses);
