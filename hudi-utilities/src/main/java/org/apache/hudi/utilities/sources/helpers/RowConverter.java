@@ -29,9 +29,10 @@ import scala.util.Either;
 import scala.util.Left;
 import scala.util.Right;
 
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
-
+/**
+ * Convert a variety of datum into Row. Has a bunch of lazy fields to circumvent issues around
+ * serializing these objects from driver to executors
+ */
 public class RowConverter implements Serializable {
   private static final long serialVersionUID = 1L;
   /**
@@ -47,20 +48,6 @@ public class RowConverter implements Serializable {
    * To be lazily initialized on executors.
    */
   private transient MercifulJsonToRowConverter jsonConverter;
-
-  public RowConverter(String schemaStr) {
-    this(schemaStr, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
-  }
-
-  public RowConverter(String schemaStr, boolean shouldSanitize, String invalidCharMask) {
-    this.schemaStr = schemaStr;
-    this.shouldSanitize = shouldSanitize;
-    this.invalidCharMask = invalidCharMask;
-  }
-
-  public RowConverter(Schema schema) {
-    this(schema, SANITIZE_SCHEMA_FIELD_NAMES.defaultValue(), SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue());
-  }
 
   public RowConverter(Schema schema, boolean shouldSanitize, String invalidCharMask) {
     this.schemaStr = schema.toString();
@@ -87,15 +74,20 @@ public class RowConverter implements Serializable {
       initSchema();
       initJsonConvertor();
       return jsonConverter.convertToRow(json, schema);
+    } catch (IllegalArgumentException e) {
+      throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was invalid.", e);
     } catch (Exception e) {
-      if (json != null) {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
-      } else {
-        throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was null.", e);
-      }
+      throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
     }
   }
 
+  /**
+   * Converts a JSON string to a Row object.
+   * If the conversion fails, it returns the original JSON string as an error.
+   *
+   * @param json The input JSON string to be converted.
+   * @return Either a Row object on successful conversion (Left) or the original JSON string on error (Right).
+   */
   public Either<Row, String> fromJsonToRowWithError(String json) {
     Row row;
     try {

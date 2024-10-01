@@ -61,13 +61,6 @@ import scala.collection.JavaConverters;
 public class MercifulJsonToRowConverter extends MercifulJsonConverter {
 
   /**
-   * Uses a default objectMapper to deserialize a json string.
-   */
-  public MercifulJsonToRowConverter() {
-    this(false, "__");
-  }
-
-  /**
    * Allows enabling sanitization and allows choice of invalidCharMask for sanitization
    */
   public MercifulJsonToRowConverter(boolean shouldSanitize, String invalidCharMask) {
