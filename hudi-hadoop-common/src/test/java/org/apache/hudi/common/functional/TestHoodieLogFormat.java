@@ -689,7 +689,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
-    appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, readBlocksLazily, enableOptimizedLogBlocksScan,
+    appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
         "100");
   }
 
@@ -699,11 +699,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
     SchemaTestUtil testUtil = new SchemaTestUtil();
 
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> firstBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, false, enableOptimizedLogScan,
+    Pair<List<IndexedRecord>, Set<HoodieLogFile>> firstBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
         "100");
 
     // trigger another batch of writes for next commit
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> secondBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, false, enableOptimizedLogScan,
+    Pair<List<IndexedRecord>, Set<HoodieLogFile>> secondBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
         "200", firstBatch.getKey(), firstBatch.getValue());
 
     List<IndexedRecord> firstAndSecondBatch = new ArrayList<>(firstBatch.getKey());
@@ -716,7 +716,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     readAndValidate(schema, "100", allLogFiles, firstBatch.getKey());
 
     // add another batch.
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> thirdBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, false, enableOptimizedLogScan,
+    Pair<List<IndexedRecord>, Set<HoodieLogFile>> thirdBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
         "300", firstAndSecondBatch, new HashSet<>(allLogFiles));
 
     allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), secondBatch.getValue(), thirdBatch.getValue()));
@@ -740,7 +740,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     readAndValidate(schema, "200", allLogFiles, firstBatch.getKey());
 
     // lets repeat the same after removing the commit from timeline.
-    FileCreateUtils.deleteDeltaCommit(basePath, "200", fs);
+    FileCreateUtils.deleteDeltaCommit(basePath, "200", storage);
     readAndValidate(schema, "300", allLogFiles, firstAndThirdBatch);
     // if we set maxCommitTime as 200 (which is rolled back commit), expected records are just from batch1
     readAndValidate(schema, "200", allLogFiles, firstBatch.getKey());
@@ -749,11 +749,11 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     // lets add commit 400 (batch4). add a rollback block with commit time 500 which rollsback 400. again, add log files with commit time 400 (batch5)
     // when we read all log files w/ max commit time as 400, batch4 needs to be ignored and only batch5 should be read.
     // trigger another batch of writes for next commit
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fourthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, false, enableOptimizedLogScan,
+    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fourthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
         "400", firstAndThirdBatch, new HashSet<>(allLogFiles));
 
     // lets delete commit 400 from timeline to simulate crash.
-    FileCreateUtils.deleteDeltaCommit(basePath, "400", fs);
+    FileCreateUtils.deleteDeltaCommit(basePath, "400", storage);
 
     // set max commit time as 400 and validate only first and 3rd batch is read. 1st batch is rolled back completely. 4th batch is partially failed commit.
     allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), thirdBatch.getValue(), fourthBatch.getValue()));
@@ -765,7 +765,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     readAndValidate(schema, "400", allLogFiles, firstAndThirdBatch);
 
     // and lets re-add new log files w/ commit time 400.
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fifthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, false, enableOptimizedLogScan,
+    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fifthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
         "400", firstBatch.getKey(), firstBatch.getValue());
 
     // lets redo the read test. this time, first batch, 3rd batch and fifth batch should be expected.
@@ -781,7 +781,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   private void addRollbackBlock(String rollbackCommitTime, String commitToRollback) throws IOException, InterruptedException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withSizeThreshold(1024).withFileId("test-fileid1").overBaseCommit("100").withFs(fs).build();
+            .withSizeThreshold(1024).withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
 
     // Rollback the 1st block i.e. a data block.
@@ -833,16 +833,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
 
   private Pair<List<IndexedRecord>, Set<HoodieLogFile>> appendAndValidate(Schema schema, SchemaTestUtil testUtil, ExternalSpillableMap.DiskMapType diskMapType,
                                  boolean isCompressionEnabled,
-                                 boolean readBlocksLazily,
                                  boolean enableOptimizedLogBlocksScan,
                                  String commitTime) throws IOException, URISyntaxException, InterruptedException {
-    return appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, readBlocksLazily, enableOptimizedLogBlocksScan, commitTime,
+    return appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan, commitTime,
         Collections.emptyList(), Collections.emptySet());
   }
 
   private Pair<List<IndexedRecord>, Set<HoodieLogFile>> appendAndValidate(Schema schema, SchemaTestUtil testUtil, ExternalSpillableMap.DiskMapType diskMapType,
                                                                             boolean isCompressionEnabled,
-                                                                            boolean readBlocksLazily,
                                                                             boolean enableOptimizedLogBlocksScan,
                                                                             String commitTime,
                                                                             List<IndexedRecord> prevGenRecords, Set<HoodieLogFile> prevLogFiles) throws IOException,
@@ -858,10 +856,10 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     List<HoodieLogFile> allLogFilesList = new ArrayList<>(allLogFiles);
     Collections.sort(allLogFilesList, new HoodieLogFile.LogFileComparator());
 
-    FileCreateUtils.createDeltaCommit(basePath, commitTime, fs);
+    FileCreateUtils.createDeltaCommit(basePath, commitTime, storage);
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withFileSystem(fs)
+        .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
             allLogFilesList.stream()
@@ -2991,6 +2989,14 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
         arguments(ExternalSpillableMap.DiskMapType.BITCASK, true),
         arguments(ExternalSpillableMap.DiskMapType.ROCKS_DB, true)
     );
+  }
+
+  private static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
+                                                  Schema schema,
+                                                  List<IndexedRecord> records,
+                                                  int numFiles)
+      throws IOException, InterruptedException {
+    return writeLogFiles(partitionPath, schema, records, numFiles, "100");
   }
 
   private static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
