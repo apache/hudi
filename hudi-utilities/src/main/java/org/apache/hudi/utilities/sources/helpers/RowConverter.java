@@ -75,7 +75,7 @@ public class RowConverter implements Serializable {
       initJsonConvertor();
       return jsonConverter.convertToRow(json, schema);
     } catch (IllegalArgumentException e) {
-      throw new HoodieSchemaException("Failed to convert schema from json to avro. Schema string was invalid.", e);
+      throw new HoodieSchemaException("Failed to convert schema from json to avro. json string is invalid.", e);
     } catch (Exception e) {
       throw new HoodieSchemaException("Failed to convert schema from json to avro: " + json, e);
     }
