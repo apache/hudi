@@ -31,7 +31,6 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
-import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -107,7 +106,7 @@ public class HoodieSparkCopyOnWriteTable<T>
 
   @Override
   public void validateForLatestTimestamp(String instantTime) {
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    validateForLatestTimestampInternal(instantTime);
   }
 
   @Override

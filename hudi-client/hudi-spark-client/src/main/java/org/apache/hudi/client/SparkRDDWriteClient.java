@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.client.utils.CommitMetadataUtils;
 import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.common.data.HoodieData;
@@ -132,7 +131,7 @@ public class SparkRDDWriteClient<T> extends
 
   @Override
   protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    validateTimestampInternal(metaClient, instantTime);
   }
 
   @Override

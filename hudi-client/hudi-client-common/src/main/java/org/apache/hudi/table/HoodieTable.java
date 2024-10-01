@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -901,6 +902,10 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @param instantTime instant time of interest.
    */
   public abstract void validateForLatestTimestamp(String instantTime);
+
+  protected void validateForLatestTimestampInternal(String instantTime) {
+    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+  }
 
   public HoodieFileFormat getBaseFileFormat() {
     return metaClient.getTableConfig().getBaseFileFormat();

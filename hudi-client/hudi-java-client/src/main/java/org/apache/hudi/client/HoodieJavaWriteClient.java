@@ -20,7 +20,6 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
-import org.apache.hudi.client.timeline.TimestampUtils;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -106,7 +105,7 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   protected void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime) {
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    validateTimestampInternal(metaClient, instantTime);
   }
 
   @Override
