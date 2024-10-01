@@ -232,6 +232,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     return HoodieArrayWritableAvroUtils.projectRecord(from, to);
   }
 
+  @Override
+  public Comparable castValue(Comparable value, Schema.Type newType) {
+    //TODO: [HUDI-8261] actually do casting here
+    return value;
+  }
+
   public UnaryOperator<ArrayWritable> reverseProjectRecord(Schema from, Schema to) {
     return HoodieArrayWritableAvroUtils.reverseProject(from, to);
   }

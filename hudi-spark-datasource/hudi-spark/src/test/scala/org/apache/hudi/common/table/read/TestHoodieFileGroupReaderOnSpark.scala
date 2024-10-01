@@ -127,10 +127,6 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     }
   }
 
-  override def getComparableUTF8String(value: String): Comparable[_] = {
-    UTF8String.fromString(value)
-  }
-
   override def getRecordPayloadForMergeMode(mergeMode: RecordMergeMode): String = {
     mergeMode match {
       case RecordMergeMode.EVENT_TIME_ORDERING => classOf[DefaultHoodieRecordPayload].getName
