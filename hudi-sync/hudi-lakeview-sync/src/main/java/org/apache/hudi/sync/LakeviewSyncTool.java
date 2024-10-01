@@ -69,7 +69,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -91,32 +93,33 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   private final boolean isLakeviewSyncToolEnabled;
   @Nullable
   private final Config config;
-  @Nullable
   private final ExecutorService executorService;
   @Nullable
   private final TableDiscoveryAndUploadJob tableDiscoveryAndUploadJob;
   private final int httpClientTimeoutSeconds;
   private final int httpClientMaxRetries;
   private final long httpClientRetryDelayMs;
+  private final long timeoutInSeconds;
 
   public LakeviewSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
     HoodieConfig hoodieConfig = new HoodieConfig(props);
     this.isLakeviewSyncToolEnabled = hoodieConfig.getBooleanOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_SYNC_ENABLED);
+    this.executorService = Executors.newFixedThreadPool(2);
     if (isLakeviewSyncToolEnabled) {
       this.config = getConfig(hoodieConfig);
-      this.executorService = Executors.newFixedThreadPool(1);
       this.tableDiscoveryAndUploadJob = getTableDiscoveryAndUploadJob(this.config, this.executorService);
       this.httpClientTimeoutSeconds = hoodieConfig.getIntOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_TIMEOUT_SECONDS);
       this.httpClientMaxRetries = hoodieConfig.getIntOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_MAX_RETRIES);
       this.httpClientRetryDelayMs = hoodieConfig.getLongOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_HTTP_CLIENT_RETRY_DELAY_MS);
+      this.timeoutInSeconds = hoodieConfig.getLongOrDefault(LakeviewSyncConfigHolder.LAKEVIEW_SYNC_TOOL_TIMEOUT_SECONDS);
     } else {
       this.config = null;
-      this.executorService = null;
       this.tableDiscoveryAndUploadJob = null;
       this.httpClientTimeoutSeconds = HTTP_CLIENT_DEFAULT_TIMEOUT_SECONDS;
       this.httpClientMaxRetries = HTTP_CLIENT_MAX_RETRIES;
       this.httpClientRetryDelayMs = HTTP_CLIENT_RETRY_DELAY_MS;
+      this.timeoutInSeconds = -1;
     }
   }
 
@@ -302,8 +305,16 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
   @Override
   public void syncHoodieTable() {
     if (isLakeviewSyncToolEnabled && tableDiscoveryAndUploadJob != null) {
+      Future<?> future = executorService.submit(tableDiscoveryAndUploadJob::runOnce);
       try {
-        tableDiscoveryAndUploadJob.runOnce();
+        if (timeoutInSeconds > 0) {
+          future.get(timeoutInSeconds, TimeUnit.SECONDS);
+        } else {
+          future.get();
+        }
+      } catch (TimeoutException e) {
+        LOG.error("Lakeview sync operation got timed out", e);
+        future.cancel(true);
       } catch (Exception e) {
         LOG.error("Failed to perform sync operation in lakeview", e);
       }

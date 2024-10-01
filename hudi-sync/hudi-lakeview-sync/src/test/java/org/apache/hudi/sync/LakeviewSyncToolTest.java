@@ -34,6 +34,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedConstruction;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -48,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockConstruction;
@@ -148,11 +151,18 @@ class LakeviewSyncToolTest {
   }
 
   @Test
-  void testRunner() {
+  void testRunner() throws IOException {
     LakeviewSyncTool.main(new String[]{"--help"});
+
+    int timeoutInSeconds = 1;
+    Path tempFile = Files.createTempFile("temp", ".txt");
     try (MockedConstruction<TableDiscoveryAndUploadJob> mockedConstruction =
              mockConstruction(TableDiscoveryAndUploadJob.class, (tableDiscoveryAndUploadJob, context) ->
-                 doNothing().when(tableDiscoveryAndUploadJob).runOnce())) {
+                 doAnswer(invocationOnMock -> {
+                   Thread.sleep((timeoutInSeconds + 10) * 1000);
+                   Files.deleteIfExists(tempFile);
+                   return null;
+                 }).when(tableDiscoveryAndUploadJob).runOnce())) {
 
       assertDoesNotThrow(() -> LakeviewSyncTool.main(new String[]{
           "--project-id", "xyz",
@@ -162,13 +172,18 @@ class LakeviewSyncToolTest {
           "--lake-paths", "lake1.databases.database1.basePaths=s3://user-bucket/lake-1/database-1/table-1,s3://user-bucket/lake-1/database-1/table-2",
           "--lake-paths", "lake1.databases.database2.basePaths=s3://user-bucket/lake-1/database-2/table-1,s3://user-bucket/lake-1/database-2/table-2",
           "--base-path", "s3://user-bucket/lake-1/database-1/table-2",
-          "--s3-region", "us-west-2"
+          "--s3-region", "us-west-2",
+          "--timeout", String.valueOf(timeoutInSeconds)
       }));
 
       List<TableDiscoveryAndUploadJob> constructedObjects = mockedConstruction.constructed();
       assertEquals(1, constructedObjects.size());
       TableDiscoveryAndUploadJob tableDiscoveryAndUploadJob = constructedObjects.get(0);
       verify(tableDiscoveryAndUploadJob, times(1)).runOnce();
+
+      // verify that the temp file is still present as the future got cancelled due to timeout
+      assertTrue(Files.exists(tempFile));
+      Files.deleteIfExists(tempFile);
     }
   }
 }

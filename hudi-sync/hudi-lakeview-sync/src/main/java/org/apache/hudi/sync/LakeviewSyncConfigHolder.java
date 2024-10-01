@@ -21,7 +21,6 @@ package org.apache.hudi.sync;
 
 import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParametersDelegate;
-import com.beust.jcommander.converters.CommaParameterSplitter;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
@@ -135,6 +134,11 @@ public class LakeviewSyncConfigHolder {
       .defaultValue(1000)
       .withDocumentation("Delay between retries of http client used by lakeview sync tool");
 
+  public static final ConfigProperty<Integer> LAKEVIEW_SYNC_TOOL_TIMEOUT_SECONDS = ConfigProperty
+      .key("hoodie.datasource.lakeview_sync.timeout.seconds")
+      .defaultValue(-1)
+      .withDocumentation("Timeout in seconds for each sync in lakeview. Set to -1 to have no timeout");
+
   public static class LakeviewSyncConfigParams {
 
     @ParametersDelegate()
@@ -178,6 +182,9 @@ public class LakeviewSyncConfigHolder {
     @Parameter(names = {"--http-client-retries-delay-ms"}, description = "Delay between retries by the http client in milliseconds")
     public int httpClientDelayBetweenRetriesInMs;
 
+    @Parameter(names = {"--timeout"}, description = "Timeout in seconds to run a sync operation in lakeview")
+    public int timeoutInSeconds;
+
     public boolean isHelp() {
       return hoodieSyncConfigParams.isHelp();
     }
@@ -210,6 +217,7 @@ public class LakeviewSyncConfigHolder {
       props.setPropertyIfNonNull(LAKEVIEW_HTTP_CLIENT_TIMEOUT_SECONDS.key(), httpClientTimeout);
       props.setPropertyIfNonNull(LAKEVIEW_HTTP_CLIENT_MAX_RETRIES.key(), httpClientMaxRetries);
       props.setPropertyIfNonNull(LAKEVIEW_HTTP_CLIENT_RETRY_DELAY_MS.key(), httpClientDelayBetweenRetriesInMs);
+      props.setPropertyIfNonNull(LAKEVIEW_SYNC_TOOL_TIMEOUT_SECONDS.key(), timeoutInSeconds);
       return props;
     }
   }
