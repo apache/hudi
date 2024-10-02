@@ -127,7 +127,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // batch 2
     ingestSecondBatchAndHiveSync();
     // TODO(HUDI-8275): fix MOR queries on Hive in integration tests
-    // testHiveAfterSecondBatch();
+    testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
@@ -373,6 +373,10 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testHiveAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
+    System.out.println("VEXLER: testHiveAfterSecondBatch:");
+    System.out.println(stdOutErrPair.getKey());
+    System.out.println(stdOutErrPair.getValue());
+    System.out.println("VEXLER: testHiveAfterSecondBatch DONE");
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
         + "| GOOG    | 2018-08-31 10:29:00  |\n", 2);
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
