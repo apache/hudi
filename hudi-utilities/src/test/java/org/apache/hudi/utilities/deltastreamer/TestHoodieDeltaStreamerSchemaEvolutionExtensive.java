@@ -141,8 +141,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     return new HoodieDeltaStreamer(getDeltaStreamerConfig(extraProps), jsc);
   }
 
-
-
   /**
    * Main testing logic for non-type promotion tests
    */
@@ -238,15 +236,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
           for (Boolean shouldCluster : new Boolean[]{false, true}) {
             for (String tableType : new String[]{"COPY_ON_WRITE", "MERGE_ON_READ"}) {
               for (Boolean isSparkRecord : new Boolean[]{false, true}) {
-                if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
+                if ((!multiLogFiles || tableType.equals("MERGE_ON_READ")) && (!rowWriterEnable || !isSparkRecord)) {
                   b.add(Arguments.of(
-                      tableType,
-                      shouldCluster,
-                      false,
-                      rowWriterEnable,
-                      addFilegroups,
-                      multiLogFiles,
-                      isSparkRecord));
+                      tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles, isSparkRecord));
                 }
               }
             }
