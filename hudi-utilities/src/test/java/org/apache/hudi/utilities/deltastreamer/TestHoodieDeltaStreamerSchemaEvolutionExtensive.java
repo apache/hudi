@@ -19,9 +19,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.TestHoodieSparkUtils;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.streamer.ErrorEvent;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -34,12 +40,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.HoodieTableConfig.LOG_FILE_FORMAT;
+import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -110,15 +119,43 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     deltaStreamer.sync();
   }
 
+  TypedProperties getSparkRelatedProperties() {
+    TypedProperties props = new TypedProperties();
+
+    props.setProperty(
+        RECORD_MERGER_IMPLS.key(),
+        HoodieAvroRecordMerger.class.getName()
+            + "," + DefaultSparkRecordMerger.class.getName()
+            + "," + OverwriteWithLatestSparkRecordMerger.class.getName());
+    props.setProperty(
+        LOG_FILE_FORMAT.key(),
+        HoodieFileFormat.PARQUET.name());
+    return props;
+  }
+
+  HoodieStreamer generateHoodieStreamer() throws IOException {
+    TypedProperties extraProps = new TypedProperties();
+    if (isSparkRecord) {
+      extraProps = getSparkRelatedProperties();
+    }
+    return new HoodieDeltaStreamer(getDeltaStreamerConfig(extraProps), jsc);
+  }
+
+
+
   /**
    * Main testing logic for non-type promotion tests
    */
-  protected void testBase(String updateFile, String updateColumn, Map<String,Integer> conditions, Boolean nullable, ErrorEvent.ErrorReason reason) throws Exception {
+  protected void testBase(String updateFile,
+                          String updateColumn,
+                          Map<String,Integer> conditions,
+                          Boolean nullable,
+                          ErrorEvent.ErrorReason reason) throws Exception {
     boolean isCow = tableType.equals("COPY_ON_WRITE");
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableName = "test_parquet_table" + testNum;
     tableBasePath = basePath + tableName;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
+    this.deltaStreamer = generateHoodieStreamer();
 
     //first write
     doFirstDeltaWrite();
@@ -200,8 +237,17 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
         for (Boolean multiLogFiles : new Boolean[]{false, true}) {
           for (Boolean shouldCluster : new Boolean[]{false, true}) {
             for (String tableType : new String[]{"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-              if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
-                b.add(Arguments.of(tableType, shouldCluster, false, rowWriterEnable, addFilegroups, multiLogFiles));
+              for (Boolean isSparkRecord : new Boolean[]{false, true}) {
+                if (!multiLogFiles || tableType.equals("MERGE_ON_READ")) {
+                  b.add(Arguments.of(
+                      tableType,
+                      shouldCluster,
+                      false,
+                      rowWriterEnable,
+                      addFilegroups,
+                      multiLogFiles,
+                      isSparkRecord));
+                }
               }
             }
           }
@@ -219,7 +265,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                              Boolean shouldCompact,
                              Boolean rowWriterEnable,
                              Boolean addFilegroups,
-                             Boolean multiLogFiles) throws Exception {
+                             Boolean multiLogFiles,
+                             Boolean isSparkRecord) throws Exception {
     this.withErrorTable = true;
     this.useSchemaProvider = false;
     this.useTransformer = false;
@@ -229,6 +276,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
+
     testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.RECORD_CREATION);
   }
 
@@ -239,7 +288,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                                Boolean shouldCompact,
                                                Boolean rowWriterEnable,
                                                Boolean addFilegroups,
-                                               Boolean multiLogFiles) throws Exception {
+                                               Boolean multiLogFiles,
+                                               Boolean isSparkRecord) throws Exception {
     this.withErrorTable = true;
     this.useSchemaProvider = true;
     this.useTransformer = false;
@@ -249,17 +299,19 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.INVALID_RECORD_SCHEMA);
   }
 
   @ParameterizedTest
   @MethodSource("testArgs")
   public void testErrorTableWithTransformer(String tableType,
-                             Boolean shouldCluster,
-                             Boolean shouldCompact,
-                             Boolean rowWriterEnable,
-                             Boolean addFilegroups,
-                             Boolean multiLogFiles) throws Exception {
+                                            Boolean shouldCluster,
+                                            Boolean shouldCompact,
+                                            Boolean rowWriterEnable,
+                                            Boolean addFilegroups,
+                                            Boolean multiLogFiles,
+                                            Boolean isSparkRecord) throws Exception {
     this.withErrorTable = true;
     this.useSchemaProvider = true;
     this.useTransformer = true;
@@ -269,6 +321,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testMissingRecordKey.json", "driver", "driver = 'driver-003'", 1, ErrorEvent.ErrorReason.AVRO_DESERIALIZATION_FAILURE);
   }
 
@@ -282,13 +335,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                              Boolean shouldCompact,
                              Boolean rowWriterEnable,
                              Boolean addFilegroups,
-                             Boolean multiLogFiles) throws Exception {
+                             Boolean multiLogFiles,
+                             Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testAddColRoot.json", "zextra_col", "zextra_col = 'yes'", 2);
   }
 
@@ -302,13 +357,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                               Boolean shouldCompact,
                               Boolean rowWriterEnable,
                               Boolean addFilegroups,
-                              Boolean multiLogFiles) throws Exception {
+                              Boolean multiLogFiles,
+                              Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testDropColRoot.json", "trip_type", "trip_type is NULL", 2);
   }
 
@@ -322,13 +379,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                              Boolean shouldCompact,
                              Boolean rowWriterEnable,
                              Boolean addFilegroups,
-                             Boolean multiLogFiles) throws Exception {
+                             Boolean multiLogFiles,
+                             Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testAddMetaCol.json", "_extra_col", "_extra_col = 'yes'", 2);
   }
 
@@ -342,13 +401,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                Boolean shouldCompact,
                                Boolean rowWriterEnable,
                                Boolean addFilegroups,
-                               Boolean multiLogFiles) throws Exception {
+                               Boolean multiLogFiles,
+                               Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testAddColStruct.json", "tip_history.zextra_col", "tip_history[0].zextra_col = 'yes'", 2);
   }
 
@@ -362,13 +423,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                 Boolean shouldCompact,
                                 Boolean rowWriterEnable,
                                 Boolean addFilegroups,
-                                Boolean multiLogFiles) throws Exception {
+                                Boolean multiLogFiles,
+                                Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testDropColStruct.json", "tip_history.currency", "tip_history[0].currency is NULL", 2);
   }
 
@@ -382,13 +445,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                   Boolean shouldCompact,
                                   Boolean rowWriterEnable,
                                   Boolean addFilegroups,
-                                  Boolean multiLogFiles) throws Exception {
+                                  Boolean multiLogFiles,
+                                  Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testAddComplexField.json", "zcomplex_array", "size(zcomplex_array) > 0", 2);
   }
 
@@ -402,13 +467,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                     Boolean shouldCompact,
                                     Boolean rowWriterEnable,
                                     Boolean addFilegroups,
-                                    Boolean multiLogFiles) throws Exception {
+                                    Boolean multiLogFiles,
+                                    Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     testBase("testAddColChangeOrderAllFiles.json", "extra_col", "extra_col = 'yes'", 2);
     //according to the docs, this should fail. But it doesn't
     //assertThrows(Exception.class, () -> testBase("testAddColChangeOrderSomeFiles.json", "extra_col", "extra_col = 'yes'", 1));
@@ -424,13 +491,15 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                  Boolean shouldCompact,
                                  Boolean rowWriterEnable,
                                  Boolean addFilegroups,
-                                 Boolean multiLogFiles) throws Exception {
+                                 Boolean multiLogFiles,
+                                 Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     Map<String,Integer> conditions = new HashMap<>();
     conditions.put("distance_in_meters is NULL", 2);
     conditions.put("tip_history[0].currency is NULL", 2);
@@ -458,7 +527,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + testNum++;
     tableName = "test_parquet_table" + testNum;
     tableBasePath = basePath + tableName;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(), jsc);
+    this.deltaStreamer = generateHoodieStreamer();
 
     //first write
     doFirstDeltaWriteTypePromo(colName, startType);
@@ -513,8 +582,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                 Boolean shouldCompact,
                                 Boolean rowWriterEnable,
                                 Boolean addFilegroups,
-                                Boolean multiLogFiles) throws Exception {
-    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, false);
+                                Boolean multiLogFiles,
+                                Boolean isSparkRecord) throws Exception {
+    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, false, isSparkRecord);
   }
 
 
@@ -528,8 +598,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                         Boolean shouldCompact,
                                         Boolean rowWriterEnable,
                                         Boolean addFilegroups,
-                                        Boolean multiLogFiles) throws Exception {
-    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, true);
+                                        Boolean multiLogFiles,
+                                        Boolean isSparkRecord) throws Exception {
+    testTypePromotion(tableType, shouldCluster, shouldCompact, rowWriterEnable, addFilegroups, multiLogFiles, true, isSparkRecord);
   }
 
   public void testTypePromotion(String tableType,
@@ -538,19 +609,20 @@ public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieD
                                 Boolean rowWriterEnable,
                                 Boolean addFilegroups,
                                 Boolean multiLogFiles,
-                                Boolean dropCols) throws Exception {
+                                Boolean dropCols,
+                                Boolean isSparkRecord) throws Exception {
     this.tableType = tableType;
     this.shouldCluster = shouldCluster;
     this.shouldCompact = shouldCompact;
     this.rowWriterEnable = rowWriterEnable;
     this.addFilegroups = addFilegroups;
     this.multiLogFiles = multiLogFiles;
+    this.isSparkRecord = isSparkRecord;
     if (dropCols) {
       this.typePromoUpdates = "endTypePromotionDropCols.json";
     } else {
       this.typePromoUpdates = "endTypePromotion.json";
     }
-
 
     //root data type promotions
     testTypePromotionBase("distance_in_meters", DataTypes.IntegerType, DataTypes.LongType);

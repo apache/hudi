@@ -163,7 +163,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     PARQUET_SOURCE_ROOT = basePath + "parquetFilesDfs" + ++testNum;
     tableName = "test_parquet_table" + testNum;
     tableBasePath = basePath + tableName;
-    this.deltaStreamer = new HoodieDeltaStreamer(getDeltaStreamerConfig(allowNullForDeletedCols), jsc);
+    TypedProperties extraProps = new TypedProperties();
+    this.deltaStreamer = new HoodieDeltaStreamer(
+        getDeltaStreamerConfig(allowNullForDeletedCols, extraProps), jsc);
 
     //first write
     String datapath = String.class.getResource("/data/schema-evolution/startTestEverything.json").getPath();

@@ -108,6 +108,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   protected boolean withErrorTable;
   protected boolean useTransformer;
   protected boolean userProvidedSchema;
+  protected boolean isSparkRecord;
 
   @BeforeAll
   public static void initKafka() {
@@ -143,18 +144,14 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
   protected HoodieStreamer deltaStreamer;
 
-  protected HoodieDeltaStreamer.Config getDeltaStreamerConfig() throws IOException {
-    return getDeltaStreamerConfig(true);
+  protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(TypedProperties extraProps) throws IOException {
+    return getDeltaStreamerConfig(true, extraProps);
   }
 
-  protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(boolean nullForDeletedCols) throws IOException {
+  protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(boolean nullForDeletedCols, TypedProperties extraProps) throws IOException {
     String[] transformerClasses = useTransformer ? new String[] {TestHoodieDeltaStreamer.TestIdentityTransformer.class.getName()}
         : new String[0];
-    return getDeltaStreamerConfig(transformerClasses, nullForDeletedCols);
-  }
-
-  protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols) throws IOException {
-    return getDeltaStreamerConfig(transformerClasses, nullForDeletedCols, new TypedProperties());
+    return getDeltaStreamerConfig(transformerClasses, nullForDeletedCols, extraProps);
   }
 
   protected HoodieDeltaStreamer.Config getDeltaStreamerConfig(String[] transformerClasses, boolean nullForDeletedCols,
@@ -197,13 +194,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
       extraProps.setProperty(HoodieErrorTableConfig.ERROR_TABLE_WRITE_CLASS.key(), TestErrorTable.class.getName());
       extraProps.setProperty("hoodie.base.path", tableBasePath);
     }
-
-    // Schema evolution
-    extraProps.setProperty(RECORD_MERGER_IMPLS.key(),
-        HoodieAvroRecordMerger.class.getCanonicalName()
-            + "," + DefaultSparkRecordMerger.class.getName()
-            + "," + OverwriteWithLatestSparkRecordMerger.class.getSimpleName());
-    extraProps.setProperty(LOG_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name());
 
     List<String> transformerClassNames = new ArrayList<>();
     Collections.addAll(transformerClassNames, transformerClasses);
