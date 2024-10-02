@@ -923,7 +923,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
             .withAutoArchive(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withMarkersType(MarkerType.DIRECT.name())
-        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(FileSystemBasedLockProvider.class)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
             .build()).withAutoCommit(false);
     HoodieWriteConfig writeConfig1 = writeConfigBuilder.build();
@@ -940,7 +940,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     // Simulate the first commit with Writer 1
     final SparkRDDWriteClient client1 = getHoodieWriteClient(writeConfig1);
     final SparkRDDWriteClient client2 = getHoodieWriteClient(writeConfig2);
-    createCommitWithInserts(writeConfig1, getHoodieWriteClient(writeConfig1), "000", client1.createNewInstantTime(), 200, true);
+    createCommitWithInserts(writeConfig1, getHoodieWriteClient(writeConfig1), client1.createNewInstantTime(), client1.createNewInstantTime(), 200, true);
 
     // multi-writer setup
     final int threadCount = 2;
