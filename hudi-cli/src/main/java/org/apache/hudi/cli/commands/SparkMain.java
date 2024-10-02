@@ -136,7 +136,7 @@ public class SparkMain {
 
   public static void addAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String... args) {
     //cmd is going to be the first arg so that is why it is minArgsCount - 1
-    ValidationUtils.checkArgument(args.length == cmd.minArgsCount - 1, "App args does not match minArgsCount");
+    ValidationUtils.checkArgument(args.length == cmd.minArgsCount - 1, "For developers only: App args does not match minArgsCount");
     sparkLauncher.addAppArgs(cmd.toString());
     sparkLauncher.addAppArgs(args);
   }
