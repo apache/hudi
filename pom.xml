@@ -1825,6 +1825,16 @@
         <artifactId>mbknor-jackson-jsonschema_${scala.binary.version}</artifactId>
         <version>1.0.39</version>
       </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-common</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
+      <dependency>
+        <groupId>io.netty</groupId>
+        <artifactId>netty-transport</artifactId>
+        <version>4.1.96.Final</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <repositories>
