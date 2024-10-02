@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources;
 
+import java.util.HashSet;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -230,19 +231,12 @@ public class HoodieIncrSource extends RowSource {
     // TODO: remove the hollow commit handling logic once the incremental relation switches to use completion timeline
     // handle hollow commits, use hollow commits as the end
     Option<HoodieInstant> lastCompletedInstant =
-        TimelineUtils.handleHollowCommitIfNeeded(
-            metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants(),
-            metaClient,
-            getHollowCommitHandleMode(props))
-        .lastInstant();
-    String endTime = lastCompletedInstant.isPresent()
-        ? lastCompletedInstant.get().getCompletionTime()
-        : startTime;
+            metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
         .startTime(startTime)
-        .endTime(endTime)
+        .endTime(null)
         .rangeType(RangeType.OPEN_CLOSED)
         .limit(numInstantsPerFetch)
         .build();
@@ -250,8 +244,9 @@ public class HoodieIncrSource extends RowSource {
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
+    String endTime;
     if (queryContext.isEmpty()
-        || (instantRange.isPresent() && startTime.equals(endTime))) {
+        || (endTime = queryContext.getMaxCompletionTime()).equals(startTime)) {
       LOG.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), startTime);
     }
@@ -276,13 +271,11 @@ public class HoodieIncrSource extends RowSource {
       if (snapshotLoadQuerySplitter.isPresent()) {
         queryContext = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
       }
+      Set<String> validInstants = new HashSet(queryContext.getInstants());
       source = snapshot
           // add filtering so that only interested records are returned.
           // completion time comparison uses ( , ], but when comparing start time we need to use [, ]
-          .filter(String.format("%s >= '%s'",
-              HoodieRecord.COMMIT_TIME_METADATA_FIELD, queryContext.getStartInstant().get()))
-          .filter(String.format("%s <= '%s'",
-              HoodieRecord.COMMIT_TIME_METADATA_FIELD, queryContext.getEndInstant().get()));
+          .filter((Row row) -> validInstants.contains(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
       // TODO add predicateFilter back
     } else {
       // normal incremental query

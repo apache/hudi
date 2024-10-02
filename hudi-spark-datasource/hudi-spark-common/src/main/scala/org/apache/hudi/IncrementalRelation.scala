@@ -330,7 +330,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .format("hudi_v1")
       .schema(usedSchema)
       .load(basePath.toString)
-      .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD, //Notice the > in place of >= because we are working with optParam instead of first commit > optParam
+      // using closed_closed range here since we are using start instant from QueryContext
+      .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         startInstantTime))
       .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         endInstantTime))

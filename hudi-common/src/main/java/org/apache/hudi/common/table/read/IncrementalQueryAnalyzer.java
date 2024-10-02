@@ -402,6 +402,10 @@ public class IncrementalQueryAnalyzer {
       return this.instants.isEmpty();
     }
 
+    public List<String> getInstants() {
+      return this.instants;
+    }
+
     public Option<String> getStartInstant() {
       return startInstant;
     }

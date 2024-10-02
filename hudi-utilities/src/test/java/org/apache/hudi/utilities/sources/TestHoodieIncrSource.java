@@ -231,51 +231,63 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       activeTimeline.revertToInflight(instant4);
       metaClient.reloadActiveTimeline();
 
+      // instant 0
+      // instant 1
+      // instant 2
+      // instant 3
+      // instant 4_inflight
+      // instant 5
+
       // Reads everything up to latest
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
-          400,
-          inserts.get(3).getCompletionTime());
+          500,
+          inserts.get(5).getCompletionTime());
 
       // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.of(inserts.get(0).getCompletionTime()),
-          300,
-          inserts.get(3).getCompletionTime());
+          400,
+          inserts.get(5).getCompletionTime());
 
       // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.of(inserts.get(2).getCompletionTime()),
-          100,
-          inserts.get(3).getCompletionTime());
+          200,
+          inserts.get(5).getCompletionTime());
 
       // Reads just the latest
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.empty(),
           100,
-          inserts.get(3).getCompletionTime());
+          inserts.get(5).getCompletionTime());
 
       // Ensures checkpoint does not move
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
-          Option.of(inserts.get(3).getCompletionTime()),
+          Option.of(inserts.get(5).getCompletionTime()),
           0,
-          inserts.get(3).getCompletionTime());
+          inserts.get(5).getCompletionTime());
 
       activeTimeline.reload().saveAsComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getCompletionTime()),
+          new HoodieInstant(HoodieInstant.State.INFLIGHT, instant4.getAction(), inserts.get(4).getInstantTime()),
           instant4CommitData);
+
+      // find instant4's new completion time
+      String instant4CompletionTime = activeTimeline.reload().getInstantsAsStream()
+          .filter(instant -> instant.getTimestamp().equals(instant4.getTimestamp())).
+          findFirst().get().getCompletionTime();
 
       // After the inflight commit completes, the checkpoint should move on after incremental pull
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
           Option.of(inserts.get(3).getCompletionTime()),
           200,
-          inserts.get(5).getCompletionTime());
+          instant4CompletionTime);
     }
   }
 
