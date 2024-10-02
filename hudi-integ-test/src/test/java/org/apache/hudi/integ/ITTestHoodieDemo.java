@@ -131,8 +131,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
-    // TODO(HUDI-8271): fix incremental queries in integration tests on Hive
-    // testIncrementalHiveQueryBeforeCompaction();
+    testIncrementalHiveQueryBeforeCompaction();
     testIncrementalSparkSQLQuery();
 
     // compaction
@@ -142,7 +141,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
-    // testIncrementalHiveQueryAfterCompaction();
+    testIncrementalHiveQueryAfterCompaction();
   }
 
   @Test
