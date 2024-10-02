@@ -35,7 +35,6 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -51,11 +50,9 @@ import static org.apache.hudi.common.table.HoodieTableConfig.LOG_FILE_FORMAT;
 import static org.apache.hudi.config.HoodieWriteConfig.RECORD_MERGER_IMPLS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 /**
  * Takes hours to run. Use to debug schema evolution. Don't enable for ci
  */
-@Disabled
 public class TestHoodieDeltaStreamerSchemaEvolutionExtensive extends TestHoodieDeltaStreamerSchemaEvolutionBase {
 
   protected void testBase(String updateFile, String updateColumn, String condition, int count) throws Exception {
