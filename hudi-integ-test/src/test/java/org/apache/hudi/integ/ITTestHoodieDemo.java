@@ -513,6 +513,10 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
+    System.out.println("VEXLER: testIncrementalSparkSQLQuery:");
+    System.out.println(stdOutErrPair.getKey());
+    System.out.println(stdOutErrPair.getValue());
+    System.out.println("VEXLER: testIncrementalSparkSQLQuery DONE");
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 2);
     assertStdOutContains(stdOutErrPair, "|default  |stock_ticks_cow              |false      |\n"
         + "|default  |stock_ticks_cow_bs           |false      |\n"
