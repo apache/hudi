@@ -21,7 +21,7 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -395,7 +395,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withMarkersType(MarkerType.DIRECT.name())
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
-            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .withConflictResolutionStrategy(new BucketIndexConcurrentFileWritesConflictResolutionStrategy())
             .build())
         .build();
   }
