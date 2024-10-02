@@ -230,6 +230,7 @@
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.8.3</snappy.version>
+    <netty.version>4.1.96.Final</netty.version>
   </properties>
 
   <scm>
@@ -1828,12 +1829,12 @@
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-common</artifactId>
-        <version>4.1.96.Final</version>
+        <version>${netty.version}</version>
       </dependency>
       <dependency>
         <groupId>io.netty</groupId>
         <artifactId>netty-transport</artifactId>
-        <version>4.1.96.Final</version>
+        <version>${netty.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
