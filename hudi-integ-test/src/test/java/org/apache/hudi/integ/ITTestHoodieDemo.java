@@ -127,7 +127,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // batch 2
     ingestSecondBatchAndHiveSync();
     // TODO(HUDI-8275): fix MOR queries on Hive in integration tests
-    testHiveAfterSecondBatch();
+    //testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
@@ -138,7 +138,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // compaction
     scheduleAndRunCompaction();
 
-    // testHiveAfterSecondBatchAfterCompaction();
+    testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
     // testIncrementalHiveQueryAfterCompaction();
@@ -424,6 +424,10 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testHiveAfterSecondBatchAfterCompaction() throws Exception {
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH2_COMMANDS);
+    System.out.println("VEXLER: testHiveAfterSecondBatchAfterCompaction:");
+    System.out.println(stdOutErrPair.getKey());
+    System.out.println(stdOutErrPair.getValue());
+    System.out.println("VEXLER: testHiveAfterSecondBatchAfterCompaction DONE");
     assertStdOutContains(stdOutErrPair, "| symbol  |         _c1          |\n+---------+----------------------+\n"
         + "| GOOG    | 2018-08-31 10:59:00  |", 4);
     assertStdOutContains(stdOutErrPair,
