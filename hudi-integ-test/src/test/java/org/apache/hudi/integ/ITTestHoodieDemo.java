@@ -372,6 +372,28 @@ public class ITTestHoodieDemo extends ITTestBase {
   }
 
   private void testHiveAfterSecondBatch() throws Exception {
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 01:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-01.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 02:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-02.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 03:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-03.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 04:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-04.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 05:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-05.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 06:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-06.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 07:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-07.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 08:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-08.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 09:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-09.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 10:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-10.commands");
+    System.out.println("VEXLER: testHiveAfterSecondBatch. Commands 11:");
+    executeHiveCommandFile("/var/hoodie/ws/docker/demo/hive-batch1-11.commands");
     Pair<String, String> stdOutErrPair = executeHiveCommandFile(HIVE_BATCH1_COMMANDS);
     System.out.println("VEXLER: testHiveAfterSecondBatch:");
     System.out.println(stdOutErrPair.getKey());
