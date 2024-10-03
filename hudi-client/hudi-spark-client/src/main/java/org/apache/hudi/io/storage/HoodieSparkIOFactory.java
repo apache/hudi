@@ -21,13 +21,17 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
+import org.apache.spark.sql.avro.HoodieAvroDeserializer;
 import org.apache.spark.sql.avro.HoodieAvroSerializer;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.StructType;
 
 import java.util.Properties;
 import java.util.function.Function;
@@ -71,5 +75,21 @@ public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
       return record -> (IndexedRecord) serializer.serialize(record.getData());
     }
     return super.toIndexedRecord(recordSchema, properties, recordType);
+  }
+
+  @Override
+  public Function<IndexedRecord, HoodieRecord<?>> fromIndexedRecord(HoodieRecord.HoodieRecordType recordType) {
+    if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
+      final Object[] deserializerAndSchema = {null, null};
+      return record -> {
+        if (deserializerAndSchema[0] == null) {
+          deserializerAndSchema[0] = HoodieInternalRowUtils.getCachedSchema(record.getSchema());
+          deserializerAndSchema[1] = SparkAdapterSupport$.MODULE$.sparkAdapter()
+              .createAvroDeserializer(record.getSchema(), (StructType) deserializerAndSchema[0]);
+        }
+        return new HoodieSparkRecord(((InternalRow) ((HoodieAvroDeserializer) deserializerAndSchema[1]).deserialize(record).get()), (StructType) deserializerAndSchema[0]);
+      };
+    }
+    return super.fromIndexedRecord(recordType);
   }
 }

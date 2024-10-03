@@ -68,7 +68,6 @@ import java.util.zip.InflaterInputStream;
 import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -146,10 +145,9 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
-    checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
-    // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content);
-    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
+    Function<IndexedRecord, HoodieRecord<?>> recordConverter = HoodieIOFactory.getIOFactory(getBlockContentLocation().get().getStorage()).fromIndexedRecord(type);
+    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) recordConverter.apply(data));
   }
 
   @Override

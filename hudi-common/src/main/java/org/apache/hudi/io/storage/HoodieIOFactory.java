@@ -123,4 +123,6 @@ public abstract class HoodieIOFactory {
   }
 
   public abstract Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema, Properties properties, HoodieRecord.HoodieRecordType recordType);
+
+  public abstract Function<IndexedRecord, HoodieRecord<?>> fromIndexedRecord(HoodieRecord.HoodieRecordType recordType);
 }

@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -133,6 +134,16 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
             throw new RuntimeException(e);
           }
         };
+      default:
+        throw new UnsupportedOperationException("This is not supported");
+    }
+  }
+
+  @Override
+  public Function<IndexedRecord, HoodieRecord<?>> fromIndexedRecord(HoodieRecord.HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        return HoodieAvroIndexedRecord::new;
       default:
         throw new UnsupportedOperationException("This is not supported");
     }

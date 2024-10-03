@@ -197,7 +197,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
+          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue() == null ? orderingFieldDefault : recordOpt.get().getOrderingValue(), orderingFieldType)));
     }
   }
 
