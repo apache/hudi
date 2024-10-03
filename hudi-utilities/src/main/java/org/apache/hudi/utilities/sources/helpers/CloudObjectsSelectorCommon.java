@@ -227,7 +227,6 @@ public class CloudObjectsSelectorCommon {
         filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, prefix));
       }
     }
-
     if (ignoreRelativePathPrefix.isPresent()) {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
     }
