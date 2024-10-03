@@ -142,7 +142,6 @@ For example,
 ```
 # Build against Flink 1.15.x
 mvn clean package -DskipTests -Dflink1.15
-
 ```
 
 ## Running Tests
