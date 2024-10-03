@@ -34,7 +34,6 @@ object AvroProjection {
    */
   def create(schema: Schema): AvroProjection = {
     val projection = (record: GenericRecord) => rewriteRecordWithNewSchema(record, schema)
-    //function to return
     (record: GenericRecord) => if (record.getSchema == schema) {
       record
     } else {
