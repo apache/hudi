@@ -239,8 +239,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       hudiOpts = hudiOpts ++ Map(
         HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
         HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
-        HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0",
-        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15"
+        HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
       )
     }
     // insert followed by two upserts (trigger a compaction so that prev version can be cleaned)
@@ -259,6 +258,12 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // Clean Operation
     val lastCleanInstant = getLatestMetaClient(false).getActiveTimeline.getCleanerTimeline.lastInstant()
     assertTrue(lastCleanInstant.isPresent)
+    // validation that the compaction commit is present in case of MOR table
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      val lastCompactionInstant = getLatestMetaClient(false).getActiveTimeline.getCommitTimeline.filterCompletedInstants().lastInstant()
+      assertTrue(lastCompactionInstant.isPresent)
+    }
+
     // do another upsert and validate the partition stats including file pruning
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
@@ -317,12 +322,16 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   @Test
   def testPartitionStatsWithMDTCompaction(): Unit = {
     val hudiOpts = commonOpts ++ Map(
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1"
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "2"
     )
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+    doWriteAndValidateDataAndPartitionStats(
+      hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
     doWriteAndValidateDataAndPartitionStats(
       hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,

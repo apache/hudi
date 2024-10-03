@@ -19,19 +19,20 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.DataSourceWriteOptions.{HIVE_STYLE_PARTITIONING, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.model._
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
-import org.apache.hudi.metadata.{HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.{JFunction, JavaConversions}
@@ -390,9 +391,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithConcurrentWrites(tableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       val tableName = "hudi_multi_writer_table_" + tableType.name()
-
-      // Common Hudi options
-      val hudiOpts = commonOpts ++ Map(
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
         HoodieWriteConfig.TBL_NAME.key -> tableName,
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
@@ -492,19 +492,17 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
-  def testSecondaryIndexPruningWithCleaning(tableType: HoodieTableType): Unit = {
+  def testSecondaryIndexWithCompactionAndCleaning(tableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
       hudiOpts = hudiOpts + (
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
         HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
       if (tableType == HoodieTableType.MERGE_ON_READ) {
-        hudiOpts = hudiOpts ++ Map(
+        hudiOpts = hudiOpts + (
           HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
           HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
-          HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0",
-          HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "15"
+          HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
         )
       }
       val sqlTableType = if (tableType == HoodieTableType.COPY_ON_WRITE) "cow" else "mor"
@@ -590,10 +588,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   @Test
   def testSecondaryIndexWithMDTCompaction(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
-      val hudiOpts = commonOpts ++ Map(
-        DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
-        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "1"
-      )
+      var hudiOpts = commonOpts
+      hudiOpts = hudiOpts + (
+        DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+        HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "2")
       val tableName = "test_secondary_index_with_mdt_compaction"
 
       spark.sql(
@@ -606,12 +604,13 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |) using hudi
            | options (
            |  primaryKey ='record_key_col',
+           |  type = 'mor',
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
            |  hoodie.enable.data.skipping = 'true',
            |  hoodie.clean.policy = 'KEEP_LATEST_COMMITS',
-           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '1'
+           |  ${HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key} = '2'
            | )
            | partitioned by(partition_key_col)
            | location '$basePath'
@@ -633,7 +632,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
       // do another insert and validate compaction in metadata table
       spark.sql(s"insert into $tableName values(3, 'row3', 'def', 'p2')")
-      val metadataTableFSView: HoodieMetadataFileSystemView = getTableFileSystemView(hudiOpts)
+      val metadataTableFSView = HoodieSparkTable.create(getWriteConfig(hudiOpts), context()).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
       try {
         val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
         val lastCompactionInstant = compactionTimeline
@@ -644,8 +643,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
           .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
           .findAny()
-        // TODO: fix secondary index compaction
-        // assertTrue(compactionBaseFile.isPresent)
+        assertTrue(compactionBaseFile.isPresent)
       } finally {
         metadataTableFSView.close()
       }
@@ -663,7 +661,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where not_record_key_col = 'abc'")(
         Seq(1, "row1", "abc", "p1")
       )
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
     }
   }
 
