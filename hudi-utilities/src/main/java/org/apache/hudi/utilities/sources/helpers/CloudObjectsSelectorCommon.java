@@ -218,9 +218,8 @@ public class CloudObjectsSelectorCommon {
 
       // Update path if regex is present
       if (!regex.isEmpty()) {
-        String updatedPathRegex = prefix.endsWith(StoragePath.SEPARATOR) || prefix.isEmpty() ?
-            prefix + regex :
-            prefix + StoragePath.SEPARATOR + regex;
+        String updatedPathRegex = prefix.isEmpty() || prefix.endsWith(StoragePath.SEPARATOR)
+            ? prefix + regex : prefix + StoragePath.SEPARATOR + regex;
         filter.append(SPACE_DELIMTER).append(String.format("and %s rlike '%s'", objectKey, updatedPathRegex));
       } else if (!prefix.isEmpty()) {
         // Build the condition based on whether regex or prefix is present
