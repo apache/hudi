@@ -490,6 +490,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializePartitionStatsIndex(List<DirectoryInfo> partitionInfoList) {
+    // TODO: cover all file slices, including log files
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(engineContext, partitionInfoList, dataWriteConfig.getMetadataConfig(), dataMetaClient);
     final int fileGroupCount = dataWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
     return Pair.of(fileGroupCount, records);
@@ -590,13 +591,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private List<Pair<String, FileSlice>> getPartitionFileSlicePairs() throws IOException {
-    HoodieMetadataFileSystemView fsView = getMetadataView();
-    // Collect the list of latest file slices present in each partition
-    List<String> partitions = metadata.getAllPartitionPaths();
-    fsView.loadAllPartitions();
-    List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    partitions.forEach(partition -> fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
-    return partitionFileSlicePairs;
+    try (HoodieMetadataFileSystemView fsView = getMetadataView()) {
+      // Collect the list of latest file slices present in each partition
+      List<String> partitions = metadata.getAllPartitionPaths();
+      fsView.loadAllPartitions();
+      List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
+      partitions.forEach(partition -> fsView.getLatestFileSlices(partition).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs))));
+      return partitionFileSlicePairs;
+    }
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition() throws IOException {

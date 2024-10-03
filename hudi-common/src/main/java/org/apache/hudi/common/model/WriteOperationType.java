@@ -168,4 +168,8 @@ public enum WriteOperationType {
   public static boolean isPreppedWriteOperation(WriteOperationType operationType) {
     return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
   }
+
+  public static boolean isPartitionStatsTightBoundRequired(WriteOperationType operationType) {
+    return operationType == COMPACT || operationType == CLUSTER;
+  }
 }

@@ -1719,7 +1719,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(HoodieTableMetadataUtil::convertColumnStatsRecordToColumnRangeMetadata)
+                    .map(HoodieColumnRangeMetadata::fromColumnStats)
                     .collect(Collectors.toList())
                     .stream())
             .sorted(new HoodieColumnRangeMetadataComparator())
