@@ -687,184 +687,23 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                   boolean enableOptimizedLogBlocksScan)
       throws IOException, URISyntaxException, InterruptedException {
 
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-    appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan,
-        "100");
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testLogRecordReaderWithMaxInstantTimeConfigured(boolean enableOptimizedLogScan) throws IOException, URISyntaxException, InterruptedException {
-    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
-    SchemaTestUtil testUtil = new SchemaTestUtil();
-
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> firstBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
-        "100");
-
-    // trigger another batch of writes for next commit
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> secondBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
-        "200", firstBatch.getKey(), firstBatch.getValue());
-
-    List<IndexedRecord> firstAndSecondBatch = new ArrayList<>(firstBatch.getKey());
-    firstAndSecondBatch.addAll(secondBatch.getKey());
-
-    // set max commit time as 200 and validate only first batch of records are returned
-    List<HoodieLogFile> allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), secondBatch.getValue()));
-
-    // expect records only from first batch when max commit time is set to 100.
-    readAndValidate(schema, "100", allLogFiles, firstBatch.getKey());
-
-    // add another batch.
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> thirdBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
-        "300", firstAndSecondBatch, new HashSet<>(allLogFiles));
-
-    allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), secondBatch.getValue(), thirdBatch.getValue()));
-
-    // set max commit time as 100 and validate only first batch of records are returned
-    readAndValidate(schema, "100", allLogFiles, firstBatch.getKey());
-    readAndValidate(schema, "200", allLogFiles, firstAndSecondBatch);
-    List<IndexedRecord> allBatches = new ArrayList<>(firstAndSecondBatch);
-    allBatches.addAll(thirdBatch.getKey());
-    readAndValidate(schema, "300", allLogFiles, allBatches);
-
-    // add rollback to commit 200
-    addRollbackBlock("400", "200");
-
-    // lets not remove commit 200 from timeline. but still due to presence of rollback block, 2nd batch should be ignored.
-    List<IndexedRecord> firstAndThirdBatch = new ArrayList<>(firstBatch.getKey());
-    firstAndThirdBatch.addAll(thirdBatch.getKey());
-    readAndValidate(schema, "300", allLogFiles, firstAndThirdBatch);
-
-    // if we set maxCommitTime as 200 (which is rolled back), expected records are just from batch1
-    readAndValidate(schema, "200", allLogFiles, firstBatch.getKey());
-
-    // lets repeat the same after removing the commit from timeline.
-    FileCreateUtils.deleteDeltaCommit(basePath, "200", storage);
-    readAndValidate(schema, "300", allLogFiles, firstAndThirdBatch);
-    // if we set maxCommitTime as 200 (which is rolled back commit), expected records are just from batch1
-    readAndValidate(schema, "200", allLogFiles, firstBatch.getKey());
-
-    // let's test rollback issue from HUDI-8248
-    // lets add commit 400 (batch4). add a rollback block with commit time 500 which rollsback 400. again, add log files with commit time 400 (batch5)
-    // when we read all log files w/ max commit time as 400, batch4 needs to be ignored and only batch5 should be read.
-    // trigger another batch of writes for next commit
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fourthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
-        "400", firstAndThirdBatch, new HashSet<>(allLogFiles));
-
-    // lets delete commit 400 from timeline to simulate crash.
-    FileCreateUtils.deleteDeltaCommit(basePath, "400", storage);
-
-    // set max commit time as 400 and validate only first and 3rd batch is read. 1st batch is rolled back completely. 4th batch is partially failed commit.
-    allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), thirdBatch.getValue(), fourthBatch.getValue()));
-    readAndValidate(schema, "400", allLogFiles, firstAndThirdBatch);
-
-    // lets add the rollback block
-    addRollbackBlock("500", "400");
-    // lets redo the read test
-    readAndValidate(schema, "400", allLogFiles, firstAndThirdBatch);
-
-    // and lets re-add new log files w/ commit time 400.
-    Pair<List<IndexedRecord>, Set<HoodieLogFile>> fifthBatch = appendAndValidate(schema, testUtil, ExternalSpillableMap.DiskMapType.BITCASK, false, enableOptimizedLogScan,
-        "400", firstBatch.getKey(), firstBatch.getValue());
-
-    // lets redo the read test. this time, first batch, 3rd batch and fifth batch should be expected.
-    allLogFiles = getSortedLogFilesList(Arrays.asList(firstBatch.getValue(), thirdBatch.getValue(),  fourthBatch.getValue(), fifthBatch.getValue()));
-    List<IndexedRecord> firstThirdFifthBatch = new ArrayList<>(firstAndThirdBatch);
-    firstThirdFifthBatch.addAll(fifthBatch.getKey());
-    readAndValidate(schema, "400", allLogFiles, firstThirdFifthBatch);
-
-    // even setting very high value for max commit time should not matter.
-    readAndValidate(schema, "600", allLogFiles, firstThirdFifthBatch);
-  }
-
-  private void addRollbackBlock(String rollbackCommitTime, String commitToRollback) throws IOException, InterruptedException {
-    Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
-            .withSizeThreshold(1024).withFileId("test-fileid1").withDeltaCommit("100").withStorage(storage).build();
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-
-    // Rollback the 1st block i.e. a data block.
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, rollbackCommitTime);
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commitToRollback);
-    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
-    HoodieCommandBlock commandBlock = new HoodieCommandBlock(header);
-    writer.appendBlock(commandBlock);
-    writer.close();
-  }
-
-  private List<HoodieLogFile> getSortedLogFilesList(List<Set<HoodieLogFile>> logFilesSets) {
-    Set<HoodieLogFile> allLogFiles = new HashSet<>();
-    logFilesSets.forEach(logfileSet -> allLogFiles.addAll(logfileSet));
-    List<HoodieLogFile> allLogFilesList = new ArrayList<>(allLogFiles);
-    Collections.sort(allLogFilesList, new HoodieLogFile.LogFileComparator());
-    return allLogFilesList;
-  }
-
-  private void readAndValidate(Schema schema, String maxCommitTime, List<HoodieLogFile> logFiles, List<IndexedRecord> expectedRecords) throws IOException {
-    try (HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
-        .withStorage(storage).withBasePath(basePath)
-        .withLogFilePaths(
-            logFiles.stream()
-                .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
-        .withReaderSchema(schema)
-        .withLatestInstantTime(maxCommitTime)
-        .withMaxMemorySizeInBytes(10240L)
-        .withReverseReader(false)
-        .withBufferSize(BUFFER_SIZE)
-        .withSpillableMapBasePath(spillableBasePath)
-        .withDiskMapType(ExternalSpillableMap.DiskMapType.BITCASK)
-        .withBitCaskDiskMapCompressionEnabled(false)
-        .withOptimizedLogBlocksScan(false)
-        .build()) {
-
-      List<IndexedRecord> scannedRecords = new ArrayList<>();
-      for (HoodieRecord record : scanner) {
-        scannedRecords.add((IndexedRecord)
-            ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
-      }
-
-      assertEquals(sort(expectedRecords), sort(scannedRecords),
-          "Scanner records count should be the same as appended records");
-    }
-  }
-
-  private Pair<List<IndexedRecord>, Set<HoodieLogFile>> appendAndValidate(Schema schema, SchemaTestUtil testUtil, ExternalSpillableMap.DiskMapType diskMapType,
-                                 boolean isCompressionEnabled,
-                                 boolean enableOptimizedLogBlocksScan,
-                                 String commitTime) throws IOException, URISyntaxException, InterruptedException {
-    return appendAndValidate(schema, testUtil, diskMapType, isCompressionEnabled, enableOptimizedLogBlocksScan, commitTime,
-        Collections.emptyList(), Collections.emptySet());
-  }
-
-  private Pair<List<IndexedRecord>, Set<HoodieLogFile>> appendAndValidate(Schema schema, SchemaTestUtil testUtil, ExternalSpillableMap.DiskMapType diskMapType,
-                                                                            boolean isCompressionEnabled,
-                                                                            boolean enableOptimizedLogBlocksScan,
-                                                                            String commitTime,
-                                                                            List<IndexedRecord> prevGenRecords, Set<HoodieLogFile> prevLogFiles) throws IOException,
-        URISyntaxException, InterruptedException {
-
     // Generate 4 delta-log files w/ random records
+    Schema schema = HoodieAvroUtils.addMetadataFields(getSimpleSchema());
+    SchemaTestUtil testUtil = new SchemaTestUtil();
     List<IndexedRecord> genRecords = testUtil.generateHoodieTestRecords(0, 400);
-    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 4, commitTime);
 
-    Set<HoodieLogFile> allLogFiles = new HashSet<>();
-    allLogFiles.addAll(logFiles);
-    allLogFiles.addAll(prevLogFiles);
-    List<HoodieLogFile> allLogFilesList = new ArrayList<>(allLogFiles);
-    Collections.sort(allLogFilesList, new HoodieLogFile.LogFileComparator());
+    Set<HoodieLogFile> logFiles = writeLogFiles(partitionPath, schema, genRecords, 4);
 
-    FileCreateUtils.createDeltaCommit(basePath, commitTime, storage);
+    FileCreateUtils.createDeltaCommit(basePath, "100", storage);
     // scan all log blocks (across multiple log files)
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
         .withBasePath(basePath)
         .withLogFilePaths(
-            allLogFilesList.stream()
+            logFiles.stream()
                 .map(logFile -> logFile.getPath().toString()).collect(Collectors.toList()))
         .withReaderSchema(schema)
-        .withLatestInstantTime(commitTime)
+        .withLatestInstantTime("100")
         .withMaxMemorySizeInBytes(10240L)
         .withReverseReader(false)
         .withBufferSize(BUFFER_SIZE)
@@ -880,13 +719,9 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           ((HoodieAvroRecord) record).getData().getInsertValue(schema).get());
     }
 
-    List<IndexedRecord> allGenRecords = new ArrayList<>(genRecords);
-    allGenRecords.addAll(prevGenRecords);
-
-    assertEquals(sort(allGenRecords), sort(scannedRecords),
+    assertEquals(sort(genRecords), sort(scannedRecords),
         "Scanner records count should be the same as appended records");
     scanner.close();
-    return Pair.of(genRecords, logFiles);
   }
 
   @ParameterizedTest
@@ -2995,15 +2830,16 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
                                                   List<IndexedRecord> records,
                                                   int numFiles)
       throws IOException, InterruptedException {
-    return writeLogFiles(partitionPath, schema, records, numFiles, "100");
+    return writeLogFiles(partitionPath, schema, records, numFiles, false);
   }
 
   private static Set<HoodieLogFile> writeLogFiles(StoragePath partitionPath,
                                                   Schema schema,
                                                   List<IndexedRecord> records,
                                                   int numFiles,
-                                                  String commitTime)
+                                                  boolean enableBlockSequenceNumbers)
       throws IOException, InterruptedException {
+    int blockSeqNo = 0;
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
@@ -3015,7 +2851,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
           (FSDataOutputStream) storage.append(writer.getLogFile().getPath()));
     }
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, commitTime);
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
 
     Set<HoodieLogFile> logFiles = new HashSet<>();
