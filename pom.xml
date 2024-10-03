@@ -91,7 +91,7 @@
     <genjavadoc-plugin.version>0.15</genjavadoc-plugin.version>
     <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
-    <maven-docker-plugin.version>0.42.1</maven-docker-plugin.version>
+    <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
 
     <java.version>8</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
@@ -225,7 +225,7 @@
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
-    <moto.port>5000</moto.port>
+    <moto.port>5002</moto.port>
     <moto.endpoint>http://localhost:${moto.port}</moto.endpoint>
     <springboot.version>2.7.3</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
@@ -2356,6 +2356,7 @@
         <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
         <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
+        <skipITs>true</skipITs>
       </properties>
       <activation>
         <property>
@@ -2564,7 +2565,7 @@
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
         <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
-        <skipITs>true</skipITs>
+        <skipITs>false</skipITs>
       </properties>
       <modules>
         <module>hudi-spark-datasource/hudi-spark3.5.x</module>

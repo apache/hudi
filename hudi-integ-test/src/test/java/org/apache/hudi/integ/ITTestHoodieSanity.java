@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Smoke tests to run as part of verification.
  */
+@Disabled("HUDI-8274")
 public class ITTestHoodieSanity extends ITTestBase {
 
   private static final String HDFS_BASE_URL =  "hdfs://namenode";

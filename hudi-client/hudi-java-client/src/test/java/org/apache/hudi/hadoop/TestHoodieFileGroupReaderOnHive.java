@@ -326,9 +326,4 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
     }
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveOrderedColumnNames);
   }
-
-  @Override
-  public Comparable getComparableUTF8String(String value) {
-    return value;
-  }
 }

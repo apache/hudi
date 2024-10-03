@@ -125,9 +125,5 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     }
   }
 
-  override def getComparableUTF8String(value: String): Comparable[_] = {
-    UTF8String.fromString(value)
-  }
-
   override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName
 }

@@ -222,7 +222,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -235,7 +234,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -429,7 +427,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -526,7 +523,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -590,7 +586,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -629,8 +624,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - sparkProfile: 'spark2.4'
-            sparkArchive: 'spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz'
+          - sparkProfile: 'spark3.5'
+            sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
       - uses: actions/checkout@v3
       - name: Set up JDK 8
@@ -639,24 +634,23 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS
       - name: 'IT'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
-          SCALA_PROFILE: '-Dscala-2.11 -Dscala.binary.version=2.11'
+          SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
           echo "Downloading $SPARK_ARCHIVE"
           curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
