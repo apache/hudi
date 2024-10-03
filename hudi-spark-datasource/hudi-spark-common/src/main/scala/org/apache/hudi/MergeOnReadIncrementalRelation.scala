@@ -184,9 +184,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 
   protected def endTimestamp: String = optParams.getOrElse(
-    DataSourceReadOptions.END_INSTANTTIME.key,
-    if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
-    else super.timeline.lastInstant().get.getTimestamp)
+    DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getCompletionTime)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
 
