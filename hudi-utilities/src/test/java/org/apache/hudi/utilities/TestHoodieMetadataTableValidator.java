@@ -54,7 +54,11 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SaveMode;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -64,6 +68,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +77,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.RawTripTestPayload.recordToString;
+import static org.apache.spark.sql.types.DataTypes.IntegerType;
+import static org.apache.spark.sql.types.DataTypes.StringType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -184,6 +191,69 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
   }
 
   @Test
+  public void testSecondaryIndexValidation() throws IOException {
+    // To overwrite the table properties created during test setup
+    storage.deleteDirectory(metaClient.getBasePath());
+
+    sparkSession.sql(
+        "create table tbl ("
+            + "ts bigint, "
+            + "record_key_col string, "
+            + "not_record_key_col string, "
+            + "partition_key_col string "
+            + ") using hudi "
+            + "options ("
+            + "primaryKey = 'record_key_col', "
+            + "type = 'mor', "
+            + "hoodie.metadata.enable = 'true', "
+            + "hoodie.metadata.record.index.enable = 'true', "
+            + "hoodie.datasource.write.recordkey.field = 'record_key_col', "
+            + "hoodie.enable.data.skipping = 'true', "
+            + "hoodie.datasource.write.precombine.field = 'ts'"
+            + ") "
+            + "partitioned by(partition_key_col) "
+            + "location '" + basePath + "'");
+
+    Dataset<Row> rows = getRowDataset(1, "row1", "abc", "p1");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows = getRowDataset(2, "row2", "cde", "p2");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+    rows = getRowDataset(3, "row3", "def", "p2");
+    rows.write().format("hudi").mode(SaveMode.Append).save(basePath);
+
+    // create secondary index
+    sparkSession.sql("create index idx_not_record_key_col on tbl using secondary_index(not_record_key_col)");
+    validateSecondaryIndex();
+
+    // updating record `not_record_key_col` column from `abc` to `cde`
+    rows = getRowDataset(1, "row1", "cde", "p1");
+    rows.write().format("hudi")
+        .option("hoodie.metadata.enable", "true")
+        .option("hoodie.metadata.record.index.enable", "true")
+        .option("hoodie.enable.data.skipping", "true")
+        .option("hoodie.datasource.write.recordkey.field", "record_key_col")
+        .option("hoodie.table.partition.fields", "partition_key_col")
+        .option("hoodie.record.merge.mode", "EVENT_TIME_ORDERING")
+        .option("hoodie.datasource.write.precombine.field", "ts")
+        .mode(SaveMode.Append)
+        .save(basePath);
+
+    // validate MDT partition stats
+    validateSecondaryIndex();
+  }
+
+  private Dataset<Row> getRowDataset(Object... rowValues) {
+    List<Row> values = Collections.singletonList(RowFactory.create(rowValues));
+    Dataset<Row> rows = sparkSession.createDataFrame(values, new StructType()
+        .add(new StructField("ts", IntegerType, true, Metadata.empty()))
+        .add(new StructField("record_key_col", StringType, true, Metadata.empty()))
+        .add(new StructField("not_record_key_col", StringType, true, Metadata.empty()))
+        .add(new StructField("partition_key_col", StringType, true, Metadata.empty()))
+    );
+    return rows;
+  }
+
+  @Test
   public void testPartitionStatsValidation() {
     // TODO: Add validation for compaction and clustering cases
     Map<String, String> writeOptions = new HashMap<>();
@@ -221,6 +291,18 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.validateLatestFileSlices = false;
     config.validateAllFileGroups = false;
     config.validatePartitionStats = true;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    assertTrue(validator.run());
+    assertFalse(validator.hasValidationFailure());
+    assertTrue(validator.getThrowables().isEmpty());
+  }
+
+  private void validateSecondaryIndex() {
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = basePath;
+    config.validateLatestFileSlices = false;
+    config.validateAllFileGroups = false;
+    config.validateSecondaryIndex = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     assertTrue(validator.run());
     assertFalse(validator.hasValidationFailure());

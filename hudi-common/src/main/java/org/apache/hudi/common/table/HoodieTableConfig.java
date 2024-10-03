@@ -86,6 +86,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 
 @Immutable
 @ConfigClassProperty(name = "Hudi Table Basic Configs",
@@ -881,7 +882,9 @@ public class HoodieTableConfig extends HoodieConfig {
   public boolean isMetadataPartitionAvailable(MetadataPartitionType metadataPartitionType) {
     /*return getMetadataPartitions().stream().anyMatch(metadataPartition ->
         metadataPartition.equals(metadataPartitionType.getPartitionPath()) || (FUNCTIONAL_INDEX.equals(metadataPartitionType) && metadataPartition.startsWith(FUNCTIONAL_INDEX.getPartitionPath())));*/
-    return getMetadataPartitions().contains(metadataPartitionType.getPartitionPath());
+    return getMetadataPartitions().stream()
+        .anyMatch(partition -> partition.contains(metadataPartitionType.getPartitionPath())
+            || (metadataPartitionType.equals(SECONDARY_INDEX) && partition.startsWith(SECONDARY_INDEX.getPartitionPath())));
   }
 
   /**
