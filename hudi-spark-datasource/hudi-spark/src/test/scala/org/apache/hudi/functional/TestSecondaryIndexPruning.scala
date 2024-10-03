@@ -391,8 +391,9 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithConcurrentWrites(tableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       val tableName = "hudi_multi_writer_table_" + tableType.name()
-      var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+
+      // Common Hudi options
+      val hudiOpts = commonOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
         HoodieWriteConfig.TBL_NAME.key -> tableName,
         HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
@@ -495,7 +496,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithCompactionAndCleaning(tableType: HoodieTableType): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
         HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
       if (tableType == HoodieTableType.MERGE_ON_READ) {
@@ -589,7 +590,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testSecondaryIndexWithMDTCompaction(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
         HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key() -> "2")
       val tableName = "test_secondary_index_with_mdt_compaction"
