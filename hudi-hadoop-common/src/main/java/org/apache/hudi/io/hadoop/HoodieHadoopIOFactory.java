@@ -35,6 +35,13 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.util.function.Function;
+
 /**
  * Creates readers and writers for AVRO record payloads.
  * Currently uses reflection to support SPARK record payloads but
@@ -113,5 +120,21 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   ConsistencyGuard consistencyGuard) {
     return new HoodieHadoopStorage(path, storage.getConf(), enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
+  }
+
+  @Override
+  public Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema, Properties properties, HoodieRecord.HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        return r -> {
+          try {
+            return r.toIndexedRecord(recordSchema, properties).get().getData();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        };
+      default:
+        throw new UnsupportedOperationException("This is not supported");
+    }
   }
 }

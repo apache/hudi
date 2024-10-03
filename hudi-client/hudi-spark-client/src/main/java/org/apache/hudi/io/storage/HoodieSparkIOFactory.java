@@ -19,9 +19,23 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.SparkAdapterSupport;
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+import org.apache.spark.sql.HoodieInternalRowUtils;
+import org.apache.spark.sql.avro.HoodieAvroSerializer;
+import org.apache.spark.sql.hudi.SparkAdapter;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.util.function.Function;
+
+import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
 
 /**
  * Creates readers and writers for SPARK and AVRO record payloads
@@ -50,5 +64,15 @@ public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
       return new HoodieSparkFileWriterFactory(storage);
     }
     return super.getWriterFactory(recordType);
+  }
+
+  @Override
+  public Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema, Properties properties, HoodieRecord.HoodieRecordType recordType) {
+    if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
+      HoodieAvroSerializer serializer = SparkAdapterSupport$.MODULE$.sparkAdapter()
+          .createAvroSerializer(HoodieInternalRowUtils.getCachedSchema(recordSchema), recordSchema, isNullable(recordSchema));
+      return record -> (IndexedRecord) serializer.serialize(record);
+    }
+    return super.toIndexedRecord(recordSchema, properties, recordType);
   }
 }

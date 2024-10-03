@@ -1261,9 +1261,9 @@ public class HoodieWriteConfig extends HoodieConfig {
                                                    List<String> mergers,
                                                    Option<String> strategy) {
     switch (logBlockType) {
-      case AVRO_DATA_BLOCK:
       case HFILE_DATA_BLOCK:
         return HoodieAvroRecordMerger.INSTANCE;
+      case AVRO_DATA_BLOCK:
       case PARQUET_DATA_BLOCK:
         //TODO: [HUDI-8202] make this custom mergers only
         switch (mergeMode) {

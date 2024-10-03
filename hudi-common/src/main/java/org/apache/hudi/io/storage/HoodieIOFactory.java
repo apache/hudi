@@ -32,6 +32,13 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.util.Properties;
+import java.util.function.Function;
+import java.util.function.UnaryOperator;
+
 /**
  * Base class to get {@link HoodieFileReaderFactory}, {@link HoodieFileWriterFactory}, and {@link FileFormatUtils}
  */
@@ -115,4 +122,6 @@ public abstract class HoodieIOFactory {
     }
     throw new UnsupportedOperationException("The format for file " + path + " is not supported yet.");
   }
+
+  public abstract Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema, Properties properties, HoodieRecord.HoodieRecordType recordType);
 }
