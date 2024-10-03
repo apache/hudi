@@ -92,7 +92,7 @@ public class ConfigUtils {
   }
 
   public static RecordMergeMode getRecordMergeMode(Properties properties) {
-    return RecordMergeMode.valueOf(getStringWithAltKeys(properties, RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name()).toUpperCase());
+    return RecordMergeMode.getValue(getStringWithAltKeys(properties, RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name()));
   }
 
   /**

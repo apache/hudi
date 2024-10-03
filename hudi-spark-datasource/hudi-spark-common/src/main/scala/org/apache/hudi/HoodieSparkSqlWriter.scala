@@ -325,7 +325,7 @@ class HoodieSparkSqlWriterInternal {
           .setPayloadClassName(payloadClass)
           .setRecordMergerStrategy(recordMergerStrategy)
           .setRecordMergeMode(hoodieConfig.getStringOpt(HoodieWriteConfig.RECORD_MERGE_MODE).toScala
-            .map(modeStr => RecordMergeMode.valueOf(modeStr)).toHoodieOpt)
+            .map(modeStr => RecordMergeMode.getValue(modeStr)).toHoodieOpt)
           .initTable(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration), path)
       }
 

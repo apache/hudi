@@ -508,7 +508,7 @@ public class SparkMain {
     cfg.schemaProviderClassName = schemaProviderClass;
     cfg.bootstrapIndexClass = bootstrapIndexClass;
     cfg.payloadClassName = payloadClassName;
-    cfg.recordMergeMode = isNullOrEmpty(recordMergeMode) ? null : RecordMergeMode.valueOf(recordMergeMode.toUpperCase());
+    cfg.recordMergeMode = RecordMergeMode.getValue(recordMergeMode);
     cfg.recordMergerStrategy = recordMergeStrategy;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 

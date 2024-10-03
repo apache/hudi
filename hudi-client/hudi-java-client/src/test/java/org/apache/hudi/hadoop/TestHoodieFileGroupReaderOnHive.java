@@ -177,7 +177,7 @@ public class TestHoodieFileGroupReaderOnHive extends TestHoodieFileGroupReaderBa
               .setTableType(writeConfigs.getOrDefault("hoodie.datasource.write.table.type", "MERGE_ON_READ"))
               .setTableName(writeConfigs.get("hoodie.table.name"))
               .setPartitionFields(writeConfigs.getOrDefault("hoodie.datasource.write.partitionpath.field", ""))
-              .setRecordMergeMode(RecordMergeMode.valueOf(writeConfigs.get("hoodie.record.merge.mode")))
+              .setRecordMergeMode(RecordMergeMode.getValue(writeConfigs.get("hoodie.record.merge.mode")))
               .set(initConfigs);
           if (writeConfigs.containsKey("hoodie.datasource.write.payload.class")) {
             builder = builder.setPayloadClassName(writeConfigs.get("hoodie.datasource.write.payload.class"));

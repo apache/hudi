@@ -1166,7 +1166,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGE_MODE)) {
         setRecordMergeMode(
-            RecordMergeMode.valueOf(hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_MODE).toUpperCase()));
+            RecordMergeMode.getValue(hoodieConfig.getString(HoodieTableConfig.RECORD_MERGE_MODE)));
       }
       if (hoodieConfig.contains(HoodieTableConfig.PAYLOAD_CLASS_NAME)) {
         setPayloadClassName(hoodieConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));

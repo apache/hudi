@@ -1242,7 +1242,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public RecordMergeMode getRecordMergeMode() {
-    return RecordMergeMode.valueOf(getString(RECORD_MERGE_MODE));
+    return RecordMergeMode.getValue(getString(RECORD_MERGE_MODE));
   }
 
   public HoodieRecordMerger getRecordMerger() {
