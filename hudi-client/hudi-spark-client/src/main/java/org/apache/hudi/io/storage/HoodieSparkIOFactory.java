@@ -19,7 +19,6 @@
 
 package org.apache.hudi.io.storage;
 
-import org.apache.hudi.SparkAdapterSupport;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.io.hadoop.HoodieHadoopIOFactory;
@@ -29,9 +28,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.avro.HoodieAvroSerializer;
-import org.apache.spark.sql.hudi.SparkAdapter;
 
-import java.io.IOException;
 import java.util.Properties;
 import java.util.function.Function;
 
@@ -71,7 +68,7 @@ public class HoodieSparkIOFactory extends HoodieHadoopIOFactory {
     if (recordType == HoodieRecord.HoodieRecordType.SPARK) {
       HoodieAvroSerializer serializer = SparkAdapterSupport$.MODULE$.sparkAdapter()
           .createAvroSerializer(HoodieInternalRowUtils.getCachedSchema(recordSchema), recordSchema, isNullable(recordSchema));
-      return record -> (IndexedRecord) serializer.serialize(record);
+      return record -> (IndexedRecord) serializer.serialize(record.getData());
     }
     return super.toIndexedRecord(recordSchema, properties, recordType);
   }

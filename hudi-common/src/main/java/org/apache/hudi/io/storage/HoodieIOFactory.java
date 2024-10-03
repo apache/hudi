@@ -37,7 +37,6 @@ import org.apache.avro.generic.IndexedRecord;
 
 import java.util.Properties;
 import java.util.function.Function;
-import java.util.function.UnaryOperator;
 
 /**
  * Base class to get {@link HoodieFileReaderFactory}, {@link HoodieFileWriterFactory}, and {@link FileFormatUtils}
