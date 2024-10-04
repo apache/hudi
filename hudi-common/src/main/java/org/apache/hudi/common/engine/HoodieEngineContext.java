@@ -117,6 +117,8 @@ public abstract class HoodieEngineContext {
 
   public abstract void cancelAllJobs();
 
+  public abstract Map<String, String> getInfo();
+
   /**
    * Returns the application id of the engine (e.g. Spark application id).
    * Used to populate lock metadata so lock holders can be identified.

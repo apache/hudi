@@ -716,6 +716,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (!tableServicesEnabled(config)) {
       return Option.empty();
     }
+    extraMetadata = updateExtraMetadata(extraMetadata);
     if (tableServiceType == TableServiceType.ARCHIVE) {
       log.info("Archival does not need scheduling. Skipping.");
       return Option.empty();

@@ -189,6 +189,11 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public Map<String, String> getInfo() {
+    return Collections.emptyMap();
+  }
+
+  @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     return data.collectAsList().stream().reduce(zeroValue, seqOp::apply, combOp::apply);
   }
