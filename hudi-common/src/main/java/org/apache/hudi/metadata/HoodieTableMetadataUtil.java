@@ -2060,7 +2060,7 @@ public class HoodieTableMetadataUtil {
 
   private static Stream<HoodieRecord> collectAndProcessColumnMetadata(
           List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata,
-          String partitionPath) {
+          String partitionPath, boolean isTightBound) {
 
     // Step 1: Flatten and Group by Column Name
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
@@ -2072,7 +2072,7 @@ public class HoodieTableMetadataUtil {
             .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
 
     // Create Partition Stats Records
-    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false);
+    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound);
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
@@ -2100,7 +2100,7 @@ public class HoodieTableMetadataUtil {
           .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false, true, writerSchemaOpt))
           .collect(Collectors.toList());
 
-      return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath).iterator();
+      return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath, true).iterator();
     });
   }
 
@@ -2191,7 +2191,7 @@ public class HoodieTableMetadataUtil {
           fileColumnMetadata.add(partitionColumnMetadata);
         }
 
-        return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName).iterator();
+        return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName, shouldScanColStatsForTightBound).iterator();
       });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);

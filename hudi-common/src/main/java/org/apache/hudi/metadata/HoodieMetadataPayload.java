@@ -519,7 +519,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   public static Stream<HoodieRecord> createPartitionStatsRecords(String partitionPath,
                                                                  Collection<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList,
-                                                                 boolean isDeleted) {
+                                                                 boolean isDeleted, boolean isTightBound) {
     return columnRangeMetadataList.stream().map(columnRangeMetadata -> {
       HoodieKey key = new HoodieKey(getPartitionStatsIndexKey(partitionPath, columnRangeMetadata.getColumnName()),
           MetadataPartitionType.PARTITION_STATS.getPartitionPath());
@@ -535,6 +535,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
               .setTotalSize(columnRangeMetadata.getTotalSize())
               .setTotalUncompressedSize(columnRangeMetadata.getTotalUncompressedSize())
               .setIsDeleted(isDeleted)
+              .setIsTightBound(isTightBound)
               .build(),
           MetadataPartitionType.PARTITION_STATS.getRecordType());
 
