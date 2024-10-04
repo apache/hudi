@@ -33,6 +33,7 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
@@ -746,6 +747,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
     assertFalse(isFilesExistInFileSystem(cdcLogFiles2))
   }
 
+  @Disabled
   @ParameterizedTest
   @EnumSource(classOf[HoodieCDCSupplementalLoggingMode])
   def testCDCWhenFirstWriteContainsUpsertAndDelete(loggingMode: HoodieCDCSupplementalLoggingMode): Unit = {

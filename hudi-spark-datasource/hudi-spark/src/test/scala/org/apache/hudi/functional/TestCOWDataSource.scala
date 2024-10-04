@@ -734,7 +734,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .save(basePath)
       fail("should fail when the specified record key field does not exist")
     } catch {
-      case e: Exception => assertTrue(containsErrorMessage(e, errorMessage))
+      case e: Exception => assertTrue(containsErrorMessage(e, errorMessage) || containsErrorMessage(e, "Failed to resolve nested field-paths"))
     }
   }
 

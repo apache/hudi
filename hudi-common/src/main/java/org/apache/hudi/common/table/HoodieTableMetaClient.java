@@ -31,6 +31,7 @@ import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
+import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
@@ -1277,19 +1278,6 @@ public class HoodieTableMetaClient implements Serializable {
         tableConfig.setInitialVersion(HoodieTableVersion.current());
       }
 
-      Triple<RecordMergeMode, String, String> mergeConfigs =
-          HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategy);
-
-      tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-
-      if (mergeConfigs.getMiddle() != null) {
-        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-      }
-
-      if (mergeConfigs.getRight() != null) {
-        tableConfig.setValue(RECORD_MERGER_STRATEGY, mergeConfigs.getRight());
-      }
-
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);
       }
@@ -1337,6 +1325,26 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
+
+      Triple<RecordMergeMode, String, String> mergeConfigs =
+          HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategy);
+
+      if (null != cdcEnabled && cdcEnabled && mergeConfigs.getMiddle() == null) {
+        tableConfig.setValue(RECORD_MERGE_MODE, RecordMergeMode.CUSTOM.name());
+        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), HoodieRecordPayload.getAvroPayloadForMergeMode(mergeConfigs.getLeft()));
+        tableConfig.setValue(RECORD_MERGER_STRATEGY, HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+      } else {
+        tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
+
+        if (mergeConfigs.getMiddle() != null) {
+          tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+        }
+
+        if (mergeConfigs.getRight() != null) {
+          tableConfig.setValue(RECORD_MERGER_STRATEGY, mergeConfigs.getRight());
+        }
+      }
+
       if (null != populateMetaFields) {
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       }
