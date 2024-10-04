@@ -607,12 +607,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         validateRecordIndex(engineContext, metaClient);
         result.add(Pair.of(true, null));
       } catch (HoodieValidationException e) {
-        LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in record index validation for table: {} ", cfg.basePath, e);
-        if (!cfg.ignoreFailed) {
-          throw e;
-        }
-        result.add(Pair.of(false, e));
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in record index validation");
       }
 
       try {
@@ -621,12 +616,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           result.add(Pair.of(true, null));
         }
       } catch (HoodieValidationException e) {
-        LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in secondary index validation for table: {} ", cfg.basePath, e);
-        if (!cfg.ignoreFailed) {
-          throw e;
-        }
-        result.add(Pair.of(false, e));
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in secondary index validation");
       }
 
       try {
@@ -634,13 +624,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           validatePartitionStats(metadataTableBasedContext, finalBaseFilesForCleaning, allPartitions);
           result.add(Pair.of(true, null));
         }
-      } catch (Exception e) {
-        LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in partition stats validation for table: {} ", cfg.basePath, e);
-        if (!cfg.ignoreFailed) {
-          throw e;
-        }
-        result.add(Pair.of(false, e));
+      } catch (HoodieValidationException e) {
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in partition stats validation");
       }
 
       for (Pair<Boolean, ? extends Exception> res : result) {
@@ -667,6 +652,14 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "ignoring the error as the validation is successful.", e);
       return true;
     }
+  }
+
+  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, ? extends Exception>> result, String errorMsg) {
+    LOG.error(errorMsg + " for table: {} ", cfg.basePath, e);
+    if (!cfg.ignoreFailed) {
+      throw e;
+    }
+    result.add(Pair.of(false, e));
   }
 
   /**
@@ -1085,9 +1078,6 @@ public class HoodieMetadataTableValidator implements Serializable {
 
   private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
                                       HoodieTableMetaClient metaClient) {
-    if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.SECONDARY_INDEX)) {
-      return;
-    }
     Collection<HoodieIndexDefinition> indexDefinitions = metaClient.getIndexMetadata().get().getIndexDefinitions().values();
     for (HoodieIndexDefinition indexDefinition : indexDefinitions) {
       validateSecondaryIndex(engineContext, metadataContext, metaClient, indexDefinition);
@@ -1121,6 +1111,18 @@ public class HoodieMetadataTableValidator implements Serializable {
     secondaryKeys.unpersist();
   }
 
+  /**
+   * Queries data in the table and generates a mapping from secondary key to list of record keys with value
+   * as secondary key. Here secondary key is the value of secondary key column or the secondaryField. Also the
+   * function returns the secondary key mapping only for the input secondary keys.
+
+   * @param sparkEngineContext Spark Engine context
+   * @param basePath Table base path
+   * @param latestCompletedCommit Latest completed commit in the table
+   * @param secondaryField The secondary key column used to determine the secondary keys
+   * @param secKeys Input secondary keys which will be filtered
+   * @return Mapping of secondary keys to list of record keys with value as secondary key
+   */
   Map<String, List<String>> getFSSecondaryKeyToRecordKeys(HoodieSparkEngineContext sparkEngineContext, String basePath, String latestCompletedCommit,
                                                           String secondaryField, List<String> secKeys) {
     List<Tuple2<String, String>> recordAndSecondaryKeys = sparkEngineContext.getSqlContext().read().format("hudi")
