@@ -132,9 +132,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-   CloseableInternalRowIterator reader = new CloseableInternalRowIterator(parquetReader.read(SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkPartitionedFileUtils().createPartitionedFile(InternalRow.empty(), path, 0, Long.MAX_VALUE),
-      requestedStructType, new StructType(), Option.empty(), (Seq<Filter>) Seq$.MODULE$.empty(), (StorageConfiguration<Configuration>) storageConf));
-
+    CloseableInternalRowIterator reader = new CloseableInternalRowIterator(parquetReader.read(
+        SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkPartitionedFileUtils().createPartitionedFile(InternalRow.empty(), path, 0, Long.MAX_VALUE),
+        requestedStructType, new StructType(), Option.empty(), (Seq<Filter>) Seq$.MODULE$.empty(), (StorageConfiguration<Configuration>) storageConf));
     readerIterators.add(reader);
     return reader;
   }
