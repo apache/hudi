@@ -399,6 +399,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-partition-stats " + validatePartitionStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
+          + "   --validate-secondary-index " + validateSecondaryIndex + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
           + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
@@ -436,6 +437,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validateAllColumnStats, config.validateAllColumnStats)
           && Objects.equals(validatePartitionStats, config.validatePartitionStats)
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
+          && Objects.equals(validateSecondaryIndex, config.validateSecondaryIndex)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
           && Objects.equals(viewStorageTypeForFSListing, config.viewStorageTypeForFSListing)
@@ -456,7 +458,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     public int hashCode() {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validatePartitionStats, validateBloomFilters,
-          validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
           viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
           sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
