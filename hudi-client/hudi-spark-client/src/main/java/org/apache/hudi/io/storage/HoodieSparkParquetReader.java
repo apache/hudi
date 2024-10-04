@@ -25,34 +25,39 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
-import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.CloseableInternalRowIterator;
+import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.Path;
-import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.schema.MessageType;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
-import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.internal.SQLConf;
+import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
+
+import scala.collection.Seq;
+import scala.collection.mutable.Seq$;
 
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
@@ -62,13 +67,20 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final StoragePath path;
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
-  private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private List<CloseableInternalRowIterator> readerIterators = new ArrayList<>();
+  private final SparkParquetReader parquetReader;
+  private final StorageConfiguration<?> storageConf;
 
   public HoodieSparkParquetReader(HoodieStorage storage, StoragePath path) {
     this.path = path;
     this.storage = storage.newInstance(path, storage.getConf().newInstance());
+    this.storageConf = this.storage.getConf();
     // Avoid adding record in list element when convert parquet schema to avro schema
-    this.storage.getConf().set(ADD_LIST_ELEMENT_RECORDS, "false");
+    storageConf.set(ADD_LIST_ELEMENT_RECORDS, "false");
+    Properties properties = new Properties();
+    properties.setProperty("returning_batch", "false");
+    this.parquetReader = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetFileReader(false, SQLConf.get(),
+        JavaScalaConverters.convertJavaPropertiesToScalaMap(properties), storageConf.unwrapAs(Configuration.class));
     this.parquetUtils = HoodieIOFactory.getIOFactory(storage)
         .getFileFormatUtils(HoodieFileFormat.PARQUET);
   }
@@ -90,7 +102,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema, requestedSchema);
+    ClosableIterator<InternalRow> iterator = getInternalRowIterator(null, requestedSchema);
     StructType structType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
     UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
 
@@ -119,21 +131,12 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    if (requestedSchema == null) {
-      requestedSchema = readerSchema;
-    }
-    StructType readerStructType = HoodieInternalRowUtils.getCachedSchema(readerSchema);
     StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-    storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readerStructType.json());
-    storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), requestedStructType.json());
-    storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
-    storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
-    ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder((ReadSupport) new ParquetReadSupport(), new Path(path.toUri()))
-        .withConf(storage.getConf().unwrapAs(Configuration.class))
-        .build();
-    ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
-    readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+   CloseableInternalRowIterator reader = new CloseableInternalRowIterator(parquetReader.read(SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkPartitionedFileUtils().createPartitionedFile(InternalRow.empty(), path, 0, Long.MAX_VALUE),
+      requestedStructType, new StructType(), Option.empty(), (Seq<Filter>) Seq$.MODULE$.empty(), (StorageConfiguration<Configuration>) storageConf));
+
+    readerIterators.add(reader);
+    return reader;
   }
 
   @Override
@@ -150,7 +153,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public void close() {
-    readerIterators.forEach(ParquetReaderIterator::close);
+    readerIterators.forEach(CloseableInternalRowIterator::close);
   }
 
   @Override
