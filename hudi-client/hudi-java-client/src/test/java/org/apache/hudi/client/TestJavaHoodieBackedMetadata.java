@@ -29,6 +29,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
@@ -87,6 +88,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
@@ -1826,6 +1828,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withAutoCommit(false)
         .withClusteringConfig(clusteringConfig)
         .withRollbackUsingMarkers(false)
+        .withEngineType(EngineType.JAVA)
         .build();
 
     // trigger clustering
@@ -1871,6 +1874,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
     context = new HoodieJavaEngineContext(storageConf);
     HoodieWriteConfig initialConfig = getSmallInsertWriteConfigForMDT(2000, TRIP_EXAMPLE_SCHEMA, 10, false);
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
+        .withEngineType(EngineType.JAVA)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build()).build();
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
@@ -1900,6 +1904,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieWriteConfig newWriteConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
         .withAutoCommit(false)
+        .withEngineType(EngineType.JAVA)
         .withClusteringConfig(clusteringConfig).build();
 
     // trigger clustering
@@ -1912,6 +1917,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieWriteConfig updatedWriteConfig = HoodieWriteConfig.newBuilder().withProperties(initialConfig.getProps())
+        .withEngineType(EngineType.JAVA)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build())
         .withRollbackUsingMarkers(false).build();
 
@@ -2156,6 +2162,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).withAutoClean(false).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withKeyGenerator(SimpleAvroKeyGenerator.class.getName())
         .withProperties(properties)
         .withEmbeddedTimelineServerEnabled(false)
         .build();
@@ -2514,6 +2521,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
   public HoodieWriteConfig.Builder getConfigBuilder(String schemaStr, HoodieIndex.IndexType indexType,
                                                     HoodieFailedWritesCleaningPolicy cleaningPolicy) {
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(schemaStr)
+        .withEngineType(EngineType.JAVA)
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteStatusClass(MetadataMergeWriteStatus.class)
