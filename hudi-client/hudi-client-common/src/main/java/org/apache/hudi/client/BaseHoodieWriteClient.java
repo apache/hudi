@@ -75,7 +75,6 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -334,15 +333,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   protected abstract HoodieTable<T, I, K, O> createTable(HoodieWriteConfig config, Configuration hadoopConf, HoodieTableMetaClient metaClient);
 
   /**
-   * Validate timestamp for new commits. Here we validate that the instant time being validated is the latest among all entries in the timeline. This will ensure timestamps are monotonically increasing.
-   * With multi=writers, out of order commits completion are still possible, just that when a new commit starts, it will always get the highest commit time compared to other instants in the timeline.
+   * Validate timestamp for new commits. Here we validate that the instant time being validated is the latest among all entries in the timeline.
+   * This will ensure timestamps are monotonically increasing. With multi=writers, out of order commits completion are still possible, just that
+   * when a new commit starts, it will always get the highest commit time compared to other instants in the timeline.
    * @param metaClient instance of{@link HoodieTableMetaClient} to be used.
    * @param instantTime instant time of the current commit thats in progress.
    */
   protected abstract void validateTimestamp(HoodieTableMetaClient metaClient, String instantTime);
 
   protected void validateTimestampInternal(HoodieTableMetaClient metaClient, String instantTime) {
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    if (config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    }
   }
 
   void emitCommitMetrics(String instantTime, HoodieCommitMetadata metadata, String actionType) {

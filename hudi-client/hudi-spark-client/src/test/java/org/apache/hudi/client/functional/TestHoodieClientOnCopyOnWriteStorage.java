@@ -945,11 +945,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
-  @Test
-  public void testOutOfOrderCommitTimestamps() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testOutOfOrderCommitTimestamps(boolean enableValidation) {
     HoodieWriteConfig config = getConfigBuilder()
         .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withEnableTimestampOrderingValidation(enableValidation)
         .build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       String commit1 = HoodieActiveTimeline.createNewInstantTime();
@@ -959,11 +961,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       String commit3 = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(commit3);
 
-      // create commit4 after commit5. commit4 creation should fail.
+      // create commit4 after commit5. commit4 creation should fail when timestamp ordering validation is enabled.
       String commit4 = HoodieActiveTimeline.createNewInstantTime();
       String commit5 = HoodieActiveTimeline.createNewInstantTime();
       client.startCommitWithTime(commit5);
-      assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commit4));
+      if (enableValidation) {
+        assertThrows(IllegalArgumentException.class, () -> client.startCommitWithTime(commit4));
+      } else {
+        client.startCommitWithTime(commit4);
+      }
     }
   }
 

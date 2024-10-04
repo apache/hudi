@@ -904,7 +904,9 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   public abstract void validateForLatestTimestamp(String instantTime);
 
   protected void validateForLatestTimestampInternal(String instantTime) {
-    TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    if (this.config.shouldEnableTimestampOrderinValidation() && config.getWriteConcurrencyMode().supportsOptimisticConcurrencyControl()) {
+      TimestampUtils.validateForLatestTimestamp(metaClient, instantTime);
+    }
   }
 
   public HoodieFileFormat getBaseFileFormat() {

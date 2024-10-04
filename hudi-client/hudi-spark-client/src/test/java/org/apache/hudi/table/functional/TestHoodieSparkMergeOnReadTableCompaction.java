@@ -76,10 +76,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -194,41 +196,53 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
 
     // schedule compaction
     String compactionInstant1 = HoodieActiveTimeline.createNewInstantTime();
-    Thread.sleep(10);
-    String compactionInstant2 = HoodieActiveTimeline.createNewInstantTime();
+    String compactionInstant2 = HoodieActiveTimeline.createNewInstantTime(10 * 1000);
+    String commit3 = HoodieActiveTimeline.createNewInstantTime(15 * 1000);
 
     final AtomicBoolean writer1Completed = new AtomicBoolean(false);
     final AtomicBoolean writer2Completed = new AtomicBoolean(false);
     final ExecutorService executors = Executors.newFixedThreadPool(2);
-    final SparkRDDWriteClient client2 = getHoodieWriteClient(config2);
-    Future future1 = executors.submit(() -> {
-      try {
-        client.scheduleCompactionAtInstant(compactionInstant1, Option.empty());
-        // since compactionInstant1 is earlier than compactionInstant2, and compaction strategy sleeps for 10s, this is expected to throw.
-        fail("Should not have reached here");
-      } catch (Exception e) {
-        writer1Completed.set(true);
-      }
-    });
+    try {
+      final SparkRDDWriteClient client2 = getHoodieWriteClient(config2);
+      CountDownLatch countDownLatch = new CountDownLatch(1);
+      Future future1 = executors.submit(() -> {
+        try {
+          if (countDownLatch.await(20, TimeUnit.SECONDS)) {
+            List<WriteStatus> writeStatuses1 = client.upsert(records, commit3).collect();
+            List<HoodieWriteStat> writeStats1 = writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+            client.commitStats(commit3, context().parallelize(writeStatuses1, 1), writeStats1, Option.empty(), metaClient.getCommitActionType());
 
-    Future future2 = executors.submit(() -> {
-      try {
-        Thread.sleep(10);
-        assertTrue(client2.scheduleCompactionAtInstant(compactionInstant2, Option.empty()));
-        writer2Completed.set(true);
-      } catch (Exception e) {
-        throw new HoodieException("Should not have reached here");
-      }
-    });
+            client.scheduleCompactionAtInstant(compactionInstant1, Option.empty());
+            // since compactionInstant1 is earlier than compactionInstant2, and compaction strategy sleeps for 10s, this is expected to throw.
+            fail("Should not have reached here");
+          } else {
+            fail("Should not have reached here");
+          }
+        } catch (Exception e) {
+          writer1Completed.set(true);
+        }
+      });
 
-    future1.get();
-    future2.get();
+      Future future2 = executors.submit(() -> {
+        try {
+          assertTrue(client2.scheduleCompactionAtInstant(compactionInstant2, Option.empty()));
+          writer2Completed.set(true);
+          countDownLatch.countDown();
+        } catch (Exception e) {
+          throw new HoodieException("Should not have reached here");
+        }
+      });
 
-    // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
-    assertTrue(writer1Completed.get() && writer2Completed.get());
-    client.close();
-    client2.close();
-    executors.shutdownNow();
+      future2.get();
+      future1.get();
+
+      // both should have been completed successfully. I mean, we already assert for conflict for writer2 at L155.
+      assertTrue(writer1Completed.get() && writer2Completed.get());
+      client.close();
+      client2.close();
+    } finally {
+      executors.shutdownNow();
+    }
   }
 
   private HoodieWriteConfig getWriteConfigWithMockCompactionStrategy() {
@@ -249,6 +263,9 @@ public class TestHoodieSparkMergeOnReadTableCompaction extends SparkClientFuncti
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withCompactionStrategy(compactionStrategy)
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withEnableTimestampOrderingValidation(true)
         .build();
   }
 

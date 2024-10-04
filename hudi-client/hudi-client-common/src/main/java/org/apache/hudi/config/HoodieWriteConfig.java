@@ -741,6 +741,14 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "The class must be a subclass of `org.apache.hudi.callback.HoodieClientInitCallback`."
           + "By default, no Hudi client init callback is executed.");
 
+  public static final ConfigProperty<Boolean> ENABLE_TIMESTAMP_ORDERING_VALIDATION = ConfigProperty
+      .key("hoodie.timestamp.ordering.validate.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.15.1")
+      .withDocumentation("Enable validation for commit time generation to ensure new commit time generated is always the latest among other entries. "
+          + "This is for additional safety to always generate a monotonically increasing commit times (for ingestion writer, table services etc).");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2621,6 +2629,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return props.getInteger(WRITES_FILEID_ENCODING, HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID);
   }
 
+  public Boolean shouldEnableTimestampOrderinValidation() {
+    return getBoolean(ENABLE_TIMESTAMP_ORDERING_VALIDATION);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3132,6 +3144,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWritesFileIdEncoding(Integer fileIdEncoding) {
       writeConfig.setValue(WRITES_FILEID_ENCODING, Integer.toString(fileIdEncoding));
+      return this;
+    }
+
+    public Builder withEnableTimestampOrderingValidation(boolean enableTimestampOrderingValidation) {
+      writeConfig.setValue(ENABLE_TIMESTAMP_ORDERING_VALIDATION, Boolean.toString(enableTimestampOrderingValidation));
       return this;
     }
 
