@@ -85,7 +85,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val tableType = testCase.tableType
       val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
@@ -164,7 +164,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   def testCreateAndDropSecondaryIndex(): Unit = {
     if (HoodieSparkUtils.gteqSpark3_3) {
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       tableName += "test_secondary_index_create_drop_partitioned_mor"
@@ -226,7 +226,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val tableType = testCase.tableType
       val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
@@ -305,7 +305,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val tableType = testCase.tableType
       val isPartitioned = testCase.isPartitioned
       var hudiOpts = commonOpts
-      hudiOpts = hudiOpts + (
+      hudiOpts = hudiOpts ++ Map(
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
         DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
@@ -500,7 +500,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
         DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
         HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1")
       if (tableType == HoodieTableType.MERGE_ON_READ) {
-        hudiOpts = hudiOpts + (
+        hudiOpts = hudiOpts ++ Map(
           HoodieCompactionConfig.INLINE_COMPACT.key() -> "true",
           HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2",
           HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
