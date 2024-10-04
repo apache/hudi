@@ -24,8 +24,9 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -95,7 +96,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       fileSplits = fileSplits,
       includeStartTime = includeStartTime,
       startTimestamp = startTs,
-      endTimestamp = endTs)
+      endTimestamp = endTs,
+      includedTimestamps = includedCommits.map(_.getTimestamp).toSet)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
@@ -236,7 +238,11 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
   }
 
-  protected lazy val (includeStartTime, startTs) = (true, includedCommits.head.getTimestamp)
+  protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
+    (false, startTimestamp)
+  } else {
+    (false, getStrictlyLowerTimestamp(includedCommits.head.getTimestamp))
+  }
   protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
@@ -244,6 +250,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val incrementalSpanRecordFilters: Seq[Filter] = {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
+    val timeStamps = includedCommits.map(_.getTimestamp).toArray[Any]
+    val isInFilter = In(HoodieRecord.COMMIT_TIME_METADATA_FIELD, timeStamps)
     val largerThanFilter = if (includeStartTime) {
       GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
     } else {
@@ -252,7 +260,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
     val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, endTs)
 
-    Seq(isNotNullFilter, largerThanFilter, lessThanFilter)
+    Seq(isNotNullFilter, isInFilter)
   }
 
   override lazy val mandatoryFields: Seq[String] = {

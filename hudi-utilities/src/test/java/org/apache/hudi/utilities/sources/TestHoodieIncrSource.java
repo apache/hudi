@@ -365,12 +365,13 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         assertTrue(compactionInstant.get().getTimestamp().compareTo(latestCommitTimestamp) < 0);
       }
 
-      // test SnapshotLoadQuerySpliiter to split snapshot query .
+      // test SnapshotLoadQuerySplitter to split snapshot query .
       // Reads only first commit
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          dataBatches.get(0).getCompletionTime(),
+          // SnapshotLoadQuerySplitter would return start time as the next checkpoint instead of completion time
+          dataBatches.get(0).getInstantTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
 
       // The pending tables services should not block the incremental pulls
@@ -426,8 +427,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     TypedProperties extraProps = new TypedProperties();
     extraProps.setProperty(HoodieIncrSourceConfig.HOODIE_INCREMENTAL_SPARK_DATASOURCE_OPTIONS.key(), "hoodie.metadata.enable=true,hoodie.enable.data.skipping=true");
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      WriteResult inserts = writeRecords(writeClient, INSERT, null, "100");
-      WriteResult inserts2 = writeRecords(writeClient, INSERT, null, "200");
+      WriteResult inserts = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
+      WriteResult inserts2 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,

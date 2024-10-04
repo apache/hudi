@@ -82,7 +82,8 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
                            includeStartTime: Boolean = false,
                            startTimestamp: String = null,
-                           endTimestamp: String = null)
+                           endTimestamp: String = null,
+                           includedTimestamps: Set[String] = null)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -138,7 +139,14 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   }
 
   private def getCommitTimeFilter(includeStartTime: Boolean, commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
-    if (includeStartTime) {
+    if (includedTimestamps != null) {
+      new Predicate[InternalRow] {
+        override def test(row: InternalRow): Boolean = {
+          val commitTime = row.getString(commitTimeMetadataFieldIdx)
+          includedTimestamps.contains(commitTime)
+        }
+      }
+    } else if (includeStartTime) {
       new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {
           val commitTime = row.getString(commitTimeMetadataFieldIdx)

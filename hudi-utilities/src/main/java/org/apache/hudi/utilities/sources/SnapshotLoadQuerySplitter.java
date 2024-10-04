@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
 import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME;
 
 /**
@@ -120,7 +121,9 @@ public abstract class SnapshotLoadQuerySplitter {
   }
 
   public QueryContext getNextCheckpoint(Dataset<Row> df, QueryContext queryContext, Option<SourceProfileSupplier> sourceProfileSupplier) {
-    return getNextCheckpoint(df, queryContext.getStartInstant().get(), sourceProfileSupplier)
+    // the start instant would be included into the final query result. So we need to get
+    // a strictly lower timestamp to have query splitter include the start instant
+    return getNextCheckpoint(df, getStrictlyLowerTimestamp(queryContext.getStartInstant().get()), sourceProfileSupplier)
         .map(checkpoint -> queryContext.withUpdatedEndInstant(checkpoint))
         .orElse(queryContext);
   }

@@ -208,7 +208,7 @@ public class HoodieIncrSource extends RowSource {
               .filterCompletedInstants()
               .lastInstant();
           startTime = lastInstant
-              .map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getTimestamp()))
+              .map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getCompletionTime()))
               .orElse(DEFAULT_BEGIN_TIMESTAMP);
           break;
         default:
@@ -270,12 +270,16 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath);
       if (snapshotLoadQuerySplitter.isPresent()) {
         queryContext = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
+        // update endTime/next checkpoint
+        endTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
       }
-      Set<String> validInstants = new HashSet(queryContext.getInstants());
       source = snapshot
           // add filtering so that only interested records are returned.
           // completion time comparison uses ( , ], but when comparing start time we need to use [, ]
-          .filter((Row row) -> validInstants.contains(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
+          .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryContext.getStartInstant().get()))
+          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              queryContext.getEndInstant().orElse(queryContext.getLastInstant())));
       // TODO add predicateFilter back
     } else {
       // normal incremental query
