@@ -31,6 +31,7 @@ import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
@@ -144,7 +145,8 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             .withColumnStatsIndexForColumns("rider,driver")
             .withPartitionStatsIndexParallelism(1)
             .build(),
-        metaClient);
+        metaClient,
+        Option.of(HoodieTestDataGenerator.AVRO_SCHEMA_WITH_METADATA_FIELDS));
     // Validate the result.
     List<HoodieRecord> records = result.collectAsList();
     // 3 partitions * 2 columns = 6 partition stats records
