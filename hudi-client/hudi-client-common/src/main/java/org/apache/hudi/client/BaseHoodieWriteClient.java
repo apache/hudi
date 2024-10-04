@@ -248,6 +248,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (!config.allowEmptyCommit() && tableWriteStats.isEmptyDataTableWriteStats()) {
       return true;
     }
+    extraMetadata = updateExtraMetadata(extraMetadata);
     log.info("Committing {} action {}", instantTime, commitActionType);
     // Create a Hoodie table which encapsulated the commits and files visible
     HoodieTable table = hoodieTableOpt.orElse(createTable(config));

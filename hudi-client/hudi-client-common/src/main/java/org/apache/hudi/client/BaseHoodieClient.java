@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -55,7 +56,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -306,5 +309,15 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
     return config.isMetadataTableEnabled()
         && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+  }
+
+  protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
+    // Add write config, HUDI version and engine specific extra metadata
+    extraMetadata = extraMetadata.isPresent() ? extraMetadata : Option.of(new HashMap<String, String>());
+    extraMetadata.get().put("hudi.version", HoodieVersion.get());
+    extraMetadata.get().put("writeconfig", config.toString());
+    extraMetadata.get().put("engine", context.getClass().getSimpleName());
+    extraMetadata.get().putAll(context.getInfo());
+    return extraMetadata;
   }
 }
