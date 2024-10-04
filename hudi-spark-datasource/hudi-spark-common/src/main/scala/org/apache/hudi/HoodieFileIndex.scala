@@ -183,9 +183,9 @@ case class HoodieFileIndex(spark: SparkSession,
           }).filter(slice => slice != null)
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
-            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
-            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          val c = fileSlices.filter(f => f.hasBootstrapBase || (includeLogFiles && f.hasLogFiles))
+            .map(f => f.withLogFiles(includeLogFiles))
+            .foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
