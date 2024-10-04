@@ -82,7 +82,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -141,7 +140,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -183,7 +181,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Generate Maven Wrapper
         run:
           mvn -N io.takari:maven:wrapper
@@ -222,7 +219,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -235,7 +231,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -277,7 +272,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -290,7 +284,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -326,7 +319,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -339,7 +331,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -381,7 +372,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -394,7 +384,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -429,7 +418,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -477,7 +465,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -526,7 +513,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -590,7 +576,6 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -696,7 +681,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -727,7 +711,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
