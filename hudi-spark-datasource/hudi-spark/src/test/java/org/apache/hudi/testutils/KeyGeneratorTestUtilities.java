@@ -106,7 +106,7 @@ public class KeyGeneratorTestUtilities {
 
   private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
       throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
-    // TODO [HUDI-8086] only spark 3 needed
+    // TODO [HUDI-8298] only spark 3 needed
     if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
       Method spark2method = encoder.getClass().getMethod("toRow", Object.class);
       return (InternalRow) spark2method.invoke(encoder, row);

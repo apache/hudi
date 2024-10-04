@@ -15,7 +15,7 @@
 * See the License for the specific language governing permissions and
 -->
 
-<!-- TODO [HUDI-8086] -->
+<!-- TODO [HUDI-8294] -->
 
 # Quick Start (demo) guide for Kafka Connect Sink for Hudi
 
