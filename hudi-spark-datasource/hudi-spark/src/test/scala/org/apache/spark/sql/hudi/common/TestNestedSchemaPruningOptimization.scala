@@ -42,9 +42,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   test("Test NestedSchemaPruning optimization successful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.1
+      // NOTE: This tests are only relevant for Spark >= 3.3
       // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_1) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         Seq("cow", "mor").foreach { tableType =>
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -107,9 +107,9 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase with Sp
 
   test("Test NestedSchemaPruning optimization unsuccessful") {
     withTempDir { tmp =>
-      // NOTE: This tests are only relevant for Spark >= 3.1
+      // NOTE: This tests are only relevant for Spark >= 3.3
       // TODO extract tests into a separate spark-version-specific module
-      if (HoodieSparkUtils.gteqSpark3_1) {
+      if (HoodieSparkUtils.gteqSpark3_3) {
         // TODO add cow
         Seq("mor").foreach { tableType =>
           val tableName = generateTableName

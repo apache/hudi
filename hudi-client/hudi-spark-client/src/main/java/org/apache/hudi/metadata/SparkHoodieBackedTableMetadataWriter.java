@@ -130,7 +130,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected void commit(String instantTime, Map<MetadataPartitionType, HoodieData<HoodieRecord>> partitionRecordsMap) {
+  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
   }
 
@@ -141,16 +141,16 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
 
   @Override
   protected void bulkCommit(
-      String instantTime, MetadataPartitionType partitionType, HoodieData<HoodieRecord> records,
+      String instantTime, String partitionName, HoodieData<HoodieRecord> records,
       int fileGroupCount) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(fileGroupCount);
-    commitInternal(instantTime, Collections.singletonMap(partitionType, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonMap(partitionName, records), true, Option.of(partitioner));
   }
 
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
-    LOG.info("Deleting Metadata Table partitions: " + partitionsToDrop);
+    LOG.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
@@ -163,11 +163,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf) {
-    HoodieFunctionalIndex<Column, Column> functionalIndex = new HoodieSparkFunctionalIndex(
-        indexDefinition.getIndexName(),
-        indexDefinition.getIndexFunction(),
-        indexDefinition.getSourceFields(),
-        indexDefinition.getIndexOptions());
+    HoodieFunctionalIndex<Column, Column> functionalIndex =
+        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -179,50 +176,33 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
     String basePath = metaClient.getBasePath().toString();
-    for (Pair<String, FileSlice> pair : partitionFileSlicePairs) {
-      String partition = pair.getKey();
-      FileSlice fileSlice = pair.getValue();
-      // For functional index using column_stats
+
+    // Group FileSlices by partition
+    Map<String, List<FileSlice>> partitionToFileSlicesMap = partitionFileSlicePairs.stream()
+        .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    for (Map.Entry<String, List<FileSlice>> entry : partitionToFileSlicesMap.entrySet()) {
+      String partition = entry.getKey();
+      List<FileSlice> fileSlices = entry.getValue();
+      List<HoodieRecord> recordsForPartition = Collections.emptyList();
       if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        return getFunctionalIndexRecordsUsingColumnStats(
-            metaClient,
-            parallelism,
-            readerSchema,
-            fileSlice,
-            basePath,
-            partition,
-            functionalIndex,
-            columnToIndex,
-            sqlContext,
-            sparkEngineContext);
+        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext);
+      } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext, metadataWriteConfig);
       }
-      // For functional index using bloom_filters
-      if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        return getFunctionalIndexRecordsUsingBloomFilter(
-            metaClient,
-            parallelism,
-            readerSchema,
-            fileSlice,
-            basePath,
-            partition,
-            functionalIndex,
-            columnToIndex,
-            sqlContext,
-            sparkEngineContext,
-            metadataWriteConfig);
-      }
+      allRecords.addAll(recordsForPartition);
     }
-    return HoodieJavaRDD.of(Collections.emptyList(), sparkEngineContext, parallelism);
+    return HoodieJavaRDD.of(allRecords, sparkEngineContext, parallelism);
   }
 
   @Override
-  protected HoodieTable getHoodieTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
+  protected HoodieTable getTable(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) {
     return HoodieSparkTable.create(writeConfig, engineContext, metaClient);
   }
 
   @Override
   public BaseHoodieWriteClient<?, JavaRDD<HoodieRecord>, ?, ?> initializeWriteClient() {
-    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, true);
+    return new SparkRDDWriteClient(engineContext, metadataWriteConfig, Option.empty());
   }
 
   @Override

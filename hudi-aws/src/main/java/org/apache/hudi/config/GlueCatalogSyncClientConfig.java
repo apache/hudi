@@ -83,7 +83,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_INDEX_FIELDS = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "partition_index_fields")
       .noDefaultValue()
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+      .withInferFunction(cfg -> HoodieTableConfig.getPartitionFieldProp(cfg)
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .sinceVersion("0.15.0")
       .withDocumentation(String.join(" ", "Specify the partitions fields to index on aws glue. Separate the fields by semicolon.",

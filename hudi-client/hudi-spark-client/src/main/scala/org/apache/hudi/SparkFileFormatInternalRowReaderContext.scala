@@ -32,6 +32,7 @@ import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath
 import org.apache.hudi.util.CloseableInternalRowIterator
 
 import org.apache.avro.Schema
+import org.apache.avro.Schema.Type
 import org.apache.avro.generic.IndexedRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
@@ -44,6 +45,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.unsafe.types.UTF8String
 
 import scala.collection.mutable
 
@@ -258,6 +260,45 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
           dataFileIterator.close()
         }
       }.asInstanceOf[ClosableIterator[InternalRow]]
+    }
+  }
+
+  override def castValue(value: Comparable[_], newType: Schema.Type): Comparable[_] = {
+    value match {
+      case v: Integer => newType match {
+        case Type.INT => v
+        case Type.LONG => v.longValue()
+        case Type.FLOAT => v.floatValue()
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Integer to $x is not supported")
+      }
+      case v: java.lang.Long => newType match {
+        case Type.LONG => v
+        case Type.FLOAT => v.floatValue()
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Long to $x is not supported")
+      }
+      case v: java.lang.Float => newType match {
+        case Type.FLOAT => v
+        case Type.DOUBLE => v.doubleValue()
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Float to $x is not supported")
+      }
+      case v: java.lang.Double => newType match {
+        case Type.DOUBLE => v
+        case Type.STRING => UTF8String.fromString(v.toString)
+        case x => throw new UnsupportedOperationException(s"Cast from Double to $x is not supported")
+      }
+      case v: String => newType match {
+        case Type.STRING => UTF8String.fromString(v)
+        case x => throw new UnsupportedOperationException(s"Cast from String to $x is not supported")
+      }
+      case v: UTF8String => newType match {
+        case Type.STRING => v
+        case x => throw new UnsupportedOperationException(s"Cast from String to $x is not supported")
+      }
     }
   }
 }

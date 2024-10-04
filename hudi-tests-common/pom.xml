@@ -161,6 +161,10 @@
                     <groupId>javax.servlet</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-reload4j</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -223,6 +227,5 @@
                 </exclusion>
             </exclusions>
         </dependency>
-
     </dependencies>
 </project>

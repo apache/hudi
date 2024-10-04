@@ -283,8 +283,8 @@ public class FileIndex implements Serializable {
     if (this.partitionPaths != null) {
       return this.partitionPaths;
     }
-    List<String> allPartitionPaths = this.tableExists
-        ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf),
+    List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(
+        new HoodieFlinkEngineContext(hadoopConf),
         new HoodieHadoopStorage(path, HadoopFSUtils.getStorageConf(hadoopConf)), metadataConfig, path.toString())
         : Collections.emptyList();
     if (this.partitionPruner == null) {

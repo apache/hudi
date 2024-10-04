@@ -109,7 +109,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_FIELDS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_fields")
       .defaultValue("")
-      .withInferFunction(cfg -> Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+      .withInferFunction(cfg -> HoodieTableConfig.getPartitionFieldProp(cfg)
           .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME))))
       .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
@@ -122,7 +122,7 @@ public class HoodieSyncConfig extends HoodieConfig {
         if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
           partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
         } else {
-          partitionFieldsOpt = Option.ofNullable(cfg.getString(HoodieTableConfig.PARTITION_FIELDS))
+          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
               .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
         }
         if (!partitionFieldsOpt.isPresent()) {

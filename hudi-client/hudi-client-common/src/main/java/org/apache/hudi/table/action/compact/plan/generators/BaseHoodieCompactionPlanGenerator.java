@@ -85,8 +85,12 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     List<String> partitionPaths = FSUtils.getAllPartitionPaths(
         engineContext, metaClient.getStorage(), writeConfig.getMetadataConfig(), metaClient.getBasePath());
 
+    int allPartitionSize = partitionPaths.size();
+
     // filter the partition paths if needed to reduce list status
-    partitionPaths = filterPartitionPathsByStrategy(writeConfig, partitionPaths);
+    partitionPaths = filterPartitionPathsByStrategy(partitionPaths);
+    LOG.info("Strategy: {} matched {} partition paths from all {} partitions",
+        writeConfig.getCompactionStrategy().getClass().getSimpleName(), partitionPaths.size(), allPartitionSize);
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
       return null;
@@ -181,7 +185,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
 
   protected abstract boolean filterLogCompactionOperations();
 
-  protected List<String> filterPartitionPathsByStrategy(HoodieWriteConfig writeConfig, List<String> partitionPaths) {
+  protected List<String> filterPartitionPathsByStrategy(List<String> partitionPaths) {
     return partitionPaths;
   }
 

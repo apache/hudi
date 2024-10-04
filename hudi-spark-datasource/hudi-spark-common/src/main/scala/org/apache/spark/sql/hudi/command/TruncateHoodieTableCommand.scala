@@ -72,7 +72,7 @@ case class TruncateHoodieTableCommand(
       FSUtils.deleteDir(engineContext, storage, targetPath, sparkSession.sparkContext.defaultParallelism)
 
       // ReInit hoodie.properties
-      val metaClient = HoodieTableMetaClient.withPropertyBuilder()
+      val metaClient = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(properties)
         .initTable(
           HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf),

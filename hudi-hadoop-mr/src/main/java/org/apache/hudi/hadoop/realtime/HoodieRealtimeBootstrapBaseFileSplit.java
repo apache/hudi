@@ -63,7 +63,8 @@ public class HoodieRealtimeBootstrapBaseFileSplit extends BootstrapBaseFileSplit
    * NOTE: This ctor is necessary for Hive to be able to serialize and
    *       then instantiate it when deserializing back
    */
-  public HoodieRealtimeBootstrapBaseFileSplit() {}
+  public HoodieRealtimeBootstrapBaseFileSplit() {
+  }
 
   public HoodieRealtimeBootstrapBaseFileSplit(FileSplit baseSplit,
                                               String basePath,

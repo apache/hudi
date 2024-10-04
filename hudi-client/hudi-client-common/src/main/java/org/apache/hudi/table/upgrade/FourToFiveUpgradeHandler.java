@@ -24,11 +24,9 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,7 +74,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  private boolean hasDefaultPartitionPath(HoodieWriteConfig config, HoodieTable  table) throws IOException {
+  private boolean hasDefaultPartitionPath(HoodieWriteConfig config, HoodieTable table) throws IOException {
     HoodieTableConfig tableConfig = table.getMetaClient().getTableConfig();
     if (!tableConfig.isTablePartitioned()) {
       return false;
@@ -88,7 +86,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
       String[] partitions = tableConfig.getPartitionFields().get();
       checkPartitionPath = partitions[0] + "=" + DEPRECATED_DEFAULT_PARTITION_PATH;
     }
-    FileSystem fs = new Path(config.getBasePath()).getFileSystem((Configuration) table.getStorageConf().unwrap());
-    return fs.exists(new Path(config.getBasePath() + "/" + checkPartitionPath));
+
+    return table.getStorage().exists(new StoragePath(config.getBasePath() + "/" + checkPartitionPath));
   }
 }

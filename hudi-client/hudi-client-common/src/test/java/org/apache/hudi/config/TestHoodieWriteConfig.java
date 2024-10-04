@@ -29,8 +29,10 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -43,10 +45,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,6 +67,7 @@ public class TestHoodieWriteConfig {
     params.put(HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key(), "1");
     params.put(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP.key(), "5");
     params.put(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP.key(), "2");
+    params.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "6");
     if (withAlternative) {
       params.put("hoodie.avro.schema.externalTransformation", "true");
     } else {
@@ -81,6 +86,36 @@ public class TestHoodieWriteConfig {
     assertEquals(2, config.getMinCommitsToKeep());
     assertTrue(config.shouldUseExternalSchemaTransformation());
     assertTrue(config.allowDuplicateInserts());
+  }
+
+  @Test
+  public void testSupportedTableWriteVersions() {
+    Set<HoodieTableVersion> supportedVersions = CollectionUtils.createSet(
+        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT
+    );
+    Arrays.stream(HoodieTableVersion.values())
+        .filter(version -> !supportedVersions.contains(version))
+        .forEach(version -> {
+          assertThrows(IllegalArgumentException.class, () -> HoodieWriteConfig.newBuilder()
+              .withPath("/tmp").withWriteTableVersion(version.versionCode()).build());
+
+          Properties props = new Properties();
+          props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(version.versionCode()));
+          assertThrows(IllegalArgumentException.class, () -> HoodieWriteConfig.newBuilder()
+              .withPath("/tmp").withProperties(props).build());
+        });
+    Arrays.stream(HoodieTableVersion.values())
+        .filter(supportedVersions::contains)
+        .forEach(version -> {
+
+          assertEquals(version, HoodieWriteConfig.newBuilder()
+              .withPath("/tmp").withWriteTableVersion(version.versionCode()).build().getWriteVersion());
+
+          Properties props = new Properties();
+          props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(version.versionCode()));
+          assertEquals(version, HoodieWriteConfig.newBuilder()
+              .withPath("/tmp").withProperties(props).build().getWriteVersion());
+        });
   }
 
   @Test

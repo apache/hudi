@@ -37,6 +37,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.keygen.CustomAvroKeyGenerator.getPartitionPathFormatException;
+
 /**
  * This is a generic implementation of KeyGenerator where users can configure record key as a single field or a combination of fields. Similarly partition path can be configured to have multiple
  * fields or only one field. This class expects value for prop "hoodie.datasource.write.partitionpath.field" in a specific format. For example:
@@ -83,9 +85,9 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
       return Collections.emptyList();
     } else {
       return partitionPathFields.stream().map(field -> {
-        String[] fieldWithType = field.split(CustomAvroKeyGenerator.SPLIT_REGEX);
+        String[] fieldWithType = field.split(CUSTOM_KEY_GENERATOR_SPLIT_REGEX);
         if (fieldWithType.length != 2) {
-          throw new HoodieKeyGeneratorException("Unable to find field names for partition path in proper format");
+          throw getPartitionPathFormatException();
         }
         String partitionPathField = fieldWithType[0];
         CustomAvroKeyGenerator.PartitionKeyType keyType = CustomAvroKeyGenerator.PartitionKeyType.valueOf(fieldWithType[1].toUpperCase());
@@ -130,7 +132,7 @@ public class CustomKeyGenerator extends BuiltinKeyGenerator {
     return UTF8String.fromString(getPartitionPath(Option.empty(), Option.empty(), Option.of(Pair.of(row, schema))));
   }
 
-  private String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
+  public String getPartitionPath(Option<GenericRecord> record, Option<Row> row, Option<Pair<InternalRow, StructType>> internalRowStructTypePair) {
     if (getPartitionPathFields() == null) {
       throw new HoodieKeyException("Unable to find field names for partition path in cfg");
     }

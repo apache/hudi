@@ -136,7 +136,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
       return this;
     }
     // pick the payload with greater ordering value as insert record
-    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0 ? true : false;
+    final boolean shouldPickOldRecord = oldValue.orderingVal.compareTo(orderingVal) > 0;
     try {
       GenericRecord oldRecord = HoodieAvroUtils.bytesToAvro(oldValue.recordBytes, schema);
       Option<IndexedRecord> mergedRecord = mergeOldRecord(oldRecord, schema, shouldPickOldRecord, true);

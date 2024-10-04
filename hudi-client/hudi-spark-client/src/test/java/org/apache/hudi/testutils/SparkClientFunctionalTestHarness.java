@@ -117,7 +117,7 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Map<String, String> sqlConf = new HashMap<>();
     sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
 
-    if (HoodieSparkUtils.gteqSpark3_2()) {
+    if (HoodieSparkUtils.gteqSpark3_3()) {
       sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
     }
 
@@ -175,13 +175,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
@@ -190,13 +189,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   @Override

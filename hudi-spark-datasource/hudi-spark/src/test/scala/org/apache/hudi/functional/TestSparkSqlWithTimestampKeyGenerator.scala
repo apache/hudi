@@ -44,7 +44,7 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
         timestampKeyGeneratorSettings.foreach { keyGeneratorSettings =>
           withTable(generateTableName) { tableName =>
             // Warning level is used due to CI run with warn-log profile for quick failed cases identification
-            LOG.warn(s"Table '${tableName}' with parameters: ${testParams}. Timestamp key generator settings: ${keyGeneratorSettings}")
+            LOG.warn(s"Table '$tableName' with parameters: $testParams. Timestamp key generator settings: $keyGeneratorSettings")
             val tablePath = tmp.getCanonicalPath + "/" + tableName
             val tsType = if (keyGeneratorSettings.contains("DATE_STRING")) "string" else "long"
             spark.sql(
@@ -53,19 +53,19 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
                  |   id int,
                  |   name string,
                  |   precomb long,
-                 |   ts ${tsType}
+                 |   ts $tsType
                  | ) USING HUDI
                  | PARTITIONED BY (ts)
-                 | LOCATION '${tablePath}'
+                 | LOCATION '$tablePath'
                  | TBLPROPERTIES (
-                 |   type = '${tableType}',
+                 |   type = '$tableType',
                  |   primaryKey = 'id',
                  |   preCombineField = 'precomb',
                  |   hoodie.datasource.write.partitionpath.field = 'ts',
                  |   hoodie.datasource.write.hive_style_partitioning = 'false',
-                 |   hoodie.file.group.reader.enabled = '${shouldUseFileGroupReader}',
+                 |   hoodie.file.group.reader.enabled = '$shouldUseFileGroupReader',
                  |   hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.TimestampBasedKeyGenerator',
-                 |   ${keyGeneratorSettings}
+                 |   $keyGeneratorSettings
                  | )
                  |""".stripMargin)
             // TODO: couldn't set `TIMESTAMP` for `hoodie.table.keygenerator.type`, it's overwritten by `SIMPLE`, only `hoodie.table.keygenerator.class` works
@@ -77,19 +77,20 @@ class TestSparkSqlWithTimestampKeyGenerator extends HoodieSparkSqlTestBase {
             else // UNIX_TIMESTAMP, and SCALAR with SECONDS
               (dataBatchesWithLongOfSeconds, queryResultWithLongOfSeconds)
 
-            withSQLConf("hoodie.file.group.reader.enabled" -> s"${shouldUseFileGroupReader}",
+            withSQLConf("hoodie.file.group.reader.enabled" -> s"$shouldUseFileGroupReader",
               "hoodie.datasource.query.type" -> "snapshot") {
               // two partitions, one contains parquet file only, the second one contains parquet and log files for MOR, and two parquets for COW
-              spark.sql(s"INSERT INTO ${tableName} VALUES ${dataBatches(0)}")
-              spark.sql(s"INSERT INTO ${tableName} VALUES ${dataBatches(1)}")
+              spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(0)}")
+              spark.sql(s"INSERT INTO $tableName VALUES ${dataBatches(1)}")
 
-              val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM ${tableName} ORDER BY id").collect().mkString("; ")
-              LOG.warn(s"Query result: ${queryResult}")
+              val queryResult = spark.sql(s"SELECT id, name, precomb, ts FROM $tableName ORDER BY id").collect().mkString("; ")
+              LOG.warn(s"Query result: $queryResult")
               // TODO: use `shouldExtractPartitionValuesFromPartitionPath` uniformly, and get `expectedQueryResult` for all cases instead of `expectedQueryResultWithLossyString` for some cases
               //   After it we could properly process filters like "WHERE ts BETWEEN 1078016000 and 1718953003" and add tests with partition pruning.
               //   COW: Fix for [HUDI-3896] overwrites `shouldExtractPartitionValuesFromPartitionPath` in `BaseFileOnlyRelation`, therefore for COW we extracting from partition paths and get nulls
               //   shouldUseFileGroupReader: [HUDI-7925] Currently there is no logic for `shouldExtractPartitionValuesFromPartitionPath` in `HoodieBaseHadoopFsRelationFactory`
-              if (tableType == "COPY_ON_WRITE" || shouldUseFileGroupReader.toBoolean)
+              //   UPDATE: with [HUDI-5807] we now have fg reader support. However partition pruning is still not fixed.
+              if (tableType == "COPY_ON_WRITE" && !shouldUseFileGroupReader.toBoolean)
                 assertResult(expectedQueryResultWithLossyString)(queryResult)
               else
                 assertResult(expectedQueryResult)(queryResult)
@@ -133,18 +134,18 @@ object TestSparkSqlWithTimestampKeyGenerator {
   val timestampKeyGeneratorSettings: Array[String] = Array(
     s"""
        |   hoodie.keygen.timebased.timestamp.type = 'UNIX_TIMESTAMP',
-       |   hoodie.keygen.timebased.output.dateformat = '${outputDateformat}'""",
+       |   hoodie.keygen.timebased.output.dateformat = '$outputDateformat'""",
     s"""
        |   hoodie.keygen.timebased.timestamp.type = 'EPOCHMILLISECONDS',
-       |   hoodie.keygen.timebased.output.dateformat = '${outputDateformat}'""",
+       |   hoodie.keygen.timebased.output.dateformat = '$outputDateformat'""",
     s"""
        |   hoodie.keygen.timebased.timestamp.type = 'SCALAR',
        |   hoodie.keygen.timebased.timestamp.scalar.time.unit = 'SECONDS',
-       |   hoodie.keygen.timebased.output.dateformat = '${outputDateformat}'""",
+       |   hoodie.keygen.timebased.output.dateformat = '$outputDateformat'""",
     s"""
        |   hoodie.keygen.timebased.timestamp.type = 'DATE_STRING',
        |   hoodie.keygen.timebased.input.dateformat = 'yyyy-MM-dd HH:mm:ss',
-       |   hoodie.keygen.timebased.output.dateformat = '${outputDateformat}'"""
+       |   hoodie.keygen.timebased.output.dateformat = '$outputDateformat'"""
   )
 
   // All data batches should correspond to 2004-02-29 01:02:03 and 2024-06-21 06:50:03

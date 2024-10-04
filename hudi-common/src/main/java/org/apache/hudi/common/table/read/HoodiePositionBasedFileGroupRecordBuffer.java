@@ -176,7 +176,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       case OVERWRITE_WITH_LATEST:
         for (Long recordPosition : recordPositions) {
           records.putIfAbsent(recordPosition,
-              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", 0L)));
+              Pair.of(Option.empty(), readerContext.generateMetadataForRecord(null, "", orderingFieldDefault, orderingFieldType)));
         }
         return;
       case EVENT_TIME_ORDERING:
@@ -199,7 +199,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
     }
   }
 

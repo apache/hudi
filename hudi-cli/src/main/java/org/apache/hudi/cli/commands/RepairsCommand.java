@@ -93,7 +93,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.DEDUPLICATE.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DEDUPLICATE, master, sparkMemory,
         duplicatedPartitionPath, repairedOutputPath, HoodieCLI.basePath, String.valueOf(dryRun), dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -301,7 +301,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION, master, sparkMemory,
         HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -329,7 +329,7 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.RENAME_PARTITION.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.RENAME_PARTITION, master, sparkMemory,
         HoodieCLI.basePath, oldPartition, newPartition);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

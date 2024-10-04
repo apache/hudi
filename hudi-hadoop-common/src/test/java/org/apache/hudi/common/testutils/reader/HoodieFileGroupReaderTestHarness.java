@@ -29,6 +29,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
@@ -111,9 +112,11 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
       throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
+    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
+
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
-            readerContext.getStorage(basePath, storageConf),
+            hoodieStorage,
             keyRanges.subList(0, numFiles),
             timestamps.subList(0, numFiles),
             operationTypes.subList(0, numFiles),
@@ -134,7 +137,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
             0L,
             Long.MAX_VALUE,
             properties,
-            new HoodieHadoopStorage(basePath, storageConf),
+            hoodieStorage,
             readerContext,
             metaClient
         );

@@ -28,6 +28,7 @@ import org.apache.hadoop.fs.FileSystem;
 
 val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
 val beginInstantTime = HoodieDataSourceHelpers.listCommitsSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
+println("Begin instant time for incremental query: " + beginInstantTime)
 val hoodieIncQueryDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
                       option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginInstantTime).

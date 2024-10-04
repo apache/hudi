@@ -404,7 +404,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
   }
 
   test("Test create table like") {
-    if (HoodieSparkUtils.gteqSpark3_1) {
+    if (HoodieSparkUtils.gteqSpark3_3) {
       // 1. Test create table from an existing HUDI table
       withTempDir { tmp =>
         Seq("cow", "mor").foreach { tableType =>
@@ -1110,7 +1110,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     )
   }
 
-  if (HoodieSparkUtils.gteqSpark3_2) {
+  if (HoodieSparkUtils.gteqSpark3_3) {
     test("Test create table with comment") {
       val tableName = generateTableName
       spark.sql(
@@ -1461,6 +1461,98 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         assertResult(tableType)(hoodieCatalogTable.tableTypeName)
         assertResult("ts")(hoodieCatalogTable.preCombineKey.get)
       }
+    }
+  }
+
+  test("Test Create Hoodie Table With Multiple Partitions") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}"
+      // throws error if order in partition by different from that in create table
+      assertThrows[IllegalArgumentException] {
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |    ts BIGINT,
+             |    id STRING,
+             |    rider STRING,
+             |    driver STRING,
+             |    fare DOUBLE,
+             |    city STRING,
+             |    state STRING
+             |) using hudi
+             | options(
+             |    primaryKey ='id'
+             |)
+             |PARTITIONED BY (state, city)
+             |location '$tablePath';
+       """.stripMargin)
+      }
+      // otherwise successful
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |    ts BIGINT,
+           |    id STRING,
+           |    rider STRING,
+           |    driver STRING,
+           |    fare DOUBLE,
+           |    city STRING,
+           |    state STRING
+           |) using hudi
+           | options(
+           |    primaryKey ='id'
+           |)
+           |PARTITIONED BY (city, state)
+           |location '$tablePath';
+       """.stripMargin)
+      // insert and validate
+      spark.sql(s"insert into $tableName values(1695332066,'trip3','rider-E','driver-O',93.50,'austin','texas')")
+      checkAnswer(s"select ts, id, rider, driver, fare, city, state from $tableName")(
+        Seq(1695332066, "trip3", "rider-E", "driver-O", 93.50, "austin", "texas")
+      )
+    }
+  }
+
+  test("Test Create Table In Inconsistent Schemes") {
+    withTempDir { tmp =>
+      val parentPath = tmp.getCanonicalPath
+
+      // test the case that create same table after change schema
+      val tableName1 = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow'
+           | )
+           | location '$parentPath/$tableName1'
+     """.stripMargin)
+      spark.sql(s"insert into $tableName1 values (1, 'a1', 1000)")
+      spark.sql(s"insert into $tableName1 values (1, 'a2', 1100)")
+      spark.sql(s"drop table $tableName1")
+
+      checkExceptionContain(
+        s"""
+           |create table $tableName1 (
+           |  id int,
+           |  name map<string, string>,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts',
+           |  type = 'cow'
+           | )
+           | location '$parentPath/$tableName1'
+     """.stripMargin
+      )("Failed to create catalog table in metastore")
     }
   }
 }

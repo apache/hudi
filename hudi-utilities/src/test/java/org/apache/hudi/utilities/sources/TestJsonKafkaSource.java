@@ -263,6 +263,36 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Test
+  void testErrorEventsForDataInRowFormatWithSanitizationEnabled() {
+    // topic setup.
+    final String topic = TEST_TOPIC_PREFIX + "testErrorEventsForDataInRowFormatWithSanitizationEnabled";
+
+    testUtils.createTopic(topic, 2);
+    List<TopicPartition> topicPartitions = new ArrayList<>();
+    TopicPartition topicPartition0 = new TopicPartition(topic, 0);
+    topicPartitions.add(topicPartition0);
+    TopicPartition topicPartition1 = new TopicPartition(topic, 1);
+    topicPartitions.add(topicPartition1);
+    sendJsonSafeMessagesToKafka(topic, 1000, 2);
+    testUtils.sendMessages(topic, new String[]{"error_event1", "error_event2"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+    props.put(ERROR_TABLE_BASE_PATH.key(),"/tmp/qurantine_table_test/json_kafka_row_events");
+    props.put(ERROR_TARGET_TABLE.key(),"json_kafka_row_events");
+    props.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
+    props.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
+    props.put("hoodie.errortable.validate.targetschema.enable", "true");
+    props.put("hoodie.base.path","/tmp/json_kafka_row_events");
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    Option<BaseErrorTableWriter> errorTableWriter = Option.of(getAnonymousErrorTableWriter(props));
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, errorTableWriter, Option.of(props));
+    assertEquals(1000, kafkaSource.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE).getBatch().get().count());
+    assertEquals(2,((JavaRDD)errorTableWriter.get().getErrorEvents(
+        InProcessTimeGenerator.createNewInstantTime(), Option.empty()).get()).count());
+  }
+
+  @Test
   public void testErrorEventsForDataInAvroFormat() throws IOException {
 
     // topic setup.

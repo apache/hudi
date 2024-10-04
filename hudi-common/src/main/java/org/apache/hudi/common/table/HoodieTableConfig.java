@@ -40,9 +40,12 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -58,6 +61,8 @@ import javax.annotation.concurrent.Immutable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -66,6 +71,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.DATE_TIME_PARSER;
@@ -98,8 +104,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
-      .noDefaultValue("Database name can't have default value as it's used to toggle Hive incremental query feature. See HUDI-2837")
-      .withDocumentation("Database name that will be used for incremental query.If different databases have the same table name during incremental query, "
+      .noDefaultValue()
+      .withDocumentation("Database name. If different databases have the same table name during incremental query, "
           + "we can set it to limit the table name under a specific database");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
@@ -110,21 +116,23 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieTableType> TYPE = ConfigProperty
       .key("hoodie.table.type")
       .defaultValue(HoodieTableType.COPY_ON_WRITE)
-      .withDocumentation("The table type for the underlying data, for this write. This can’t change between writes.");
+      .withDocumentation("The table type for the underlying data.");
 
   public static final ConfigProperty<HoodieTableVersion> VERSION = ConfigProperty
       .key("hoodie.table.version")
-      .defaultValue(HoodieTableVersion.ZERO)
+      .defaultValue(HoodieTableVersion.current())
       .withDocumentation("Version of table, used for running upgrade/downgrade steps between releases with potentially "
           + "breaking/backwards compatible changes.");
 
   public static final ConfigProperty<HoodieTableVersion> INITIAL_VERSION = ConfigProperty
-          .key("hoodie.table.initial.version")
-          .defaultValue(HoodieTableVersion.ZERO)
-          .withDocumentation("Initial Version of table when the table was created. Used for upgrade/downgrade"
-                  + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
-                  + "when the table is initially setup.");
+      .key("hoodie.table.initial.version")
+      .defaultValue(HoodieTableVersion.current())
+      .sinceVersion("1.0.0")
+      .withDocumentation("Initial Version of table when the table was created. Used for upgrade/downgrade"
+          + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
+          + "when the table is initially setup.");
 
+  // TODO: is this this called precombine in 1.0. ..
   public static final ConfigProperty<String> PRECOMBINE_FIELD = ConfigProperty
       .key("hoodie.table.precombine.field")
       .noDefaultValue()
@@ -134,8 +142,8 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_FIELDS = ConfigProperty
       .key("hoodie.table.partition.fields")
       .noDefaultValue()
-      .withDocumentation("Fields used to partition the table. Concatenated values of these fields are used as "
-          + "the partition path, by invoking toString()");
+      .withDocumentation("Comma separated field names used to partition the table. These field names also include "
+          + "the partition type which is used by custom key generators");
 
   public static final ConfigProperty<String> RECORDKEY_FIELDS = ConfigProperty
       .key("hoodie.table.recordkey.fields")
@@ -155,10 +163,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation(HoodieCDCSupplementalLoggingMode.class)
       .sinceVersion("0.13.0");
 
+  // TODO: is this necessary? won't we just use a table schema.
   public static final ConfigProperty<String> CREATE_SCHEMA = ConfigProperty
       .key("hoodie.table.create.schema")
       .noDefaultValue()
-      .withDocumentation("Schema used when creating the table, for the first time.");
+      .withDocumentation("Schema used when creating the table");
 
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.table.base.file.format")
@@ -177,6 +186,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Version of timeline used, by the table.");
 
+  //TODO: why is this the default? not OVERWRITE_WITH_LATEST?
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
       .key("hoodie.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
@@ -187,7 +197,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .key("hoodie.compaction.payload.class")
       .defaultValue(DefaultHoodieRecordPayload.class.getName())
       .deprecatedAfter("1.0.0")
-      .withDocumentation("Payload class to use for performing compactions, i.e merge delta logs with current base file and then "
+      .withDocumentation("Payload class to use for performing merges, compactions, i.e merge delta logs with current base file and then "
           + " produce a new base file.");
 
   public static final ConfigProperty<String> PAYLOAD_TYPE = ConfigProperty
@@ -258,6 +268,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
+  // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
       .defaultValue(HoodieTimelineTimeZone.LOCAL)
@@ -302,6 +313,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Table checksum is used to guard against partial writes in HDFS. It is added as the last entry in hoodie.properties and then used to validate while reading table config.");
 
+  // TODO: understand why is writing/changing all these. this has to work on both HDFS and Cloud.
   public static final ConfigProperty<String> TABLE_METADATA_PARTITIONS_INFLIGHT = ConfigProperty
       .key("hoodie.table.metadata.partitions.inflight")
       .noDefaultValue()
@@ -330,6 +342,23 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final String TABLE_CHECKSUM_FORMAT = "%s.%s"; // <database_name>.<table_name>
 
+  static List<ConfigProperty<?>> definedTableConfigs() {
+    Field[] fields = ReflectionUtils.getClass(HoodieTableConfig.class.getName()).getDeclaredFields();
+    return Arrays.stream(fields)
+        .filter(f -> f.getType().equals(ConfigProperty.class)
+            && Modifier.isPublic(f.getModifiers())
+            && Modifier.isStatic(f.getModifiers())
+        )
+        .map(f -> {
+          try {
+            return (ConfigProperty<?>) f.get(null);
+          } catch (IllegalAccessException e) {
+            throw new HoodieException("Error reading defined table configs, for " + f.getName(), e);
+          }
+        })
+        .collect(Collectors.toList());
+  }
+
   public HoodieTableConfig(HoodieStorage storage, StoragePath metaPath, String payloadClassName, String recordMergerStrategyId) {
     super();
     StoragePath propertyPath = new StoragePath(metaPath, HOODIE_PROPERTIES_FILE);
@@ -353,13 +382,12 @@ public class HoodieTableConfig extends HoodieConfig {
         needStore = true;
       }
       if (needStore) {
-        // FIXME(vc): wonder if this can be removed. Need to look into history.
         try (OutputStream outputStream = storage.create(propertyPath)) {
           storeProperties(props, outputStream);
         }
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Could not load Hoodie properties from " + propertyPath, e);
+      throw new HoodieIOException("Could not load properties from " + propertyPath, e);
     }
   }
 
@@ -469,6 +497,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * Initialize the hoodie meta directory and any necessary files inside the meta (including the hoodie.properties).
+   *
+   * TODO: this directory creation etc should happen in the HoodieTableMetaClient.
    */
   public static void create(HoodieStorage storage, StoragePath metadataFolder, Properties properties)
       throws IOException {
@@ -477,13 +507,16 @@ public class HoodieTableConfig extends HoodieConfig {
     }
     HoodieConfig hoodieConfig = new HoodieConfig(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
+    HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
     try (OutputStream outputStream = storage.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");
       }
       hoodieConfig.setDefaultValue(TYPE);
       if (hoodieConfig.getString(TYPE).equals(HoodieTableType.MERGE_ON_READ.name())) {
-        hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
+        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
+          hoodieConfig.setDefaultValue(PAYLOAD_TYPE);
+        }
         hoodieConfig.setDefaultValue(RECORD_MERGER_STRATEGY);
       }
       hoodieConfig.setDefaultValue(ARCHIVELOG_FOLDER);
@@ -492,14 +525,19 @@ public class HoodieTableConfig extends HoodieConfig {
         hoodieConfig.setValue(TIMELINE_LAYOUT_VERSION, TimelineLayoutVersion.CURR_VERSION.toString());
       }
       if (hoodieConfig.contains(BOOTSTRAP_BASE_PATH)) {
-        // Use the default bootstrap index class.
-        hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
+        if (tableVersion.greaterThan(HoodieTableVersion.SEVEN)) {
+          hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_TYPE, BootstrapIndexType.getBootstrapIndexType(hoodieConfig).toString());
+        } else {
+          // Use the default bootstrap index class.
+          hoodieConfig.setDefaultValue(BOOTSTRAP_INDEX_CLASS_NAME, BootstrapIndexType.getDefaultBootstrapIndexClassName(hoodieConfig));
+        }
       }
       if (hoodieConfig.contains(TIMELINE_TIMEZONE)) {
         HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getString(TIMELINE_TIMEZONE)));
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
+      dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream);
     }
   }
@@ -515,6 +553,97 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static boolean validateChecksum(Properties props) {
     return Long.parseLong(props.getProperty(TABLE_CHECKSUM.key())) == generateChecksum(props);
+  }
+
+  static void dropInvalidConfigs(HoodieConfig config) {
+    HoodieTableVersion tableVersion = getTableVersion(config);
+    Map<String, ConfigProperty<?>> definedTableConfigs = HoodieTableConfig.definedTableConfigs()
+        .stream().collect(Collectors.toMap(ConfigProperty::key, Function.identity()));
+    List<String> invalidConfigs = config.getProps().keySet().stream()
+        .map(k -> (String) k)
+        // TODO: this can be eventually tightened to ensure all table configs are defined.
+        .filter(key -> definedTableConfigs.containsKey(key)
+            && !validateConfigVersion(definedTableConfigs.get(key), tableVersion))
+        .collect(Collectors.toList());
+    invalidConfigs.forEach(key -> {
+      config.getProps().remove(key);
+    });
+  }
+
+  static boolean validateConfigVersion(ConfigProperty<?> configProperty, HoodieTableVersion tableVersion) {
+    // TODO: this can be tightened up, once all configs have a since version.
+    if (!configProperty.getSinceVersion().isPresent()) {
+      return true;
+    }
+    // validate that the table version is greater than or equal to the config version
+    HoodieTableVersion firstVersion = HoodieTableVersion.fromReleaseVersion(configProperty.getSinceVersion().get());
+    boolean valid = tableVersion.greaterThan(firstVersion) || tableVersion.equals(firstVersion);
+    if (!valid) {
+      LOG.warn("Table version {} is lower than or equal to config's first version {}. Config {} will be ignored.",
+          tableVersion, firstVersion, configProperty.key());
+    }
+    return valid;
+  }
+
+  /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
+   */
+  public static Option<String> getPartitionFieldPropForKeyGenerator(HoodieConfig config) {
+    return Option.ofNullable(config.getString(PARTITION_FIELDS));
+  }
+
+  /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
+   * include the key generator partition type with the field. The key generator partition type is used for
+   * Custom Key Generator.
+   */
+  public static Option<List<String>> getPartitionFieldsForKeyGenerator(HoodieConfig config) {
+    return Option.ofNullable(config.getString(PARTITION_FIELDS)).map(field -> Arrays.asList(field.split(BaseKeyGenerator.FIELD_SEPARATOR)));
+  }
+
+  /**
+   * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will
+   * strip the partition key generator related info from the fields.
+   */
+  public static Option<String> getPartitionFieldProp(HoodieConfig config) {
+    // With table version eight, the table config org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS
+    // stores the corresponding partition type as well. This partition type is useful for CustomKeyGenerator
+    // and CustomAvroKeyGenerator.
+    return getPartitionFields(config).map(fields -> String.join(BaseKeyGenerator.FIELD_SEPARATOR, fields));
+  }
+
+  /**
+   * This function returns the partition fields only. This method strips the key generator related
+   * partition key types from the configured fields.
+   */
+  public static Option<String[]> getPartitionFields(HoodieConfig config) {
+    if (contains(PARTITION_FIELDS, config)) {
+      return Option.of(Arrays.stream(config.getString(PARTITION_FIELDS).split(BaseKeyGenerator.FIELD_SEPARATOR))
+          .filter(p -> !p.isEmpty())
+          .map(p -> getPartitionFieldWithoutKeyGenPartitionType(p, config))
+          .collect(Collectors.toList()).toArray(new String[] {}));
+    }
+    return Option.empty();
+  }
+
+  /**
+   * This function returns the partition fields only. The input partition field would contain partition
+   * type corresponding to the custom key generator if table version is eight and if custom key
+   * generator is configured. This function would strip the partition type and return the partition field.
+   */
+  public static String getPartitionFieldWithoutKeyGenPartitionType(String partitionField, HoodieConfig config) {
+    return partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0];
+  }
+
+  /**
+   * This function returns the hoodie.table.version from hoodie.properties file.
+   */
+  public static HoodieTableVersion getTableVersion(HoodieConfig config) {
+    return contains(VERSION, config)
+        ? HoodieTableVersion.fromVersionCode(config.getInt(VERSION))
+        : VERSION.defaultValue();
   }
 
   /**
@@ -534,9 +663,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return the hoodie.table.version from hoodie.properties file.
    */
   public HoodieTableVersion getTableVersion() {
-    return contains(VERSION)
-        ? HoodieTableVersion.versionFromCode(getInt(VERSION))
-        : VERSION.defaultValue();
+    return getTableVersion(this);
   }
 
   /**
@@ -544,12 +671,16 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public HoodieTableVersion getTableInitialVersion() {
     return contains(INITIAL_VERSION)
-            ? HoodieTableVersion.versionFromCode(getInt(INITIAL_VERSION))
+            ? HoodieTableVersion.fromVersionCode(getInt(INITIAL_VERSION))
             : INITIAL_VERSION.defaultValue();
   }
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
+  }
+
+  public void setInitialVersion(HoodieTableVersion initialVersion) {
+    setValue(INITIAL_VERSION, Integer.toString(initialVersion.versionCode()));
   }
 
   public RecordMergeMode getRecordMergeMode() {
@@ -585,11 +716,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public Option<String[]> getPartitionFields() {
-    if (contains(PARTITION_FIELDS)) {
-      return Option.of(Arrays.stream(getString(PARTITION_FIELDS).split(","))
-          .filter(p -> p.length() > 0).collect(Collectors.toList()).toArray(new String[] {}));
-    }
-    return Option.empty();
+    return getPartitionFields(this);
   }
 
   public boolean isTablePartitioned() {
@@ -612,33 +739,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public String getPartitionFieldProp() {
     // NOTE: We're adding a stub returning empty string to stay compatible w/ pre-existing
     //       behavior until this method is fully deprecated
-    return Option.ofNullable(getString(PARTITION_FIELDS)).orElse("");
-  }
-
-  /**
-   * Read the payload class for HoodieRecords from the table properties.
-   */
-  public String getBootstrapIndexClass() {
-    if (!props.getBoolean(BOOTSTRAP_INDEX_ENABLE.key(), BOOTSTRAP_INDEX_ENABLE.defaultValue())) {
-      return BootstrapIndexType.NO_OP.getClassName();
-    }
-    String bootstrapIndexClassName;
-    if (contains(BOOTSTRAP_INDEX_TYPE)) {
-      bootstrapIndexClassName = BootstrapIndexType.valueOf(getString(BOOTSTRAP_INDEX_TYPE)).getClassName();
-    } else if (contains(BOOTSTRAP_INDEX_CLASS_NAME)) {
-      bootstrapIndexClassName = getString(BOOTSTRAP_INDEX_CLASS_NAME);
-    } else {
-      bootstrapIndexClassName = BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
-    }
-    return bootstrapIndexClassName;
-  }
-
-  public static String getDefaultBootstrapIndexClass(Properties props) {
-    HoodieConfig hoodieConfig = new HoodieConfig(props);
-    if (!hoodieConfig.getBooleanOrDefault(BOOTSTRAP_INDEX_ENABLE)) {
-      return BootstrapIndexType.NO_OP.getClassName();
-    }
-    return BootstrapIndexType.valueOf(BOOTSTRAP_INDEX_TYPE.defaultValue()).getClassName();
+    return getPartitionFieldProp(this).orElse("");
   }
 
   public Option<String> getBootstrapBasePath() {
@@ -743,13 +844,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public boolean isMultipleBaseFileFormatsEnabled() {
     return getBooleanOrDefault(MULTIPLE_BASE_FILE_FORMATS_ENABLE);
-  }
-
-  /**
-   * Read the table checksum.
-   */
-  private Long getTableChecksum() {
-    return getLong(TABLE_CHECKSUM);
   }
 
   public Set<String> getMetadataPartitionsInflight() {

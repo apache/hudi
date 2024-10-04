@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
@@ -131,6 +132,12 @@ public class HoodieTestUtils {
     return init(getDefaultStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
   }
 
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, HoodieTableVersion version) throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
+    return init(getDefaultStorageConf(), basePath, tableType, properties);
+  }
+
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath) throws IOException {
     return init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
@@ -181,12 +188,16 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
-    HoodieTableMetaClient.PropertyBuilder builder =
-        HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder =
+        HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
             .setTableType(tableType)
             .setPayloadClass(HoodieAvroPayload.class);
+
+    if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()) != null) {
+      builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));
+    }
 
     String keyGen = properties.getProperty("hoodie.datasource.write.keygenerator.class");
     if (!Objects.equals(keyGen, "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
@@ -194,9 +205,8 @@ public class HoodieTestUtils {
       builder.setPartitionFields("some_nonexistent_field");
     }
 
-    Properties processedProperties = builder.fromProperties(properties).build();
-
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, processedProperties);
+    return builder.fromProperties(properties)
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {

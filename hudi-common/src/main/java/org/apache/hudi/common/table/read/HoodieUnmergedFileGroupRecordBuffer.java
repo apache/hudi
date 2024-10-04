@@ -62,7 +62,7 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = baseFileIterator.next();
+      nextRecord = readerContext.seal(baseFileIterator.next());
       return true;
     }
 
@@ -130,7 +130,7 @@ public class HoodieUnmergedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     records.put(index, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue())));
+        deleteRecord.getRecordKey(), deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), orderingFieldType)));
   }
 
   @Override

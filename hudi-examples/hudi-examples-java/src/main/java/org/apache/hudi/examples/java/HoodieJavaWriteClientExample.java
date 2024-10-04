@@ -47,9 +47,10 @@ import java.util.stream.Collectors;
 /**
  * Simple examples of #{@link HoodieJavaWriteClient}.
  *
- * Usage: HoodieJavaWriteClientExample <tablePath> <tableName>
+ * Usage: HoodieJavaWriteClientExample <tablePath> <tableName> <tableType>
  * <tablePath> and <tableName> describe root path of hudi and table name
- * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt`
+ * <tableType> describe table's type, now support mor and cow, default value is cow
+ * for example, `HoodieJavaWriteClientExample file:///tmp/hoodie/sample-table hoodie_rt mor`
  */
 public class HoodieJavaWriteClientExample {
 
@@ -57,13 +58,21 @@ public class HoodieJavaWriteClientExample {
 
   private static String tableType = HoodieTableType.COPY_ON_WRITE.name();
 
+  private static final String MOR_STR = "mor";
+
   public static void main(String[] args) throws Exception {
-    if (args.length < 2) {
-      System.err.println("Usage: HoodieJavaWriteClientExample <tablePath> <tableName>");
+    if (args.length < 3) {
+      System.err.println("Usage: HoodieJavaWriteClientExample <tablePath> <tableName> <tableType: [cow|mor]>");
       System.exit(1);
     }
     String tablePath = args[0];
     String tableName = args[1];
+    String tableTypeStr = args[2];
+    if (tableTypeStr != null && tableTypeStr.equals(MOR_STR)) {
+      tableType = HoodieTableType.MERGE_ON_READ.name();
+    }
+
+    LOG.info("Start JavaWriteClient example with tablePath: {}, tableName: {}, tableType: {}", tablePath, tableName, tableType);
 
     // Generator of some records to be loaded in.
     HoodieExampleDataGenerator<HoodieAvroPayload> dataGen = new HoodieExampleDataGenerator<>();
@@ -73,7 +82,7 @@ public class HoodieJavaWriteClientExample {
     Path path = new Path(tablePath);
     FileSystem fs = HadoopFSUtils.getFs(tablePath, storageConf);
     if (!fs.exists(path)) {
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .setTableType(tableType)
         .setTableName(tableName)
           .setPayloadClassName(HoodieAvroPayload.class.getName())
@@ -92,27 +101,27 @@ public class HoodieJavaWriteClientExample {
 
       // inserts
       String newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
 
       List<HoodieRecord<HoodieAvroPayload>> records = dataGen.generateInserts(newCommitTime, 10);
       List<HoodieRecord<HoodieAvroPayload>> recordsSoFar = new ArrayList<>(records);
       List<HoodieRecord<HoodieAvroPayload>> writeRecords =
-          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+          recordsSoFar.stream().map(HoodieAvroRecord::new).collect(Collectors.toList());
       client.insert(writeRecords, newCommitTime);
 
       // updates
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
       List<HoodieRecord<HoodieAvroPayload>> toBeUpdated = dataGen.generateUpdates(newCommitTime, 2);
       records.addAll(toBeUpdated);
       recordsSoFar.addAll(toBeUpdated);
       writeRecords =
-          recordsSoFar.stream().map(r -> new HoodieAvroRecord<HoodieAvroPayload>(r)).collect(Collectors.toList());
+          recordsSoFar.stream().map(HoodieAvroRecord::new).collect(Collectors.toList());
       client.upsert(writeRecords, newCommitTime);
 
       // Delete
       newCommitTime = client.startCommit();
-      LOG.info("Starting commit " + newCommitTime);
+      LOG.info("Starting commit {}", newCommitTime);
       // just delete half of the records
       int numToDelete = recordsSoFar.size() / 2;
       List<HoodieKey> toBeDeleted =

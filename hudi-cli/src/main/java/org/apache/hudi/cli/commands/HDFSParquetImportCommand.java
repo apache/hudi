@@ -74,12 +74,12 @@ public class HDFSParquetImportCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
 
-    String cmd = SparkCommand.IMPORT.toString();
+    SparkCommand cmd = SparkCommand.IMPORT;
     if (useUpsert) {
-      cmd = SparkCommand.UPSERT.toString();
+      cmd = SparkCommand.UPSERT;
     }
 
-    sparkLauncher.addAppArgs(cmd, master, sparkMemory, srcPath, targetPath, tableName, tableType, rowKeyField,
+    SparkMain.addAppArgs(sparkLauncher, cmd, master, sparkMemory, srcPath, targetPath, tableName, tableType, rowKeyField,
         partitionPathField, parallelism, schemaFilePath, retry, propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();

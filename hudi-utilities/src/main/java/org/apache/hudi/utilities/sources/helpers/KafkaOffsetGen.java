@@ -28,6 +28,7 @@ import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 
+import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -49,7 +50,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,9 +57,12 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredProperties;
+import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET;
+import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_CHECKPOINT_TYPE_TIMESTAMP;
 import static org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils.checkTopicCheckpoint;
 
 /**
@@ -70,7 +73,6 @@ public class KafkaOffsetGen {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOffsetGen.class);
   private static final String METRIC_NAME_KAFKA_DELAY_COUNT = "kafkaDelayCount";
   private static final Comparator<OffsetRange> SORT_BY_PARTITION = Comparator.comparing(OffsetRange::partition);
-  public static final String KAFKA_CHECKPOINT_TYPE_TIMESTAMP = "timestamp";
 
   public static class CheckpointUtils {
     /**
@@ -258,13 +260,13 @@ public class KafkaOffsetGen {
     long numEvents;
     if (sourceLimit == Long.MAX_VALUE) {
       numEvents = maxEventsToReadFromKafka;
-      LOG.info("SourceLimit not configured, set numEvents to default value : " + maxEventsToReadFromKafka);
+      LOG.info("SourceLimit not configured, set numEvents to default value : {}", maxEventsToReadFromKafka);
     } else {
       numEvents = sourceLimit;
     }
 
     long minPartitions = getLongWithAltKeys(props, KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS);
-    LOG.info("getNextOffsetRanges set config " + KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key() + " to " + minPartitions);
+    LOG.info("getNextOffsetRanges set config {} to {}", KafkaSourceConfig.KAFKA_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
     return getNextOffsetRanges(lastCheckpointStr, numEvents, minPartitions, metrics);
   }
@@ -273,7 +275,7 @@ public class KafkaOffsetGen {
     // Obtain current metadata for the topic
     Map<TopicPartition, Long> fromOffsets;
     Map<TopicPartition, Long> toOffsets;
-    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+    try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, kafkaParams)) {
       if (!checkTopicExists(consumer)) {
         throw new HoodieException("Kafka topic:" + topicName + " does not exist");
       }
@@ -281,8 +283,14 @@ public class KafkaOffsetGen {
       Set<TopicPartition> topicPartitions = partitionInfoList.stream()
               .map(x -> new TopicPartition(x.topic(), x.partition())).collect(Collectors.toSet());
 
-      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equals(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
+      if (KAFKA_CHECKPOINT_TYPE_TIMESTAMP.equalsIgnoreCase(kafkaCheckpointType) && isValidTimestampCheckpointType(lastCheckpointStr)) {
         lastCheckpointStr = getOffsetsByTimestamp(consumer, partitionInfoList, topicPartitions, topicName, Long.parseLong(lastCheckpointStr.get()));
+      } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType) && partitionInfoList.size() != 1) {
+        throw new HoodieException("Kafka topic " + topicName + " has " + partitionInfoList.size()
+            + " partitions (more than 1). single_offset checkpoint type is not applicable.");
+      } else if (KAFKA_CHECKPOINT_TYPE_SINGLE_OFFSET.equalsIgnoreCase(kafkaCheckpointType)
+          && partitionInfoList.size() == 1 && isValidOffsetCheckpointType(lastCheckpointStr)) {
+        lastCheckpointStr = Option.of(topicName + ",0:" + lastCheckpointStr.get());
       }
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
@@ -317,22 +325,12 @@ public class KafkaOffsetGen {
    * @param topicName
    */
   private List<PartitionInfo> fetchPartitionInfos(KafkaConsumer consumer, String topicName) {
-    long timeout = getLongWithAltKeys(this.props, KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT);
-    long start = System.currentTimeMillis();
-
-    List<PartitionInfo> partitionInfos;
-    do {
-      // TODO(HUDI-4625) cleanup, introduce retrying client
-      partitionInfos = consumer.partitionsFor(topicName);
-      try {
-        if (partitionInfos == null) {
-          TimeUnit.SECONDS.sleep(10);
-        }
-      } catch (InterruptedException e) {
-        LOG.error("Sleep failed while fetching partitions");
-      }
-    } while (partitionInfos == null && (System.currentTimeMillis() <= (start + timeout)));
-
+    if (containsConfigProperty(this.props, KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT)) {
+      LOG.warn("{} is deprecated and is not taking effect anymore. Use {}, {} and {} for setting up retrying configuration of KafkaConsumer",
+          KafkaSourceConfig.KAFKA_FETCH_PARTITION_TIME_OUT.key(), KafkaSourceConfig.INITIAL_RETRY_INTERVAL_MS.key(),
+          KafkaSourceConfig.MAX_RETRY_INTERVAL_MS.key(), KafkaSourceConfig.MAX_RETRY_COUNT.key());
+    }
+    List<PartitionInfo> partitionInfos = consumer.partitionsFor(topicName);
     if (partitionInfos == null) {
       throw new HoodieStreamerException(String.format("Can not find metadata for topic %s from kafka cluster", topicName));
     }
@@ -369,8 +367,7 @@ public class KafkaOffsetGen {
       if (getBooleanWithAltKeys(this.props, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS)) {
         throw new HoodieStreamerException(message);
       } else {
-        LOG.warn(message
-            + " If you want Hudi Streamer to fail on such cases, set \"" + KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "\" to \"true\".");
+        LOG.warn("{} If you want Hudi Streamer to fail on such cases, set \"{}\" to \"true\".", message, KafkaSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key());
       }
     }
     return isCheckpointOutOfBounds ? earliestOffsets : checkpointOffsets;
@@ -388,6 +385,24 @@ public class KafkaOffsetGen {
     Pattern pattern = Pattern.compile("[-+]?[0-9]+(\\.[0-9]+)?");
     Matcher isNum = pattern.matcher(lastCheckpointStr.get());
     return isNum.matches() && (lastCheckpointStr.get().length() == 13 || lastCheckpointStr.get().length() == 10);
+  }
+
+  /**
+   * Check if checkpoint is a single offset
+   * @param lastCheckpointStr
+   * @return
+   */
+  private Boolean isValidOffsetCheckpointType(Option<String> lastCheckpointStr) {
+    if (!lastCheckpointStr.isPresent()) {
+      return false;
+    }
+    try {
+      Long.parseUnsignedLong(lastCheckpointStr.get());
+      return true;
+    } catch (NumberFormatException ex) {
+      LOG.warn("Checkpoint type is set to single_offset, but provided value of checkpoint=\"{}\" is not a valid number", lastCheckpointStr.get());
+      return false;
+    }
   }
 
   private Long delayOffsetCalculation(Option<String> lastCheckpointStr, Set<TopicPartition> topicPartitions, KafkaConsumer consumer) {
@@ -424,16 +439,15 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> earliestOffsets = consumer.beginningOffsets(topicPartitions);
     Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = consumer.offsetsForTimes(topicPartitionsTimestamp);
 
-    StringBuilder sb = new StringBuilder();
-    sb.append(topicName + ",");
+    StringBuilder sb = new StringBuilder(topicName);
     for (Map.Entry<TopicPartition, OffsetAndTimestamp> map : offsetAndTimestamp.entrySet()) {
       if (map.getValue() != null) {
-        sb.append(map.getKey().partition()).append(":").append(map.getValue().offset()).append(",");
+        sb.append(",").append(map.getKey().partition()).append(":").append(map.getValue().offset());
       } else {
-        sb.append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey())).append(",");
+        sb.append(",").append(map.getKey().partition()).append(":").append(earliestOffsets.get(map.getKey()));
       }
     }
-    return Option.of(sb.deleteCharAt(sb.length() - 1).toString());
+    return Option.of(sb.toString());
   }
 
   /**
@@ -454,7 +468,7 @@ public class KafkaOffsetGen {
     return kafkaParams;
   }
 
-  private Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
+  public static Map<String, Object> excludeHoodieConfigs(TypedProperties props) {
     Map<String, Object> kafkaParams = new HashMap<>();
     props.keySet().stream().filter(prop -> {
       // In order to prevent printing unnecessary warn logs, here filter out the hoodie
@@ -477,7 +491,7 @@ public class KafkaOffsetGen {
     checkRequiredProperties(props, Collections.singletonList(ConsumerConfig.GROUP_ID_CONFIG));
     Map<TopicPartition, Long> offsetMap = CheckpointUtils.strToOffsets(checkpointStr);
     Map<TopicPartition, OffsetAndMetadata> offsetAndMetadataMap = new HashMap<>(offsetMap.size());
-    try (KafkaConsumer consumer = new KafkaConsumer(kafkaParams)) {
+    try (KafkaConsumer consumer = new HoodieRetryingKafkaConsumer(props, kafkaParams)) {
       offsetMap.forEach((topicPartition, offset) -> offsetAndMetadataMap.put(topicPartition, new OffsetAndMetadata(offset)));
       consumer.commitSync(offsetAndMetadataMap);
     } catch (CommitFailedException | TimeoutException e) {

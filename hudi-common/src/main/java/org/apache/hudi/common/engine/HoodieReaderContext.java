@@ -19,16 +19,14 @@
 
 package org.apache.hudi.common.engine;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.read.HoodieFileGroupReaderSchemaHandler;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -145,15 +143,6 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_SCHEMA = "_5";
 
   /**
-   * Gets the file system based on the file path and configuration.
-   *
-   * @param path File path to get the file system.
-   * @param conf {@link StorageConfiguration} for I/O.
-   * @return The {@link HoodieStorage} instance to use.
-   */
-  public abstract HoodieStorage getStorage(String path, StorageConfiguration<?> conf);
-
-  /**
    * Gets the record iterator based on the type of engine-specific record representation from the
    * file.
    *
@@ -168,6 +157,24 @@ public abstract class HoodieReaderContext<T> {
   public abstract ClosableIterator<T> getFileRecordIterator(
       StoragePath filePath, long start, long length, Schema dataSchema, Schema requiredSchema,
       HoodieStorage storage) throws IOException;
+
+  /**
+   * Gets the record iterator based on the type of engine-specific record representation from the
+   * file.
+   *
+   * @param storagePathInfo {@link StoragePathInfo} instance of a file.
+   * @param start           Starting byte to start reading.
+   * @param length          Bytes to read.
+   * @param dataSchema      Schema of records in the file in {@link Schema}.
+   * @param requiredSchema  Schema containing required fields to read in {@link Schema} for projection.
+   * @param storage         {@link HoodieStorage} for reading records.
+   * @return {@link ClosableIterator<T>} that can return all records through iteration.
+   */
+  public ClosableIterator<T> getFileRecordIterator(
+      StoragePathInfo storagePathInfo, long start, long length, Schema dataSchema, Schema requiredSchema,
+      HoodieStorage storage) throws IOException {
+    return getFileRecordIterator(storagePathInfo.getPath(), start, length, dataSchema, requiredSchema, storage);
+  }
 
   /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
@@ -211,25 +218,29 @@ public abstract class HoodieReaderContext<T> {
    * @param recordOption An option of record.
    * @param metadataMap  A map containing the record metadata.
    * @param schema       The Avro schema of the record.
-   * @param props        Properties.
+   * @param orderingFieldName name of the ordering field
+   * @param orderingFieldType type of the ordering field
+   * @param orderingFieldDefault default value for ordering
    * @return The ordering value.
    */
   public Comparable getOrderingValue(Option<T> recordOption,
                                      Map<String, Object> metadataMap,
                                      Schema schema,
-                                     TypedProperties props) {
+                                     String orderingFieldName,
+                                     Schema.Type orderingFieldType,
+                                     Comparable orderingFieldDefault) {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
 
-    if (!recordOption.isPresent()) {
-      return 0;
+    if (!recordOption.isPresent() || orderingFieldName == null) {
+      return orderingFieldDefault;
     }
 
-    String orderingFieldName = ConfigUtils.getOrderingField(props);
     Object value = getValue(recordOption.get(), schema, orderingFieldName);
-    return value != null ? (Comparable) value : 0;
-
+    Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldType) : orderingFieldDefault;
+    metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
+    return finalOrderingVal;
   }
 
   /**
@@ -251,18 +262,6 @@ public abstract class HoodieReaderContext<T> {
   public abstract T seal(T record);
 
   /**
-   * Compares values in different types which can contain engine-specific types.
-   *
-   * @param o1 {@link Comparable} object.
-   * @param o2 other {@link Comparable} object to compare to.
-   * @return comparison result.
-   */
-  public int compareTo(Comparable o1, Comparable o2) {
-    throw new IllegalArgumentException("Cannot compare values in different types: "
-        + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")");
-  }
-
-  /**
    * Generates metadata map based on the information.
    *
    * @param recordKey     Record key in String.
@@ -271,11 +270,11 @@ public abstract class HoodieReaderContext<T> {
    * @return A mapping containing the metadata.
    */
   public Map<String, Object> generateMetadataForRecord(
-      String recordKey, String partitionPath, Comparable orderingVal) {
+      String recordKey, String partitionPath, Comparable orderingVal, Schema.Type orderingFieldType) {
     Map<String, Object> meta = new HashMap<>();
     meta.put(INTERNAL_META_RECORD_KEY, recordKey);
     meta.put(INTERNAL_META_PARTITION_PATH, partitionPath);
-    meta.put(INTERNAL_META_ORDERING_FIELD, orderingVal);
+    meta.put(INTERNAL_META_ORDERING_FIELD, castValue(orderingVal, orderingFieldType));
     return meta;
   }
 
@@ -335,6 +334,8 @@ public abstract class HoodieReaderContext<T> {
   public final UnaryOperator<T> projectRecord(Schema from, Schema to) {
     return projectRecord(from, to, Collections.emptyMap());
   }
+
+  public abstract Comparable castValue(Comparable value, Schema.Type newType);
 
   /**
    * Extracts the record position value from the record itself.

@@ -38,7 +38,7 @@ case class AlterHoodieTableRenameCommand(
       val hoodieCatalogTable = HoodieCatalogTable(sparkSession, oldName)
 
       // Init table with new name.
-      HoodieTableMetaClient.withPropertyBuilder()
+      HoodieTableMetaClient.newTableBuilder()
         .fromProperties(hoodieCatalogTable.tableConfig.getProps)
         .setTableName(newName.table)
         .initTable(

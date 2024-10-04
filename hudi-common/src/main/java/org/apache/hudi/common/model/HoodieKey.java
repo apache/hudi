@@ -42,7 +42,8 @@ public class HoodieKey implements Serializable {
   private String partitionPath;
 
   // Required for serializer
-  public HoodieKey() {}
+  public HoodieKey() {
+  }
 
   public HoodieKey(String recordKey, String partitionPath) {
     this.recordKey = recordKey;

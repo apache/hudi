@@ -94,12 +94,12 @@ public class HoodieJavaWriteClient<T> extends
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config) {
-    return HoodieJavaTable.create(config, context);
+    return createTableAndValidate(config, HoodieJavaTable::create);
   }
 
   @Override
   protected HoodieTable createTable(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    return HoodieJavaTable.create(config, context, metaClient);
+    return createTableAndValidate(config, metaClient, HoodieJavaTable::create);
   }
 
   @Override

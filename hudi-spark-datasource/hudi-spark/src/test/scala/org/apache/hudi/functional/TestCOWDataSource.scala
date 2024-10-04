@@ -66,6 +66,7 @@ import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
 
+import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 
@@ -560,14 +561,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
     val snapshotQueryRes = spark.read.format("hudi").options(readOpts).load(pathForReader)
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    if (enableFileIndex) {
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022/01/02'").count, 30)
-    } else {
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
-      assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
-    }
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-01'").count, 20)
+    assertEquals(snapshotQueryRes.where("partition = '2022-01-02'").count, 30)
 
     // incremental query
     val incrementalQueryRes = spark.read.format("hudi")
@@ -716,6 +711,43 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       } finally {
         countDownLatch.countDown()
       }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings =  Array(
+    "_row_key,non_existent_field|Record key field 'non_existent_field' does not exist in the input record",
+    "non_existent_field|recordKey value: \"null\" for field: \"non_existent_field\" cannot be null or empty.",
+    "_row_key,tip_history.non_existent_field|Record key field 'tip_history.non_existent_field' does not exist in the input record",
+    "tip_history.non_existent_field|recordKey value: \"null\" for field: \"tip_history.non_existent_field\" cannot be null or empty."))
+  def testMissingRecordkeyField(args: String): Unit = {
+    val splits = args.split('|')
+    val recordKeyFields = splits(0)
+    val errorMessage = splits(1)
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 5)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    try {
+      inputDF1.write.format("hudi")
+        .option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), recordKeyFields)
+        .option(HoodieWriteConfig.TBL_NAME.key, "hoodie_test")
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+      fail("should fail when the specified record key field does not exist")
+    } catch {
+      case e: Exception => assertTrue(containsErrorMessage(e, errorMessage))
+    }
+  }
+
+  @tailrec
+  private def containsErrorMessage(e: Throwable, message: String): Boolean = {
+    if (e != null) {
+      if (e.getMessage.contains(message)) {
+        true
+      } else {
+        containsErrorMessage(e.getCause, message)
+      }
+    } else {
+      false
     }
   }
 
@@ -1494,15 +1526,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     assert(firstDF.count() == 2)
 
-    // data_date is the partition field. Persist to the parquet file using the origin values, and read it.
-    // TODO(HUDI-3204) we have to revert this to pre-existing behavior from 0.10
-    val expectedValues = if (useGlobbing || !enableFileIndex) {
-      Seq("2018-09-23", "2018-09-24")
-    } else {
-      Seq("2018/09/23", "2018/09/24")
-    }
+    assertEquals(
+      Seq("2018-09-23", "2018-09-24"),
+      firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq
+    )
 
-    assertEquals(expectedValues, firstDF.select("data_date").map(_.get(0).toString).collect().sorted.toSeq)
     assertEquals(
       Seq("2018/09/23", "2018/09/24"),
       firstDF.select("_hoodie_partition_path").map(_.get(0).toString).collect().sorted.toSeq
@@ -1772,7 +1800,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.DefaultSparkRecordMerger"
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 

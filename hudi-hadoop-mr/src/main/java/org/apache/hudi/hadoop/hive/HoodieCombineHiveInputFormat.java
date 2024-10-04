@@ -18,13 +18,24 @@
 
 package org.apache.hudi.hadoop.hive;
 
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormatBase;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -96,7 +107,7 @@ import java.util.concurrent.Future;
  * CombineHiveInputFormat is a parameterized InputFormat which looks at the path name and determine the correct
  * InputFormat for that path name from mapredPlan.pathToPartitionInfo(). It can be used to read files with different
  * input format in the same map-reduce job.
- *
+ * <p>
  * NOTE : This class is implemented to work with Hive 2.x +
  */
 public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extends Writable>
@@ -108,6 +119,8 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   // max number of threads we can use to check non-combinable paths
   private static final int MAX_CHECK_NONCOMBINABLE_THREAD_NUM = 50;
   private static final int DEFAULT_NUM_PATH_PER_THREAD = 100;
+  public static final String INTERNAL_SCHEMA_CACHE_KEY_PREFIX = "hudi.hive.internal.schema.cache.key.prefix";
+  public static final String SCHEMA_CACHE_KEY_PREFIX = "hudi.hive.schema.cache.key.prefix";
 
   protected String getParquetInputFormatClassName() {
     return HoodieParquetInputFormat.class.getName();
@@ -375,6 +388,43 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     // clear work from ThreadLocal after splits generated in case of thread is reused in pool.
     Utilities.clearWorkMapForConf(job);
 
+    // build internal schema for the query
+    if (!result.isEmpty()) {
+      ArrayList<String> uniqTablePaths = new ArrayList<>();
+      Arrays.stream(paths).forEach(path -> {
+        final HoodieStorage storage;
+        try {
+          storage = new HoodieHadoopStorage(path.getFileSystem(job));
+          Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
+          if (tablePath.isPresent()) {
+            uniqTablePaths.add(tablePath.get().toUri().toString());
+          }
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
+
+      try {
+        for (String path : uniqTablePaths) {
+          HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(new HadoopStorageConfiguration(job)).build();
+          TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+          String avroSchema = schemaUtil.getTableAvroSchema().toString();
+          Option<InternalSchema> internalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata();
+          if (internalSchema.isPresent()) {
+            LOG.info("Set internal and avro schema cache with path: " + path);
+            job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, avroSchema);
+            job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, SerDeHelper.toJson(internalSchema.get()));
+          } else {
+            // always sets up the cache so that we can distinguish with the scenario where the cache was never set(e.g. in tests).
+            job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, "");
+            job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, "");
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Fail to set schema cache", e);
+      }
+    }
+
     LOG.info("Number of all splits " + result.size());
     perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.GET_SPLITS);
     return result.toArray(new InputSplit[result.size()]);
@@ -390,6 +440,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
   /**
    * HiveFileFormatUtils.getPartitionDescFromPathRecursively is no longer available since Hive 3.
    * This method is to make it compatible with both Hive 2 and Hive 3.
+   *
    * @param pathToPartitionInfo
    * @param dir
    * @param cacheMap
@@ -397,7 +448,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
    * @throws IOException
    */
   private static PartitionDesc getPartitionFromPath(Map<Path, PartitionDesc> pathToPartitionInfo, Path dir,
-      Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap)
+                                                    Map<Map<Path, PartitionDesc>, Map<Path, PartitionDesc>> cacheMap)
       throws IOException {
     Method method;
     try {
@@ -554,6 +605,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     if (inputFormatClass.getName().equals(getParquetRealtimeInputFormatClassName())) {
       HoodieCombineFileInputFormatShim shims = createInputFormatShim();
       IOContextMap.get(job).setInputPath(((CombineHiveInputSplit) split).getPath(0));
+      job.set("hudi.hive.realtime","true");
       return shims.getRecordReader(job, ((CombineHiveInputSplit) split).getInputSplitShim(),
           reporter, CombineHiveRecordReader.class);
     } else {
@@ -594,7 +646,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     }
 
     public CombineHiveInputSplit(JobConf job, CombineFileSplit inputSplitShim,
-        Map<Path, PartitionDesc> pathToPartitionInfo) throws IOException {
+                                 Map<Path, PartitionDesc> pathToPartitionInfo) throws IOException {
       this.inputSplitShim = inputSplitShim;
       this.pathToPartitionInfo = pathToPartitionInfo;
       if (job != null) {
@@ -766,7 +818,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
     private final String deserializerClassName;
 
     public CombinePathInputFormat(List<Operator<? extends OperatorDesc>> opList, String inputFormatClassName,
-        String deserializerClassName) {
+                                  String deserializerClassName) {
       this.opList = opList;
       this.inputFormatClassName = inputFormatClassName;
       this.deserializerClassName = deserializerClassName;
@@ -929,13 +981,13 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
         int counter = 0;
         for (int pos = 0; pos < splits.length; pos++) {
           if (counter == maxSize - 1 || pos == splits.length - 1) {
-            builder.addSplit((FileSplit)splits[pos]);
+            builder.addSplit((FileSplit) splits[pos]);
             combineFileSplits.add(builder.build(job));
             builder = new HoodieCombineRealtimeFileSplit.Builder();
             counter = 0;
           } else if (counter < maxSize) {
             counter++;
-            builder.addSplit((FileSplit)splits[pos]);
+            builder.addSplit((FileSplit) splits[pos]);
           }
         }
         return combineFileSplits.toArray(new CombineFileSplit[combineFileSplits.size()]);
@@ -962,7 +1014,7 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
 
     @Override
     public RecordReader getRecordReader(JobConf job, CombineFileSplit split, Reporter reporter,
-        Class<RecordReader<K, V>> rrClass) throws IOException {
+                                        Class<RecordReader<K, V>> rrClass) throws IOException {
       isRealTime = Boolean.valueOf(job.get("hudi.hive.realtime", "false"));
       if (isRealTime) {
         List<RecordReader> recordReaders = new LinkedList<>();

@@ -121,7 +121,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\": \"rider\", \"type\": \"string\"}," + "{\"name\": \"driver\", \"type\": \"string\"},"
       + "{\"name\": \"begin_lat\", \"type\": \"double\"}," + "{\"name\": \"begin_lon\", \"type\": \"double\"},"
       + "{\"name\": \"end_lat\", \"type\": \"double\"}," + "{\"name\": \"end_lon\", \"type\": \"double\"},";
-  public static final String TRIP_SCHEMA_SUFFIX = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false} ]}";
+  public static final String HOODIE_IS_DELETED_SCHEMA = "{\"name\": \"_hoodie_is_deleted\", \"type\": \"boolean\", \"default\": false}";
+  public static final String TRIP_SCHEMA_SUFFIX = HOODIE_IS_DELETED_SCHEMA + " ]}";
   public static final String FARE_NESTED_SCHEMA = "{\"name\": \"fare\",\"type\": {\"type\":\"record\", \"name\":\"fare\",\"fields\": ["
       + "{\"name\": \"amount\",\"type\": \"double\"},{\"name\": \"currency\", \"type\": \"string\"}]}},";
   public static final String FARE_FLATTENED_SCHEMA = "{\"name\": \"fare\", \"type\": \"double\"},"
@@ -380,7 +381,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateGenericRecord(rowKey, partitionPath, riderName, driverName, timestamp, false, false);
   }
 
-
   /**
    * Populate rec with values for TRIP_SCHEMA_PREFIX
    */
@@ -468,8 +468,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       rec.put("_hoodie_is_deleted", false);
     }
   }
-
-
+  
   /**
    * Generate record conforming to TRIP_EXAMPLE_SCHEMA or TRIP_FLATTENED_SCHEMA if isFlattened is true
    */

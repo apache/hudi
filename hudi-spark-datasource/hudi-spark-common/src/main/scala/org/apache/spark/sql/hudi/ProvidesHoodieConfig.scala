@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceWriteOptions, HoodieFileIndex}
 import org.apache.hudi.AutoRecordKeyGenerationUtils.shouldAutoGenerateRecordKeys
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toProperties
-import org.apache.hudi.common.config.{DFSPropertiesConfiguration, TypedProperties}
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, TypedProperties}
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{ReflectionUtils, StringUtils}
@@ -29,7 +29,7 @@ import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWr
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
-import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
+import org.apache.hudi.keygen.{BaseKeyGenerator, ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.spark.internal.Logging
@@ -48,7 +48,6 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -192,7 +191,8 @@ trait ProvidesHoodieConfig extends Logging {
     // NOTE: Here we fallback to "" to make sure that null value is not overridden with
     // default value ("ts")
     // TODO(HUDI-3456) clean up
-    val preCombineField = combinedOpts.getOrElse(PRECOMBINE_FIELD.key, "")
+    val preCombineField = combinedOpts.getOrElse(HoodieTableConfig.PRECOMBINE_FIELD.key,
+      combinedOpts.getOrElse(PRECOMBINE_FIELD.key, ""))
 
     val hiveStylePartitioningEnable = Option(tableConfig.getHiveStylePartitioningEnable).getOrElse("true")
     val urlEncodePartitioning = Option(tableConfig.getUrlEncodePartitioning).getOrElse("false")
@@ -556,12 +556,11 @@ object ProvidesHoodieConfig {
       val keyGenClass = ReflectionUtils.getClass(tableConfigKeyGeneratorClassName)
       if (classOf[CustomKeyGenerator].equals(keyGenClass)
         || classOf[CustomAvroKeyGenerator].equals(keyGenClass)) {
-        // For custom key generator, we have to take the write config value from
-        // "hoodie.datasource.write.partitionpath.field" which contains the key generator
-        // type, whereas the table config only contains the prtition field names without
-        // key generator types.
+        val partitionFieldWithKeyGenType = HoodieTableConfig.getPartitionFieldPropForKeyGenerator(catalogTable.tableConfig).orElse("")
         if (writeConfigPartitionField.isDefined) {
           writeConfigPartitionField.get
+        } else if (StringUtils.nonEmpty(partitionFieldWithKeyGenType)) {
+          partitionFieldWithKeyGenType
         } else {
           log.warn("Write config \"hoodie.datasource.write.partitionpath.field\" is not set for "
             + "custom key generator. This may fail the write operation.")
@@ -572,6 +571,12 @@ object ProvidesHoodieConfig {
       }
     }
   }
+
+  def isSchemaEvolutionEnabled(sparkSession: SparkSession): Boolean =
+    sparkSession.sessionState.conf.getConfString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key,
+      DFSPropertiesConfiguration.getGlobalProps.getString(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(),
+        HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString)
+    ).toBoolean
 
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }

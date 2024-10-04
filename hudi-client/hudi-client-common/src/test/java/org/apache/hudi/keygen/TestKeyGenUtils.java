@@ -36,6 +36,7 @@ public class TestKeyGenUtils {
     assertEquals(
         KeyGeneratorType.SIMPLE,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1"));
+
     assertEquals(
         KeyGeneratorType.COMPLEX,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1,partition2"));
@@ -45,12 +46,68 @@ public class TestKeyGenUtils {
     assertEquals(
         KeyGeneratorType.COMPLEX,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1,partition2"));
+
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1"), "partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), "partition1:simple,partition2:timestamp"));
+
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), ""));
     assertEquals(
         KeyGeneratorType.NON_PARTITION,
         KeyGenUtils.inferKeyGeneratorType(Option.of("col1,col2"), null));
+
+    // Test key generator type with auto generation of record keys
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), "partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), ""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorType(Option.empty(), null));
+  }
+
+  @Test
+  public void testInferKeyGeneratorTypeFromPartitionFields() {
+    assertEquals(
+        KeyGeneratorType.SIMPLE,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1"));
+    assertEquals(
+        KeyGeneratorType.COMPLEX,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1,partition2"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:timestamp"));
+    assertEquals(
+        KeyGeneratorType.CUSTOM,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields("partition1:simple,partition2:timestamp"));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(""));
+    assertEquals(
+        KeyGeneratorType.NON_PARTITION,
+        KeyGenUtils.inferKeyGeneratorTypeFromPartitionFields(null));
   }
 
   @Test

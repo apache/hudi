@@ -18,13 +18,17 @@
 package org.apache.hudi.sync.common;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sync.common.metrics.HoodieMetaSyncMetrics;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 
 import java.util.Properties;
+
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
 /**
  * Base class to sync metadata with metastores to make
@@ -61,5 +65,13 @@ public abstract class HoodieSyncTool implements AutoCloseable {
   @Override
   public void close() throws Exception {
     // no op
+  }
+
+  protected static HoodieTableMetaClient buildMetaClient(HoodieSyncConfig config) {
+    return HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
+        .setBasePath(config.getString(META_SYNC_BASE_PATH))
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
   }
 }

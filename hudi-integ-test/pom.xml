@@ -389,7 +389,9 @@
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
-    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml</dockerCompose.file>
+    <dockerCompose.file>
+      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark353_amd64.yml
+    </dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
@@ -458,6 +460,36 @@
               <outputFile>${dockerCompose.envFile}</outputFile>
             </configuration>
           </execution>
+          <execution>
+            <id>up</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${docker.compose.skip}</skip>
+              <executable>/bin/bash</executable>
+              <arguments>
+                <argument>-c</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} up -d</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>down</id>
+            <phase>post-integration-test</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${docker.compose.skip}</skip>
+              <executable>/bin/bash</executable>
+              <arguments>
+                <argument>-c</argument>
+                <argument>export HUDI_WS=`dirname ${project.basedir}`; docker compose -f ${dockerCompose.file} down -v</argument>
+              </arguments>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
       <plugin>
@@ -473,39 +505,6 @@
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
       <plugin>
-        <groupId>com.dkanejs.maven.plugins</groupId>
-        <artifactId>docker-compose-maven-plugin</artifactId>
-        <version>2.0.1</version>
-        <executions>
-          <execution>
-            <id>up</id>
-            <phase>pre-integration-test</phase>
-            <goals>
-              <goal>up</goal>
-            </goals>
-            <configuration>
-              <skip>${docker.compose.skip}</skip>
-              <host>unix:///var/run/docker.sock</host>
-              <composeFile>${dockerCompose.file}</composeFile>
-              <detachedMode>true</detachedMode>
-              <envFile>${dockerCompose.envFile}</envFile>
-            </configuration>
-          </execution>
-          <execution>
-            <id>down</id>
-            <phase>post-integration-test</phase>
-            <goals>
-              <goal>down</goal>
-            </goals>
-            <configuration>
-              <skip>${docker.compose.skip}</skip>
-              <composeFile>${dockerCompose.file}</composeFile>
-              <removeVolumes>true</removeVolumes>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
@@ -516,7 +515,9 @@
     <profile>
       <id>m1-mac</id>
       <properties>
-        <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml</dockerCompose.file>
+        <dockerCompose.file>
+          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml
+        </dockerCompose.file>
       </properties>
       <activation>
         <os>

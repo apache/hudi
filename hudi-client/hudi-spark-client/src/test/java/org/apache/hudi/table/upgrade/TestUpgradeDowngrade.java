@@ -43,6 +43,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -169,6 +170,17 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   @AfterEach
   public void cleanUp() throws Exception {
     cleanupResources();
+  }
+
+  @Test
+  public void testAutoUpgradeFailure() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    HoodieWriteConfig cfg = getConfigBuilder().withAutoUpgradeVersion(false).withProps(params).build();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
+    assertThrows(HoodieUpgradeDowngradeException.class, () ->
+        new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.EIGHT, null)
+    );
   }
 
   @Test
@@ -544,10 +556,10 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
             .withMetadataIndexBloomFilter(true)
             .withEnableRecordIndex(true).build())
         .build();
-    for (MetadataPartitionType partitionType : MetadataPartitionType.values()) {
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
       metaClient.getTableConfig().setMetadataPartitionState(metaClient, partitionType.getPartitionPath(), true);
     }
-    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.values());
+    metaClient.getTableConfig().setMetadataPartitionsInflight(metaClient, MetadataPartitionType.getValidValues());
     String metadataTableBasePath = Paths.get(basePath, METADATA_TABLE_FOLDER_PATH).toString();
     HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.init(metadataTableBasePath, MERGE_ON_READ);
     HoodieMetadataTestTable.of(metadataTableMetaClient)

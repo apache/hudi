@@ -53,7 +53,7 @@ public interface HoodieTableMetadataWriter extends Serializable, AutoCloseable {
    * @param metadataPartitions List of MDT partitions to drop
    * @throws IOException on failures
    */
-  void dropMetadataPartitions(List<MetadataPartitionType> metadataPartitions) throws IOException;
+  void dropMetadataPartitions(List<String> metadataPartitions) throws IOException;
 
   /**
    * Update the metadata table due to a COMMIT operation.

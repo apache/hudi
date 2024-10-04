@@ -154,7 +154,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     cleanupExecutorService();
   }
 
-  public class TestJavaTaskContextSupplier extends TaskContextSupplier {
+  public static class TestJavaTaskContextSupplier extends TaskContextSupplier {
     int partitionId = 0;
     int stageId = 0;
     long attemptId = 0;
@@ -1007,7 +1007,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
               }
             }).count();
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
-        Stream<GenericRecord> genericRecordStream = readHFile(context.getStorageConf().unwrapAs(Configuration.class), paths);
+        Stream<GenericRecord> genericRecordStream = readHFile(context.getStorageConf(), paths);
         if (lastCommitTimeOpt.isPresent()) {
           return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
                   gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))

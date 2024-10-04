@@ -31,8 +31,12 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -108,6 +112,85 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   public void tearDown() throws IOException {
     if (fs != null) {
       fs.delete(new Path(tempDir.toAbsolutePath().toString()), true);
+    }
+  }
+
+  @Test
+  public void testInternalSchemaCacheForMR() throws Exception {
+    // test for HUDI-8182
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
+    Schema schema = HoodieAvroUtils.addMetadataFields(SchemaTestUtil.getEvolvedSchema());
+    java.nio.file.Path path1 = tempDir.resolve("tblOne");
+    java.nio.file.Path path2 = tempDir.resolve("tblTwo");
+    HoodieTestUtils.init(conf, path1.toString(), HoodieTableType.MERGE_ON_READ);
+    HoodieTestUtils.init(conf, path2.toString(), HoodieTableType.MERGE_ON_READ);
+    String commitTime = "100";
+    final int numRecords = 10;
+    // Create 3 parquet files with 10 records each for partition 1
+    File partitionDirOne = InputFormatTestUtil.prepareParquetTable(path1, schema, 3, numRecords, commitTime);
+    HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    // mock the latest schema to the commit metadata
+    InternalSchema internalSchema = AvroInternalSchemaConverter.convert(schema);
+    commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
+    FileCreateUtils.createCommit(path1.toString(), commitTime, Option.of(commitMetadataOne));
+    // Create 3 parquet files with 10 records each for partition 2
+    File partitionDirTwo = InputFormatTestUtil.prepareParquetTable(path2, schema, 3, numRecords, commitTime);
+    HoodieCommitMetadata commitMetadataTwo = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
+        schema.toString(), HoodieTimeline.COMMIT_ACTION);
+    // Mock the latest schema to the commit metadata
+    commitMetadataTwo.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
+    FileCreateUtils.createCommit(path2.toString(), commitTime, Option.of(commitMetadataTwo));
+
+    // Enable schema evolution
+    conf.set("hoodie.schema.on.read.enable", "true");
+
+    TableDesc tblDesc = Utilities.defaultTd;
+    // Set the input format
+    tblDesc.setInputFileFormatClass(HoodieParquetRealtimeInputFormat.class);
+    PartitionDesc partDesc = new PartitionDesc(tblDesc, null);
+    LinkedHashMap<Path, PartitionDesc> pt = new LinkedHashMap<>();
+    LinkedHashMap<Path, ArrayList<String>> tableAlias = new LinkedHashMap<>();
+    ArrayList<String> alias = new ArrayList<>();
+    // Add partition info one
+    alias.add(path1.toAbsolutePath().toString());
+    tableAlias.put(new Path(path1.toAbsolutePath().toString()), alias);
+    pt.put(new Path(path1.toAbsolutePath().toString()), partDesc);
+    // Add partition info two
+    alias.add(path2.toAbsolutePath().toString());
+    tableAlias.put(new Path(path2.toAbsolutePath().toString()), alias);
+    pt.put(new Path(path2.toAbsolutePath().toString()), partDesc);
+
+    MapredWork mrwork = new MapredWork();
+    mrwork.getMapWork().setPathToPartitionInfo(pt);
+    mrwork.getMapWork().setPathToAliases(tableAlias);
+    mrwork.getMapWork().setMapperCannotSpanPartns(true);
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
+    Utilities.setMapRedWork(conf.unwrap(), mrwork, mapWorkPath);
+    JobConf jobConf = new JobConf(conf.unwrap());
+    // Add the paths
+    FileInputFormat.setInputPaths(jobConf, partitionDirOne.getPath() + "," + partitionDirTwo.getPath());
+    jobConf.set(HAS_MAP_WORK, "true");
+    // The following config tells Hive to choose ExecMapper to read the MAP_WORK
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+    // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
+    jobConf.set(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.SPLIT_MAXSIZE, "128000000");
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
+    String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
+    InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 2);
+    // Check the internal schema and avro is the same as the original one
+    for (InputSplit split : splits) {
+      HoodieCombineRealtimeFileSplit inputSplitShim = (HoodieCombineRealtimeFileSplit) ((HoodieCombineRealtimeHiveSplit) split).getInputSplitShim();
+      List<FileSplit> fileSplits = inputSplitShim.getRealtimeFileSplits();
+      for (FileSplit fileSplit : fileSplits) {
+        SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(fileSplit, jobConf);
+        Option<InternalSchema> internalSchemaFromCache = schemaEvolutionContext.getInternalSchemaFromCache();
+        assertEquals(internalSchemaFromCache.get(), internalSchema);
+        Schema avroSchemaFromCache = schemaEvolutionContext.getAvroSchemaFromCache();
+        assertEquals(avroSchemaFromCache, schema);
+      }
     }
   }
 

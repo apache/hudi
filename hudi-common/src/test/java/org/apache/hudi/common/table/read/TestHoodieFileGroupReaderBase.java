@@ -22,6 +22,7 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
@@ -29,6 +30,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -40,12 +42,12 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -59,15 +61,12 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
-import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.compareTo;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
-import static org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
@@ -89,79 +88,20 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
   public abstract String getRecordPayloadForMergeMode(RecordMergeMode mergeMode);
 
-  public abstract void commitToTable(List<String> recordList, String operation,
+  public abstract void commitToTable(List<HoodieRecord> recordList, String operation,
                                      Map<String, String> writeConfigs);
 
   public abstract void validateRecordsInFileGroup(String tablePath,
                                                   List<T> actualRecordList,
                                                   Schema schema,
-                                                  String fileGroupId);
+                                                  FileSlice fileSlice,
+                                                  boolean isSkipMerge);
 
-  public abstract Comparable getComparableUTF8String(String value);
-
-  @Test
-  public void testCompareToComparable() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING));
-    // Prepare a table for initializing reader context
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 1)), BULK_INSERT.value(), writeConfigs);
-    }
-    StorageConfiguration<?> storageConf = getStorageConf();
-    String tablePath = getBasePath();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
-    Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, storageConf);
-
-    // Test same type
-    assertEquals(1, compareTo(readerContext, Boolean.TRUE, Boolean.FALSE));
-    assertEquals(0, compareTo(readerContext, Boolean.TRUE, Boolean.TRUE));
-    assertEquals(-1, compareTo(readerContext, Boolean.FALSE, Boolean.TRUE));
-    assertEquals(1, compareTo(readerContext, 20, 15));
-    assertEquals(0, compareTo(readerContext, 15, 15));
-    assertEquals(-1, compareTo(readerContext, 10, 15));
-    assertEquals(1, compareTo(readerContext, 1.1f, 1.0f));
-    assertEquals(0, compareTo(readerContext, 1.0f, 1.0f));
-    assertEquals(-1, compareTo(readerContext, 0.9f, 1.0f));
-    assertEquals(1, compareTo(readerContext, 1.1, 1.0));
-    assertEquals(0, compareTo(readerContext, 1.0, 1.0));
-    assertEquals(-1, compareTo(readerContext, 0.9, 1.0));
-    assertEquals(1, compareTo(readerContext, 1.1, 1));
-    assertEquals(-1, compareTo(readerContext, 0.9, 1));
-    assertEquals(1, compareTo(readerContext, "value2", "value1"));
-    assertEquals(0, compareTo(readerContext, "value1", "value1"));
-    assertEquals(-1, compareTo(readerContext, "value1", "value2"));
-    // Test different types which are comparable
-    assertEquals(1, compareTo(readerContext, Long.MAX_VALUE / 2L, 10));
-    assertEquals(1, compareTo(readerContext, 20, 10L));
-    assertEquals(0, compareTo(readerContext, 10L, 10));
-    assertEquals(0, compareTo(readerContext, 10, 10L));
-    assertEquals(-1, compareTo(readerContext, 10, Long.MAX_VALUE));
-    assertEquals(-1, compareTo(readerContext, 10L, 20));
-    assertEquals(1, compareTo(readerContext, 10.01f, 10));
-    assertEquals(1, compareTo(readerContext, 10.01f, 10L));
-    assertEquals(1, compareTo(readerContext, 10.01, 10));
-    assertEquals(1, compareTo(readerContext, 10.01, 10L));
-    assertEquals(1, compareTo(readerContext, 11L, 10.99f));
-    assertEquals(1, compareTo(readerContext, 11, 10.99));
-    // Throw exception if comparing Double with Float which have different precision
-    assertThrows(IllegalArgumentException.class, () -> compareTo(readerContext, 10.01f, 10.0));
-    assertThrows(IllegalArgumentException.class, () -> compareTo(readerContext, 10.01, 10.0f));
-    assertEquals(0, compareTo(readerContext, 10.0, 10L));
-    assertEquals(0, compareTo(readerContext, 10.0f, 10L));
-    assertEquals(0, compareTo(readerContext, 10.0, 10));
-    assertEquals(0, compareTo(readerContext, 10.0f, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99f, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99f, 10L));
-    assertEquals(-1, compareTo(readerContext, 9.99, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99, 10L));
-    assertEquals(-1, compareTo(readerContext, 10L, 10.01f));
-    assertEquals(-1, compareTo(readerContext, 10, 10.01));
-    assertEquals(1, compareTo(readerContext, getComparableUTF8String("value2"), "value1"));
-    assertEquals(1, compareTo(readerContext, "value2", getComparableUTF8String("value1")));
-    assertEquals(0, compareTo(readerContext, getComparableUTF8String("value1"), "value1"));
-    assertEquals(0, compareTo(readerContext, "value1", getComparableUTF8String("value1")));
-    assertEquals(-1, compareTo(readerContext, getComparableUTF8String("value1"), "value2"));
-    assertEquals(-1, compareTo(readerContext, "value1", getComparableUTF8String("value2")));
+  public void validateRecordsInFileGroup(String tablePath,
+                                                  List<T> actualRecordList,
+                                                  Schema schema,
+                                                  FileSlice fileSlice) {
+    validateRecordsInFileGroup(tablePath, actualRecordList, schema, fileSlice, false);
   }
 
   private static Stream<Arguments> testArguments() {
@@ -183,17 +123,17 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 0, recordMergeMode);
 
       // Two commits; reading one file group containing a base file and a log file
-      commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 1, recordMergeMode);
 
       // Three commits; reading one file group containing a base file and two log files
-      commitToTable(recordsToStrings(dataGen.generateUpdates("003", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("003", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), true, 2, recordMergeMode);
     }
@@ -209,12 +149,12 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
 
     try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
       // One commit; reading one file group containing a base file only
-      commitToTable(recordsToStrings(dataGen.generateInserts("001", 100)), INSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateInserts("001", 100), INSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 1, recordMergeMode);
 
       // Two commits; reading one file group containing a base file and a log file
-      commitToTable(recordsToStrings(dataGen.generateUpdates("002", 100)), UPSERT.value(), writeConfigs);
+      commitToTable(dataGen.generateUpdates("002", 100), UPSERT.value(), writeConfigs);
       validateOutputFromFileGroupReader(
           getStorageConf(), getBasePath(), dataGen.getPartitionPaths(), false, 2, recordMergeMode);
     }
@@ -285,6 +225,22 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       props.setProperty(PARTITION_FIELDS.key(), metaClient.getTableConfig().getString(PARTITION_FIELDS));
     }
     assertEquals(containsBaseFile, fileSlice.getBaseFile().isPresent());
+    if (shouldValidatePartialRead(fileSlice, avroSchema)) {
+      assertThrows(IllegalArgumentException.class, () -> new HoodieFileGroupReader<>(
+          getHoodieReaderContext(tablePath, avroSchema, storageConf),
+          metaClient.getStorage(),
+          tablePath,
+          metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+          fileSlice,
+          avroSchema,
+          avroSchema,
+          Option.empty(),
+          metaClient,
+          props,
+          1,
+          fileSlice.getTotalFileSize(),
+          false));
+    }
     HoodieFileGroupReader<T> fileGroupReader = new HoodieFileGroupReader<>(
         getHoodieReaderContext(tablePath, avroSchema, storageConf),
         metaClient.getStorage(),
@@ -305,6 +261,43 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     }
     fileGroupReader.close();
 
-    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice.getFileId());
+    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice);
+
+    //validate skip merge
+    actualRecordList.clear();
+    props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+    fileGroupReader = new HoodieFileGroupReader<>(
+        getHoodieReaderContext(tablePath, avroSchema, storageConf),
+        metaClient.getStorage(),
+        tablePath,
+        metaClient.getActiveTimeline().lastInstant().get().getTimestamp(),
+        fileSlice,
+        avroSchema,
+        avroSchema,
+        Option.empty(),
+        metaClient,
+        props,
+        0,
+        fileSlice.getTotalFileSize(),
+        false);
+    fileGroupReader.initRecordIterators();
+    while (fileGroupReader.hasNext()) {
+      actualRecordList.add(fileGroupReader.next());
+    }
+    fileGroupReader.close();
+
+    validateRecordsInFileGroup(tablePath, actualRecordList, avroSchema, fileSlice, true);
+  }
+
+  private boolean shouldValidatePartialRead(FileSlice fileSlice, Schema requestedSchema) {
+    if (fileSlice.getLogFiles().findAny().isPresent()) {
+      return true;
+    }
+    if (fileSlice.getBaseFile().get().getBootstrapBaseFile().isPresent()) {
+      //TODO: [HUDI-8169] this code path will not hit until we implement bootstrap tests
+      Pair<List<Schema.Field>, List<Schema.Field>> dataAndMetaCols = HoodieFileGroupReaderSchemaHandler.getDataAndMetaCols(requestedSchema);
+      return !dataAndMetaCols.getLeft().isEmpty() && !dataAndMetaCols.getRight().isEmpty();
+    }
+    return false;
   }
 }

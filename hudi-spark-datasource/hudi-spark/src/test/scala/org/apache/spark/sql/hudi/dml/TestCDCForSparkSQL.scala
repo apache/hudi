@@ -48,44 +48,46 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
   }
 
   test("Test delete all records in filegroup") {
-    withTempDir { tmp =>
-      val databaseName = "hudi_database"
-      spark.sql(s"create database if not exists $databaseName")
-      spark.sql(s"use $databaseName")
-      val tableName = generateTableName
-      val basePath = s"${tmp.getCanonicalPath}/$tableName"
-      spark.sql(
-        s"""
-           | create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double,
-           |  ts long
-           | ) using hudi
-           | partitioned by (name)
-           | tblproperties (
-           |   'primaryKey' = 'id',
-           |   'preCombineField' = 'ts',
-           |   'hoodie.table.cdc.enabled' = 'true',
-           |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
-           |   type = 'cow'
-           | )
-           | location '$basePath'
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val databaseName = "hudi_database"
+        spark.sql(s"create database if not exists $databaseName")
+        spark.sql(s"use $databaseName")
+        val tableName = generateTableName
+        val basePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             | create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long
+             | ) using hudi
+             | partitioned by (name)
+             | tblproperties (
+             |   'primaryKey' = 'id',
+             |   'preCombineField' = 'ts',
+             |   'hoodie.table.cdc.enabled' = 'true',
+             |   'hoodie.table.cdc.supplemental.logging.mode' = '$DATA_BEFORE_AFTER',
+             |   type = '$tableType'
+             | )
+             | location '$basePath'
       """.stripMargin)
-      val metaClient = createMetaClient(spark, basePath)
-      spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
-      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
-      val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
-      val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
-      val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
-      cdcDataOnly1.show(false)
-      assertCDCOpCnt(cdcDataOnly1, 2, 0, 0)
+        val metaClient = createMetaClient(spark, basePath)
+        spark.sql(s"insert into $tableName values (1, 11, 1000, 'a1'), (2, 12, 1000, 'a2')")
+        assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 2)
+        val fgForID1 = spark.sql(s"select _hoodie_file_name from $tableName where id=1").head().get(0)
+        val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+        val cdcDataOnly1 = cdcDataFrame(basePath, commitTime1.toLong - 1)
+        cdcDataOnly1.show(false)
+        assertCDCOpCnt(cdcDataOnly1, 2, 0, 0)
 
-      spark.sql(s"delete from $tableName where id = 1")
-      val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
-      assertCDCOpCnt(cdcDataOnly2, 0, 0, 1)
-      assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 1)
-      assert(!spark.sql(s"select _hoodie_file_name from $tableName").head().get(0).equals(fgForID1))
+        spark.sql(s"delete from $tableName where id = 1")
+        val cdcDataOnly2 = cdcDataFrame(basePath, commitTime1.toLong)
+        assertCDCOpCnt(cdcDataOnly2, 0, 0, 1)
+        assert(spark.sql(s"select _hoodie_file_name from $tableName").distinct().count() == 1)
+        assert(!spark.sql(s"select _hoodie_file_name from $tableName").head().get(0).equals(fgForID1))
+      }
     }
   }
 

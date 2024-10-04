@@ -20,13 +20,13 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.common.config.HoodieReaderConfig.FILE_GROUP_READER_ENABLED
-import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.engine.HoodieReaderContext
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, FileSlice, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.common.testutils.{HoodieTestUtils, RawTripTestPayload}
 import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.{HoodieSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{DefaultSparkRecordMerger, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
@@ -89,12 +89,13 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def getHoodieReaderContext(tablePath: String, avroSchema: Schema, storageConf: StorageConfiguration[_]): HoodieReaderContext[InternalRow] = {
     val reader = sparkAdapter.createParquetFileReader(vectorized = false, spark.sessionState.conf, Map.empty, storageConf.unwrapAs(classOf[Configuration]))
     val metaClient = HoodieTableMetaClient.builder().setConf(storageConf).setBasePath(tablePath).build
-    val recordKeyField = new HoodieSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
+    val recordKeyField = new DefaultSparkRecordMerger().getMandatoryFieldsForMerging(metaClient.getTableConfig)(0)
     new SparkFileFormatInternalRowReaderContext(reader, recordKeyField, Seq.empty, Seq.empty)
   }
 
-  override def commitToTable(recordList: util.List[String], operation: String, options: util.Map[String, String]): Unit = {
-    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recordList.asScala.toList, 2))
+  override def commitToTable(recordList: util.List[HoodieRecord[_]], operation: String, options: util.Map[String, String]): Unit = {
+    val recs = RawTripTestPayload.recordsToStrings(recordList)
+    val inputDF: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(recs.asScala.toList, 2))
 
     inputDF.write.format("hudi")
       .options(options)
@@ -109,20 +110,21 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   override def validateRecordsInFileGroup(basePath: String,
                                           actualRecordList: util.List[InternalRow],
                                           schema: Schema,
-                                          fileGroupId: String): Unit = {
-    val expectedDf = spark.read.format("hudi")
-      .option(FILE_GROUP_READER_ENABLED.key(), "false")
-      .load(basePath)
-      .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileGroupId))
-    assertEquals(expectedDf.count, actualRecordList.size)
-    val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
-      spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
-    assertEquals(0, expectedDf.except(actualDf).count())
-    assertEquals(0, actualDf.except(expectedDf).count())
-  }
-
-  override def getComparableUTF8String(value: String): Comparable[_] = {
-    UTF8String.fromString(value)
+                                          fileSlice: FileSlice,
+                                          isSkipMerge: Boolean): Unit = {
+    //TODO [HUDI-8207] get rid of this if block, and revert the argument change from (fileGroupId: String -> fileSlice: FileSlice)
+    if (!isSkipMerge || fileSlice.getLogFiles.count() < 2) {
+      val expectedDf = spark.read.format("hudi")
+        .option(FILE_GROUP_READER_ENABLED.key(), "false")
+        .option(HoodieReaderConfig.MERGE_TYPE.key, if (isSkipMerge) HoodieReaderConfig.REALTIME_SKIP_MERGE else HoodieReaderConfig.REALTIME_PAYLOAD_COMBINE)
+        .load(basePath)
+        .where(col(HoodieRecord.FILENAME_METADATA_FIELD).contains(fileSlice.getFileId))
+      assertEquals(expectedDf.count, actualRecordList.size)
+      val actualDf = HoodieUnsafeUtils.createDataFrameFromInternalRows(
+        spark, actualRecordList.asScala.toSeq, HoodieInternalRowUtils.getCachedSchema(schema))
+      assertEquals(0, expectedDf.except(actualDf).count())
+      assertEquals(0, actualDf.except(expectedDf).count())
+    }
   }
 
   override def getRecordPayloadForMergeMode(mergeMode: RecordMergeMode): String = {

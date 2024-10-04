@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.HoodieSparkRecordMerger
+import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieAvroRecordMerger
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory
 
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
@@ -70,7 +71,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config(sparkConf())
     .getOrCreate()
 
-  private var tableId = 0
+  private var tableId = new AtomicInteger(0)
 
   private var extraConf = Map[String, String]()
 
@@ -113,9 +114,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   protected def generateTableName: String = {
-    val name = s"h$tableId"
-    tableId = tableId + 1
-    name
+    s"h${tableId.incrementAndGet()}"
   }
 
   override protected def afterAll(): Unit = {
@@ -215,7 +214,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     try {
       f(tableName)
     } finally {
-      spark.sql(s"drop table if exists $tableName")
+      spark.sql(s"drop table if exists $tableName purge")
     }
   }
 
@@ -224,7 +223,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     // TODO HUDI-5264 Test parquet log with avro record in spark sql test
     recordTypes.foreach { recordType =>
       val (merger, format) = recordType match {
-        case HoodieRecordType.SPARK => (classOf[HoodieSparkRecordMerger].getName, "parquet")
+        case HoodieRecordType.SPARK => (classOf[DefaultSparkRecordMerger].getName, "parquet")
         case _ => (classOf[HoodieAvroRecordMerger].getName, "avro")
       }
       val config = Map(
@@ -240,7 +239,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   protected def getRecordType(): HoodieRecordType = {
     val merger = spark.sessionState.conf.getConfString(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, HoodieWriteConfig.RECORD_MERGER_IMPLS.defaultValue())
-    if (merger.equals(classOf[HoodieSparkRecordMerger].getName)) {
+    if (merger.equals(classOf[DefaultSparkRecordMerger].getName)) {
       HoodieRecordType.SPARK
     } else {
       HoodieRecordType.AVRO

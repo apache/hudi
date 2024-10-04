@@ -26,7 +26,6 @@ import org.apache.hadoop.hive.shims.ShimLoader
 import org.apache.hudi.AutoRecordKeyGenerationUtils.mayBeValidateParamsForAutoGenerationOfRecordKeys
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema, getAvroRecordNameAndNamespace}
 import org.apache.hudi.DataSourceOptionsHelper.fetchMissingWriteConfigsFromTableConfig
-import org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
@@ -49,7 +48,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, T
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
 import org.apache.hudi.common.util.{CommitUtils, StringUtils, Option => HOption}
 import org.apache.hudi.config.HoodieBootstrapConfig.{BASE_PATH, INDEX_CLASS_NAME}
-import org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY
+import org.apache.hudi.config.HoodieWriteConfig.{SPARK_SQL_MERGE_INTO_PREPPED_KEY, WRITE_TABLE_VERSION}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieException, HoodieRecordCreationException, HoodieWriteConflictException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -68,6 +67,7 @@ import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
 import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -279,7 +279,8 @@ class HoodieSparkSqlWriterInternal {
     } else {
       // Handle various save modes
       handleSaveModes(sqlContext.sparkSession, mode, basePath, tableConfig, tblName, operation, fs)
-      val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters))
+      val partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters), false)
+      val partitionColumnsForKeyGenerator = SparkKeyGenUtils.getPartitionColumns(keyGenerator, toProperties(parameters), true)
       val timelineTimeZone = HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE))
       val tableMetaClient = if (tableExists) {
         HoodieInstantTimeGenerator.setCommitTimeZone(timelineTimeZone)
@@ -300,7 +301,7 @@ class HoodieSparkSqlWriterInternal {
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)))
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
-        HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
           .setDatabaseName(databaseName)
           .setTableName(tblName)
@@ -310,7 +311,7 @@ class HoodieSparkSqlWriterInternal {
           // we can't fetch preCombine field from hoodieConfig object, since it falls back to "ts" as default value,
           // but we are interested in what user has set, hence fetching from optParams.
           .setPreCombineField(optParams.getOrElse(PRECOMBINE_FIELD.key(), null))
-          .setPartitionFields(partitionColumns)
+          .setPartitionFields(partitionColumnsForKeyGenerator)
           .setPopulateMetaFields(populateMetaFields)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
           .setSecondaryKeyFields(hoodieConfig.getString(SECONDARYKEY_COLUMN_NAME))
@@ -724,7 +725,7 @@ class HoodieSparkSqlWriterInternal {
 
       if (!tableExists) {
         val archiveLogFolder = hoodieConfig.getStringOrDefault(HoodieTableConfig.ARCHIVELOG_FOLDER)
-        val partitionColumns = HoodieWriterUtils.getPartitionColumns(parameters)
+        val partitionColumnsWithType = SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(toProperties(parameters))
         val recordKeyFields = hoodieConfig.getString(DataSourceWriteOptions.RECORDKEY_FIELD)
         val payloadClass =
           if (StringUtils.nonEmpty(hoodieConfig.getString(DataSourceWriteOptions.PAYLOAD_CLASS_NAME)))
@@ -745,17 +746,18 @@ class HoodieSparkSqlWriterInternal {
           String.valueOf(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue())
         ))
 
-        HoodieTableMetaClient.withPropertyBuilder()
+        HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
+          .setTableVersion(hoodieConfig.getIntOrDefault(WRITE_TABLE_VERSION))
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(payloadClass)
           .setPreCombineField(hoodieConfig.getStringOrDefault(PRECOMBINE_FIELD, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBaseFileFormat(baseFileFormat)
           .setBootstrapBasePath(bootstrapBasePath)
-          .setPartitionFields(partitionColumns)
+          .setPartitionFields(partitionColumnsWithType)
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(populateMetaFields)

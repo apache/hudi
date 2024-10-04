@@ -34,6 +34,7 @@ import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
 import org.apache.avro.Schema
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -242,6 +243,27 @@ object HoodieSchemaUtils {
       // Picking new schema as a writer schema we need to validate that we'd be able to
       // rewrite table's data into it
       (newSchema, isSchemaCompatible(tableSchema, newSchema))
+    }
+  }
+
+  /**
+   * Check if the partition schema fields order matches the table schema fields order.
+   *
+   * @param tableSchema      The table schema
+   * @param partitionFields  The partition fields
+   */
+  def checkPartitionSchemaOrder(tableSchema: StructType, partitionFields: Seq[String]): Unit = {
+    val tableSchemaFields = tableSchema.fields.map(_.name)
+    // It is not allowed to specify partition columns when the table schema is not defined.
+    // https://spark.apache.org/docs/latest/sql-error-conditions.html#specify_partition_is_not_allowed
+    if (tableSchemaFields.isEmpty && partitionFields.nonEmpty) {
+      throw new IllegalArgumentException("It is not allowed to specify partition columns when the table schema is not defined.")
+    }
+    // Filter the table schema fields to get the partition field names in order
+    val tableSchemaPartitionFields = tableSchemaFields.filter(partitionFields.contains).toSeq
+    if (tableSchemaPartitionFields != partitionFields) {
+      throw new IllegalArgumentException(s"Partition schema fields order does not match the table schema fields order," +
+        s" tableSchemaFields: $tableSchemaPartitionFields, partitionFields: $partitionFields.")
     }
   }
 }

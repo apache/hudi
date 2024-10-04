@@ -28,11 +28,9 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.hadoop.fs.FileSystem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,19 +56,19 @@ public class LockManager implements Serializable, AutoCloseable {
   private transient HoodieLockMetrics metrics;
   private volatile LockProvider lockProvider;
 
-  public LockManager(HoodieWriteConfig writeConfig, FileSystem fs) {
-    this(writeConfig, fs, writeConfig.getProps());
+  public LockManager(HoodieWriteConfig writeConfig, HoodieStorage storage) {
+    this(writeConfig, storage, writeConfig.getProps());
   }
 
-  public LockManager(HoodieWriteConfig writeConfig, FileSystem fs, TypedProperties lockProps) {
+  public LockManager(HoodieWriteConfig writeConfig, HoodieStorage storage, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
-    this.storageConf = HadoopFSUtils.getStorageConfWithCopy(fs.getConf());
+    this.storageConf = storage.getConf().newInstance();
     this.lockConfiguration = new LockConfiguration(lockProps);
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,
         Long.parseLong(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS.defaultValue()));
-    metrics = new HoodieLockMetrics(writeConfig, new HoodieHadoopStorage(fs));
+    metrics = new HoodieLockMetrics(writeConfig, storage);
     lockRetryHelper = new RetryHelper<>(maxWaitTimeInMs, maxRetries, maxWaitTimeInMs,
         Arrays.asList(HoodieLockException.class, InterruptedException.class), "acquire lock");
   }
