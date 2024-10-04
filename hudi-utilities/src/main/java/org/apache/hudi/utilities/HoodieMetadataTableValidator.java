@@ -622,7 +622,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         }
       } catch (HoodieValidationException e) {
         LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in record index validation for table: {} ", cfg.basePath, e);
+            "Metadata table validation failed due to HoodieValidationException in secondary index validation for table: {} ", cfg.basePath, e);
         if (!cfg.ignoreFailed) {
           throw e;
         }
