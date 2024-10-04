@@ -22,11 +22,12 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.util.ExceptionWrappingIterator
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.util.{CloseableInternalRowIterator, ExceptionWrappingIterator}
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
@@ -35,6 +36,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils.getTimeZone
 import org.apache.spark.sql.execution.SQLConfInjectingRDD
 import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, HoodieUnsafeUtils}
@@ -324,5 +326,16 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       }
     }
     return partitionVals
+  }
+
+  def readParquetFile(parquetReader: SparkParquetReader,
+                      path: StoragePath,
+                      requestedSchema: StructType,
+                      storageConf: StorageConfiguration[_]): CloseableInternalRowIterator = {
+    new CloseableInternalRowIterator(parquetReader.read(
+      SparkAdapterSupport.sparkAdapter.getSparkPartitionedFileUtils
+        .createPartitionedFile(InternalRow.empty, path, 0, Long.MaxValue),
+      requestedSchema, new StructType(), org.apache.hudi.common.util.Option.empty(),
+      Seq.empty, storageConf.asInstanceOf[StorageConfiguration[Configuration]]))
   }
 }

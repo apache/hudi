@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -25,7 +26,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -47,7 +47,6 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
 import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReader;
 import org.apache.spark.sql.internal.SQLConf;
-import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -129,10 +128,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
     StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-    CloseableInternalRowIterator reader = new CloseableInternalRowIterator(parquetReader.read(
-        SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkPartitionedFileUtils().createPartitionedFile(InternalRow.empty(), path, 0, Long.MAX_VALUE),
-        requestedStructType, new StructType(), Option.empty(), (scala.collection.immutable.Seq<Filter>) scala.collection.immutable.Seq$.MODULE$.empty(),
-        (StorageConfiguration<Configuration>) storageConf));
+    CloseableInternalRowIterator reader = HoodieSparkUtils.readParquetFile(parquetReader, path, requestedStructType, storageConf);
     readerIterators.add(reader);
     return reader;
   }
