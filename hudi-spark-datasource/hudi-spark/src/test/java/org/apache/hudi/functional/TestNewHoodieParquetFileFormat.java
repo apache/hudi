@@ -135,10 +135,11 @@ public class TestNewHoodieParquetFileFormat extends TestBootstrapReadBase {
         //df.except(df) does not work with map type cols
         legacyDf = legacyDf.drop("city_to_state");
         fileFormatDf = fileFormatDf.drop("city_to_state");
+
+        //TODO: [HUDI-3204] for toHadoopFs in BaseFileOnlyRelation, the partition columns will be at the end
+        //so just drop column that is out of order here for now
         if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL())
-        && tableType.equals(MERGE_ON_READ) && nPartitions > 0) {
-          //TODO: [HUDI-3204] for toHadoopFs in BaseFileOnlyRelation, the partition columns will be at the end
-          //so just drop column that is out of order here for now
+            && tableType.equals(MERGE_ON_READ) && nPartitions > 0) {
           legacyDf = legacyDf.drop("partition_path");
           fileFormatDf = fileFormatDf.drop("partition_path");
         }
