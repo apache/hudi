@@ -127,8 +127,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val resolvedExpr = resolveExpr(spark, sourceExpr, sourceTableSchema)
     val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedExpr, indexSchema)
 
-    val spark2 = spark
-    import spark2.implicits._
+    val sparkB = spark
+    import sparkB.implicits._
 
     val indexDf = spark.createDataset(input)
 

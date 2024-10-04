@@ -68,7 +68,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-      // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
           toScalaOption(record.getData.getInsertValue(null, null))
             .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)

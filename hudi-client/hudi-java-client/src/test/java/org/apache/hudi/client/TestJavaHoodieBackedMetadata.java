@@ -504,7 +504,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(12) // cannot restore to before the oldest compaction on MDT as there are no base files before that time
             .build())
         .build();
-    // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11 (Spark >= 3.3)
+    // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11
     // Java 8 date/time type `java.time.LocalDate` is not supported by default
     JsonUtils.registerModules();
     init(tableType, writeConfig);

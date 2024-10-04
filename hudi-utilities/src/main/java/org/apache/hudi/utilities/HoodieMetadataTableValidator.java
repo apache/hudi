@@ -128,6 +128,7 @@ import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFa
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
+ * TODO: [HUDI-8294]
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
  * between metadata table and filesystem.
  * <p>

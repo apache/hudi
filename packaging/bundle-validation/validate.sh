@@ -280,6 +280,7 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
+#TODO [HUDI-8295] get this working for some of the supported spark versions
 if [[ $SPARK_HOME == *"spark-2.4"* ]] || [[  $SPARK_HOME == *"spark-3.1"* ]]
 then
   echo "::warning::validate.sh validating utilities bundle"

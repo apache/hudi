@@ -273,11 +273,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     // TODO move to analysis phase
     validate
 
-    if (HoodieSparkUtils.isSpark2) {
-      //already enabled by default for spark 3+
-      sparkSession.conf.set("spark.sql.crossJoin.enabled","true")
-    }
-
     val projectedJoinedDF: DataFrame = projectedJoinedDataset
     // Create the write parameters
     val props = buildMergeIntoConfig(hoodieCatalogTable)
