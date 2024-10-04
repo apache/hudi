@@ -263,7 +263,8 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
     try {
       final String newInstantTime = "006";
       config.getProps().setProperty("hoodie.merge.data.validation.enabled", "true");
-      HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder().withProps(config.getProps()).build();
+      HoodieWriteConfig cfg2 = HoodieWriteConfig.newBuilder()
+          .withProps(config.getProps()).withEngineType(config.getEngineType()).build();
       // does the handle need to be closed to clean up the writer it contains?
       handle = new HoodieMergeHandle(cfg2, newInstantTime, table, new HashMap<>(),
           partitionAndBaseFilePaths.getLeft(), FSUtils.getFileId(baseFile.getFileName()), baseFile, new JavaTaskContextSupplier(),
