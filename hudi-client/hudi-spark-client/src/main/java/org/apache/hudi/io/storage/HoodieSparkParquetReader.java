@@ -56,9 +56,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-import scala.collection.Seq;
-import scala.collection.mutable.Seq$;
-
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 import static org.apache.parquet.avro.AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS;
 
@@ -134,7 +131,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
     CloseableInternalRowIterator reader = new CloseableInternalRowIterator(parquetReader.read(
         SparkAdapterSupport$.MODULE$.sparkAdapter().getSparkPartitionedFileUtils().createPartitionedFile(InternalRow.empty(), path, 0, Long.MAX_VALUE),
-        requestedStructType, new StructType(), Option.empty(), (Seq<Filter>) Seq$.MODULE$.empty(), (StorageConfiguration<Configuration>) storageConf));
+        requestedStructType, new StructType(), Option.empty(), (scala.collection.immutable.Seq<Filter>) scala.collection.immutable.Seq$.MODULE$.empty(),
+        (StorageConfiguration<Configuration>) storageConf));
     readerIterators.add(reader);
     return reader;
   }
