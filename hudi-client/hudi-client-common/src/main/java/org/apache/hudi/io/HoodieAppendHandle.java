@@ -258,9 +258,15 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
 
         // Prepend meta-fields into the record
+        HoodieRecord populatedRecord;
         MetadataValues metadataValues = populateMetadataFields(finalRecord);
-        HoodieRecord populatedRecord =
-            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+        if (!metadataValues.isEmpty()) {
+          populatedRecord = finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+          // deflate record payload after recording success. This will help users access payload as a part of marking record successful. // todo jerry
+          hoodieRecord.deflate();
+        } else {
+          populatedRecord = hoodieRecord;
+        }
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -282,10 +288,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
 
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
-      // deflate record payload after recording success. This will help users access payload as a
-      // part of marking
-      // record successful.
-      hoodieRecord.deflate();
       return finalRecordOpt;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
