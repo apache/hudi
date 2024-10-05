@@ -205,7 +205,7 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx2g -Xms128m</argLine>
+    <argLine>-Xmx3g -Xms128m</argLine>
     <jacoco.version>0.8.12</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
@@ -600,6 +600,9 @@
             </goals>
             <configuration>
               <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+              <includes>
+                <include>**/*.class</include>
+              </includes>
             </configuration>
           </execution>
         </executions>
@@ -620,6 +623,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
+            <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
         <plugin>
