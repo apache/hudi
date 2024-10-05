@@ -431,6 +431,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 150L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip2.json", 150L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match1.json", 150L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 150L, "3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 150L, "3"));
 
@@ -447,6 +448,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.deltastreamer.source.cloud.data.select.path.regex", "path/to/file[0-9]+");
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file3.json"), 50L, "3#path/to/file4.json", typedProperties);
 
@@ -470,11 +472,14 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
     filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 50L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match1.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip2.json", 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match2.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 50L, "3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 50L, "3"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match3.json", 50L, "3"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
@@ -482,6 +487,8 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "path/to/file[0-9]+");
+
     List<Long> bytesPerPartition = Arrays.asList(10L, 20L, -1L, 1000L * 1000L * 1000L);
 
     // If the computed number of partitions based on bytes is less than this value, it should use this value for num partitions.
@@ -490,11 +497,16 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, sourcePartitions, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
+    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.key.prefix", "path/to/");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "file[0-9]+");
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, sourcePartitions, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
+    typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.key.prefix", "path/to");
+    typedProperties.remove("hoodie.streamer.source.cloud.data.select.relative.path.regex");
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
+    typedProperties.remove("hoodie.deltastreamer.source.s3incr.key.prefix");
     typedProperties.setProperty("hoodie.deltastreamer.source.s3incr.ignore.key.prefix", "path/to");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
     when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(3)));
