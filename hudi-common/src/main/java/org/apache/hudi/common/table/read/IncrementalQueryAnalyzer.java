@@ -348,7 +348,7 @@ public class IncrementalQueryAnalyzer {
    * Represents the analyzed query context.
    */
   public static class QueryContext {
-    public static final QueryContext EMPTY = new QueryContext(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null);
+    public static final QueryContext EMPTY = new QueryContext(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, null);
 
     /**
      * An empty option indicates consumption from the earliest instant.
@@ -369,15 +369,17 @@ public class IncrementalQueryAnalyzer {
      */
     private final HoodieTimeline archivedTimeline;
     private final List<String> instants;
+    private final Option<String> predicateFilter;
 
-    private QueryContext(
+    public QueryContext(
         @Nullable String startInstant,
         @Nullable String endInstant,
         List<String> instants,
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
-        @Nullable HoodieTimeline archivedTimeline) {
+        @Nullable HoodieTimeline archivedTimeline,
+        @Nullable String predicateFilter) {
       this.startInstant = Option.ofNullable(startInstant);
       this.endInstant = Option.ofNullable(endInstant);
       this.archivedInstants = archivedInstants;
@@ -385,6 +387,7 @@ public class IncrementalQueryAnalyzer {
       this.activeTimeline = activeTimeline;
       this.archivedTimeline = archivedTimeline;
       this.instants = instants;
+      this.predicateFilter = Option.ofNullable(predicateFilter);
     }
 
     public static QueryContext create(
@@ -395,7 +398,19 @@ public class IncrementalQueryAnalyzer {
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
         @Nullable HoodieTimeline archivedTimeline) {
-      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
+      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline, null);
+    }
+
+    public static QueryContext create(
+        @Nullable String startInstant,
+        @Nullable String endInstant,
+        List<String> instants,
+        List<HoodieInstant> archivedInstants,
+        List<HoodieInstant> activeInstants,
+        HoodieTimeline activeTimeline,
+        @Nullable HoodieTimeline archivedTimeline,
+        @Nullable String predicateFilter) {
+      return new QueryContext(startInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline, predicateFilter);
     }
 
     public boolean isEmpty() {
@@ -478,6 +493,10 @@ public class IncrementalQueryAnalyzer {
       return archivedTimeline;
     }
 
+    public Option<String> getPredicateFilter() {
+      return predicateFilter;
+    }
+
     public QueryContext withUpdatedEndInstant(String endInstant) {
       return new QueryContext(
           startInstant.get(),
@@ -485,7 +504,8 @@ public class IncrementalQueryAnalyzer {
           instants,
           archivedInstants,
           activeInstants,
-          activeTimeline,archivedTimeline);
+          activeTimeline,archivedTimeline,
+          null);
     }
   }
 }

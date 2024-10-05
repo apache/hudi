@@ -432,7 +432,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          inserts.getCompletionTime(),
+          // SnapshotLoadQuerySplitter would return start time as the next checkpoint instead of completion time
+          inserts.getInstantTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
     }
   }
@@ -454,29 +455,93 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .build();
     List<WriteResult> inserts = new ArrayList<>();
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "100", DEFAULT_PARTITION_PATHS[0]));
-      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "200", DEFAULT_PARTITION_PATHS[1]));
-      inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, "300", DEFAULT_PARTITION_PATHS[2]));
+      for (int i = 0; i < 3; i++) {
+        inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, writeClient.createNewInstantTime(), DEFAULT_PARTITION_PATHS[i]));
+      }
+      /*
+      chkpt, maxRows, expectedChkpt, expected partitions
+          Arguments.of(null, 1, "100", 100, 1),
+          Arguments.of(null, 101, "200", 200, 3),
+          Arguments.of(null, 10001, "300", 300, 3),
+          Arguments.of("100", 101, "300", 200, 2),
+          Arguments.of("200", 101, "300", 100, 1),
+          Arguments.of("300", 101, "300", 0, 0)
+          */
       // Go over all possible test cases to assert behaviour.
-      getArgsForPartitionPruningInHoodieIncrSource().forEach(argumentsStream -> {
-        Object[] arguments = argumentsStream.get();
-        String checkpointToPullFromHoodieInstant = (String) arguments[0];
-        int maxRowsPerSnapshotBatch = (int) arguments[1];
-        String expectedCheckpointHoodieInstant = (String) arguments[2];
-        int expectedCount = (int) arguments[3];
-        int expectedRDDPartitions = (int) arguments[4];
+//      getArgsForPartitionPruningInHoodieIncrSource(inserts).forEach(argumentsStream -> {
+//        Object[] arguments = argumentsStream.get();
+//        String checkpointToPullFromHoodieInstant = (String) arguments[0];
+//        int maxRowsPerSnapshotBatch = (int) arguments[1];
+//        String expectedCheckpointHoodieInstant = (String) arguments[2];
+//        int expectedCount = (int) arguments[3];
+//        int expectedRDDPartitions = (int) arguments[4];
+//
+//        TypedProperties extraProps = new TypedProperties();
+//        extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(maxRowsPerSnapshotBatch));
+//        readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+//            Option.ofNullable(checkpointToPullFromHoodieInstant),
+//            expectedCount,
+//            expectedCheckpointHoodieInstant,
+//            Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+//            extraProps,
+//            Option.ofNullable(expectedRDDPartitions)
+//        );
+//      });
 
-        TypedProperties extraProps = new TypedProperties();
-        extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(maxRowsPerSnapshotBatch));
-        readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-            Option.ofNullable(checkpointToPullFromHoodieInstant),
-            expectedCount,
-            expectedCheckpointHoodieInstant,
-            Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-            extraProps,
-            Option.ofNullable(expectedRDDPartitions)
-        );
-      });
+      TypedProperties extraProps = new TypedProperties();
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(1));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          100,
+          inserts.get(0).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(1));
+
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          200,
+          inserts.get(1).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(3));
+
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(10001));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          300,
+          inserts.get(2).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(3));
+
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(0).getInstantTime()),
+          200,
+          inserts.get(2).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(2));
+
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(1).getInstantTime()),
+          100,
+          inserts.get(2).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(1));
+
+      extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
+      readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(2).getInstantTime()),
+          0,
+          inserts.get(2).getInstantTime(),
+          Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
+          extraProps,
+          Option.ofNullable(0));
     }
   }
 
@@ -539,9 +604,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   }
 
   private WriteResult writeRecordsForPartition(SparkRDDWriteClient writeClient,
-                                                                    WriteOperationType writeOperationType,
-                                                                    String commit,
-                                                                    String partitionPath) {
+                                               WriteOperationType writeOperationType,
+                                               String commit,
+                                               String partitionPath) {
     writeClient.startCommitWithTime(commit);
     List<HoodieRecord> records = dataGen.generateInsertsForPartition(commit, 100, partitionPath);
     JavaRDD<WriteStatus> result = writeOperationType == WriteOperationType.BULK_INSERT
@@ -549,7 +614,13 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         : writeClient.upsert(jsc().parallelize(records, 1), commit);
     List<WriteStatus> statuses = result.collect();
     assertNoWriteErrors(statuses);
-    return new WriteResult(metaClient.getActiveTimeline().lastInstant().get(), records);
+    metaClient.reloadActiveTimeline();
+    return new WriteResult(
+        metaClient
+          .getCommitsAndCompactionTimeline()
+          .filterCompletedInstants()
+          .lastInstant().get(),
+        records);
   }
 
   private HoodieWriteConfig.Builder getConfigBuilder(String basePath, HoodieTableMetaClient metaClient) {
@@ -559,15 +630,15 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .forTable(metaClient.getTableConfig().getTableName());
   }
 
-  private static Stream<Arguments> getArgsForPartitionPruningInHoodieIncrSource() {
+  private static Stream<Arguments> getArgsForPartitionPruningInHoodieIncrSource(List<WriteResult> inserts) {
     // Arguments are in order -> checkpointToPullFromHoodieInstant, maxRowsPerSnapshotBatch, expectedCheckpointHoodieInstant, expectedCount, expectedFileParallelism.
     return Stream.of(
-        Arguments.of(null, 1, "100", 100, 1),
-        Arguments.of(null, 101, "200", 200, 3),
-        Arguments.of(null, 10001, "300", 300, 3),
-        Arguments.of("100", 101, "300", 200, 2),
-        Arguments.of("200", 101, "300", 100, 1),
-        Arguments.of("300", 101, "300", 0, 0)
+        Arguments.of(null, 1, inserts.get(0).getInstantTime(), 100, 1),
+        Arguments.of(null, 101, inserts.get(1).getInstantTime(), 200, 3),
+        Arguments.of(null, 10001, inserts.get(2).getInstantTime(), 300, 3),
+        Arguments.of(inserts.get(0).getInstantTime(), 101, inserts.get(2).getInstantTime(), 200, 2),
+        Arguments.of(inserts.get(1).getInstantTime(), 101, inserts.get(2).getInstantTime(), 100, 1),
+        Arguments.of(inserts.get(2).getInstantTime(), 101, inserts.get(2).getInstantTime(), 0, 0)
     );
   }
 

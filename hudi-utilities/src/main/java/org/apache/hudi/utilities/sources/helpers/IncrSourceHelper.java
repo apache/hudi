@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
@@ -31,6 +32,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 
+import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -272,6 +274,23 @@ public class IncrSourceHelper {
       dataset = dataset.coalesce(numPartitions);
     }
     return dataset;
+  }
+
+  /**
+   * Copy IncrementalQueryAnalyzer.QueryContext with info from CheckpointWithPredicates updated
+   * */
+  public static QueryContext withUpdatedCheckpoint(
+      QueryContext oldContext,
+      SnapshotLoadQuerySplitter.CheckpointWithPredicates checkpointWithPredicates) {
+    return new QueryContext(
+        oldContext.getStartInstant().get(),
+        checkpointWithPredicates.getEndInstant(),
+        oldContext.getInstants(),
+        oldContext.getArchivedInstants(),
+        oldContext.getActiveInstants(),
+        oldContext.getActiveTimeline(),
+        oldContext.getArchivedTimeline(),
+        checkpointWithPredicates.getPredicateFilter());
   }
 
   /**

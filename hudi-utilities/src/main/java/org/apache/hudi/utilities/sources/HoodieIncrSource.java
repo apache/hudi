@@ -38,6 +38,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -194,6 +195,8 @@ public class HoodieIncrSource extends RowSource {
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
+    int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
+
     String startTime;
     if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
       startTime = lastCkptStr.get();
@@ -201,6 +204,8 @@ public class HoodieIncrSource extends RowSource {
       switch (missingCheckpointStrategy) {
         case READ_UPTO_LATEST_COMMIT:
           startTime = DEFAULT_BEGIN_TIMESTAMP;
+          // disrespect numInstantsFromConfig when reading up to latest
+          numInstantsFromConfig = -1;
           break;
         case READ_LATEST:
           Option<HoodieInstant> lastInstant = metaClient
@@ -219,11 +224,12 @@ public class HoodieIncrSource extends RowSource {
           + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
     }
 
+    final int numInstantsFromConfigFinal = numInstantsFromConfig;
     // If source profile exists, use the numInstants from source profile.
-    final int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
     int numInstantsPerFetch = getLatestSourceProfile().map(sourceProfile -> {
       int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}", numInstantsFromSourceProfile, numInstantsFromConfig);
+      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+          numInstantsFromSourceProfile, numInstantsFromConfigFinal);
       return numInstantsFromSourceProfile;
     }).orElse(numInstantsFromConfig);
 
@@ -280,7 +286,7 @@ public class HoodieIncrSource extends RowSource {
               queryContext.getStartInstant().get()))
           .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryContext.getEndInstant().orElse(queryContext.getLastInstant())));
-      // TODO add predicateFilter back
+      source = queryContext.getPredicateFilter().map(source::filter).orElse(source);
     } else {
       // normal incremental query
       source = reader
