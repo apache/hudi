@@ -516,29 +516,34 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           extraProps,
           Option.ofNullable(3));
 
+      // even if TestSnapshotQuerySplitterImpl is configured, it shouldn't be used if it's not a snapshot query
+      // Conditions to determine if HoodieIncrSource should run a snapshot query
+      //   1. checkpoint exists or checkpoint is missing but the MissingCheckpointStrategy is set to READ_LATEST
+      //   2. starting instant/checkpoint is archived
+      // The tests below do not meet either of one of the condition, so they should run normal incremental queries
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(0).getInstantTime()),
+          Option.of(inserts.get(0).getCompletionTime()),
           200,
-          inserts.get(2).getInstantTime(),
+          inserts.get(2).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(2));
 
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(1).getInstantTime()),
+          Option.of(inserts.get(1).getCompletionTime()),
           100,
-          inserts.get(2).getInstantTime(),
+          inserts.get(2).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(1));
 
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-          Option.of(inserts.get(2).getInstantTime()),
+          Option.of(inserts.get(2).getCompletionTime()),
           0,
-          inserts.get(2).getInstantTime(),
+          inserts.get(2).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(0));

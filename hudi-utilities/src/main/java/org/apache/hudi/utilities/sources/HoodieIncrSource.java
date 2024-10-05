@@ -279,14 +279,16 @@ public class HoodieIncrSource extends RowSource {
         // update endTime/next checkpoint
         endTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
       }
+      Set<String> validInstants = new HashSet<>(queryContext.getInstants());
+      snapshot = queryContext.getPredicateFilter().map(snapshot::filter).orElse(snapshot);
       source = snapshot
           // add filtering so that only interested records are returned.
           // completion time comparison uses ( , ], but when comparing start time we need to use [, ]
           .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryContext.getStartInstant().get()))
           .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryContext.getEndInstant().orElse(queryContext.getLastInstant())));
-      source = queryContext.getPredicateFilter().map(source::filter).orElse(source);
+              queryContext.getEndInstant().orElse(queryContext.getLastInstant())))
+          .filter((Row row) -> validInstants.contains(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
     } else {
       // normal incremental query
       source = reader
