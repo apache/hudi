@@ -252,13 +252,11 @@ public abstract class AbstractHoodieLogRecordReader {
         HoodieLogBlock logBlock = logFormatReaderWrapper.next();
         final String instantTime = logBlock.getLogBlockHeader().get(INSTANT_TIME);
         totalLogBlocks.incrementAndGet();
-        if (logBlock.getBlockType() != CORRUPT_BLOCK
-            && !HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime
-        )) {
-          // hit a block with instant time greater than should be processed, stop processing further
-          break;
-        }
-        if (logBlock.getBlockType() != CORRUPT_BLOCK && logBlock.getBlockType() != COMMAND_BLOCK) {
+        if (logBlock.isDataOrDeleteBlock()) {
+          if (HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.GREATER_THAN, this.latestInstantTime)) {
+            // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
+            continue;
+          }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
             continue;
@@ -440,10 +438,10 @@ public abstract class AbstractHoodieLogRecordReader {
           totalCorruptBlocks.incrementAndGet();
           continue;
         }
-        if (!HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME),
-            HoodieTimeline.LESSER_THAN_OR_EQUALS, this.latestInstantTime)) {
-          // hit a block with instant time greater than should be processed, stop processing further
-          break;
+        if (logBlock.isDataOrDeleteBlock()
+            && HoodieTimeline.compareTimestamps(logBlock.getLogBlockHeader().get(INSTANT_TIME), HoodieTimeline.GREATER_THAN, this.latestInstantTime)) {
+          // Skip processing a data or delete block with the instant time greater than the latest instant time used by this log record reader
+          continue;
         }
         if (logBlock.getBlockType() != COMMAND_BLOCK) {
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {

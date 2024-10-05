@@ -182,6 +182,20 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
   }
 
   @Test
+  public void testHoodieLogBlockTypeIsDataOrDeleteBlock() {
+    List<HoodieLogBlock.HoodieLogBlockType> dataOrDeleteBlocks = new ArrayList<>();
+    dataOrDeleteBlocks.add(HoodieLogBlockType.DELETE_BLOCK);
+    dataOrDeleteBlocks.add(HoodieLogBlockType.AVRO_DATA_BLOCK);
+    dataOrDeleteBlocks.add(HoodieLogBlockType.PARQUET_DATA_BLOCK);
+    dataOrDeleteBlocks.add(HoodieLogBlockType.HFILE_DATA_BLOCK);
+    dataOrDeleteBlocks.add(HoodieLogBlockType.CDC_DATA_BLOCK);
+
+    Arrays.stream(HoodieLogBlockType.values()).forEach(logBlockType -> {
+      assertEquals(dataOrDeleteBlocks.contains(logBlockType), logBlockType.isDataOrDeleteBlock());
+    });
+  }
+
+  @Test
   public void testEmptyLog() throws IOException {
     Writer writer =
         HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath)
