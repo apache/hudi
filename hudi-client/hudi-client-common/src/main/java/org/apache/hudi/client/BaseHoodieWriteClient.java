@@ -77,7 +77,7 @@ import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
-import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -1338,7 +1338,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return table;
   }
 
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  public static void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
@@ -1348,21 +1348,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
     }
 
-    // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
-    // {@code NonpartitionedKeyGenerator} is used
+    // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code NonpartitionedKeyGenerator} is used
     if (!tableConfig.populateMetaFields()) {
-      String keyGenClass = KeyGeneratorType.getKeyGeneratorClassName(new HoodieConfig(properties));
-      if (StringUtils.isNullOrEmpty(keyGenClass)) {
-        keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
-      }
-      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
-        throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
+      if (KeyGenUtils.getRecordKeyFields(writeConfig.getProps()).size() >= 2) {
+        throw new HoodieException("When meta fields are not populated, the number of record key fields must be exactly one");
       }
     }
 
-    //Check to make sure it's not a COW table with consistent hashing bucket index
+    // Check if operation metadata fields are allowed
+    if (writeConfig.allowOperationMetadataField()) {
+      if (!writeConfig.populateMetaFields()) {
+        throw new HoodieException("Operation metadata fields are allowed, but populateMetaFields is not enabled. "
+            + "Please ensure that populateMetaFields is set to true in the configuration.");
+      }
+    }
+
+    // Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
       HoodieIndex.IndexType indexType = writeConfig.getIndexType();
       if (indexType != null && indexType.equals(HoodieIndex.IndexType.BUCKET)) {
