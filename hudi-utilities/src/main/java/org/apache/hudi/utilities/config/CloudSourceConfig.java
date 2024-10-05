@@ -87,6 +87,16 @@ public class CloudSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Only selects objects in the bucket whose relative path starts with this prefix");
 
+  public static final ConfigProperty<String> SELECT_RELATIVE_PATH_REGEX = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.relative.path.regex")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Only selects objects in the bucket whose relative path matches this regex. "
+          + "For example: When hoodie.streamer.source.cloud.data.select.relpath.prefix is set to /path/prefix, and the hoodie.streamer.source.cloud.data.select.relative.path.regex"
+          + " is regex/files[0-9]+, only files located in the /path/prefix/regex directory that match the pattern (e.g., file1, file2, etc.) will be ingested.\n"
+          + "If hoodie.streamer.source.cloud.data.select.relpath.prefix is not set, the ingestion process will look for files matching /regex/files[0-9]+ in the source bucket.");
+
   public static final ConfigProperty<String> IGNORE_RELATIVE_PATH_PREFIX = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.ignore.relpath.prefix")
       .noDefaultValue()
