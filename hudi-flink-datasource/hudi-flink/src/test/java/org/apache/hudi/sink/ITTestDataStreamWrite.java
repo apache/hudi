@@ -67,7 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -115,14 +115,20 @@ public class ITTestDataStreamWrite extends TestLogger {
   File tempFile;
 
   @ParameterizedTest
-  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
-  public void testWriteCopyOnWrite(String indexType) throws Exception {
+  @CsvSource({
+      "BUCKET, true",
+      "BUCKET, false",
+      "FLINK_STATE, true",
+      "FLINK_STATE, false",
+  })
+  public void testWriteCopyOnWrite(String indexType, boolean populateMetaFields) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, true);
+    conf.setBoolean(FlinkOptions.POPULATE_META_FIELDS, populateMetaFields);
 
-    testWriteToHoodie(conf, "cow_write", 2, EXPECTED);
+    testWriteToHoodie(conf, "cow_write", 2, populateMetaFields ? EXPECTED : removeMetaFields(EXPECTED));
   }
 
   @Test
@@ -160,15 +166,21 @@ public class ITTestDataStreamWrite extends TestLogger {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"BUCKET", "FLINK_STATE"})
-  public void testWriteMergeOnReadWithCompaction(String indexType) throws Exception {
+  @CsvSource({
+      "BUCKET, true",
+      "BUCKET, false",
+      "FLINK_STATE, true",
+      "FLINK_STATE, false",
+  })
+  public void testWriteMergeOnReadWithCompaction(String indexType, boolean populateMetaFields) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.setString(FlinkOptions.INDEX_TYPE, indexType);
     conf.setInteger(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.setInteger(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.setString(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.setBoolean(FlinkOptions.POPULATE_META_FIELDS, populateMetaFields);
 
-    testWriteToHoodie(conf, "mor_write_with_compact", 1, EXPECTED);
+    testWriteToHoodie(conf, "mor_write_with_compact", 1, populateMetaFields ? EXPECTED : removeMetaFields(EXPECTED));
   }
 
   @Test
@@ -565,5 +577,28 @@ public class ITTestDataStreamWrite extends TestLogger {
       }
     }
     throw new AssertionError(String.format("Excepted exception %s is not found", MissingSchemaFieldException.class));
+  }
+
+  private static Map<String, List<String>> removeMetaFields(Map<String, List<String>> inputMap) {
+    Map<String, List<String>> resultMap = new HashMap<>();
+
+    for (Map.Entry<String, List<String>> entry : inputMap.entrySet()) {
+      List<String> updatedList = new ArrayList<>();
+      for (String value : entry.getValue()) {
+        // Split the string by comma
+        String[] parts = value.split(",", 3);
+        // Replace the first two elements with "null"
+        parts[0] = "null";
+        parts[1] = "null";
+        // Join the array back into a string
+        String updatedValue = String.join(",", parts);
+        // Add the updated string to the new list
+        updatedList.add(updatedValue);
+      }
+      // Add the updated list to the resultMap
+      resultMap.put(entry.getKey(), updatedList);
+    }
+
+    return resultMap;
   }
 }
