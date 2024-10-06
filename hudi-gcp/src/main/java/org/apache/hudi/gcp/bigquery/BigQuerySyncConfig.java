@@ -58,6 +58,15 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
       .markAdvanced()
       .withDocumentation("Name of the target project in BigQuery");
 
+  public static final ConfigProperty<String> BIGQUERY_SYNC_BILLING_PROJECT_ID = ConfigProperty
+      .key("hoodie.gcp.bigquery.sync.billing.project.id")
+      .noDefaultValue()
+      .sinceVersion("0.15.1")
+      .markAdvanced()
+      .withDocumentation("Name of the billing project id in BigQuery. By default it uses the "
+          + "configuration from `hoodie.gcp.bigquery.sync.project_id` if this configuration is "
+          + "not set. This can only be used with manifest file based approach");
+  
   public static final ConfigProperty<String> BIGQUERY_SYNC_DATASET_NAME = ConfigProperty
       .key("hoodie.gcp.bigquery.sync.dataset_name")
       .noDefaultValue()
@@ -156,6 +165,8 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
 
     @Parameter(names = {"--project-id"}, description = "Name of the target project in BigQuery", required = true)
     public String projectId;
+    @Parameter(names = {"--billing-project-id"}, description = "Name of the billing project in BigQuery. This can only be used with --use-bq-manifest-file", required = false)
+    public String billingProjectId;
     @Parameter(names = {"--dataset-name"}, description = "Name of the target dataset in BigQuery", required = true)
     public String datasetName;
     @Parameter(names = {"--dataset-location"}, description = "Location of the target dataset in BigQuery", required = true)
@@ -181,6 +192,7 @@ public class BigQuerySyncConfig extends HoodieSyncConfig implements Serializable
     public TypedProperties toProps() {
       final TypedProperties props = hoodieSyncConfigParams.toProps();
       props.setPropertyIfNonNull(BIGQUERY_SYNC_PROJECT_ID.key(), projectId);
+      props.setPropertyIfNonNull(BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), billingProjectId);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_NAME.key(), datasetName);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_DATASET_LOCATION.key(), datasetLocation);
       props.setPropertyIfNonNull(BIGQUERY_SYNC_TABLE_NAME.key(), hoodieSyncConfigParams.tableName);
