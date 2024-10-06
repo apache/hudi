@@ -88,6 +88,16 @@ public class HoodieDataSourceHelpers {
     return timeline.lastInstant().get().getTimestamp();
   }
 
+  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
+    return timeline.lastInstant().get().getCompletionTime();
+  }
+
+  public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
+    return timeline.lastInstant().get().getCompletionTime();
+  }
+
   /**
    * Obtain all the commits, compactions that have occurred on the timeline, whose instant times could be fed into the
    * datasource options.

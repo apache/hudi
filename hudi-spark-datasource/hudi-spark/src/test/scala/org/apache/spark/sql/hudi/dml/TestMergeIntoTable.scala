@@ -985,6 +985,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         )
         val fs = HadoopFSUtils.getFs(targetBasePath, spark.sessionState.newHadoopConf())
         val firstCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
+        val firstCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, targetBasePath)
 
         // Second merge
         spark.sql(s"update $sourceTable set price = 12, _ts = 1001 where id = 1")
@@ -1002,13 +1003,14 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
           .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommitTime)
+          .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
           Seq(1, "a1", 10, 1000)
         )
         val secondCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
+        val secondCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, targetBasePath)
         // Third merge
         spark.sql(s"insert into $sourceTable values(2, 'a2', 10, 1001)")
         spark.sql(
@@ -1026,7 +1028,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, secondCommitTime)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, secondCompletionTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(

@@ -25,11 +25,11 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.HoodiePendingRollbackInfo
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
-import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieTimeGeneratorConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimeGenerator, TimeGenerators, TimelineUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.testutils.RawTripTestPayload.{deleteRecordsToStrings, recordsToStrings}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
@@ -48,7 +48,6 @@ import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
-
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -65,7 +64,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.function.Consumer
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
@@ -77,6 +75,7 @@ import scala.util.matching.Regex
 class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSupport {
   var spark: SparkSession = null
 
+  var timeGen: TimeGenerator = null
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
@@ -92,6 +91,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     spark = sqlContext.sparkSession
     initTestDataGenerator()
     initHoodieStorage()
+    timeGen = TimeGenerators.getTimeGenerator(HoodieTimeGeneratorConfig.defaultConfig(basePath), storageConf)
   }
 
   @AfterEach override def tearDown() = {
@@ -540,23 +540,23 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     ) ++ writeOpts
 
     val dataGen1 = new HoodieTestDataGenerator(Array("2022-01-01"))
-    val records1 = recordsToStrings(dataGen1.generateInserts("001", 20)).asScala.toList
+    val records1 = recordsToStrings(dataGen1.generateInserts(timeGen.currentTimeMillis(true), 20)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+    val commit1CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
-    val records2 = recordsToStrings(dataGen2.generateInserts("002", 30)).asScala.toList
+    val records2 = recordsToStrings(dataGen2.generateInserts(timeGen.currentTimeMillis(true), 30)).asScala.toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
 
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
@@ -568,8 +568,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val incrementalQueryRes = spark.read.format("hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1Time)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2Time)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1CompletionTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(incrementalQueryRes.where("partition = '2022-01-01'").count, 0)
     assertEquals(incrementalQueryRes.where("partition = '2022-01-02'").count, 30)
@@ -975,10 +975,11 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val insert2NewKeyCnt = 2
 
     val totalUniqueKeyToGenerate = insert1Cnt + insert2NewKeyCnt
-    val allRecords = dataGen.generateInserts("001", totalUniqueKeyToGenerate)
+    val allRecords = dataGen.generateInserts(timeGen.currentTimeMillis(true), totalUniqueKeyToGenerate)
     val inserts1 = allRecords.subList(0, insert1Cnt)
-    val inserts2New = dataGen.generateSameKeyInserts("002", allRecords.subList(insert1Cnt, insert1Cnt + insert2NewKeyCnt))
-    val inserts2Dup = dataGen.generateSameKeyInserts("002", inserts1.subList(0, insert2DupKeyCnt))
+    val inserts2Time = timeGen.currentTimeMillis(true)
+    val inserts2New = dataGen.generateSameKeyInserts(inserts2Time, allRecords.subList(insert1Cnt, insert1Cnt + insert2NewKeyCnt))
+    val inserts2Dup = dataGen.generateSameKeyInserts(inserts2Time, inserts1.subList(0, insert2DupKeyCnt))
 
     val records1 = recordsToStrings(inserts1).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
@@ -992,7 +993,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .load(basePath + "/*/*/*/*")
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
-    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
+    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
     val inserts2 = new java.util.ArrayList[HoodieRecord[_]]
     inserts2.addAll(inserts2Dup)
     inserts2.addAll(inserts2New)
@@ -1313,8 +1314,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType, enableFileIndex = enableFileIndex)
 
     val N = 20
+    val instantTime = timeGen.currentTimeMillis(true)
     // Test query with partition prune if URL_ENCODE_PARTITIONING has enable
-    val records1 = dataGen.generateInsertsContainsAllPartitions("000", N)
+    val records1 = dataGen.generateInsertsContainsAllPartitions(instantTime, N)
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records1).asScala.toSeq, 2))
     inputDF1.write.format("hudi")
       .options(writeOpts)
@@ -1323,7 +1325,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, basePath)
+    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
 
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     val pathForReader = getPathForReader(basePath, !enableFileIndex, if (partitionEncode) 1 else 3)
@@ -1346,7 +1348,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     assertEquals(countIn20160315, count2)
 
     // Second write with Append mode
-    val records2 = dataGen.generateInsertsContainsAllPartitions("000", N + 1)
+    val records2 = dataGen.generateInsertsContainsAllPartitions(instantTime, N + 1)
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records2).asScala.toSeq, 2))
     inputDF2.write.format("hudi")
       .options(writeOpts)
@@ -1359,7 +1361,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitCompletionTime1)
       .load(basePath)
     assertEquals(N + 1, hoodieIncViewDF1.count())
     assertEquals(false, Metrics.isInitialized(basePath))

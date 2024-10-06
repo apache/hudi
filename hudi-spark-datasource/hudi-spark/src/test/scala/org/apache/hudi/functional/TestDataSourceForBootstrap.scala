@@ -128,6 +128,7 @@ class TestDataSourceForBootstrap {
       extraOpts = options ++ Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> bootstrapKeygenClass),
       bootstrapKeygenClass = bootstrapKeygenClass
     )
+    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
@@ -165,7 +166,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF1WithBasePath.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF1WithBasePath.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = false, isHiveStylePartitioned = true)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, commitCompletionTime1, isPartitioned = false, isHiveStylePartitioned = true)
   }
 
   @ParameterizedTest
@@ -201,6 +202,8 @@ class TestDataSourceForBootstrap {
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       readOpts ++ getRecordTypeOpts(recordType),
       classOf[SimpleKeyGenerator].getName)
+
+    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
 
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
@@ -250,7 +253,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF4.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF3.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, commitCompletionTime1, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   @Test
@@ -276,6 +279,7 @@ class TestDataSourceForBootstrap {
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
+    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
@@ -326,7 +330,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF4.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF4.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, isPartitioned = true, isHiveStylePartitioned = true)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime3, commitCompletionTime1, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   @Test
@@ -577,6 +581,7 @@ class TestDataSourceForBootstrap {
       .save(basePath)
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val commitInstantCompletionTime1: String = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
     assertEquals(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
 
     // Read bootstrapped table and verify count
@@ -610,7 +615,7 @@ class TestDataSourceForBootstrap {
     assertEquals(numRecords, hoodieROViewDF2.count())
     assertEquals(numRecordsUpdate, hoodieROViewDF2.filter(s"timestamp == $updateTimestamp").count())
 
-    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, isPartitioned = true, isHiveStylePartitioned = true)
+    verifyIncrementalViewResult(commitInstantTime1, commitInstantTime2, commitInstantCompletionTime1, isPartitioned = true, isHiveStylePartitioned = true)
   }
 
   def runBootstrapAndVerifyCommit(tableType: String,
@@ -638,13 +643,14 @@ class TestDataSourceForBootstrap {
   }
 
   def verifyIncrementalViewResult(bootstrapCommitInstantTime: String, latestCommitInstantTime: String,
-                                  isPartitioned: Boolean, isHiveStylePartitioned: Boolean): Unit = {
+                                  bootstrapCommitCompletionTime: String, isPartitioned: Boolean,
+                                  isHiveStylePartitioned: Boolean): Unit = {
     // incrementally pull only changes in the bootstrap commit, which would pull all the initial records written
     // during bootstrap
     val hoodieIncViewDF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, bootstrapCommitInstantTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, bootstrapCommitCompletionTime)
       .load(basePath)
 
     assertEquals(numRecords, hoodieIncViewDF1.count())
@@ -656,7 +662,7 @@ class TestDataSourceForBootstrap {
     // later commits
     val hoodieIncViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, bootstrapCommitInstantTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, bootstrapCommitCompletionTime)
       .load(basePath)
 
     assertEquals(numRecordsUpdate, hoodieIncViewDF2.count())
@@ -669,7 +675,7 @@ class TestDataSourceForBootstrap {
       // pull the update commits within certain partitions
       val hoodieIncViewDF3 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, bootstrapCommitInstantTime)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, bootstrapCommitCompletionTime)
         .option(DataSourceReadOptions.INCR_PATH_GLOB.key, relativePartitionPath)
         .load(basePath)
 

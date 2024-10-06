@@ -90,9 +90,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
       .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
-      .endTime(optParams(DataSourceReadOptions.END_INSTANTTIME.key))
+      .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-      .limit(optParams(DataSourceReadOptions.INCREMENTAL_LIMIT.key).toInt)
+      .limit(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_LIMIT.key, "-1").toInt)
       .build()
       .analyze()
 

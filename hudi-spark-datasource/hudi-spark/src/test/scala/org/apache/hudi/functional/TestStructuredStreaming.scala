@@ -23,7 +23,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
@@ -32,7 +32,6 @@ import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
@@ -146,6 +145,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
+      val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, destPath)
       // Read RO View
       val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
@@ -175,7 +175,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
         .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-        .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+        .option(DataSourceReadOptions.END_INSTANTTIME.key, commitCompletionTime1)
         .load(destPath)
       assertEquals(100, hoodieIncViewDF1.count())
       // 100 initial inserts must be pulled
@@ -186,7 +186,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       // pull the latest commit
       val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime1)
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitCompletionTime1)
         .load(destPath)
 
       assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled

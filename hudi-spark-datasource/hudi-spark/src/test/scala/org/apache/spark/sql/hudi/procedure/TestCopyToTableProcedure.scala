@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.HoodieDataSourceHelpers
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.spark.sql.Row
 
 import java.util
@@ -167,6 +169,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call copy_to_table Procedure with incremental") {
     withTempDir { tmp =>
       val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath + tableName
       // create table
       spark.sql(
         s"""
@@ -176,7 +179,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
            |  price double,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
+           | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
            |  preCombineField = 'ts'
@@ -188,10 +191,11 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // mark beginTime
-      val beginTime = spark.sql(s"select max(_hoodie_commit_time) from $tableName").collectAsList().get(0).get(0)
+      val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
+      val beginCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, tablePath)
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
-      val endTime = spark.sql(s"select max(_hoodie_commit_time) from $tableName").collectAsList().get(0).get(0)
+      val endCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, tablePath)
 
 
       val copyTableName = generateTableName
@@ -202,8 +206,8 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val copyCmd = spark.sql(s"call copy_to_table" + s"(table=>'$tableName'" +
         s",new_table=>'$copyTableName'" +
         s",query_type=>'incremental'" +
-        s",begin_instance_time=>'$beginTime'" +
-        s",end_instance_time=>'$endTime')").collectAsList()
+        s",begin_instance_time=>'$beginCompletionTime'" +
+        s",end_instance_time=>'$endCompletionTime')").collectAsList()
       assert(copyCmd.size() == 1 && copyCmd.get(0).get(0) == 0)
 
       val df = spark.sql(s"select * from $copyTableName")
