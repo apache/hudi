@@ -37,11 +37,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 import java.nio.file.Path;
 import java.util.Properties;
 
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -56,6 +60,7 @@ public class TestHoodieBigQuerySyncClient {
   static @TempDir Path tempDir;
 
   private static String basePath;
+  private static final String BILLING_PROJECT_ID = "test_billing_project";
   private final BigQuery mockBigQuery = mock(BigQuery.class);
   private HoodieBigQuerySyncClient client;
 
@@ -74,6 +79,7 @@ public class TestHoodieBigQuerySyncClient {
     Properties properties = new Properties();
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_PROJECT_ID.key(), PROJECT_ID);
     properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME.key(), TEST_DATASET);
+    properties.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), BILLING_PROJECT_ID);
     properties.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), tempDir.toString());
     BigQuerySyncConfig config = new BigQuerySyncConfig(properties);
     client = new HoodieBigQuerySyncClient(config, mockBigQuery);
@@ -117,4 +123,28 @@ public class TestHoodieBigQuerySyncClient {
         String.format("CREATE EXTERNAL TABLE `%s.%s.%s` ( field STRING ) OPTIONS (enable_list_inference=true, uris=[\"%s\"], format=\"PARQUET\", "
             + "file_set_spec_type=\"NEW_LINE_DELIMITED_MANIFEST\")", PROJECT_ID, TEST_DATASET, TEST_TABLE, MANIFEST_FILE_URI));
   }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testCreateOrUpdateTableUsingManifestWithBillingProjectId(boolean setBillingProjectId) {
+    Properties props = new Properties();
+    props.setProperty(BIGQUERY_SYNC_PROJECT_ID.key(), PROJECT_ID);
+    if (setBillingProjectId) {
+      props.setProperty(BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), BILLING_PROJECT_ID);
+    }
+    props.setProperty(BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME.key(), TEST_DATASET);
+    props.setProperty(HoodieSyncConfig.META_SYNC_BASE_PATH.key(), tempDir.toString());
+    BigQuerySyncConfig syncConfig = new BigQuerySyncConfig(props);
+    Job mockJob = mock(Job.class);
+    ArgumentCaptor<JobInfo> jobInfoCaptor = ArgumentCaptor.forClass(JobInfo.class);
+    when(mockBigQuery.create(jobInfoCaptor.capture())).thenReturn(mockJob);
+
+    Schema schema = Schema.of(Field.of("field", StandardSQLTypeName.STRING));
+    client.createTableUsingBqManifestFile(TEST_TABLE, MANIFEST_FILE_URI, "", schema);
+
+    assertEquals(
+        setBillingProjectId ? BILLING_PROJECT_ID : PROJECT_ID,
+        jobInfoCaptor.getValue().getJobId().getProject());
+  }
+
 }
