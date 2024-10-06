@@ -340,7 +340,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     val numRecordsForSecondQueryWithDataSkipping = spark.sql(secondQuery).count()
 
     if (queryType.equals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)) {
-      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getTimestamp)
+      createIncrementalSQLTable(commonOpts, metaClient.reloadActiveTimeline().getInstants.get(1).getCompletionTime)
       assertEquals(spark.sql(firstQuery).count(), if (isLastOperationDelete) 0 else 3)
       assertEquals(spark.sql(secondQuery).count(), if (isLastOperationDelete) 0 else 2)
     }

@@ -46,7 +46,7 @@ class TestStreamingSource extends StreamTest {
   )
   private val columns = Seq("id", "name", "price", "ts")
 
-  val handlingMode: HollowCommitHandling = BLOCK
+  val handlingMode: HollowCommitHandling = USE_TRANSITION_TIME
 
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 
@@ -205,13 +205,10 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("2", "a1", "11", "001")))
       addData(tablePath, Seq(("3", "a1", "12", "002")))
 
-      val timestamp = if (handlingMode == USE_TRANSITION_TIME) {
+      val timestamp =
         metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
           .firstInstant().get().getCompletionTime
-      } else {
-        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-          .firstInstant().get().getTimestamp
-      }
+
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)
