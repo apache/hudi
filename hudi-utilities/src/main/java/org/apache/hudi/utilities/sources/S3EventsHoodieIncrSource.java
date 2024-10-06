@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -49,6 +50,7 @@ import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH;
 import static org.apache.hudi.utilities.config.HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH;
 import static org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon.Type.S3;
+import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMissingCheckpointStrategy;
 
 /**
@@ -108,11 +110,12 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
   @Override
   public Pair<Option<Dataset<Row>>, String> fetchNextBatch(Option<String> lastCheckpoint, long sourceLimit) {
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
+    HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo =
         IncrSourceHelper.generateQueryInfo(
             sparkContext, srcPath, numInstantsPerFetch,
             Option.of(cloudObjectIncrCheckpoint.getCommit()),
-            missingCheckpointStrategy,
+            missingCheckpointStrategy, handlingMode,
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,
             CloudObjectsSelectorCommon.S3_OBJECT_SIZE, true,

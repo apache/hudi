@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
+import java.util.function.Function;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
+import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -81,6 +83,7 @@ public class IncrSourceHelper {
    * @param numInstantsPerFetch       Max Instants per fetch
    * @param beginInstant              Last Checkpoint String
    * @param missingCheckpointStrategy when begin instant is missing, allow reading based on missing checkpoint strategy
+   * @param handlingMode              Hollow Commit Handling Mode
    * @param orderColumn               Column to order by (used for size based incr source)
    * @param keyColumn                 Key column (used for size based incr source)
    * @param limitColumn               Limit column (used for size based incr source)
@@ -92,6 +95,7 @@ public class IncrSourceHelper {
   public static QueryInfo generateQueryInfo(JavaSparkContext jssc, String srcBasePath,
                                             int numInstantsPerFetch, Option<String> beginInstant,
                                             MissingCheckpointStrategy missingCheckpointStrategy,
+                                            HollowCommitHandling handlingMode,
                                             String orderColumn, String keyColumn, String limitColumn,
                                             boolean sourceLimitBasedBatching,
                                             Option<String> lastCheckpointKey) {
@@ -102,14 +106,14 @@ public class IncrSourceHelper {
         .setBasePath(srcBasePath).setLoadActiveTimelineOnLoad(true).build();
 
     HoodieTimeline completedCommitTimeline = srcMetaClient.getCommitsAndCompactionTimeline().filterCompletedInstants();
+    final HoodieTimeline activeCommitTimeline = handleHollowCommitIfNeeded(completedCommitTimeline, srcMetaClient, handlingMode);
+    Function<HoodieInstant, String> timestampForLastInstant = instant -> handlingMode == HollowCommitHandling.USE_TRANSITION_TIME
+        ? instant.getCompletionTime() : instant.getTimestamp();
     String beginInstantTime = beginInstant.orElseGet(() -> {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
-          Option<HoodieInstant> lastInstant = completedCommitTimeline.lastInstant();
-          return lastInstant
-              .map(hoodieInstant ->
-                  getStrictlyLowerTimestamp(hoodieInstant.getCompletionTime()))
-              .orElse(DEFAULT_BEGIN_TIMESTAMP);
+          Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
+          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(timestampForLastInstant.apply(hoodieInstant))).orElse(DEFAULT_BEGIN_TIMESTAMP);
         } else {
           return DEFAULT_BEGIN_TIMESTAMP;
         }
@@ -124,28 +128,28 @@ public class IncrSourceHelper {
     // `previousInstantTime` is set to `DEFAULT_BEGIN_TIMESTAMP`.
     String previousInstantTime = DEFAULT_BEGIN_TIMESTAMP;
     if (!beginInstantTime.equals(DEFAULT_BEGIN_TIMESTAMP)) {
-      Option<HoodieInstant> previousInstant = completedCommitTimeline.findInstantBefore(beginInstantTime);
+      Option<HoodieInstant> previousInstant = activeCommitTimeline.findInstantBefore(beginInstantTime);
       if (previousInstant.isPresent()) {
         previousInstantTime = previousInstant.get().getTimestamp();
       } else {
         // if begin instant time matches first entry in active timeline, we can set previous = beginInstantTime - 1
-        if (completedCommitTimeline.firstInstant().isPresent()
-            && completedCommitTimeline.firstInstant().get().getTimestamp().equals(beginInstantTime)) {
+        if (activeCommitTimeline.filterCompletedInstants().firstInstant().isPresent()
+            && activeCommitTimeline.filterCompletedInstants().firstInstant().get().getTimestamp().equals(beginInstantTime)) {
           previousInstantTime = String.valueOf(Long.parseLong(beginInstantTime) - 1);
         }
       }
     }
 
-    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !completedCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
+    if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST || !activeCommitTimeline.isBeforeTimelineStarts(beginInstantTime)) {
       Option<HoodieInstant> nthInstant;
       // When we are in the upgrade code path from non-sourcelimit-based batching to sourcelimit-based batching, we need to avoid fetching the commit
       // that is read already. Else we will have duplicates in append-only use case if we use "findInstantsAfterOrEquals".
       // As soon as we have a new format of checkpoint and a key we will move to the new code of fetching the current commit as well.
       if (sourceLimitBasedBatching && lastCheckpointKey.isPresent()) {
-        nthInstant = Option.fromJavaOptional(completedCommitTimeline
+        nthInstant = Option.fromJavaOptional(activeCommitTimeline
             .findInstantsAfterOrEquals(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       } else {
-        nthInstant = Option.fromJavaOptional(completedCommitTimeline
+        nthInstant = Option.fromJavaOptional(activeCommitTimeline
             .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       }
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
@@ -153,7 +157,7 @@ public class IncrSourceHelper {
           orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
-      Option<HoodieInstant> lastInstant = completedCommitTimeline.lastInstant();
+      Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
           previousInstantTime, beginInstantTime, lastInstant.get().getTimestamp(),
           orderColumn, keyColumn, limitColumn);
