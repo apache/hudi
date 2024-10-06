@@ -33,7 +33,8 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 public class LakeviewSyncConfigHolder {
 
   // this class holds static config fields
-  private LakeviewSyncConfigHolder() {}
+  private LakeviewSyncConfigHolder() {
+  }
 
   public static final ConfigProperty<Boolean> LAKEVIEW_SYNC_ENABLED = ConfigProperty
       .key("hoodie.datasource.lakeview_sync.enable")
@@ -170,7 +171,8 @@ public class LakeviewSyncConfigHolder {
     @Parameter(names = {"--path-exclusion-patterns"}, description = "Path exclusion patterns (comma separated)")
     public String pathExclusionPatterns;
 
-    @Parameter(names = {"--lake-paths"}, description = "Lake/Database paths (eg: <lake1>.databases.<database1>.basePaths=<basepath11>,<basepath12>)", required = true, order = 5, splitter = IdentitySplitter.class)
+    @Parameter(names = {"--lake-paths"}, description = "Lake/Database paths (eg: <lake1>.databases.<database1>.basePaths=<basepath11>,<basepath12>)",
+        required = true, order = 5, splitter = IdentitySplitter.class)
     public List<String> lakePaths;
 
     @Parameter(names = {"--http-client-timeout"}, description = "Http client timeout")

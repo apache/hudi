@@ -47,12 +47,13 @@ import ai.onehouse.storage.StorageUtils;
 import ai.onehouse.storage.providers.GcsClientProvider;
 import ai.onehouse.storage.providers.S3AsyncClientProvider;
 import com.beust.jcommander.JCommander;
-import com.google.common.annotations.VisibleForTesting;
 import okhttp3.Dispatcher;
 import okhttp3.OkHttpClient;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,7 +66,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -174,11 +174,11 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
 
   private FileSystemConfiguration getFileSystemConfiguration(HoodieConfig hoodieConfig) {
     FileSystemConfiguration.FileSystemConfigurationBuilder fileSystemConfigurationBuilder = FileSystemConfiguration.builder();
-    Optional<S3Config> s3Config = getS3Config(hoodieConfig);
+    Option<S3Config> s3Config = getS3Config(hoodieConfig);
     if (s3Config.isPresent()) {
       fileSystemConfigurationBuilder.s3Config(s3Config.get());
     } else {
-      Optional<GCSConfig> gcsConfig = getGCSConfig(hoodieConfig);
+      Option<GCSConfig> gcsConfig = getGCSConfig(hoodieConfig);
       if (gcsConfig.isPresent()) {
         fileSystemConfigurationBuilder.gcsConfig(gcsConfig.get());
       } else {
@@ -190,37 +190,37 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
     return fileSystemConfigurationBuilder.build();
   }
 
-  private Optional<S3Config> getS3Config(HoodieConfig hoodieConfig) {
+  private Option<S3Config> getS3Config(HoodieConfig hoodieConfig) {
     String region = hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_REGION);
     if (!StringUtils.isNullOrEmpty(region)) {
-      return Optional.of(S3Config.builder()
+      return Option.of(S3Config.builder()
           .region(region)
-          .accessKey(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_KEY)))
-          .accessSecret(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_SECRET)))
+          .accessKey(java.util.Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_KEY)))
+          .accessSecret(java.util.Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_S3_ACCESS_SECRET)))
           .build());
     } else {
-      return Optional.empty();
+      return Option.empty();
     }
   }
 
-  private Optional<GCSConfig> getGCSConfig(HoodieConfig hoodieConfig) {
+  private Option<GCSConfig> getGCSConfig(HoodieConfig hoodieConfig) {
     String gcsProjectId = hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_GCS_PROJECT_ID);
     if (!StringUtils.isNullOrEmpty(gcsProjectId)) {
-      return Optional.of(GCSConfig.builder()
-          .projectId(Optional.of(gcsProjectId))
-          .gcpServiceAccountKeyPath(Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_GCS_SERVICE_ACCOUNT_KEY_PATH)))
+      return Option.of(GCSConfig.builder()
+          .projectId(java.util.Optional.of(gcsProjectId))
+          .gcpServiceAccountKeyPath(java.util.Optional.ofNullable(hoodieConfig.getString(LakeviewSyncConfigHolder.LAKEVIEW_GCS_SERVICE_ACCOUNT_KEY_PATH)))
           .build());
     } else {
-      return Optional.empty();
+      return Option.empty();
     }
   }
 
-  private Optional<List<String>> getPathsToExclude(HoodieConfig hoodieConfig) {
+  private java.util.Optional<List<String>> getPathsToExclude(HoodieConfig hoodieConfig) {
     String pathsToExclude = hoodieConfig.getStringOrDefault(LAKEVIEW_METADATA_EXTRACTOR_PATH_EXCLUSION_PATTERNS);
     if (StringUtils.isNullOrEmpty(pathsToExclude)) {
-      return Optional.empty();
+      return java.util.Optional.empty();
     } else {
-      return Optional.of(Arrays.stream(pathsToExclude.split(","))
+      return java.util.Optional.of(Arrays.stream(pathsToExclude.split(","))
           .filter(entry -> !entry.isEmpty())
           .collect(Collectors.toList()));
     }

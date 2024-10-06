@@ -40,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -103,7 +102,7 @@ class LakeviewSyncToolTest {
       assertNotNull(config);
       assertEquals(new HashSet<>(expectedParserConfigs),
           new HashSet<>(config.getMetadataExtractorConfig().getParserConfig()));
-      Optional<List<String>> pathExclusionPatterns = config.getMetadataExtractorConfig().getPathExclusionPatterns();
+      java.util.Optional<List<String>> pathExclusionPatterns = config.getMetadataExtractorConfig().getPathExclusionPatterns();
       assertTrue(pathExclusionPatterns.isPresent());
       assertEquals(2, pathExclusionPatterns.get().size());
       if (fileSystem.equals("s3")) {
@@ -169,8 +168,10 @@ class LakeviewSyncToolTest {
           "--api-key", "my-api-key",
           "--api-secret", "my-api-secret",
           "--userid", "my-userid",
-          "--lake-paths", "lake1.databases.database1.basePaths=s3://user-bucket/lake-1/database-1/table-1,s3://user-bucket/lake-1/database-1/table-2",
-          "--lake-paths", "lake1.databases.database2.basePaths=s3://user-bucket/lake-1/database-2/table-1,s3://user-bucket/lake-1/database-2/table-2",
+          "--lake-paths", "lake1.databases.database1.basePaths=s3://user-bucket/lake-1/database-1/table-1,"
+            + "s3://user-bucket/lake-1/database-1/table-2",
+          "--lake-paths", "lake1.databases.database2.basePaths=s3://user-bucket/lake-1/database-2/table-1,"
+            + "s3://user-bucket/lake-1/database-2/table-2",
           "--base-path", "s3://user-bucket/lake-1/database-1/table-2",
           "--s3-region", "us-west-2",
           "--timeout", String.valueOf(timeoutInSeconds)
