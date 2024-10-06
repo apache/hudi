@@ -21,6 +21,7 @@ package org.apache.hudi.sync;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.aws.sync.AwsGlueCatalogSyncTool;
+import org.apache.hudi.common.util.Option;
 
 import java.util.Properties;
 
@@ -29,7 +30,7 @@ public class LakeviewGlueSyncTool extends AwsGlueCatalogSyncTool {
   private final LakeviewSyncTool lakeviewSyncTool;
 
   public LakeviewGlueSyncTool(Properties props, Configuration hadoopConf) {
-    super(props, hadoopConf);
+    super(props, hadoopConf, Option.empty());
     this.lakeviewSyncTool = new LakeviewSyncTool(props, hadoopConf);
   }
 
