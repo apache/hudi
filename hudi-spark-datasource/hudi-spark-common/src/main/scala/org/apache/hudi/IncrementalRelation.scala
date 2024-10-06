@@ -70,17 +70,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   val skeletonSchema: StructType = HoodieSparkUtils.getMetaSchema
   private val basePath = metaClient.getBasePath
-  // TODO : Figure out a valid HoodieWriteConfig
-  private val hoodieTable = HoodieSparkTable.create(HoodieWriteConfig.newBuilder().withPath(basePath.toString).build(),
-    new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-    metaClient)
-
-  private val hollowCommitHandling: HollowCommitHandling = getHollowCommitHandling(optParams)
-
-//  private val commitTimeline = handleHollowCommitIfNeeded(
-//    hoodieTable.getMetaClient.getCommitTimeline.filterCompletedInstants,
-//    hoodieTable.getMetaClient,
-//    hollowCommitHandling)
 
   private val commitTimeline =
     metaClient.getCommitTimeline.filterCompletedInstants
@@ -107,28 +96,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .build()
       .analyze()
 
-  private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
-    INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
-
-  private val lastInstant = commitTimeline.lastInstant().get()
-
-  /*
-  private val commitsTimelineToReturn = {
-    if (hollowCommitHandling == USE_TRANSITION_TIME) {
-      commitTimeline.findInstantsInRangeByCompletionTime(
-        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getCompletionTime))
-    } else {
-      commitTimeline.findInstantsInRange(
-        optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
-    }
-  }
-  */
-
   private val commitsToReturn = List.concat(
     queryContext.getArchivedInstants.asScala,
     queryContext.getActiveInstants.asScala)
+
+  private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
+    INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 
   // use schema from a file produced in the end/latest instant
 
@@ -249,9 +222,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
-//        if (hollowCommitHandling == USE_TRANSITION_TIME) {
-//          throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
-//        }
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
@@ -314,7 +284,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
                     throw e
                   }
               }
-
             }
             df
           }

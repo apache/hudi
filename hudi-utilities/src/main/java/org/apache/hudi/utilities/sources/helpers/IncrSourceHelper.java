@@ -44,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -57,20 +58,6 @@ public class IncrSourceHelper {
   private static final Logger LOG = LoggerFactory.getLogger(IncrSourceHelper.class);
   public static final String DEFAULT_BEGIN_TIMESTAMP = HoodieTimeline.INIT_INSTANT_TS;
   private static final String CUMULATIVE_COLUMN_NAME = "cumulativeSize";
-
-  @Deprecated
-  /**
-   * @Deprecated please use HoodieInstantTimeGenerator#getStrictlyLowerTimestamp
-   * Get a timestamp which is the next value in a descending sequence.
-   *
-   * @param timestamp Timestamp
-   */
-  public static String getStrictlyLowerTimestamp(String timestamp) {
-    long ts = Long.parseLong(timestamp);
-    ValidationUtils.checkArgument(ts > 0, "Timestamp must be positive");
-    long lower = ts - 1;
-    return "" + lower;
-  }
 
   /**
    * When hollow commits are found while using incremental source with {@link HoodieDeltaStreamer},

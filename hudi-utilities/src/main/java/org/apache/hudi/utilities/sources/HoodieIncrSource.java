@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -38,7 +37,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
-import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -72,7 +70,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_BEGIN_TIMESTAMP;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
 public class HoodieIncrSource extends RowSource {
 
@@ -232,12 +229,6 @@ public class HoodieIncrSource extends RowSource {
           numInstantsFromSourceProfile, numInstantsFromConfigFinal);
       return numInstantsFromSourceProfile;
     }).orElse(numInstantsFromConfig);
-
-
-    // TODO: remove the hollow commit handling logic once the incremental relation switches to use completion timeline
-    // handle hollow commits, use hollow commits as the end
-    Option<HoodieInstant> lastCompletedInstant =
-            metaClient.getCommitsAndCompactionTimeline().filterCompletedInstants().lastInstant();
 
     IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)

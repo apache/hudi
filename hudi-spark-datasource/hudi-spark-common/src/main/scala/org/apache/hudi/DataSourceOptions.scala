@@ -125,10 +125,10 @@ object DataSourceReadOptions {
       + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
-  val INCREMENTAL_LIMIT: ConfigProperty[String] = ConfigProperty
+  val INCREMENTAL_LIMIT: ConfigProperty[Int] = ConfigProperty
     .key("hoodie.datasource.read.incremental.limit")
-    .defaultValue("0")
-    .withDocumentation("0=>no limit")
+    .defaultValue(5)
+    .withDocumentation("limit")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")

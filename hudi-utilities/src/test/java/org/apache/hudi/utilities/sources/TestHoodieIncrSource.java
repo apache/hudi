@@ -22,7 +22,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -31,9 +30,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerator;
-import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.ClusteringUtils;
@@ -98,7 +94,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
   }
 
   private HoodieTestDataGenerator dataGen;
-  private TimeGenerator timeGen;
   private HoodieTableMetaClient metaClient;
   private HoodieTableType tableType = COPY_ON_WRITE;
   private final Option<SourceProfileSupplier> sourceProfile = Option.of(mock(SourceProfileSupplier.class));
@@ -109,9 +104,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     dataGen = new HoodieTestDataGenerator();
     String basePath = basePath();
     metaClient = getHoodieMetaClient(storageConf(), basePath);
-    timeGen = TimeGenerators.getTimeGenerator(
-        HoodieTimeGeneratorConfig.defaultConfig(basePath),
-        metaClient.getStorageConf());
   }
 
   @Override
@@ -237,7 +229,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // instant 3
       // instant 4_inflight
       // instant 5
-
       // Reads everything up to latest
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
@@ -279,8 +270,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
       // find instant4's new completion time
       String instant4CompletionTime = activeTimeline.reload().getInstantsAsStream()
-          .filter(instant -> instant.getTimestamp().equals(instant4.getTimestamp())).
-          findFirst().get().getCompletionTime();
+          .filter(instant -> instant.getTimestamp().equals(instant4.getTimestamp()))
+          .findFirst().get().getCompletionTime();
 
       // After the inflight commit completes, the checkpoint should move on after incremental pull
       readAndAssert(
@@ -458,36 +449,16 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       for (int i = 0; i < 3; i++) {
         inserts.add(writeRecordsForPartition(writeClient, BULK_INSERT, writeClient.createNewInstantTime(), DEFAULT_PARTITION_PATHS[i]));
       }
+
       /*
-      chkpt, maxRows, expectedChkpt, expected partitions
+          chkpt, maxRows, expectedChkpt, expected partitions
           Arguments.of(null, 1, "100", 100, 1),
           Arguments.of(null, 101, "200", 200, 3),
           Arguments.of(null, 10001, "300", 300, 3),
           Arguments.of("100", 101, "300", 200, 2),
           Arguments.of("200", 101, "300", 100, 1),
           Arguments.of("300", 101, "300", 0, 0)
-          */
-      // Go over all possible test cases to assert behaviour.
-//      getArgsForPartitionPruningInHoodieIncrSource(inserts).forEach(argumentsStream -> {
-//        Object[] arguments = argumentsStream.get();
-//        String checkpointToPullFromHoodieInstant = (String) arguments[0];
-//        int maxRowsPerSnapshotBatch = (int) arguments[1];
-//        String expectedCheckpointHoodieInstant = (String) arguments[2];
-//        int expectedCount = (int) arguments[3];
-//        int expectedRDDPartitions = (int) arguments[4];
-//
-//        TypedProperties extraProps = new TypedProperties();
-//        extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(maxRowsPerSnapshotBatch));
-//        readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
-//            Option.ofNullable(checkpointToPullFromHoodieInstant),
-//            expectedCount,
-//            expectedCheckpointHoodieInstant,
-//            Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
-//            extraProps,
-//            Option.ofNullable(expectedRDDPartitions)
-//        );
-//      });
-
+      */
       TypedProperties extraProps = new TypedProperties();
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(1));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
@@ -633,18 +604,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         .withParallelism(2, 2).withBulkInsertParallelism(2).withFinalizeWriteParallelism(2).withDeleteParallelism(2)
         .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .forTable(metaClient.getTableConfig().getTableName());
-  }
-
-  private static Stream<Arguments> getArgsForPartitionPruningInHoodieIncrSource(List<WriteResult> inserts) {
-    // Arguments are in order -> checkpointToPullFromHoodieInstant, maxRowsPerSnapshotBatch, expectedCheckpointHoodieInstant, expectedCount, expectedFileParallelism.
-    return Stream.of(
-        Arguments.of(null, 1, inserts.get(0).getInstantTime(), 100, 1),
-        Arguments.of(null, 101, inserts.get(1).getInstantTime(), 200, 3),
-        Arguments.of(null, 10001, inserts.get(2).getInstantTime(), 300, 3),
-        Arguments.of(inserts.get(0).getInstantTime(), 101, inserts.get(2).getInstantTime(), 200, 2),
-        Arguments.of(inserts.get(1).getInstantTime(), 101, inserts.get(2).getInstantTime(), 100, 1),
-        Arguments.of(inserts.get(2).getInstantTime(), 101, inserts.get(2).getInstantTime(), 0, 0)
-    );
   }
 
   private static class DummySchemaProvider extends SchemaProvider {

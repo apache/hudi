@@ -201,7 +201,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       Option<String> rangeEnd,
       InstantRange.RangeType rangeType) {
     // assumes any instant/transaction lasts at most 1 day to optimize the query efficiency.
-    return getStartTimes(timeline, rangeStart, rangeEnd, rangeType, s ->  HoodieInstantTimeGenerator.instantTimeMinusMillis(s, MILLI_SECONDS_IN_ONE_DAY));
+    return getStartTimes(timeline, rangeStart, rangeEnd, rangeType, s -> HoodieInstantTimeGenerator.instantTimeMinusMillis(s, MILLI_SECONDS_IN_ONE_DAY));
   }
 
   /**

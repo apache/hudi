@@ -94,7 +94,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includeStartTime = includeStartTime,
+      includeStartTime = false,
       startTimestamp = startTs,
       endTimestamp = endTs,
       includedTimestamps = includedCommits.map(_.getTimestamp).toSet)
@@ -214,23 +214,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       .build()
       .analyze()
 
-  protected lazy val includedCommits: immutable.Seq[HoodieInstant] =
-    List.concat(
-      queryContext.getArchivedInstants.asScala,
-      queryContext.getActiveInstants.asScala)
-
-//  {
-//    if (!startInstantArchived || !endInstantArchived) {
-//      // If endTimestamp commit is not archived, will filter instants
-//      // before endTimestamp.
-//      if (hollowCommitHandling == USE_TRANSITION_TIME) {
-//        super.timeline.findInstantsInRangeByCompletionTime(startTimestamp, endTimestamp).getInstants.asScala.toList
-//      } else {
-//        super.timeline.findInstantsInRange(startTimestamp, endTimestamp).getInstants.asScala.toList
-//      }
-//    } else {
-//      super.timeline.getInstants.asScala.toList
-//    }
+  protected lazy val includedCommits: immutable.Seq[HoodieInstant] = List.concat(
+    queryContext.getArchivedInstants.asScala,
+    queryContext.getActiveInstants.asScala)
 
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 
@@ -238,11 +224,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
   }
 
-  protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
-    (false, startTimestamp)
-  } else {
-    (false, getStrictlyLowerTimestamp(includedCommits.head.getTimestamp))
-  }
+  // use instants from queryContext
+  protected lazy val startTs: String = getStrictlyLowerTimestamp(includedCommits.head.getTimestamp)
+
   protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
@@ -251,20 +235,13 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     val isNotNullFilter = IsNotNull(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
 
     val timeStamps = includedCommits.map(_.getTimestamp).toArray[Any]
-    val isInFilter = In(HoodieRecord.COMMIT_TIME_METADATA_FIELD, timeStamps)
-    val largerThanFilter = if (includeStartTime) {
-      GreaterThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
-    } else {
-      GreaterThan(HoodieRecord.COMMIT_TIME_METADATA_FIELD, startTs)
-    }
+    val inFilter = In(HoodieRecord.COMMIT_TIME_METADATA_FIELD, timeStamps)
 
-    val lessThanFilter = LessThanOrEqual(HoodieRecord.COMMIT_TIME_METADATA_FIELD, endTs)
-
-    Seq(isNotNullFilter, isInFilter)
+    Seq(isNotNullFilter, inFilter)
   }
 
   override lazy val mandatoryFields: Seq[String] = {
-    // NOTE: This columns are required for Incremental flow to be able to handle the rows properly, even in
+    // NOTE: These columns are required for Incremental flow to be able to handle the rows properly, even in
     //       cases when no columns are requested to be fetched (for ex, when using {@code count()} API)
     Seq(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.COMMIT_TIME_METADATA_FIELD) ++
       preCombineFieldOpt.map(Seq(_)).getOrElse(Seq())
