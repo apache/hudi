@@ -101,7 +101,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {
-    if (includedCommits.isEmpty) {
+    if (includedCommits.isEmpty) {2
       List()
     } else {
       val fileSlices = if (fullTableScan) {
@@ -208,7 +208,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
       .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
-      .endTime(optParams(DataSourceReadOptions.END_INSTANTTIME.key))
+      .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
       .limit(optParams(DataSourceReadOptions.INCREMENTAL_LIMIT.key).toInt)
       .build()
