@@ -1384,8 +1384,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
                   assertNotNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
                 } else {
                   // Metadata table records should not have meta fields!
-                  assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
-                  assertNull(record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+                  assertNull(record.getSchema().getField(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+                  assertNull(record.getSchema().getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
                 }
 
                 final String key = String.valueOf(record.get(HoodieMetadataPayload.KEY_FIELD_NAME));
