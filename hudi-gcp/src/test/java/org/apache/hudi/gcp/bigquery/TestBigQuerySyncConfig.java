@@ -30,6 +30,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING;
+import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_BILLING_PROJECT_ID;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_LOCATION;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_DATASET_NAME;
 import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_PARTITION_FIELDS;
@@ -49,6 +50,7 @@ public class TestBigQuerySyncConfig {
   public void testGetConfigs() {
     Properties props = new Properties();
     props.setProperty(BIGQUERY_SYNC_PROJECT_ID.key(), "fooproject");
+    props.setProperty(BIGQUERY_SYNC_BILLING_PROJECT_ID.key(), "foobillingproject");
     props.setProperty(BIGQUERY_SYNC_DATASET_NAME.key(), "foodataset");
     props.setProperty(BIGQUERY_SYNC_DATASET_LOCATION.key(), "US");
     props.setProperty(BIGQUERY_SYNC_TABLE_NAME.key(), "footable");
@@ -61,6 +63,7 @@ public class TestBigQuerySyncConfig {
     props.setProperty(BIGQUERY_SYNC_ASSUME_DATE_PARTITIONING.key(), "true");
     BigQuerySyncConfig syncConfig = new BigQuerySyncConfig(props);
     assertEquals("fooproject", syncConfig.getString(BIGQUERY_SYNC_PROJECT_ID));
+    assertEquals("foobillingproject", syncConfig.getString(BIGQUERY_SYNC_BILLING_PROJECT_ID));
     assertEquals("foodataset", syncConfig.getString(BIGQUERY_SYNC_DATASET_NAME));
     assertEquals("US", syncConfig.getString(BIGQUERY_SYNC_DATASET_LOCATION));
     assertEquals("footable", syncConfig.getString(BIGQUERY_SYNC_TABLE_NAME));
