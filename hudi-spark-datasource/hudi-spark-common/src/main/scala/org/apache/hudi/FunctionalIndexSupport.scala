@@ -148,7 +148,7 @@ class FunctionalIndexSupport(spark: SparkSession,
         s"Index type $indexType is not supported")
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadFunctionalIndexForColumnsInternal(
         indexDefinition.getSourceFields.asScala.toSeq, indexPartition, shouldReadInMemory)
-      // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
@@ -180,7 +180,7 @@ class FunctionalIndexSupport(spark: SparkSession,
     val metadataRecords: HoodieData[HoodieRecord[HoodieMetadataPayload]] =
       metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, indexPartition, shouldReadInMemory)
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-    // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
           toScalaOption(record.getData.getInsertValue(null, null))
             .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)

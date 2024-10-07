@@ -62,7 +62,7 @@ public class JsonUtils {
   }
 
   public static void registerModules() {
-    // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11 (Spark >= 3.2)
+    // NOTE: Registering [[JavaTimeModule]] is required for Jackson >= 2.11
     MAPPER.registerModules(new JavaTimeModule());
   }
 }

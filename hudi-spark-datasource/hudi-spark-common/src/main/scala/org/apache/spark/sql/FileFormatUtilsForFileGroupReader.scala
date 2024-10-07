@@ -19,11 +19,12 @@
 package org.apache.spark.sql
 
 import org.apache.hudi.{HoodieCDCFileIndex, SparkAdapterSupport, SparkHoodieTableFileIndex}
+
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{BooleanType, StructType}
 
 import scala.util.Try
 
@@ -93,12 +94,10 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
           zipAttributeAndValue(attribute, value).map(StartsWith.tupled)
         case sources.StringEndsWith(attribute, value) =>
           zipAttributeAndValue(attribute, value).map(EndsWith.tupled)
-        /* Not supported in spark2. If needed, we will need to create separate spark 2 and 3 implementations
       case sources.AlwaysTrue() =>
         Some(Literal(true, BooleanType))
       case sources.AlwaysFalse() =>
         Some(Literal(false, BooleanType))
-         */
       }
 
       translate(filter)

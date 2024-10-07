@@ -48,9 +48,6 @@ ADD conf/hive-log4j2.properties $HIVE_HOME/conf
 ADD conf/ivysettings.xml $HIVE_HOME/conf
 ADD conf/llap-daemon-log4j2.properties $HIVE_HOME/conf
 
-# Setup Hoodie Library jars
-ADD target/ /var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/
-
 ENV HUDI_HADOOP_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar
 ENV HUDI_HIVE_SYNC_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hive-sync-bundle.jar
 ENV HUDI_SPARK_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar

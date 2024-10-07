@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -75,6 +76,7 @@ import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.PATH_BASED_PARTITION_FIELDS;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.SELECT_RELATIVE_PATH_REGEX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX;
 import static org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig.S3_IGNORE_KEY_PREFIX;
@@ -156,7 +158,7 @@ public class CloudObjectsSelectorCommon {
     final Configuration configuration = storageConf.unwrapCopy();
 
     String bucket = row.getString(0);
-    String filePath = storageUrlSchemePrefix + bucket + "/" + row.getString(1);
+    String filePath = storageUrlSchemePrefix + bucket + StoragePath.SEPARATOR + row.getString(1);
 
     try {
       String filePathUrl = URLDecoder.decode(filePath, StandardCharsets.UTF_8.name());
@@ -193,6 +195,7 @@ public class CloudObjectsSelectorCommon {
     Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
+    Option<String> selectRelativePathRegex = getPropVal(props, SELECT_RELATIVE_PATH_REGEX);
 
     String objectKey;
     String objectSizeKey;
@@ -209,8 +212,19 @@ public class CloudObjectsSelectorCommon {
     }
 
     StringBuilder filter = new StringBuilder(String.format("%s > 0", objectSizeKey));
-    if (selectRelativePathPrefix.isPresent()) {
-      filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, selectRelativePathPrefix.get()));
+    if (selectRelativePathPrefix.isPresent() || selectRelativePathRegex.isPresent()) {
+      String prefix = selectRelativePathPrefix.orElse("");
+      String regex = selectRelativePathRegex.orElse("");
+
+      // Update path if regex is present
+      if (!regex.isEmpty()) {
+        String updatedPathRegex = prefix.isEmpty() || prefix.endsWith(StoragePath.SEPARATOR)
+            ? prefix + regex : prefix + StoragePath.SEPARATOR + regex;
+        filter.append(SPACE_DELIMTER).append(String.format("and %s rlike '%s'", objectKey, updatedPathRegex));
+      } else if (!prefix.isEmpty()) {
+        // Build the condition based on whether regex or prefix is present
+        filter.append(SPACE_DELIMTER).append(String.format("and %s like '%s%%'", objectKey, prefix));
+      }
     }
     if (ignoreRelativePathPrefix.isPresent()) {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%s%%'", objectKey, ignoreRelativePathPrefix.get()));
@@ -326,7 +340,7 @@ public class CloudObjectsSelectorCommon {
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
         LOG.info(String.format("Adding column %s to dataset", partitionKey));
-        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), "/").getItem(0));
+        dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }
     dataset = coalesceOrRepartition(dataset, numPartitions);

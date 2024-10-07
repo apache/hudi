@@ -413,7 +413,7 @@ Set up a few environment variables to simplify Maven commands that follow. This 
       3. Use a VPN if you can't prevent your IP from switching
       4. after uploading, inspect the log to make sure all maven tasks said "BUILD SUCCESS"
    5. Review all staged artifacts by logging into Apache Nexus and clicking on "Staging Repositories" link on left pane. Then find a "open" entry for apachehudi
-   6. Ensure it contains all 3 (2.11, 2.12 with spark2 and 2.12 with spark3) artifacts, mainly hudi-spark-bundle-2.11/2.12, hudi-spark3-bundle-2.12, hudi-spark-2.11/2.12, hudi-spark2-2.11/2.12, hudi-spark3-2.12, hudi-utilities-bundle_2.11/2.12 and hudi-utilities_2.11/2.12.
+   6. Ensure it contains all 2 (2.12 and 2.13) artifacts, mainly hudi-spark-bundle-2.12/2.13, hudi-spark3-bundle-2.12/2.13, hudi-spark-2.12/2.13, hudi-spark3-2.12/2.13, hudi-utilities-bundle_2.12/2.13 and hudi-utilities_2.12/2.13.
       > With 0.10.1, we had 4 bundles. spark2 with scala11, spark2 with scala12, spark3.0.x bundles and spark3.1.x bundles. Ensure each spark bundle reflects the version correctly. hudi-spark3.1.2-bundle_2.12-0.10.1.jar and hudi-spark3.0.3-bundle_2.12-0.10.1.jar are the respective bundle names for spark3 bundles.
    7. Once you have ensured everything is good and validation of step 7 succeeds, you can close the staging repo. Until you close, you can re-run deploying to staging multiple times. But once closed, it will create a new staging repo. So ensure you close this, so that the next RC (if need be) is on a new repo. So, once everything is good, close the staging repository on Apache Nexus. When prompted for a description, enter
       > Apache Hudi, version `${RELEASE_VERSION}`, release candidate `${RC_NUM}`.

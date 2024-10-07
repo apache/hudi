@@ -241,7 +241,7 @@ public class HoodieIndexUtils {
       HoodieData<Pair<String, String>> partitionLocations, HoodieWriteConfig config, HoodieTable hoodieTable) {
     final Option<String> instantTime = hoodieTable
         .getMetaClient()
-        .getCommitsTimeline()
+        .getActiveTimeline() // we need to include all actions and completed
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
