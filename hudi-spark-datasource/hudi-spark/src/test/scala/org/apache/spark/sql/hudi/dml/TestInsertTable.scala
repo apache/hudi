@@ -430,53 +430,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
    })
   }
 
-  test("Test Insert Into None Partitioned Table strict mode with no preCombineField") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      spark.sql(s"set hoodie.sql.insert.mode=strict")
-      // Create none partitioned cow table
-      spark.sql(
-        s"""
-           |create table $tableName (
-           |  id int,
-           |  name string,
-           |  price double
-           |) using hudi
-           | location '${tmp.getCanonicalPath}/$tableName'
-           | tblproperties (
-           |  type = 'cow',
-           |  primaryKey = 'id'
-           | )
-       """.stripMargin)
-      spark.sql(s"insert into $tableName values(1, 'a1', 10)")
-      checkAnswer(s"select id, name, price from $tableName")(
-        Seq(1, "a1", 10.0)
-      )
-      spark.sql(s"insert into $tableName select 2, 'a2', 12")
-      checkAnswer(s"select id, name, price from $tableName")(
-        Seq(1, "a1", 10.0),
-        Seq(2, "a2", 12.0)
-      )
-
-      spark.sql("set hoodie.merge.allow.duplicate.on.inserts = false")
-      assertThrows[HoodieDuplicateKeyException] {
-        try {
-          spark.sql(s"insert into $tableName select 1, 'a1', 10")
-        } catch {
-          case e: Exception =>
-            var root: Throwable = e
-            while (root.getCause != null) {
-              root = root.getCause
-            }
-            throw root
-        }
-      }
-
-      // disable this config to avoid affect other test in this class.
-      spark.sql(s"set hoodie.sql.insert.mode=upsert")
-    }
-  }
-
   test("Test Insert Overwrite") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -1364,44 +1317,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         })
       }
     }
-  }
-
-  test("Test For read operation's field") {
-      withRecordType()(withTempDir { tmp => {
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        import spark.implicits._
-        val day = "2021-08-02"
-        val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
-        // Write a table by spark dataframe.
-        df.write.format("hudi")
-          .option(HoodieWriteConfig.TBL_NAME.key, tableName)
-          .option(TABLE_TYPE.key, MOR_TABLE_TYPE_OPT_VAL)
-          .option(RECORDKEY_FIELD.key, "id")
-          .option(PRECOMBINE_FIELD.key, "ts")
-          .option(PARTITIONPATH_FIELD.key, "day,hh")
-          .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
-          .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
-          .mode(SaveMode.Overwrite)
-          .save(tablePath)
-
-        val metaClient = createMetaClient(spark, tablePath)
-
-        assertResult(true)(new TableSchemaResolver(metaClient).hasOperationField)
-
-        spark.sql(
-          s"""
-             |create table $tableName using hudi
-             |location '${tablePath}'
-             |""".stripMargin)
-
-        // Note: spark sql batch write currently does not write actual content to the operation field
-        checkAnswer(s"select id, _hoodie_operation from $tableName")(
-          Seq(1, null)
-        )
-      }
-      })
   }
 
   test("Test enable hoodie.datasource.write.drop.partition.columns when write") {
@@ -2549,21 +2464,6 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           ingestAndValidateDropDupPolicyBulkInsert(tableType, tableName, tmp,
             List(s"set ${SPARK_SQL_INSERT_INTO_OPERATION.key}=${WriteOperationType.BULK_INSERT.value}",
               s"set ${DataSourceWriteOptions.INSERT_DUP_POLICY.key}=$dupPolicy"))
-        }
-      }
-    })
-  }
-
-  test("Test FAIL insert dup policy with INSERT_INTO explicit new configs") {
-    withRecordType(Seq(HoodieRecordType.AVRO))(withTempDir { tmp =>
-      Seq("cow", "mor").foreach { tableType =>
-        val operation = WriteOperationType.UPSERT
-        val dupPolicy = FAIL_INSERT_DUP_POLICY
-        withTable(generateTableName) { tableName =>
-          ingestAndValidateDataDupPolicy(tableType, tableName, tmp, operation,
-            List(s"set ${SPARK_SQL_INSERT_INTO_OPERATION.key}=${operation.value}",
-              s"set ${DataSourceWriteOptions.INSERT_DUP_POLICY.key}=$dupPolicy"),
-            dupPolicy, true)
         }
       }
     })

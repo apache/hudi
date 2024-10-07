@@ -20,14 +20,15 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.engine.EngineType
-import org.apache.hudi.common.model.{HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieRecordMerger, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodiePayloadConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.api.java.JavaRDD
@@ -52,6 +53,9 @@ class TestStreamSourceReadByStateTransitionTime extends TestStreamingSource {
 
         val writeConfig = HoodieWriteConfig.newBuilder()
           .withEngineType(EngineType.SPARK)
+          .withRecordMergeMode(RecordMergeMode.CUSTOM)
+          .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
+          .withPayloadConfig(HoodiePayloadConfig.newBuilder().withPayloadClass(classOf[DefaultHoodieRecordPayload].getCanonicalName).build())
           .withPath(tablePath)
           .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
           .withCleanConfig(HoodieCleanConfig.newBuilder()

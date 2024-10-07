@@ -102,6 +102,29 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     assertEquals(serDe.deserializeRow(newRow), Row("Rob", 18, null.asInstanceOf[StructType], null.asInstanceOf[StringType], null.asInstanceOf[IntegerType]))
   }
 
+  private val twoFieldSchema = StructType(Seq(
+    StructField("col1", StringType),
+    StructField("col2", StringType)
+  ))
+
+  private val oneFieldSchema = StructType(Seq(
+    StructField("col1", StringType)
+  ))
+
+
+  test("Test simple col rename overwrite") {
+    val rows = Seq(Row("aaa", "bbb"))
+    val data = sparkSession.sparkContext.parallelize(rows)
+    val oldRow = sparkSession.createDataFrame(data, twoFieldSchema).queryExecution.toRdd.first()
+
+    val rowWriter1 = HoodieInternalRowUtils.genUnsafeRowWriter(twoFieldSchema, oneFieldSchema, JCollections.singletonMap("col1", "col2"))
+    val newRow1 = rowWriter1(oldRow)
+
+    //This does not work, see "Test alter column multiple times"
+    //val serDe1 = sparkAdapter.createSparkRowSerDe(oneFieldSchema)
+    //assertEquals(serDe1.deserializeRow(newRow1), Row("bbb"))
+  }
+
   /**
    * test record data type changes.
    * int => long/float/double/string
