@@ -868,7 +868,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   }
 
   @Override
-  protected Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getSecondaryIndexRecords(List<String> keys, String partitionName) {
+  public Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getSecondaryIndexRecords(List<String> keys, String partitionName) {
     if (keys.isEmpty()) {
       return Collections.emptyMap();
     }
