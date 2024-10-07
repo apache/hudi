@@ -103,6 +103,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
+    val completionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
@@ -133,6 +134,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val completionTime2 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
 
     val snapshotDF2 = spark.read.format("hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
@@ -145,7 +147,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     var inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
 
     if (isTimestampBasedKeyGen) {
-      // incase of Timestamp based key gen, current_ts should not be updated. but dataGen.generateUpdates() would have updated
+      // in case of Timestamp based key gen, current_ts should not be updated. but dataGen.generateUpdates() would have updated
       // the value of current_ts. So, we need to revert it back to original value.
       // here is what we are going to do. Copy values to temp columns, join with original df and update the current_ts
       // and drop the temp columns.
@@ -169,6 +171,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
+    val completionTime3 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query
@@ -185,7 +188,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, completionTime1)
       .load(basePath)
     assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
     spark.sparkContext.hadoopConfiguration.unset("mapreduce.input.pathFilter.class")
@@ -212,7 +215,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit
     val hoodieIncViewDF2 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, completionTime2)
       .load(basePath)
 
     assertEquals(uniqueKeyCnt, hoodieIncViewDF2.count()) // 100 records must be pulled
@@ -223,7 +226,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     // pull the latest commit within certain partitions
     val hoodieIncViewDF3 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commitInstantTime2)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, completionTime2)
       .option(DataSourceReadOptions.INCR_PATH_GLOB.key, if (isTimestampBasedKeyGen) "/2016*/*" else "/2016/*/*/*")
       .load(basePath)
     assertEquals(hoodieIncViewDF2
@@ -232,7 +235,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     val timeTravelDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCommit)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, completionTime1)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled
   }
