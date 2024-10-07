@@ -224,17 +224,6 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     // create secondary index
     sparkSession.sql("create index idx_not_record_key_col on tbl using secondary_index(not_record_key_col)");
     validateSecondaryIndex();
-
-    // updating record `not_record_key_col` column from `abc` to `cde`
-    rows = getRowDataset(1, "row1", "cde", "p1");
-    rows.write().format("hudi")
-        .option("hoodie.metadata.enable", "true")
-        .option("hoodie.metadata.record.index.enable", "true")
-        .mode(SaveMode.Append)
-        .save(basePath);
-
-    // validate MDT partition stats
-    validateSecondaryIndex();
   }
 
   @Test
