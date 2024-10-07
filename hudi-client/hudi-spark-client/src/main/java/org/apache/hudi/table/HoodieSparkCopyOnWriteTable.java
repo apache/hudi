@@ -105,6 +105,11 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
+  public void validateForLatestTimestamp(String instantTime) {
+    validateForLatestTimestampInternal(instantTime);
+  }
+
+  @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> upsert(HoodieEngineContext context, String instantTime, HoodieData<HoodieRecord<T>> records) {
     return new SparkUpsertCommitActionExecutor<>((HoodieSparkEngineContext) context, config, this, instantTime, records).execute();
   }
