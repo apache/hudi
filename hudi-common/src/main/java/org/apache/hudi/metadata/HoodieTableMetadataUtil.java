@@ -80,6 +80,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
@@ -140,6 +141,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
@@ -1213,14 +1215,14 @@ public class HoodieTableMetadataUtil {
                                                                                          boolean shouldReadColumnStatsForLogFiles,
                                                                                          Option<Schema> writerSchemaOpt) {
     try {
+      StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), filePath);
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), filePath);
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
-      } else if (FSUtils.isLogFile(filePath) && shouldReadColumnStatsForLogFiles) {
-        LOG.warn("Reading log file: {}, to build column range metadata.", filePath);
-        return getLogFileColumnRangeMetadata(filePath, datasetMetaClient, columnsToIndex, writerSchemaOpt);
+      } else if (FSUtils.isLogFile(fullFilePath) && shouldReadColumnStatsForLogFiles) {
+        LOG.warn("Reading log file: {}, to build column range metadata.", fullFilePath);
+        return getLogFileColumnRangeMetadata(fullFilePath.toString(), datasetMetaClient, columnsToIndex, writerSchemaOpt);
       }
 
       LOG.warn("Column range index not supported for: {}", filePath);
@@ -1236,10 +1238,11 @@ public class HoodieTableMetadataUtil {
   /**
    * Read column range metadata from log file.
    */
-  private static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath,
-                                                                                           HoodieTableMetaClient datasetMetaClient,
-                                                                                           List<String> columnsToIndex,
-                                                                                           Option<Schema> writerSchemaOpt) {
+  @VisibleForTesting
+  protected static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath,
+                                                                                             HoodieTableMetaClient datasetMetaClient,
+                                                                                             List<String> columnsToIndex,
+                                                                                             Option<Schema> writerSchemaOpt) {
     if (writerSchemaOpt.isPresent()) {
       List<Schema.Field> fieldsToIndex = writerSchemaOpt.get().getFields().stream()
           .filter(field -> columnsToIndex.contains(field.name()))
@@ -1247,10 +1250,15 @@ public class HoodieTableMetadataUtil {
       // read log file records without merging
       List<HoodieRecord> records = new ArrayList<>();
       HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+          .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
           .withLogFilePaths(Collections.singletonList(filePath))
+          .withBufferSize(MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
+          .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().getTimestamp())
           .withReaderSchema(writerSchemaOpt.get())
-          .withLogRecordScannerCallback(records::add).build();
+          .withTableMetaClient(datasetMetaClient)
+          .withLogRecordScannerCallback(records::add)
+          .build();
       scanner.scan(false);
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
           collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());

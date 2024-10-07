@@ -238,30 +238,37 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
 
   test(s"Test partition stats index on int type field with update and file pruning") {
     Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price int,
-             |  ts long
-             |) using hudi
-             |partitioned by (ts)
-             |tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'price',
-             |  hoodie.metadata.index.partition.stats.enable = 'true',
-             |  hoodie.metadata.index.column.stats.column.list = 'price'
-             |)
-             |location '$tablePath'
-             |""".stripMargin
-        )
+      Seq(true, false).foreach { shouldCompact =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price int,
+               |  ts long
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'price',
+               |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '$tablePath'
+               |""".stripMargin
+          )
 
-        writeAndValidatePartitionStats(tableName, tablePath)
+          // trigger compaction after update and validate stats
+          if (tableType == "mor" && shouldCompact) {
+            spark.sql("set hoodie.compact.inline=true")
+            spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+          }
+          writeAndValidatePartitionStats(tableName, tablePath)
+        }
       }
     }
   }
