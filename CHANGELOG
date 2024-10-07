@@ -345,3 +345,11 @@ d68f36112f4 [ENG-12764][HUDI-8090] Add new zookeeper based lock provider (#877)
 5a8a4442822 [ENG-14965][HUDI-8266] Ensure CleanPlanner is serializable (#935)
 e4f7f69d87a [ENG-14372][HUDI-8248] Fixing Log Record reader to include rollback blocks with timestamps > maxInstant times (#930)
 09ecdbb1022 [ENG-13527][INTERNAL] immutable collection causes runtime issue (#934)
+
+---[2024-10-07 00:39:42] [release-v1.37.0] ---
+7b4a714147 [ENG-14712][HUDI-8126] Support proto messages for spark kryo serializer (#956)
+e35e8ec88c [ENG-14712][HUDI-8126] Support proto messages for spark kryo serializer (#943)
+d5bea46c20 [ENG-15261][INTERNAL] Resolve CI issues with larger heap, fork timeout by default in surefire (#952)
+ab7ad5f149 [ENG-14556][HUDI-8276] Add support for File path regex for Hoodie Incr Source (#940)
+6f60263d99 [ENG-14372][HUDI-8248] Fixing Log Record reader to include rollback blocks with timestamps > maxInstant times (#942)
+03d8210bf0 [ENG-10945][INTERNAL] Migrate to Spark 3.5 (#906)
