@@ -467,9 +467,9 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   protected abstract Map<String, String> getSecondaryKeysForRecordKeys(List<String> recordKeys, String partitionName);
 
   /**
-   * Returns a map of (record-key -> list-of-secondary-index-records) for the provided secondary keys.
+   * Returns a map of (secondary-key -> list-of-secondary-index-records) for the provided secondary keys.
    */
-  protected abstract Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getSecondaryIndexRecords(List<String> keys, String partitionName);
+  public abstract Map<String, List<HoodieRecord<HoodieMetadataPayload>>> getSecondaryIndexRecords(List<String> keys, String partitionName);
 
   public HoodieMetadataConfig getMetadataConfig() {
     return metadataConfig;

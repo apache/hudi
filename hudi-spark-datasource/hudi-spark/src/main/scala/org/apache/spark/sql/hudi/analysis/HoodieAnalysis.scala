@@ -32,13 +32,14 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
-import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, sparkAdapter}
+import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable, instantiateKlass, sparkAdapter}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import java.util
+
 import scala.collection.mutable.ListBuffer
 
 object HoodieAnalysis extends SparkAdapterSupport {
@@ -53,54 +54,44 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //       For more details please check out the scala-doc of the rule
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
-    if (HoodieSparkUtils.isSpark2) {
-      //Add or correct resolution of MergeInto
-      // the way we load the class via reflection is diff across spark2 and spark3 and hence had to split it out.
-      val resolveReferencesClass = "org.apache.spark.sql.catalyst.analysis.HoodieSpark2Analysis$ResolveReferences"
-      val sparkResolveReferences: RuleBuilder =
-        session => ReflectionUtils.loadClass(resolveReferencesClass, session).asInstanceOf[Rule[LogicalPlan]]
-      // TODO elaborate on the ordering
-      rules += (adaptIngestionTargetLogicalRelations, sparkResolveReferences)
-    } else {
-      rules += adaptIngestionTargetLogicalRelations
-      val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-      else if (HoodieSparkUtils.isSpark3_4)
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-      else {
-        // Spark 3.3.x
-        "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
-      }
-      val dataSourceV2ToV1Fallback: RuleBuilder =
-        session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
-
-      val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
-      val spark3ResolveReferences: RuleBuilder =
-        session => instantiateKlass(spark3ResolveReferencesClass, session)
-
-      // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
-      //
-      // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
-      // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
-      // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
-      rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
-
-      val resolveAlterTableCommandsClass =
-        if (HoodieSparkUtils.gteqSpark3_5) {
-          "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-        } else if (HoodieSparkUtils.gteqSpark3_4) {
-          "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
-        } else if (HoodieSparkUtils.gteqSpark3_3) {
-          "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
-        } else {
-          throw new IllegalStateException("Unsupported Spark version")
-        }
-
-      val resolveAlterTableCommands: RuleBuilder =
-        session => instantiateKlass(resolveAlterTableCommandsClass, session)
-
-      rules += resolveAlterTableCommands
+    rules += adaptIngestionTargetLogicalRelations
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark3_5)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
+    else if (HoodieSparkUtils.isSpark3_4)
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
+    else {
+      // Spark 3.3.x
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
+    val dataSourceV2ToV1Fallback: RuleBuilder =
+      session => instantiateKlass(dataSourceV2ToV1FallbackClass, session)
+
+    val spark3ResolveReferencesClass = "org.apache.spark.sql.hudi.analysis.HoodieSpark3ResolveReferences"
+    val spark3ResolveReferences: RuleBuilder =
+      session => instantiateKlass(spark3ResolveReferencesClass, session)
+
+    // NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+    //
+    // It's critical for this rules to follow in this order; re-ordering this rules might lead to changes in
+    // behavior of Spark's analysis phase (for ex, DataSource V2 to V1 fallback might not kick in before other rules,
+    // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
+    rules ++= Seq(dataSourceV2ToV1Fallback, spark3ResolveReferences)
+
+    val resolveAlterTableCommandsClass =
+      if (HoodieSparkUtils.gteqSpark3_5) {
+        "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.gteqSpark3_4) {
+        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.gteqSpark3_3) {
+        "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
+      } else {
+        throw new IllegalStateException("Unsupported Spark version")
+      }
+
+    val resolveAlterTableCommands: RuleBuilder =
+      session => instantiateKlass(resolveAlterTableCommandsClass, session)
+
+    rules += resolveAlterTableCommands
 
     // NOTE: Some of the conversions (for [[CreateTable]], [[InsertIntoStatement]] have to happen
     //       early to preempt execution of [[DataSourceAnalysis]] rule from Spark
@@ -134,20 +125,18 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    if (HoodieSparkUtils.isSpark3) {
-      val nestedSchemaPruningClass =
-        if (HoodieSparkUtils.gteqSpark3_5) {
-          "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-        } else if (HoodieSparkUtils.gteqSpark3_4) {
-          "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-        } else {
-          // spark 3.3
-          "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-        }
+    val nestedSchemaPruningClass =
+      if (HoodieSparkUtils.gteqSpark3_5) {
+        "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
+      } else if (HoodieSparkUtils.gteqSpark3_4) {
+        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
+      } else {
+        // spark 3.3
+        "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
+      }
 
-      val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-      rules += (_ => nestedSchemaPruningRule)
-    }
+    val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
+    rules += (_ => nestedSchemaPruningRule)
 
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
     //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.

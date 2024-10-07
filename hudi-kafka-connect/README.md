@@ -15,6 +15,8 @@
 * See the License for the specific language governing permissions and
 -->
 
+<!-- TODO [HUDI-8294] -->
+
 # Quick Start (demo) guide for Kafka Connect Sink for Hudi
 
 This repo contains a sample project that can be used to start off your own source connector for Kafka Connect.

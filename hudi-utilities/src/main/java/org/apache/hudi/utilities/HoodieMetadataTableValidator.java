@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -64,6 +65,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -75,6 +77,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -93,6 +96,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.Optional;
 import org.apache.spark.sql.functions;
+import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,6 +105,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -128,6 +133,7 @@ import static org.apache.hudi.io.storage.HoodieSparkIOFactory.getHoodieSparkIOFa
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
+ * TODO: [HUDI-8294]
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
  * between metadata table and filesystem.
  * <p>
@@ -326,6 +332,11 @@ public class HoodieMetadataTableValidator implements Serializable {
         required = false)
     public boolean validateRecordIndexContent = false;
 
+    @Parameter(names = {"--validate-secondary-index"},
+        description = "Validate the entries in secondary index match the primary key for the records",
+        required = false)
+    public boolean validateSecondaryIndex = false;
+
     @Parameter(names = {"--num-record-index-error-samples"},
         description = "Number of error samples to show for record index validation",
         required = false)
@@ -389,6 +400,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "   --validate-all-column-stats " + validateAllColumnStats + ", \n"
           + "   --validate-partition-stats " + validatePartitionStats + ", \n"
           + "   --validate-bloom-filters " + validateBloomFilters + ", \n"
+          + "   --validate-secondary-index " + validateSecondaryIndex + ", \n"
           + "   --validate-record-index-count " + validateRecordIndexCount + ", \n"
           + "   --validate-record-index-content " + validateRecordIndexContent + ", \n"
           + "   --num-record-index-error-samples " + numRecordIndexErrorSamples + ", \n"
@@ -426,6 +438,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           && Objects.equals(validateAllColumnStats, config.validateAllColumnStats)
           && Objects.equals(validatePartitionStats, config.validatePartitionStats)
           && Objects.equals(validateBloomFilters, config.validateBloomFilters)
+          && Objects.equals(validateSecondaryIndex, config.validateSecondaryIndex)
           && Objects.equals(validateRecordIndexCount, config.validateRecordIndexCount)
           && Objects.equals(validateRecordIndexContent, config.validateRecordIndexContent)
           && Objects.equals(viewStorageTypeForFSListing, config.viewStorageTypeForFSListing)
@@ -446,7 +459,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     public int hashCode() {
       return Objects.hash(basePath, continuous, skipDataFilesForCleaning, validateLatestFileSlices,
           validateLatestBaseFiles, validateAllFileGroups, validateAllColumnStats, validatePartitionStats, validateBloomFilters,
-          validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
+          validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
           viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
           sparkMaster, sparkMemory, assumeDatePartitioning, propsFilePath, configs, help);
@@ -595,12 +608,16 @@ public class HoodieMetadataTableValidator implements Serializable {
         validateRecordIndex(engineContext, metaClient);
         result.add(Pair.of(true, null));
       } catch (HoodieValidationException e) {
-        LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in record index validation for table: {} ", cfg.basePath, e);
-        if (!cfg.ignoreFailed) {
-          throw e;
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in record index validation");
+      }
+
+      try {
+        if (cfg.validateSecondaryIndex) {
+          validateSecondaryIndex(engineContext, metadataTableBasedContext, metaClient);
+          result.add(Pair.of(true, null));
         }
-        result.add(Pair.of(false, e));
+      } catch (HoodieValidationException e) {
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in secondary index validation");
       }
 
       try {
@@ -608,13 +625,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           validatePartitionStats(metadataTableBasedContext, finalBaseFilesForCleaning, allPartitions);
           result.add(Pair.of(true, null));
         }
-      } catch (Exception e) {
-        LOG.error(
-            "Metadata table validation failed due to HoodieValidationException in partition stats validation for table: {} ", cfg.basePath, e);
-        if (!cfg.ignoreFailed) {
-          throw e;
-        }
-        result.add(Pair.of(false, e));
+      } catch (HoodieValidationException e) {
+        handleValidationException(e, result, "Metadata table validation failed due to HoodieValidationException in partition stats validation");
       }
 
       for (Pair<Boolean, ? extends Exception> res : result) {
@@ -641,6 +653,14 @@ public class HoodieMetadataTableValidator implements Serializable {
           + "ignoring the error as the validation is successful.", e);
       return true;
     }
+  }
+
+  private void handleValidationException(HoodieValidationException e, List<Pair<Boolean, ? extends Exception>> result, String errorMsg) {
+    LOG.error(errorMsg + " for table: {} ", cfg.basePath, e);
+    if (!cfg.ignoreFailed) {
+      throw e;
+    }
+    result.add(Pair.of(false, e));
   }
 
   /**
@@ -1055,6 +1075,83 @@ public class HoodieMetadataTableValidator implements Serializable {
     } else if (cfg.validateRecordIndexCount) {
       validateRecordIndexCount(sparkEngineContext, metaClient);
     }
+  }
+
+  private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+                                      HoodieTableMetaClient metaClient) {
+    Collection<HoodieIndexDefinition> indexDefinitions = metaClient.getIndexMetadata().get().getIndexDefinitions().values();
+    for (HoodieIndexDefinition indexDefinition : indexDefinitions) {
+      validateSecondaryIndex(engineContext, metadataContext, metaClient, indexDefinition);
+    }
+  }
+
+  private void validateSecondaryIndex(HoodieSparkEngineContext engineContext, HoodieMetadataValidationContext metadataContext,
+                                      HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
+    String basePath = metaClient.getBasePath().toString();
+    String latestCompletedCommit = metaClient.getActiveTimeline().getCommitsAndCompactionTimeline()
+        .filterCompletedInstants().lastInstant().get().getTimestamp();
+
+    JavaRDD<String> secondaryKeys = readSecondaryKeys(engineContext, indexDefinition.getSourceFields(), basePath, latestCompletedCommit);
+    secondaryKeys.persist(StorageLevel.MEMORY_AND_DISK());
+    long numSecondaryKeys = secondaryKeys.count();
+    int numPartitions = (int) Math.max(1, numSecondaryKeys / 100);
+    secondaryKeys = secondaryKeys.sortBy(x -> x, true, numPartitions);
+    for (int i = 0; i < numPartitions; i++) {
+      List<String> secKeys = secondaryKeys.collectPartitions(new int[] {i})[0];
+      Map<String, List<String>> mdtSecondaryKeyToRecordKeys = ((HoodieBackedTableMetadata) metadataContext.tableMetadata)
+          .getSecondaryIndexRecords(secKeys, indexDefinition.getIndexName())
+          .entrySet().stream()
+          .collect(Collectors.toMap(Map.Entry::getKey,
+              e -> e.getValue().stream().map(rec -> rec.getData().getRecordKeyFromSecondaryIndex()).collect(Collectors.toList())));
+      Map<String, List<String>> fsSecondaryKeyToRecordKeys = getFSSecondaryKeyToRecordKeys(engineContext, basePath, latestCompletedCommit, indexDefinition.getSourceFields().get(0), secKeys);
+      if (!fsSecondaryKeyToRecordKeys.equals(mdtSecondaryKeyToRecordKeys)) {
+        throw new HoodieValidationException(String.format("Secondary Index does not match : \nMDT secondary index: %s \nFS secondary index: %s",
+            StringUtils.join(mdtSecondaryKeyToRecordKeys), StringUtils.join(fsSecondaryKeyToRecordKeys)));
+      }
+    }
+    secondaryKeys.unpersist();
+  }
+
+  /**
+   * Queries data in the table and generates a mapping from secondary key to list of record keys with value
+   * as secondary key. Here secondary key is the value of secondary key column or the secondaryField. Also the
+   * function returns the secondary key mapping only for the input secondary keys.
+
+   * @param sparkEngineContext Spark Engine context
+   * @param basePath Table base path
+   * @param latestCompletedCommit Latest completed commit in the table
+   * @param secondaryField The secondary key column used to determine the secondary keys
+   * @param secKeys Input secondary keys which will be filtered
+   * @return Mapping of secondary keys to list of record keys with value as secondary key
+   */
+  Map<String, List<String>> getFSSecondaryKeyToRecordKeys(HoodieSparkEngineContext sparkEngineContext, String basePath, String latestCompletedCommit,
+                                                          String secondaryField, List<String> secKeys) {
+    List<Tuple2<String, String>> recordAndSecondaryKeys = sparkEngineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .load(basePath)
+        .filter(functions.col(secondaryField).isin(secKeys.toArray()))
+        .select(RECORD_KEY_METADATA_FIELD, secondaryField)
+        .javaRDD()
+        .map(row -> new Tuple2<>(row.getAs(RECORD_KEY_METADATA_FIELD).toString(), row.getAs(secondaryField).toString()))
+        .collect();
+    Map<String, List<String>> secondaryKeyToRecordKeys = new HashMap<>();
+    for (Tuple2<String, String> recordAndSecondaryKey : recordAndSecondaryKeys) {
+      secondaryKeyToRecordKeys.compute(recordAndSecondaryKey._2, (k, v) -> {
+        List<String> recKeys = v != null ? v : new ArrayList<>();
+        recKeys.add(recordAndSecondaryKey._1);
+        return recKeys;
+      });
+    }
+    return secondaryKeyToRecordKeys;
+  }
+
+  private JavaRDD<String> readSecondaryKeys(HoodieSparkEngineContext engineContext, List<String> sourceFields, String basePath, String latestCompletedCommit) {
+    return engineContext.getSqlContext().read().format("hudi")
+        .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT().key(), latestCompletedCommit)
+        .load(basePath)
+        .select(sourceFields.get(0))
+        .toJavaRDD()
+        .map(row -> row.getAs(sourceFields.get(0)).toString());
   }
 
   private void validateRecordIndexCount(HoodieSparkEngineContext sparkEngineContext,
