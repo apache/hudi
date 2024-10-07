@@ -267,7 +267,7 @@ public class LakeviewSyncTool extends HoodieSyncTool implements AutoCloseable {
     PresignedUrlFileUploader presignedUrlFileUploader = new PresignedUrlFileUploader(asyncStorageClient,
         asyncHttpClientWithRetry, lakeViewExtractorMetrics);
     TimelineCommitInstantsUploader timelineCommitInstantsUploader = new TimelineCommitInstantsUploader(asyncStorageClient,
-        presignedUrlFileUploader, onehouseApiClient, storageUtils, executorService, new ActiveTimelineInstantBatcher(),
+        presignedUrlFileUploader, onehouseApiClient, storageUtils, executorService, new ActiveTimelineInstantBatcher(config),
         lakeViewExtractorMetrics, config);
     TableMetadataUploaderService tableMetadataUploaderService = new TableMetadataUploaderService(hoodiePropertiesReader,
         onehouseApiClient, timelineCommitInstantsUploader, lakeViewExtractorMetrics, executorService);

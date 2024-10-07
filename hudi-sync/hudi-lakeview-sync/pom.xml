@@ -135,7 +135,7 @@
         <dependency>
             <groupId>ai.onehouse</groupId>
             <artifactId>lakeview</artifactId>
-            <version>0.0.1</version>
+            <version>${lakeview.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>ch.qos.logback</groupId>
