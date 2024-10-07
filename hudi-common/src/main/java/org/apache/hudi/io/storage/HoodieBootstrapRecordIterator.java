@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.util.Option;
@@ -35,6 +36,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
   private final Object[] partitionValues;
 
   protected Schema schema;
+  protected Schema bootstrapSchema;
 
   public HoodieBootstrapRecordIterator(ClosableIterator<HoodieRecord<T>> skeletonIterator,
                                        ClosableIterator<HoodieRecord<T>> dataFileIterator,
@@ -44,6 +46,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
     this.skeletonIterator = skeletonIterator;
     this.dataFileIterator = dataFileIterator;
     this.schema = schema;
+    this.bootstrapSchema = HoodieAvroUtils.removeMetadataFields(schema);
     this.partitionFields = partitionFields;
     this.partitionValues = partitionValues;
   }
@@ -64,7 +67,7 @@ public abstract class HoodieBootstrapRecordIterator<T> implements ClosableIterat
   public HoodieRecord<T> next() {
     HoodieRecord<T> dataRecord = dataFileIterator.next();
     HoodieRecord<T> skeletonRecord = skeletonIterator.next();
-    HoodieRecord<T> ret = dataRecord.prependMetaFields(schema, schema,
+    HoodieRecord<T> ret = dataRecord.prependMetaFields(bootstrapSchema, schema,
         new MetadataValues().setCommitTime(skeletonRecord.getRecordKey(schema, HoodieRecord.COMMIT_TIME_METADATA_FIELD))
             .setCommitSeqno(skeletonRecord.getRecordKey(schema, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD))
             .setRecordKey(skeletonRecord.getRecordKey(schema, HoodieRecord.RECORD_KEY_METADATA_FIELD))

@@ -100,9 +100,8 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         && isStrictProjectionOf(readerSchema, writerSchema);
     // Check whether we will need to rewrite target (already merged) records into the
     // writer's schema
-    boolean shouldRewriteInWriterSchema = !isPureProjection
-        || baseFile.getBootstrapBaseFile().isPresent()
-        || writeConfig.shouldUseExternalSchemaTransformation();
+    boolean shouldRewriteInWriterSchema = (!isPureProjection
+        || writeConfig.shouldUseExternalSchemaTransformation()) && !baseFile.getBootstrapBaseFile().isPresent();
 
     HoodieExecutor<Void> executor = null;
 
