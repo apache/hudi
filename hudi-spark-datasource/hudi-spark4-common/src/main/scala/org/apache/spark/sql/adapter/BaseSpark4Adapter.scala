@@ -22,7 +22,7 @@ import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileS
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark4HoodieInternalRow}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark4RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
@@ -116,7 +116,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
   override def compareUTF8String(a: UTF8String, b: UTF8String): Int = a.binaryCompare(b)
 
-  override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = Spark4FlatLists.ofComparableArray(t)
+  override def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = Spark4FlatLists.ofComparableArray(t)
 
   override def createInternalRow(commitTime: UTF8String,
                                  commitSeqNumber: UTF8String,

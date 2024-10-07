@@ -18,9 +18,9 @@
 
 package org.apache.hudi.execution.bulkinsert;
 
-import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.SparkSortUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -62,14 +62,11 @@ public class RDDCustomColumnsSortPartitioner<T>
   @Override
   public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
                                                      int outputSparkPartitions) {
-    return records
-        .sortBy(record -> SparkAdapterSupport$.MODULE$.sparkAdapter().createComparableList(
-            BulkInsertPartitioner.prependPartitionPath(
-                record.getPartitionPath(),
-                record.getColumnValues(
-                    schema.get(),
-                    sortColumns,
-                    consistentLogicalTimestampEnabled))));
+    return records.sortBy(record ->
+            SparkSortUtils.getComparableSortColumns(
+                record, sortColumnNames, serializableSchema.get(),
+                suffixRecordKey, consistentLogicalTimestampEnabled),
+        true, outputSparkPartitions);
   }
 
   @Override

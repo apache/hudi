@@ -35,7 +35,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.hudi.DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty;
+import static org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty;
 
 /**
  * DataSource V2 implementation for managing internal write logic. Only called internally.

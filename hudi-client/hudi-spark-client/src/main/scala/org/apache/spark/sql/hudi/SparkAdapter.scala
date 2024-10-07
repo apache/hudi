@@ -25,7 +25,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
-import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.collection.FlatLists
 import org.apache.spark.sql._
@@ -264,7 +264,7 @@ trait SparkAdapter extends Serializable {
    * FlatLists is a static class and we cannot override any methods within to change the logic for comparison
    * So we have to create [[Spark4FlatLists]] for Spark 4.0+
    */
-  def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Nothing] = FlatLists.ofComparableArray(t)
+  def createComparableList(t: Array[AnyRef]): FlatLists.ComparableList[Comparable[HoodieRecord[_]]] = FlatLists.ofComparableArray(t)
 
   def createInternalRow(commitTime: UTF8String,
                         commitSeqNumber: UTF8String,

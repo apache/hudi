@@ -189,7 +189,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-              new HoodiePartitionFileSliceMapping(InternalRow.fromSeq(convertedPartitionValues), c), baseFileStatusesAndLogFileOnly)
+              sparkAdapter.createHoodiePartitionFileSliceMapping(InternalRow.fromSeq(convertedPartitionValues), c), baseFileStatusesAndLogFileOnly)
           } else {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
               InternalRow.fromSeq(convertedPartitionValues), baseFileStatusesAndLogFileOnly)
