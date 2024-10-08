@@ -308,6 +308,16 @@ public class TimelineUtils {
     return timelineSinceLastSync;
   }
 
+  public static HoodieTimeline getCommitsTimeLineAfterByCompletionTimeRange(
+      HoodieTableMetaClient metaClient,
+      String exclusiveStartCompletionTime,
+      Option<String> inclusiveEndCompletionTime) {
+    return metaClient.getActiveTimeline().getWriteTimeline()
+        .findInstantsInRangeByCompletionTime(
+            exclusiveStartCompletionTime,
+            inclusiveEndCompletionTime.orElse(String.valueOf(Long.MAX_VALUE)));
+  }
+
   /**
    * Returns the commit metadata of the given instant.
    *

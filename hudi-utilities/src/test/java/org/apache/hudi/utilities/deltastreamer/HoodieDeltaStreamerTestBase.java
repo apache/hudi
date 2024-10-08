@@ -680,7 +680,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
           HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(lastInstant).get(), HoodieCommitMetadata.class);
       assertEquals(totalCommits, timeline.countInstants());
       assertEquals(expected, commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY));
-      return lastInstant.getTimestamp();
+      return lastInstant.getCompletionTime();
     }
 
     static void waitTillCondition(Function<Boolean, Boolean> condition, Future dsFuture, long timeoutInSecs) throws Exception {

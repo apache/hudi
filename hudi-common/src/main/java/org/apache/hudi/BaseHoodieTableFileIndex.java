@@ -313,8 +313,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     try {
       if (isPartitionedTable()) {
         if (queryType == HoodieTableQueryType.INCREMENTAL && beginInstantTime.isPresent()) {
-          HoodieTimeline timelineAfterBeginInstant = TimelineUtils.getCommitsTimelineAfter(metaClient, beginInstantTime.get(), Option.empty());
-          HoodieTimeline timelineToQuery = endInstantTime.map(timelineAfterBeginInstant::findInstantsBeforeOrEquals).orElse(timelineAfterBeginInstant);
+          HoodieTimeline timelineToQuery = TimelineUtils.getCommitsTimeLineAfterByCompletionTimeRange(metaClient, beginInstantTime.get(), endInstantTime);
+//          HoodieTimeline timelineAfterBeginInstant = TimelineUtils.getCommitsTimelineAfter(metaClient, beginInstantTime.get(), Option.empty());
+//          HoodieTimeline timelineToQuery = endInstantTime.map(timelineAfterBeginInstant::findInstantsBeforeOrEquals).orElse(timelineAfterBeginInstant);
           matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
         } else {
           matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
