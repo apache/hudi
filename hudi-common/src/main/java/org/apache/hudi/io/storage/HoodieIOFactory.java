@@ -132,6 +132,7 @@ public abstract class HoodieIOFactory {
   public abstract Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema,
                                                                            Properties properties,
                                                                            HoodieRecord.HoodieRecordType recordType);
+
   /**
    * @param recordType type of the record payload
    * @return mapping function from indexed record to HoodieRecord with recordType payload

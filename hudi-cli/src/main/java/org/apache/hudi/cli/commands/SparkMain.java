@@ -100,7 +100,7 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    BOOTSTRAP(20), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
+    BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
     IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(7), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
     COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
     CLUSTERING_SCHEDULE(7), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
@@ -235,7 +235,7 @@ public class SparkMain {
           break;
         case BOOTSTRAP:
           returnCode = doBootstrap(jsc, args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10],
-              args[11], args[12], args[13], args[14], args[15], args[16], args[17], args[18], propsFilePath, configs);
+              args[11], args[12], args[13], args[14], args[15], args[16], args[17], args[18], args[19], propsFilePath, configs);
           break;
         case UPGRADE:
         case DOWNGRADE:
@@ -489,8 +489,8 @@ public class SparkMain {
   private static int doBootstrap(JavaSparkContext jsc, String tableName, String tableType, String basePath,
                                  String sourcePath, String recordKeyCols, String partitionFields, String parallelism, String schemaProviderClass,
                                  String bootstrapIndexClass, String selectorClass, String keyGenerator, String fullBootstrapInputProvider,
-                                 String recordMergeMode, String payloadClassName, String recordMergeStrategy, String enableHiveSync,
-                                 String propsFilePath, List<String> configs) throws IOException {
+                                 String recordMergeMode, String payloadClassName, String recordMergeStrategy, String recordMergerImpls,
+                                 String enableHiveSync, String propsFilePath, List<String> configs) throws IOException {
 
     TypedProperties properties = propsFilePath == null ? buildProperties(configs)
         : readConfig(jsc.hadoopConfiguration(), new Path(propsFilePath), configs).getProps(true);
@@ -518,6 +518,7 @@ public class SparkMain {
     cfg.payloadClassName = payloadClassName;
     cfg.recordMergeMode = RecordMergeMode.getValue(recordMergeMode);
     cfg.recordMergerStrategy = recordMergeStrategy;
+    cfg.recordMergerImpls = recordMergerImpls;
     cfg.enableHiveSync = Boolean.valueOf(enableHiveSync);
 
     new BootstrapExecutor(cfg, jsc, HadoopFSUtils.getFs(basePath, jsc.hadoopConfiguration()),

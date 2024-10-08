@@ -195,6 +195,10 @@ public class HoodieStreamer implements Serializable {
       // Explicitly set the table type
       hoodieConfig.setValue(HoodieTableConfig.TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
     }
+    if (!hoodieConfig.contains(HoodieWriteConfig.RECORD_MERGER_IMPLS)
+        && !StringUtils.isNullOrEmpty(cfg.recordMergerImpls)) {
+      hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), cfg.recordMergerImpls);
+    }
 
     return hoodieConfig.getProps(true);
   }
@@ -276,6 +280,9 @@ public class HoodieStreamer implements Serializable {
     
     @Parameter(names = {"--merger-strategy", "--record-merger-strategy"}, description = "only set this if you are using custom merge mode")
     public String recordMergerStrategy = null;
+
+    @Parameter(names = {"--merger-impls", "--record-merger-impls"}, description = "Comma separated list of classes that implement the record merger strategy")
+    public String recordMergerImpls = null;
 
     @Parameter(names = {"--schemaprovider-class"}, description = "subclass of org.apache.hudi.utilities.schema"
         + ".SchemaProvider to attach schemas to input & target table data, built in options: "

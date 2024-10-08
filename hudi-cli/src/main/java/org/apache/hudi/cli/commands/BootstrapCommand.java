@@ -73,11 +73,13 @@ public class BootstrapCommand {
       @ShellOption(value = {"--schemaProviderClass"}, defaultValue = "",
           help = "SchemaProvider to attach schemas to bootstrap source data") final String schemaProviderClass,
       @ShellOption(value = {"--payloadClass"}, defaultValue = "",
-          help = "Deprecated. Use merge-mode for overwrite or event time merging. Payload Class") final String payloadClass,
+          help = "Payload Class (deprecated). Use merge-mode for overwrite or event time merging.") final String payloadClass,
       @ShellOption(value = {"--merge-mode", "--record-merge-mode"}, defaultValue = "",
           help = "Merge mode to use. 'EVENT_TIME_ORDERING', 'OVERWRITE_WITH_LATEST', or 'CUSTOM' if you want to set a merge strategy") final String recordMergeMode,
       @ShellOption(value = {"--merger-strategy", "--record-merger-strategy"}, defaultValue = "",
           help = "Merge strategy to use. Only set when using 'CUSTOM' merge mode") final String recordMergerStrategy,
+      @ShellOption(value = {"--merger-impls"}, defaultValue = "",
+          help = "Comma separated list of classes that implement the record merger strategy") final String recordMergerImpls,
       @ShellOption(value = {"--parallelism"}, defaultValue = "1500", help = "Bootstrap writer parallelism") final int parallelism,
       @ShellOption(value = {"--sparkMaster"}, defaultValue = "", help = "Spark Master") String master,
       @ShellOption(value = {"--sparkMemory"}, defaultValue = "4G", help = "Spark executor memory") final String sparkMemory,
@@ -99,7 +101,7 @@ public class BootstrapCommand {
 
     SparkMain.addAppArgs(sparkLauncher, SparkCommand.BOOTSTRAP, master, sparkMemory, tableName, tableType, targetPath, srcPath, rowKeyField,
         partitionPathField, String.valueOf(parallelism), schemaProviderClass, bootstrapIndexClass, selectorClass,
-        keyGeneratorClass, fullBootstrapInputProvider, recordMergeMode, payloadClass, recordMergerStrategy,
+        keyGeneratorClass, fullBootstrapInputProvider, recordMergeMode, payloadClass, recordMergerStrategy, recordMergerImpls,
         String.valueOf(enableHiveSync), propsFilePath);
     UtilHelpers.validateAndAddProperties(configs, sparkLauncher);
     Process process = sparkLauncher.launch();

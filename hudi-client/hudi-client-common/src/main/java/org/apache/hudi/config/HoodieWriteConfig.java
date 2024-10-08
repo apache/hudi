@@ -2954,7 +2954,9 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergerImpls(String recordMergerImpls) {
-      writeConfig.setValue(RECORD_MERGER_IMPLS, recordMergerImpls);
+      if (!StringUtils.isNullOrEmpty(recordMergerImpls)) {
+        writeConfig.setValue(RECORD_MERGER_IMPLS, recordMergerImpls);
+      }
       return this;
     }
 

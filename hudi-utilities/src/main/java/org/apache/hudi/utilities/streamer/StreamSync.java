@@ -36,7 +36,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.common.config.HoodieConfig;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -47,7 +46,6 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
@@ -1181,6 +1179,7 @@ public class StreamSync implements Serializable, Closeable {
                     .build())
             .withRecordMergeMode(cfg.recordMergeMode)
             .withRecordMergerStrategy(cfg.recordMergerStrategy)
+            .withRecordMergerImpls(cfg.recordMergerImpls)
             .forTable(cfg.targetTableName)
             .withAutoCommit(autoCommit)
             .withProps(props);
