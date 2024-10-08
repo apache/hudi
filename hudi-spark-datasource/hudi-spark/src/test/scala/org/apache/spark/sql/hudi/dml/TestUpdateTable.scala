@@ -19,7 +19,6 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
@@ -161,11 +160,7 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
        """.stripMargin)
 
         // insert data to table
-        if (isSpark2) {
-          spark.sql(s"insert into $tableName values (1, 'a1', cast(10.0 as double), 1000), (2, 'a2', cast(20.0 as double), 1000)")
-        } else {
-          spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000)")
-        }
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000), (2, 'a2', 20.0, 1000)")
 
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 10.0, 1000),
@@ -201,19 +196,11 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           """.stripMargin)
 
         // insert data to table
-        if (isSpark2) {
-          spark.sql(
-            s"""
-               |insert into $ptTableName
-               |values (1, 'a1', cast(10.0 as double), 1000, "2021"), (2, 'a2', cast(20.0 as double), 1000, "2021"), (3, 'a2', cast(30.0 as double), 1000, "2022")
-               |""".stripMargin)
-        } else {
-          spark.sql(
-            s"""
-               |insert into $ptTableName
-               |values (1, 'a1', 10.0, 1000, "2021"), (2, 'a2', 20.0, 1000, "2021"), (3, 'a2', 30.0, 1000, "2022")
-               |""".stripMargin)
-        }
+        spark.sql(
+          s"""
+             |insert into $ptTableName
+             |values (1, 'a1', 10.0, 1000, "2021"), (2, 'a2', 20.0, 1000, "2021"), (3, 'a2', 30.0, 1000, "2022")
+             |""".stripMargin)
 
         checkAnswer(s"select id, name, price, ts, pt from $ptTableName")(
           Seq(1, "a1", 10.0, 1000, "2021"),

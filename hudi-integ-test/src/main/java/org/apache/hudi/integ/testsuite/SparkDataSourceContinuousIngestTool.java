@@ -44,6 +44,7 @@ import java.util.Map;
 /**
  * Sample command
  *
+ * TODO: [HUDI-8294]
  * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.11:2.4.4 --driver-memory 4g   --executor-memory 4g \
  * --conf spark.serializer=org.apache.spark.serializer.KryoSerializer   --conf spark.sql.catalogImplementation=hive \
  * --class org.apache.hudi.integ.testsuite.SparkDSContinuousIngestTool \

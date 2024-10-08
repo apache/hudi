@@ -19,7 +19,7 @@
 SCRIPT_PATH=$(cd `dirname $0`; pwd)
 HUDI_DEMO_ENV=$1
 WS_ROOT=`dirname $SCRIPT_PATH`
-COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244.yml"
+COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark353_amd64.yml"
 if [ "$HUDI_DEMO_ENV" = "--mac-aarch64" ]; then
   COMPOSE_FILE_NAME="docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml"
 fi

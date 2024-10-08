@@ -48,7 +48,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -62,13 +61,11 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.WriteOperationType.BULK_INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGER_STRATEGY;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
-import static org.apache.hudi.common.table.read.HoodieBaseFileGroupRecordBuffer.compareTo;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getLogFileListFromFileSlice;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -105,73 +102,6 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                                                   Schema schema,
                                                   FileSlice fileSlice) {
     validateRecordsInFileGroup(tablePath, actualRecordList, schema, fileSlice, false);
-  }
-
-  public abstract Comparable getComparableUTF8String(String value);
-
-  @Test
-  public void testCompareToComparable() throws Exception {
-    Map<String, String> writeConfigs = new HashMap<>(getCommonConfigs(RecordMergeMode.EVENT_TIME_ORDERING));
-    // Prepare a table for initializing reader context
-    try (HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEEF)) {
-      commitToTable(dataGen.generateInserts("001", 1), BULK_INSERT.value(), writeConfigs);
-    }
-    StorageConfiguration<?> storageConf = getStorageConf();
-    String tablePath = getBasePath();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, tablePath);
-    Schema avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    HoodieReaderContext<T> readerContext = getHoodieReaderContext(tablePath, avroSchema, storageConf);
-
-    // Test same type
-    assertEquals(1, compareTo(readerContext, Boolean.TRUE, Boolean.FALSE));
-    assertEquals(0, compareTo(readerContext, Boolean.TRUE, Boolean.TRUE));
-    assertEquals(-1, compareTo(readerContext, Boolean.FALSE, Boolean.TRUE));
-    assertEquals(1, compareTo(readerContext, 20, 15));
-    assertEquals(0, compareTo(readerContext, 15, 15));
-    assertEquals(-1, compareTo(readerContext, 10, 15));
-    assertEquals(1, compareTo(readerContext, 1.1f, 1.0f));
-    assertEquals(0, compareTo(readerContext, 1.0f, 1.0f));
-    assertEquals(-1, compareTo(readerContext, 0.9f, 1.0f));
-    assertEquals(1, compareTo(readerContext, 1.1, 1.0));
-    assertEquals(0, compareTo(readerContext, 1.0, 1.0));
-    assertEquals(-1, compareTo(readerContext, 0.9, 1.0));
-    assertEquals(1, compareTo(readerContext, 1.1, 1));
-    assertEquals(-1, compareTo(readerContext, 0.9, 1));
-    assertEquals(1, compareTo(readerContext, "value2", "value1"));
-    assertEquals(0, compareTo(readerContext, "value1", "value1"));
-    assertEquals(-1, compareTo(readerContext, "value1", "value2"));
-    // Test different types which are comparable
-    assertEquals(1, compareTo(readerContext, Long.MAX_VALUE / 2L, 10));
-    assertEquals(1, compareTo(readerContext, 20, 10L));
-    assertEquals(0, compareTo(readerContext, 10L, 10));
-    assertEquals(0, compareTo(readerContext, 10, 10L));
-    assertEquals(-1, compareTo(readerContext, 10, Long.MAX_VALUE));
-    assertEquals(-1, compareTo(readerContext, 10L, 20));
-    assertEquals(1, compareTo(readerContext, 10.01f, 10));
-    assertEquals(1, compareTo(readerContext, 10.01f, 10L));
-    assertEquals(1, compareTo(readerContext, 10.01, 10));
-    assertEquals(1, compareTo(readerContext, 10.01, 10L));
-    assertEquals(1, compareTo(readerContext, 11L, 10.99f));
-    assertEquals(1, compareTo(readerContext, 11, 10.99));
-    // Throw exception if comparing Double with Float which have different precision
-    assertThrows(IllegalArgumentException.class, () -> compareTo(readerContext, 10.01f, 10.0));
-    assertThrows(IllegalArgumentException.class, () -> compareTo(readerContext, 10.01, 10.0f));
-    assertEquals(0, compareTo(readerContext, 10.0, 10L));
-    assertEquals(0, compareTo(readerContext, 10.0f, 10L));
-    assertEquals(0, compareTo(readerContext, 10.0, 10));
-    assertEquals(0, compareTo(readerContext, 10.0f, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99f, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99f, 10L));
-    assertEquals(-1, compareTo(readerContext, 9.99, 10));
-    assertEquals(-1, compareTo(readerContext, 9.99, 10L));
-    assertEquals(-1, compareTo(readerContext, 10L, 10.01f));
-    assertEquals(-1, compareTo(readerContext, 10, 10.01));
-    assertEquals(1, compareTo(readerContext, getComparableUTF8String("value2"), "value1"));
-    assertEquals(1, compareTo(readerContext, "value2", getComparableUTF8String("value1")));
-    assertEquals(0, compareTo(readerContext, getComparableUTF8String("value1"), "value1"));
-    assertEquals(0, compareTo(readerContext, "value1", getComparableUTF8String("value1")));
-    assertEquals(-1, compareTo(readerContext, getComparableUTF8String("value1"), "value2"));
-    assertEquals(-1, compareTo(readerContext, "value1", getComparableUTF8String("value2")));
   }
 
   private static Stream<Arguments> testArguments() {

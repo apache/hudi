@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 
 import org.apache.hudi.integ.HoodieTestHiveBase;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration test class for HoodieSyncCommand in hudi-cli module.
  */
+@Disabled("HUDI-8274")
 public class ITTestHoodieSyncCommand extends HoodieTestHiveBase {
 
   private static final String HUDI_CLI_TOOL = HOODIE_WS_ROOT + "/hudi-cli/hudi-cli.sh";

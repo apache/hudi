@@ -52,6 +52,7 @@ public class HoodieArrayWritableAvroUtils {
    * and if the size changes the reader will fail
    */
   public static UnaryOperator<ArrayWritable> projectRecord(Schema from, Schema to) {
+    //TODO: [HUDI-8261] add casting to the projection
     int[] projection = getProjection(from, to);
     return arrayWritable -> {
       Writable[] values = new Writable[arrayWritable.get().length];

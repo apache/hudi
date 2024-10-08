@@ -27,71 +27,43 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hadoop.fs.FileSystem;
 
 val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
+
 val beginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
-val hoodieIncQueryDF =  spark.read.format("org.apache.hudi").
+println("Begin completion time for COW incremental query: " + beginCompletionTime)
+val hoodieIncQueryDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
                       option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTIme).
                       load("/user/hive/warehouse/stock_ticks_cow");
+println("stock_ticks_cow incremental count: " + hoodieIncQueryDF.count)
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
 
-spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, close from stock_ticks_cow_incr").
-    write.format("org.apache.hudi").
-    option("hoodie.insert.shuffle.parallelism", "2").
-    option("hoodie.upsert.shuffle.parallelism","2").
-    option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
-    option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
-    option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
-    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
-    option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
-    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor").
-    option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor").
-    option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
-    option(HiveSyncConfigHolder.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
-    option(HiveSyncConfigHolder.HIVE_USER.key(), "hive").
-    option(HiveSyncConfigHolder.HIVE_PASS.key(), "hive").
-    option(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key(), "true").
-    option(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr").
-    option(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
-    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
-    mode(SaveMode.Overwrite).
-    save("/user/hive/warehouse/stock_ticks_derived_mor");
-
-val beginCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, "/user/hive/warehouse/stock_ticks_derived_mor")
-spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
-spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
-
-val hoodieIncQueryBsDF =  spark.read.format("org.apache.hudi").
+val bsBeginCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, "/user/hive/warehouse/stock_ticks_cow_bs")
+val hoodieIncQueryBsDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTime1).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), bsBeginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_cow_bs");
+println("stock_ticks_cow_bs incremental count: " + hoodieIncQueryBsDF.count)
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_bs_incr where  symbol = 'GOOG'").show(100, false);
 
-spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, close from stock_ticks_cow_bs_incr").
-    write.format("org.apache.hudi").
-    option("hoodie.insert.shuffle.parallelism", "2").
-    option("hoodie.upsert.shuffle.parallelism","2").
-    option(DataSourceWriteOptions.TABLE_TYPE.key(), DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL).
-    option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL).
-    option(DataSourceWriteOptions.RECORDKEY_FIELD.key(), "key").
-    option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key(), "datestr").
-    option(DataSourceWriteOptions.PRECOMBINE_FIELD.key(), "ts").
-    option(HoodieWriteConfig.TBL_NAME.key(), "stock_ticks_derived_mor_bs").
-    option(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "stock_ticks_derived_mor_bs").
-    option(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "default").
-    option(HiveSyncConfigHolder.HIVE_URL.key(), "jdbc:hive2://hiveserver:10000").
-    option(HiveSyncConfigHolder.HIVE_USER.key(), "hive").
-    option(HiveSyncConfigHolder.HIVE_PASS.key(), "hive").
-    option(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key(), "true").
-    option(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr").
-    option(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[MultiPartKeysValueExtractor].getCanonicalName).
-    option(DataSourceWriteOptions.URL_ENCODE_PARTITIONING.key(), "true").
-    mode(SaveMode.Overwrite).
-    save("/user/hive/warehouse/stock_ticks_derived_mor_bs");
+val morBeginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_mor", "00000").get(0)
+println("Begin completion time for MOR incremental query: " + morBeginCompletionTime)
+val hoodieMorIncQueryDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), morBeginCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_mor");
+println("stock_ticks_mor incremental count: " + hoodieMorIncQueryDF.count)
+hoodieMorIncQueryDF.registerTempTable("stock_ticks_mor_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close from stock_ticks_mor_incr where symbol = 'GOOG'").show(100, false);
 
-spark.sql("show tables").show(20, false)
-spark.sql("select count(*) from stock_ticks_derived_mor_bs_ro").show(20, false)
-spark.sql("select count(*) from stock_ticks_derived_mor_bs_rt").show(20, false)
+val bsMorBeginCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, "/user/hive/warehouse/stock_ticks_mor_bs")
+val hoodieMorIncQueryBsDF =  spark.read.format("hudi").
+                      option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), bsMorBeginCompletionTime).
+                      load("/user/hive/warehouse/stock_ticks_mor_bs");
+println("stock_ticks_mor_bs incremental count: " + hoodieMorIncQueryBsDF.count)
+hoodieIncQueryBsDF.registerTempTable("stock_ticks_mor_bs_incr")
+spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close from stock_ticks_mor_bs_incr where symbol = 'GOOG'").show(100, false);
 
 System.exit(0);

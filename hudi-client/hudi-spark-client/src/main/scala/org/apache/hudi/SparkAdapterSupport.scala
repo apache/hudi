@@ -22,7 +22,7 @@ import org.apache.spark.sql.hudi.SparkAdapter
 
 /**
  * Use the SparkAdapterSupport trait to get the SparkAdapter when we
- * need to adapt the difference between spark2 and spark3.
+ * need to adapt the difference between spark versions
  */
 trait SparkAdapterSupport {
 
@@ -37,10 +37,8 @@ object SparkAdapterSupport {
       "org.apache.spark.sql.adapter.Spark3_5Adapter"
     } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.adapter.Spark3_4Adapter"
-    } else if (HoodieSparkUtils.isSpark3_3) {
-      "org.apache.spark.sql.adapter.Spark3_3Adapter"
     } else {
-      "org.apache.spark.sql.adapter.Spark2Adapter"
+      "org.apache.spark.sql.adapter.Spark3_3Adapter"
     }
     getClass.getClassLoader.loadClass(adapterClass)
       .newInstance().asInstanceOf[SparkAdapter]
