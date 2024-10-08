@@ -27,10 +27,10 @@ import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hadoop.fs.FileSystem;
 
 val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-val beginInstantTime = HoodieDataSourceHelpers.listCommitsSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
+val beginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, "/user/hive/warehouse/stock_ticks_cow", "00000").get(0)
 val hoodieIncQueryDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginInstantTime).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTIme).
                       load("/user/hive/warehouse/stock_ticks_cow");
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_incr where  symbol = 'GOOG'").show(100, false);
@@ -57,12 +57,13 @@ spark.sql("select key, `_hoodie_partition_path` as datestr, symbol, ts, open, cl
     mode(SaveMode.Overwrite).
     save("/user/hive/warehouse/stock_ticks_derived_mor");
 
+val beginCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, "/user/hive/warehouse/stock_ticks_derived_mor")
 spark.sql("select count(*) from stock_ticks_derived_mor_ro").show(20, false)
 spark.sql("select count(*) from stock_ticks_derived_mor_rt").show(20, false)
 
 val hoodieIncQueryBsDF =  spark.read.format("org.apache.hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), "00000000000001").
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTime1).
                       load("/user/hive/warehouse/stock_ticks_cow_bs");
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
 spark.sql("select `_hoodie_commit_time`, symbol, ts, volume, open, close  from stock_ticks_cow_bs_incr where  symbol = 'GOOG'").show(100, false);

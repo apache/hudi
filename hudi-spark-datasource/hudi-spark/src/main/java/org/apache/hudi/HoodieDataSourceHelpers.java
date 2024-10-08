@@ -74,6 +74,12 @@ public class HoodieDataSourceHelpers {
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
+  public static List<String> listCompletionTimeSince(HoodieStorage storage, String basePath,
+      String instantTimestamp) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
+    return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
+  }
   /**
    * Returns the last successful write operation's instant time.
    */
