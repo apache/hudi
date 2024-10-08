@@ -205,8 +205,8 @@
     <spark.bundle.hive.shade.prefix/>
     <utilities.bundle.hive.scope>provided</utilities.bundle.hive.scope>
     <utilities.bundle.hive.shade.prefix/>
-    <argLine>-Xmx3g -Xms128m</argLine>
-    <jacoco.version>0.8.12</jacoco.version>
+    <argLine>-Xmx2g -Xms128m</argLine>
+    <jacoco.version>0.8.8</jacoco.version>
     <presto.bundle.bootstrap.scope>compile</presto.bundle.bootstrap.scope>
     <presto.bundle.bootstrap.shade.prefix>org.apache.hudi.</presto.bundle.bootstrap.shade.prefix>
     <trino.bundle.bootstrap.scope>compile</trino.bundle.bootstrap.scope>
@@ -441,11 +441,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-        <version>${jacoco.version}</version>
-      </plugin>
-      <plugin>
         <groupId>io.fabric8</groupId>
         <artifactId>docker-maven-plugin</artifactId>
         <version>${maven-docker-plugin.version}</version>
@@ -584,30 +579,6 @@
           </relocations>
         </configuration>
       </plugin>
-      <plugin>
-        <groupId>org.jacoco</groupId>
-        <artifactId>jacoco-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>prepare-agent</goal>
-            </goals>
-          </execution>
-          <execution>
-            <id>post-unit-tests</id>
-            <phase>test</phase>
-            <goals>
-              <goal>report</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
-              <includes>
-                <include>**/*.class</include>
-              </includes>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
     </plugins>
 
     <pluginManagement>
@@ -624,7 +595,7 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
-            <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
+            <forkedProcessExitTimeoutInSeconds>240</forkedProcessExitTimeoutInSeconds>
           </configuration>
         </plugin>
         <plugin>
@@ -818,6 +789,11 @@
             <protocVersion>${protoc.version}</protocVersion>
             <includeStdTypes>true</includeStdTypes>
           </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -1916,7 +1892,6 @@
             <version>${maven-surefire-plugin.version}</version>
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
-              <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
               <excludedGroups>functional</excludedGroups>
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
@@ -1924,6 +1899,30 @@
                 <exclude>**/testsuite/**/Test*.java</exclude>
               </excludes>
             </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>post-unit-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+                  <includes>
+                    <include>**/*.class</include>
+                  </includes>
+                </configuration>
+              </execution>
+            </executions>
           </plugin>
         </plugins>
       </build>
@@ -1956,6 +1955,30 @@
                 <include>**/*FunctionalTestSuite.java</include>
               </includes>
             </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>post-functional-tests</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
+                  <includes>
+                    <include>**/*.class</include>
+                  </includes>
+                </configuration>
+              </execution>
+            </executions>
           </plugin>
         </plugins>
       </build>

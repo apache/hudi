@@ -61,7 +61,13 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
+          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
+      - name: Hudi Utilties Functional Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run: |
+          mvn test -Pfunctional-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl $UTILITIES_MODULE $MVN_ARGS
       - name: Sonar Report
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -109,13 +115,19 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE" clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
+          mvn -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE" clean install -T 4 -Pintegration-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS
       - name: Hudi Utilties Bundle Unit Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
+          mvn test -Punit-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
+      - name: Hudi Utilties Bundle Functional Test
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run: |
+          mvn test -Pfunctional-tests -DskipSparkClientUTs=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -am -pl "$DATAHUB_SYNC_MODULE,$UTILITIES_BUNDLE_MODULE,!$UTILITIES_MODULE,!$SPARK_COMMON_MODULE,!$SPARK3_COMMON_MODULE,!$SPARK3PLUS_COMMON_MODULE,!$SPARK_MODULE,!$SPARK3_MODULE,!$HUDI_COMMON_MODULE,!$CLIENT_COMMON_MODULE,!$SPARK_CLIENT_MODULE,!$JAVA_CLIENT_MODULE" $MVN_ARGS
       - name: Sonar Report
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -169,7 +181,13 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
+      - name: Hudi Client Functional Tests
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run: |
+          mvn test -Pfunctional-tests -Djacoco.skip=true -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$CLIENT_COMMON_MODULE,$SPARK_CLIENT_MODULE,$JAVA_CLIENT_MODULE,$HUDI_COMMON_MODULE" $MVN_ARGS
       - name: Sonar Report
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -223,7 +241,13 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run: |
-          mvn test -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
+      - name: Spark Datasource Functional Tests
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run: |
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULE,$SPARK3_COMMON_MODULE,$SPARK3PLUS_COMMON_MODULE,$SPARK_MODULE,$SPARK3_MODULE " $MVN_ARGS
       - name: Sonar Report
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
