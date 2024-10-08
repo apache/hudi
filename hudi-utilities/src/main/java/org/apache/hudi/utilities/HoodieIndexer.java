@@ -63,6 +63,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool to run metadata indexing asynchronously.
  * <p>
  * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):

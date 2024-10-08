@@ -131,13 +131,14 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
-    // TODO(HUDI-8271, HUDI-8272): fix incremental queries in integration tests on Hive and Spark
+    // TODO(HUDI-8271): fix incremental queries in integration tests on Hive
     // testIncrementalHiveQueryBeforeCompaction();
-    // testIncrementalSparkSQLQuery();
+    testIncrementalSparkSQLQuery();
 
     // compaction
     scheduleAndRunCompaction();
 
+    testIncrementalSparkSQLQuery();
     // testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
@@ -498,24 +499,11 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
-    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 2);
-    assertStdOutContains(stdOutErrPair, "|default  |stock_ticks_cow              |false      |\n"
-        + "|default  |stock_ticks_cow_bs           |false      |\n"
-        + "|default  |stock_ticks_derived_mor      |false      |\n"
-        + "|default  |stock_ticks_derived_mor_bs   |false      |\n"
-        + "|default  |stock_ticks_derived_mor_bs_ro|false      |\n"
-        + "|default  |stock_ticks_derived_mor_bs_rt|false      |\n"
-        + "|default  |stock_ticks_derived_mor_ro   |false      |\n"
-        + "|default  |stock_ticks_derived_mor_rt   |false      |\n"
-        + "|default  |stock_ticks_mor              |false      |\n"
-        + "|default  |stock_ticks_mor_bs           |false      |\n"
-        + "|default  |stock_ticks_mor_bs_ro        |false      |\n"
-        + "|default  |stock_ticks_mor_bs_rt        |false      |\n"
-        + "|default  |stock_ticks_mor_ro           |false      |\n"
-        + "|default  |stock_ticks_mor_rt           |false      |\n"
-        + "|         |stock_ticks_cow_bs_incr      |true       |\n"
-        + "|         |stock_ticks_cow_incr         |true       |");
-    assertStdOutContains(stdOutErrPair, "|count(1)|\n+--------+\n|99     |", 4);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow incremental count: 99", 1);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_cow_bs incremental count: 99", 1);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor incremental count: 99", 1);
+    assertStdOutContains(stdOutErrPair, "stock_ticks_mor_bs incremental count: 99", 1);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 4);
   }
 
   private void scheduleAndRunCompaction() throws Exception {

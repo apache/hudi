@@ -77,7 +77,7 @@ public class SavepointsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.SAVEPOINT.toString(), master, sparkMemory, commitTime,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.SAVEPOINT, master, sparkMemory, commitTime,
         user, comments, HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -114,7 +114,7 @@ public class SavepointsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT.toString(), master, sparkMemory,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.ROLLBACK_TO_SAVEPOINT, master, sparkMemory,
         instantTime, HoodieCLI.basePath, lazyFailedWritesCleanPolicy);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
@@ -148,7 +148,7 @@ public class SavepointsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    sparkLauncher.addAppArgs(SparkMain.SparkCommand.DELETE_SAVEPOINT.toString(), master, sparkMemory, instantTime,
+    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DELETE_SAVEPOINT, master, sparkMemory, instantTime,
         HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);

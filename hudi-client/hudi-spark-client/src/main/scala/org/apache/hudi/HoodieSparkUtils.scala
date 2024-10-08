@@ -46,7 +46,6 @@ import scala.reflect.ClassTag
 private[hudi] trait SparkVersionsSupport {
   def getSparkVersion: String
 
-  def isSpark2: Boolean = getSparkVersion.startsWith("2.")
   def isSpark3: Boolean = getSparkVersion.startsWith("3.")
   def isSpark3_3: Boolean = getSparkVersion.startsWith("3.3")
   def isSpark3_4: Boolean = getSparkVersion.startsWith("3.4")

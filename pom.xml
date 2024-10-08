@@ -103,7 +103,6 @@
     <kafka.version>2.0.0</kafka.version>
     <pulsar.version>3.0.2</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
-    <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
     <pulsar.spark.scala12.version>3.1.1.4</pulsar.spark.scala12.version>
     <pulsar.spark.scala13.version>3.4.1.1</pulsar.spark.scala13.version>
     <confluent.version>5.5.0</confluent.version>
@@ -136,7 +135,6 @@
     <aws.sdk.httpcore.version>4.4.13</aws.sdk.httpcore.version>
     <http.version>4.4.1</http.version>
     <spark.version>${spark3.version}</spark.version>
-    <spark2.version>2.4.4</spark2.version>
     <spark3.version>3.5.1</spark3.version>
     <sparkbundle.version></sparkbundle.version>
     <flink1.19.version>1.19.1</flink1.19.version>
@@ -172,7 +170,6 @@
     <bijection-avro.version>0.9.7</bijection-avro.version>
     <caffeine.version>2.9.1</caffeine.version>
     <commons.io.version>2.11.0</commons.io.version>
-    <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.15</scala12.version>
     <scala13.version>2.13.8</scala13.version>
     <scala.version>${scala12.version}</scala.version>
@@ -180,7 +177,6 @@
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
     <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
-    <scalatest.spark_pre31.version>3.0.1</scalatest.spark_pre31.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <scalatest.version>${scalatest.spark3.version}</scalatest.version>
     <surefire-log4j.file>log4j2-surefire.properties</surefire-log4j.file>
@@ -195,7 +191,6 @@
     <skipUTs>${skipTests}</skipUTs>
     <skipFTs>${skipTests}</skipFTs>
     <skipITs>${skipTests}</skipITs>
-    <skip.hudi-spark2.unit.tests>${skipTests}</skip.hudi-spark2.unit.tests>
     <skip.hudi-spark3.unit.tests>${skipTests}</skip.hudi-spark3.unit.tests>
     <skipDocker>${skipTests}</skipDocker>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -2209,19 +2204,6 @@
       </build>
     </profile>
     <profile>
-      <id>scala-2.11</id>
-      <properties>
-        <scala.version>${scala11.version}</scala.version>
-        <scala.binary.version>2.11</scala.binary.version>
-        <pulsar.spark.version>${pulsar.spark.scala11.version}</pulsar.spark.version>
-      </properties>
-      <activation>
-        <property>
-          <name>scala-2.11</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
       <id>scala-2.12</id>
       <properties>
         <scala.version>${scala12.version}</scala.version>
@@ -2301,85 +2283,6 @@
       </build>
     </profile>
 
-    <!-- "spark2" is an alias of "spark2.4" -->
-    <!-- NOTE: This profile is deprecated and soon will be removed -->
-    <profile>
-      <id>spark2</id>
-      <modules>
-        <module>hudi-spark-datasource/hudi-spark2</module>
-        <module>hudi-spark-datasource/hudi-spark2-common</module>
-      </modules>
-      <properties>
-        <spark.version>${spark2.version}</spark.version>
-        <sparkbundle.version/>
-        <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
-        <hudi.spark.module>hudi-spark2</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
-        <kafka.version>2.0.0</kafka.version>
-        <parquet.version>1.10.1</parquet.version>
-        <orc.spark.version>1.6.0</orc.spark.version>
-        <avro.version>1.8.2</avro.version>
-        <antlr.version>4.7</antlr.version>
-        <fasterxml.version>2.6.7</fasterxml.version>
-        <fasterxml.jackson.databind.version>${fasterxml.version}</fasterxml.jackson.databind.version>
-        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
-        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
-        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-        <skipITs>true</skipITs>
-      </properties>
-      <activation>
-        <property>
-          <name>spark2</name>
-        </property>
-      </activation>
-    </profile>
-
-    <profile>
-      <id>spark2.4</id>
-      <modules>
-        <module>hudi-spark-datasource/hudi-spark2</module>
-        <module>hudi-spark-datasource/hudi-spark2-common</module>
-      </modules>
-      <properties>
-        <spark.version>${spark2.version}</spark.version>
-        <sparkbundle.version>2.4</sparkbundle.version>
-        <scalatest.version>${scalatest.spark_pre31.version}</scalatest.version>
-        <hudi.spark.module>hudi-spark2</hudi.spark.module>
-        <hudi.spark.common.module>hudi-spark2-common</hudi.spark.common.module>
-        <kafka.version>2.0.0</kafka.version>
-        <parquet.version>1.10.1</parquet.version>
-        <orc.spark.version>1.6.0</orc.spark.version>
-        <avro.version>1.8.2</avro.version>
-        <antlr.version>4.7</antlr.version>
-        <fasterxml.version>2.6.7</fasterxml.version>
-        <fasterxml.jackson.databind.version>${fasterxml.version}</fasterxml.jackson.databind.version>
-        <fasterxml.jackson.module.scala.version>2.6.7.1</fasterxml.jackson.module.scala.version>
-        <fasterxml.jackson.dataformat.yaml.version>2.7.4</fasterxml.jackson.dataformat.yaml.version>
-        <skip.hudi-spark3.unit.tests>true</skip.hudi-spark3.unit.tests>
-        <skipITs>true</skipITs>
-      </properties>
-      <activation>
-        <property>
-          <name>spark2.4</name>
-        </property>
-      </activation>
-    </profile>
-    <profile>
-      <id>m1-mac</id>
-      <properties>
-        <spark2.version>2.4.8</spark2.version>
-      </properties>
-      <activation>
-        <os>
-          <family>mac</family>
-          <arch>aarch64</arch>
-        </os>
-        <property>
-          <name>spark2.4</name>
-        </property>
-      </activation>
-    </profile>
-
     <!-- "spark3" is an alias for "spark3.5" -->
     <!-- NOTE: This profile is deprecated and soon will be removed -->
     <profile>
@@ -2414,7 +2317,6 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2469,7 +2371,6 @@
         <fasterxml.jackson.module.scala.version>${fasterxml.spark3.version}</fasterxml.jackson.module.scala.version>
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2513,7 +2414,6 @@
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
         <log4j2.version>2.19.0</log4j2.version>
         <slf4j.version>2.0.6</slf4j.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2564,7 +2464,6 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>false</skipITs>
       </properties>
       <modules>

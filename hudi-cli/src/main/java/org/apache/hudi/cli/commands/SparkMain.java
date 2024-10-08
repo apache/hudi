@@ -63,6 +63,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
@@ -131,6 +132,13 @@ public class SparkMain {
       return (args.length >= minArgsCount && !StringUtils.isNullOrEmpty(args[minArgsCount - 1]))
           ? args[minArgsCount - 1] : null;
     }
+  }
+
+  public static void addAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String... args) {
+    //cmd is going to be the first arg so that is why it is minArgsCount - 1
+    ValidationUtils.checkArgument(args.length == cmd.minArgsCount - 1, "For developers only: App args does not match minArgsCount");
+    sparkLauncher.addAppArgs(cmd.toString());
+    sparkLauncher.addAppArgs(args);
   }
 
   public static void main(String[] args) {

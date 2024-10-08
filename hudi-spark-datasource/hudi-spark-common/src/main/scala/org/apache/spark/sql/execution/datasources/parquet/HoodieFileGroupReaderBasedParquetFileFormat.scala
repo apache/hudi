@@ -152,8 +152,6 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
     val parquetFileReader = spark.sparkContext.broadcast(sparkAdapter.createParquetFileReader(supportBatchResult,
       spark.sessionState.conf, options, augmentedStorageConf.unwrap()))
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
-    val broadcastedDataSchema =  spark.sparkContext.broadcast(dataAvroSchema)
-    val broadcastedRequestedSchema =  spark.sparkContext.broadcast(requestedAvroSchema)
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
 
     (file: PartitionedFile) => {
@@ -176,8 +174,8 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
                 tableState.tablePath,
                 tableState.latestCommitTimestamp.get,
                 fileSlice,
-                broadcastedDataSchema.value,
-                broadcastedRequestedSchema.value,
+                dataAvroSchema,
+                requestedAvroSchema,
                 internalSchemaOpt,
                 metaClient,
                 props,
