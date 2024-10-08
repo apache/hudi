@@ -80,6 +80,7 @@ public class HoodieDataSourceHelpers {
     return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE).getInstantsAsStream()
         .map(HoodieInstant::getCompletionTime).collect(Collectors.toList());
   }
+
   /**
    * Returns the last successful write operation's instant time.
    */

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import java.util.HashSet;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
@@ -52,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
