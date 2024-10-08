@@ -282,16 +282,23 @@ public class HoodieIncrSource extends RowSource {
           .filter((Row row) -> validInstants.contains(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
     } else {
       // normal incremental query
-      source = reader
-          .options(readOpts)
-          .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_INSTANTTIME().key(), startTime)
-          .option(END_INSTANTTIME().key(), endTime)
-          .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-              props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                  INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
-          .option(DataSourceReadOptions.INCREMENTAL_LIMIT().key(), numInstantsFromConfig)
-          .load(srcPath);
+      if (false) {
+        //      if (srcPath.toString().endsWith("test_table2")) {
+        source = reader
+            .options(readOpts)
+            .load(srcPath);
+      } else {
+        source = reader
+            .options(readOpts)
+            .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
+            .option(BEGIN_INSTANTTIME().key(), startTime)
+            .option(END_INSTANTTIME().key(), endTime)
+            .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
+                props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
+                    INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
+            .option(DataSourceReadOptions.INCREMENTAL_LIMIT().key(), numInstantsFromConfig)
+            .load(srcPath);
+      }
     }
 
     HoodieRecord.HoodieRecordType recordType = createRecordMerger(props).getRecordType();
