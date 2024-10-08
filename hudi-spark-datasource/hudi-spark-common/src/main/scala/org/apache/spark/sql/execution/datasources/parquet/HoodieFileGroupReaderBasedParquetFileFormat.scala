@@ -38,10 +38,9 @@ import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.vectorized.{OffHeapColumnVector, OnHeapColumnVector}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.PARQUET_VECTORIZED_READER_ENABLED
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchProjection}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
@@ -306,7 +305,7 @@ class HoodieFileGroupReaderBasedParquetFileFormat(tableState: HoodieTableState,
 
   private def projectIter(iter: Iterator[Any], from: StructType, to: StructType): Iterator[InternalRow] = {
     val unsafeProjection = generateUnsafeProjection(from, to)
-    val batchProjection = ColumnarBatchUtils.generateProjection(from, to)
+    val batchProjection = ColumnarBatchProjection.generateProjection(from, to)
     iter.map {
       case ir: InternalRow => unsafeProjection(ir)
       case cb: ColumnarBatch => batchProjection(cb)
