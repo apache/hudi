@@ -1261,32 +1261,41 @@ public class HoodieWriteConfig extends HoodieConfig {
                                                    List<String> mergers,
                                                    Option<String> strategy) {
     switch (logBlockType) {
-      case AVRO_DATA_BLOCK:
       case HFILE_DATA_BLOCK:
         return HoodieAvroRecordMerger.INSTANCE;
+      case AVRO_DATA_BLOCK:
       case PARQUET_DATA_BLOCK:
-        //TODO: [HUDI-8202] make this custom mergers only
-        switch (mergeMode) {
-          case EVENT_TIME_ORDERING:
-            switch (engineType) {
-              case SPARK:
-                return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
-              default:
-                return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-            }
-          case OVERWRITE_WITH_LATEST:
-            switch (engineType) {
-              case SPARK:
-                return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
-              default:
-                return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-            }
-          case CUSTOM:
+        //TODO: [HUDI-8317] return getMergerByMode(basePath, mergeMode, engineType, mergers, strategy);
+        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+      default:
+        throw new IllegalStateException("This log block type is not implemented");
+    }
+  }
+
+  private static HoodieRecordMerger getMergerByMode(String basePath,
+                                                    RecordMergeMode mergeMode,
+                                                    EngineType engineType,
+                                                    List<String> mergers,
+                                                    Option<String> strategy) {
+    //TODO: [HUDI-8202] make this custom mergers only
+    switch (mergeMode) {
+      case EVENT_TIME_ORDERING:
+        switch (engineType) {
+          case SPARK:
+            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
           default:
             return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
         }
+      case OVERWRITE_WITH_LATEST:
+        switch (engineType) {
+          case SPARK:
+            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
+          default:
+            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
+        }
+      case CUSTOM:
       default:
-        throw new IllegalStateException("This log block type is not implemented");
+        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
     }
   }
 

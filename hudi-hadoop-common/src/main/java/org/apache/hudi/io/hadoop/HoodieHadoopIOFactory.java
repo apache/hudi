@@ -20,6 +20,7 @@
 package org.apache.hudi.io.hadoop;
 
 import org.apache.hudi.common.fs.ConsistencyGuard;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
@@ -34,6 +35,13 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.IndexedRecord;
+
+import java.io.IOException;
+import java.util.Properties;
+import java.util.function.Function;
 
 /**
  * Creates readers and writers for AVRO record payloads.
@@ -113,5 +121,31 @@ public class HoodieHadoopIOFactory extends HoodieIOFactory {
                                   ConsistencyGuard consistencyGuard) {
     return new HoodieHadoopStorage(path, storage.getConf(), enableRetry, maxRetryIntervalMs,
         maxRetryNumbers, maxRetryIntervalMs, retryExceptions, consistencyGuard);
+  }
+
+  @Override
+  public Function<HoodieRecord<?>, IndexedRecord> toIndexedRecord(Schema recordSchema, Properties properties, HoodieRecord.HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        return r -> {
+          try {
+            return r.toIndexedRecord(recordSchema, properties).get().getData();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
+        };
+      default:
+        throw new UnsupportedOperationException("This is not supported");
+    }
+  }
+
+  @Override
+  public Function<IndexedRecord, HoodieRecord<?>> fromIndexedRecord(HoodieRecord.HoodieRecordType recordType) {
+    switch (recordType) {
+      case AVRO:
+        return HoodieAvroIndexedRecord::new;
+      default:
+        throw new UnsupportedOperationException("This is not supported");
+    }
   }
 }
