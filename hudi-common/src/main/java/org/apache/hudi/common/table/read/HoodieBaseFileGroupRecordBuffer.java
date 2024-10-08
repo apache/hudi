@@ -112,7 +112,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       this.payloadClass = Option.empty();
     }
     this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
-    this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.INT);
+    this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.STRING);
     this.orderingFieldDefault = readerContext.castValue(0, orderingFieldType);
     this.props = props;
     this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();

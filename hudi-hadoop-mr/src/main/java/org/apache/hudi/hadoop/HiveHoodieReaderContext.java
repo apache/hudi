@@ -259,6 +259,9 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
   @Override
   public Comparable castValue(Comparable value, Schema.Type newType) {
     //TODO: [HUDI-8261] actually do casting here
+    if (newType == Schema.Type.STRING) {
+      return value.toString();
+    }
     return value;
   }
 
