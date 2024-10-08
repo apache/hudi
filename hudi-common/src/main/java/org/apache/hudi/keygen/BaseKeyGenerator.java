@@ -33,6 +33,8 @@ import java.util.List;
 public abstract class BaseKeyGenerator extends KeyGenerator {
 
   public static final String EMPTY_PARTITION = "";
+  public static final String CUSTOM_KEY_GENERATOR_SPLIT_REGEX = ":";
+  public static final String FIELD_SEPARATOR = ",";
   protected List<String> recordKeyFields;
   protected List<String> partitionPathFields;
   protected final boolean encodePartitionPath;

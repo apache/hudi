@@ -88,7 +88,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       KeyGenerator keyGenerator = HoodieAvroKeyGeneratorFactory.createAvroKeyGeneratorByType(
           new TypedProperties(connectConfigs.getProps()));
       String recordKeyFields = KafkaConnectUtils.getRecordKeyColumns(keyGenerator);
-      String partitionColumns = KafkaConnectUtils.getPartitionColumns(keyGenerator,
+      String partitionColumns = KafkaConnectUtils.getPartitionColumnsForKeyGenerator(keyGenerator,
           new TypedProperties(connectConfigs.getProps()));
 
       LOG.info(String.format("Setting record key %s and partition fields %s for table %s",
