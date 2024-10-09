@@ -68,7 +68,7 @@ declare -a ALL_VERSION_OPTS=(
 "-Dscala-2.12 -Dflink1.17 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.18 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
 "-Dscala-2.12 -Dflink1.19 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
-"-Dscala-2.12 -Dflink1.20 -Davro.version=1.11.1 -pl packaging/hudi-flink-bundle -am"
+"-Dscala-2.12 -Dflink1.20 -Davro.version=1.11.3 -pl packaging/hudi-flink-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 

@@ -148,7 +148,7 @@
     <hudi.flink.module>hudi-flink1.20.x</hudi.flink.module>
     <flink.bundle.version>1.20</flink.bundle.version>
     <!-- This is fixed to match with version from flink-avro -->
-    <flink.avro.version>1.11.1</flink.avro.version>
+    <flink.avro.version>1.11.3</flink.avro.version>
     <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
     <!-- check kafka version -->
     <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version> 
