@@ -55,7 +55,7 @@ We use "txn" as a abbreviation of transaction.
 |----------|---------------------|--------------------------|-------------------|------------------|---------------------------------------|-------|
 | 1 | Not exists | Not exists | S1 | No | S1 | Current txn is the first commit ever, conflict is impossible |
 | 2 | Not exists | S1 | S1 | No | S1 | Second commit, no schema evolution |
-| 3 | Not exists | S1 | S2 | Yes | N/A (throws exception) | No predefined schema, effectively concurrent schema definition. The design decision made here is to identify this as schema conflict for simplicity. It can also be broken down into cases where (1) S3 is evolvable from S2, (2) S3 is not evolvable from S2, for further optimization. |
+| 3 | Not exists | S2 | S3 | Yes | N/A (throws exception) | No predefined schema, effectively concurrent schema definition. The design decision made here is to identify this as schema conflict for simplicity. It can also be broken down into cases where (1) S3 is evolvable from S2, (2) S3 is not evolvable from S2, for further optimization. |
 | 4 | S1 | S1 | S1 | No | S1 | No schema evolution |
 | 5 | S1 | S1 | S2 | No | S2 | Schema evolution in current transaction |
 | 6 | S1 | S2 | S1 | No | S2 | Backwards compatibility handles it |
@@ -65,7 +65,7 @@ We use "txn" as a abbreviation of transaction.
 For timeline graph of each case please refer appendix.
 
 Notes:
-- S1, S2, S3 represent different schemas. The proposed solution does not assume compability/evolvbility among those schemas.
+- S1, S2, S3 represent different schemas. The proposed solution does not introduce any new assumptions on compatibility/evolvbility among those schemas. But if "Table Schema when Txn Start" is schema X and Table Schema when Txn Validates is Y, it naturally means Y is compatible and is evolved from X as it is guaranteed by today's implementation.
 - 3 schemas to consider:
   + The **table schema** from the last committed txn when the current txn starts.
   + The **table schema** from the last committed txn when the current txn validates.
@@ -77,7 +77,8 @@ Notes:
 The proposed implementation involves the following key changes:
 
 1. Enhance the `TransactionUtils` class to include schema conflict detection:
-   - Add a new method `abortTxnOnConcurrentSchemaEvolution` to check for schema conflicts.
+   - Add a new interface `SchemaConflictResolutionStrategy` to check for schema conflicts.
+   - Add an implementation to this new interface `SimpleSchemaConflictResolutionStrategy` which implements the table above.
 
 2. Schema conflict detection logic:
    - Follow the graph as explained above.
@@ -140,7 +141,7 @@ use S_REAL_AT_V or S_OF_TXN, whichever is more "general".
 
 For the "general" comparison, one simple case is we find S_OF_TXN has 1 more column than S_REAL_AT_V, so we use S_OF_TXN in commit metadata (This is case 5). If it is in a reverse way that S_REAL_AT_V has 1 more column then it is case 6. If cannot evolve from S_REAL_AT_V to S_OF_TXN then it is case 8, for example, both 2 schema has columns that is absent from each other.
 
-Here we need to look into the content of the schema to make a call, complexity grows if there are nested columns. Compared to the proposed solution where we only need equity check, the proposed solution is more easy to make it correct.
+Here we need to look into the content of the schema to make a call, complexity grows if there are nested columns. The proposed solution only needs equality check, which is simpler.
 
 In conclusion, it is doable to get rid of "Table Schema when Txn Start", we choose not to pay for that.
 
