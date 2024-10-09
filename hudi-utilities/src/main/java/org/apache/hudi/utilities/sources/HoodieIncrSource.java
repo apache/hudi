@@ -36,6 +36,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
+import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
@@ -258,8 +259,7 @@ public class HoodieIncrSource extends RowSource {
     }
     boolean shouldFullScan =
         queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(startTime)
-        && Boolean.valueOf(props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-            INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()));
+        && missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
     Dataset<Row> source;
     if (instantRange.isEmpty() || shouldFullScan) {
       // snapshot query

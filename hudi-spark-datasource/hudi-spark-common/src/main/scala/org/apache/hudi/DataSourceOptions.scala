@@ -125,6 +125,9 @@ object DataSourceReadOptions {
       + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
       + "`stateTransitionTime` to perform comparison.")
 
+  /* TODO: this is a replacement of HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH
+      to make incremental instant limit available in spark incremental relations
+      Need to link HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH to this correctly and add doc*/
   val INCREMENTAL_LIMIT: ConfigProperty[Int] = ConfigProperty
     .key("hoodie.datasource.read.incremental.limit")
     .defaultValue(5)
