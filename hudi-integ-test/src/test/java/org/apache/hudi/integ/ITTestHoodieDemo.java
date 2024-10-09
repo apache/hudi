@@ -499,6 +499,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testIncrementalSparkSQLQuery() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_INCREMENTAL_COMMANDS, true);
+    LOG.error(stdOutErrPair.getLeft());
     assertStdOutContains(stdOutErrPair, "stock_ticks_cow incremental count: 99", 1);
     assertStdOutContains(stdOutErrPair, "stock_ticks_cow_bs incremental count: 99", 1);
     assertStdOutContains(stdOutErrPair, "stock_ticks_mor incremental count: 99", 1);
