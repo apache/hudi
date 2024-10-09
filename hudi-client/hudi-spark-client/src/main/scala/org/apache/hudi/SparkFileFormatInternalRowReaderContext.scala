@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
+import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
@@ -38,7 +39,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, SparkParquetReader}
 import org.apache.spark.sql.hudi.SparkAdapter
@@ -87,17 +88,15 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
-      val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType)
-      new CloseableMappingIterator[InternalRow, UnsafeRow](
+      val dataSchemaWithMergeCol = if (hasRowIndexField) {
+        HoodiePositionBasedSchemaHandler.addPositionalMergeCol(dataSchema)
+      } else {
+        dataSchema
+      }
+      new CloseableMappingIterator[InternalRow, InternalRow](
         new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-          .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, requiredSchema),
-        new java.util.function.Function[InternalRow, UnsafeRow] {
-          override def apply(data: InternalRow): UnsafeRow = {
-            // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
-            //       it to [[UnsafeRow]] holding just raw bytes
-            projection.apply(data)
-          }
-        }).asInstanceOf[ClosableIterator[InternalRow]]
+          .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, dataSchemaWithMergeCol),
+        projectRecord(dataSchemaWithMergeCol, requiredSchema))
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
