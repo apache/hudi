@@ -334,7 +334,7 @@ class HoodieCopyOnWriteSnapshotHadoopFsRelationFactory(override val sqlContext: 
     Some(tableStructSchema),
     optParams,
     FileStatusCache.getOrCreate(sparkSession),
-    shouldEmbedFileSlices = true,
+    shouldEmbedFileSlices = isBootstrap,
     shouldUseStringTypeForTimestampPartitionKeyType = true)
 
   override def buildFileFormat(): FileFormat = {
