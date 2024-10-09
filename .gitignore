@@ -1,6 +1,8 @@
 # Directories #
 /build/
 target/
+.metals/
+.vscode/
 metastore_db/
 .mvn/
 
