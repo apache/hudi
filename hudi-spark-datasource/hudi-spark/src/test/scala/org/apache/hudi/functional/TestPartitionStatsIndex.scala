@@ -177,7 +177,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       override def apply(): Boolean = {
         try {
           doWriteAndValidateDataAndPartitionStats(hudiOpts,
-            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+            operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
             validate = false)
           true

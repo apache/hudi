@@ -202,7 +202,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
   /**
    * @return [[DataFrame]] that should not exist as of the latest instant; used for non-existence validation.
    */
-  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = {
+  protected def calculateMergedDf(latestBatchDf: DataFrame, operation: String): DataFrame = synchronized {
     val prevDfOpt = mergedDfList.lastOption
     if (prevDfOpt.isEmpty) {
       mergedDfList = mergedDfList :+ latestBatchDf
