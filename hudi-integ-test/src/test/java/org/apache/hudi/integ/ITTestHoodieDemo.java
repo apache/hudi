@@ -116,6 +116,8 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     setupDemo();
 
+    List<String> cmds = CollectionUtils.createImmutableList("rm -rf /user/hive/warehouse/*");
+    executeCommandStringsInDocker(ADHOC_1_CONTAINER, cmds);
     // batch 1
     ingestFirstBatchAndHiveSync();
     testHiveAfterFirstBatch();
