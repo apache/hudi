@@ -89,7 +89,8 @@ case class HoodieFileIndex(spark: SparkSession,
                            @transient fileStatusCache: FileStatusCache = NoopCache,
                            includeLogFiles: Boolean = false,
                            shouldEmbedFileSlices: Boolean = false,
-                           shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false)
+                           shouldUseStringTypeForTimestampPartitionKeyType: Boolean = false,
+                           shouldConvertFilter: Boolean = false)
   extends SparkHoodieTableFileIndex(
     spark = spark,
     metaClient = metaClient,
@@ -319,7 +320,7 @@ case class HoodieFileIndex(spark: SparkSession,
     val prunedPartitionsTuple: (Boolean, Seq[PartitionPath]) =
       if (isPartitionedTable && partitionFilters.nonEmpty) {
         // For partitioned table and partition filters, prune the partitions by the partition filters
-        if (shouldEmbedFileSlices) {
+        if (shouldConvertFilter) {
           (true, listMatchingPartitionPaths(convertFilterForTimestampKeyGenerator(metaClient, partitionFilters)))
         } else {
           (true, listMatchingPartitionPaths(partitionFilters))
