@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
+import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
@@ -221,6 +222,25 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       Function<String, String> earliestInstantTimeFunc) {
     return getStartTimes(metaClient.getCommitsTimeline().filterCompletedInstants(), Option.ofNullable(rangeStart), Option.ofNullable(rangeEnd),
         InstantRange.RangeType.CLOSED_CLOSED, earliestInstantTimeFunc);
+  }
+
+  /**
+   * Queries the instant start time with given completion time range.
+   *
+   * @param rangeStart              The query range start completion time.
+   * @param rangeEnd                The query range end completion time.
+   * @param rangeType               The range type.
+   *                                with the minimum completion time.
+   *
+   * @return The sorted instant time list.
+   */
+  @VisibleForTesting
+  public List<String> getStartTimes(
+      String rangeStart,
+      String rangeEnd,
+      RangeType rangeType) {
+    return getStartTimes(metaClient.getCommitsTimeline().filterCompletedInstants(), Option.ofNullable(rangeStart), Option.ofNullable(rangeEnd),
+        rangeType, s -> HoodieInstantTimeGenerator.instantTimeMinusMillis(s, MILLI_SECONDS_IN_ONE_DAY));
   }
 
   /**

@@ -532,6 +532,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
         && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
   }
 
+  @Override
+  public boolean isBeforeTimelineStartsByCompletionTime(String completionTime) {
+    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommit();
+    return firstNonSavepointCommit.isPresent()
+        && compareTimestamps(completionTime, LESSER_THAN, firstNonSavepointCommit.get().getCompletionTime());
+  }
+
   public Option<HoodieInstant> getFirstNonSavepointCommit() {
     if (this.firstNonSavepointCommit == null) {
       synchronized (this) {

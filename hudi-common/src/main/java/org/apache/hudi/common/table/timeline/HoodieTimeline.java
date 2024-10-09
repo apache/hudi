@@ -411,6 +411,11 @@ public interface HoodieTimeline extends Serializable {
   boolean isBeforeTimelineStarts(String ts);
 
   /**
+   * @return true if the passed in completion time is before the first completion time in the timeline
+   */
+  boolean isBeforeTimelineStartsByCompletionTime(String completionTime);
+
+  /**
    * First non-savepoint commit in the active data timeline. Examples:
    * 1. An active data timeline C1, C2, C3, C4, C5 returns C1.
    * 2. If archival is allowed beyond savepoint and let's say C1, C2, C4 have been archived

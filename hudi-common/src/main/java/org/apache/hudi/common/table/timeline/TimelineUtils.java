@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -311,11 +312,33 @@ public class TimelineUtils {
   public static HoodieTimeline getCommitsTimeLineAfterByCompletionTimeRange(
       HoodieTableMetaClient metaClient,
       String exclusiveStartCompletionTime,
-      Option<String> inclusiveEndCompletionTime) {
-    return metaClient.getActiveTimeline().getWriteTimeline()
-        .findInstantsInRangeByCompletionTime(
+      String inclusiveEndCompletionTime) {
+    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+
+    HoodieDefaultTimeline timeline;
+    if (writeTimeline.isBeforeTimelineStartsByCompletionTime(exclusiveStartCompletionTime)) {
+      // need to load archived timeline as well
+      try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient)) {
+        List<String> instants = view.getStartTimes(
             exclusiveStartCompletionTime,
-            inclusiveEndCompletionTime.orElse(String.valueOf(Long.MAX_VALUE)));
+            inclusiveEndCompletionTime,
+            RangeType.OPEN_CLOSED);
+        if (instants.isEmpty()) {
+          LOG.warn("Did not find any instant when getting timeline, using write timeline for incremental read");
+          timeline = writeTimeline;
+        } else {
+          timeline = metaClient.getArchivedTimeline(instants.get(0))
+              .mergeTimeline(writeTimeline)
+              .mergeTimeline(writeTimeline);
+        }
+      }
+    } else {
+      timeline = writeTimeline;
+    }
+
+    return timeline.findInstantsInRangeByCompletionTime(
+            exclusiveStartCompletionTime,
+            inclusiveEndCompletionTime);
   }
 
   /**

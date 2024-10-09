@@ -256,10 +256,12 @@ public class HoodieIncrSource extends RowSource {
           .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
       reader = reader.options(optionsMap);
     }
+    boolean shouldFullScan =
+        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(startTime)
+        && Boolean.valueOf(props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
+            INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()));
     Dataset<Row> source;
-
-    if (instantRange.isEmpty()
-        || queryContext.getActiveTimeline().isBeforeTimelineStarts(startTime)) {
+    if (instantRange.isEmpty() || shouldFullScan) {
       // snapshot query
       Dataset<Row> snapshot = reader
           .options(readOpts)
