@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -84,6 +85,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -211,13 +213,18 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     checkWrittenData(result, 1);
   }
 
-  //Prove that multiwriters will only produce base files for bulk insert
+  //Prove that multiple writers will only produce base files for bulk insert
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiBaseFile(boolean bulkInsertFirst) throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig(true);
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    //there should only be a single filegroup, so we will verify that it is consistent
+    String fileID = null;
 
+    // if there is not a bulk insert first, then we will write to log files for a filegroup
+    // without a base file. Having a base file adds the possibility of small file handling
+    // which we want to ensure doesn't happen.
     if (bulkInsertFirst) {
       SparkRDDWriteClient client0 = getHoodieWriteClient(config);
       List<String> dataset0 = Collections.singletonList("id0,Danny,0,0,par1");
@@ -230,16 +237,26 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
           Option.empty(),
           metaClient.getCommitActionType());
       for (WriteStatus status : writeStatuses0) {
+        if (fileID == null) {
+          fileID = status.getFileId();
+        } else {
+          assertEquals(fileID, status.getFileId());
+        }
         assertFalse(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
       }
+      client0.close();
     }
-
 
     SparkRDDWriteClient client1 = getHoodieWriteClient(config);
     List<String> dataset1 = Collections.singletonList("id1,Danny,22,1,par1");
     String insertTime1 = client1.createNewInstantTime();
     List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT, true);
     for (WriteStatus status : writeStatuses1) {
+      if (fileID == null) {
+        fileID = status.getFileId();
+      } else {
+        assertEquals(fileID, status.getFileId());
+      }
       assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
     }
 
@@ -248,6 +265,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     String insertTime2 = client2.createNewInstantTime();
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.UPSERT, true);
     for (WriteStatus status : writeStatuses2) {
+      assertEquals(fileID, status.getFileId());
       assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
     }
 
@@ -259,6 +277,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         Option.empty(),
         metaClient.getCommitActionType());
 
+    // step to commit the 2nd txn
     client2.commitStats(
         insertTime2,
         context().parallelize(writeStatuses2, 1),
@@ -266,22 +285,25 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         Option.empty(),
         metaClient.getCommitActionType());
 
-    //second bulk insert will be a log file because there is only 1 bucket
-    SparkRDDWriteClient client3 = getHoodieWriteClient(config);
-    List<String> dataset3 = Collections.singletonList("id2,Danny,0,0,par1");
-    String insertTime3 = client3.createNewInstantTime();
-    List<WriteStatus> writeStatuses3 = writeData(client3, insertTime3, dataset3, false, WriteOperationType.BULK_INSERT, true);
-    client3.commitStats(
-        insertTime3,
-        context().parallelize(writeStatuses3, 1),
-        writeStatuses3.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
-        Option.empty(),
-        metaClient.getCommitActionType());
-    for (WriteStatus status : writeStatuses3) {
-      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+    client1.close();
+    client2.close();
+
+    metaClient.reloadActiveTimeline();
+    List<HoodieInstant> instants = metaClient.getActiveTimeline().getInstants();
+    if (bulkInsertFirst) {
+      assertEquals(3, instants.size());
+      // check that bulk insert finished before the upsert started
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) < Long.parseLong(instants.get(1).getTimestamp()));
+      // check that the upserts overlapped in time
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(2).getTimestamp()));
+      assertTrue(Long.parseLong(instants.get(2).getCompletionTime()) > Long.parseLong(instants.get(1).getTimestamp()));
+    } else {
+      assertEquals(2, instants.size());
+      // check that the upserts overlapped in time
+      assertTrue(Long.parseLong(instants.get(0).getCompletionTime()) > Long.parseLong(instants.get(1).getTimestamp()));
+      assertTrue(Long.parseLong(instants.get(1).getCompletionTime()) > Long.parseLong(instants.get(0).getTimestamp()));
     }
   }
-
 
   // case1: txn1 is upsert writer, txn2 is bulk_insert writer.
   //      |----------- txn1 -----------|
