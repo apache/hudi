@@ -199,7 +199,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     assertTrue(f1.value.get.get || f2.value.get.get)
     executor.shutdownNow()
-    Thread.sleep(2000L)
     validateDataAndPartitionStats()
   }
 
