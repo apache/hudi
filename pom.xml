@@ -2509,9 +2509,13 @@
     <profile>
       <id>flink1.19</id>
       <properties>
+        <flink.version>${flink1.19.version}</flink.version>
+        <hudi.flink.module>hudi-flink1.19.x</hudi.flink.module>
+        <flink.bundle.version>1.19</flink.bundle.version>
         <orc.flink.version>1.5.6</orc.flink.version>
         <flink.avro.version>1.11.1</flink.avro.version>
         <flink.format.parquet.version>1.13.1</flink.format.parquet.version>
+        <flink.connector.kafka.version>3.2.0-1.19</flink.connector.kafka.version>
       </properties>
       <activation>
         <property>
