@@ -18,13 +18,6 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
-
-import java.io.FileNotFoundException;
-import java.io.IOException;
-
 /**
  * <p>
  * Exception thrown to indicate that a hoodie table was not found on the path provided.
