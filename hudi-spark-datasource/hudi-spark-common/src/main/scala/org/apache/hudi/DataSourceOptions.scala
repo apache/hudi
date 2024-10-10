@@ -130,8 +130,9 @@ object DataSourceReadOptions {
       Need to link HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH to this correctly and add doc*/
   val INCREMENTAL_LIMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.streamer.source.hoodieincr.num_instants")
-    .defaultValue("5")
-    .withDocumentation("Max number of instants whose changes can be incrementally fetched")
+    .defaultValue("-1")
+    .withDocumentation("Max number of instants whose changes can be incrementally fetched, " +
+      "negative value means unlimited")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
