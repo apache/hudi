@@ -32,7 +32,7 @@ val beginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, "/
 println("Begin completion time for COW incremental query: " + beginCompletionTime)
 val hoodieIncQueryDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTIme).
+                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_cow");
 println("stock_ticks_cow incremental count: " + hoodieIncQueryDF.count)
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
