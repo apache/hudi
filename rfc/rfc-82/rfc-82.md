@@ -85,39 +85,39 @@ The proposed implementation involves the following key changes:
 2. Schema conflict detection logic:
    - Follow the graph as explained above.
 
-sudo code:
+Pseudo code:
 ```
 // Initialize schemas
-schemaOfTxn = current transaction schema
-schemaAtTxnStart = schema at transaction start (if available)
-schemaAtTxnValidation = schema at transaction validation (if available)
+writerSchemaOfTxn = writer schema of the current transaction
+tableSchemaAtTxnStart = table schema at transaction start (if available)
+tableSchemaAtTxnValidation = table schema at transaction validation (if available)
 
 // Case 1: First commit ever
-if schemaAtTxnValidation is null:
-    return schemaOfTxn
+if tableSchemaAtTxnValidation is null:
+return writerSchemaOfTxn
 
 // Case 2, 3: Second commit, first one committed during read-write phase
-if schemaAtTxnStart is null:
-    if schemaOfTxn != schemaAtTxnValidation:
-        throw ConcurrentSchemaEvolutionError
-    return schemaOfTxn
+if tableSchemaAtTxnStart is null:
+if writerSchemaOfTxn != tableSchemaAtTxnValidation:
+throw ConcurrentSchemaEvolutionError
+return writerSchemaOfTxn
 
 // Case 8: Multiple commits, potential concurrent schema evolution
-if schemaAtTxnStart != schemaOfTxn AND
-   schemaAtTxnStart != schemaAtTxnValidation AND
-   schemaOfTxn != schemaAtTxnValidation:
-    throw ConcurrentSchemaEvolutionError
+if tableSchemaAtTxnStart != writerSchemaOfTxn AND
+tableSchemaAtTxnStart != tableSchemaAtTxnValidation AND
+writerSchemaOfTxn != tableSchemaAtTxnValidation:
+throw ConcurrentSchemaEvolutionError
 
 // Compatible case 4,5
 if transaction start instant == transaction validation instant:
-    return schemaOfTxn
+return writerSchemaOfTxn
 
 // Compatible case 7
-if schemaAtTxnStart == schemaAtTxnValidation:
-    return schemaOfTxn
+if tableSchemaAtTxnStart == tableSchemaAtTxnValidation:
+return writerSchemaOfTxn
 
 // Compatible case 6
-return schemaAtTxnValidation
+return tableSchemaAtTxnValidation
 ```
 
 ## Rollout/Adoption Plan
@@ -192,12 +192,12 @@ Should Conflict?: No
 Time ---------------------------------------------------------------------------------->
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]--------------------[ Commit Txn1 ]
-           Uses writer schema: S1                                          Writes table schema in commit metadata: S1
+      Uses **writer schema**: S1                                          Writes table schema in commit metadata: S1
 Table Schema:
           [ Not Exists ]----------------------------[ Not Exists ]--------------------[ S1 ]
 ```
 Notes:
-- Txn1 is the first transaction; it creates the table with schema S1.
+- Txn1 is the first transaction; it creates the table with **table schema** S1.
 - No conflicts occur since there are no other transactions.
 
 
@@ -207,35 +207,35 @@ Notes:
 Time ---------------------------------------------------------------------------------->
 
 Txn1:    [ Start Txn1 ]------------------------[ Commit Txn1 ]
-            Creates Schema: S1
+                                             Creates Table Schema: S1
 
 Txn2:            [ Start Txn2 ]------------------------[ Validate ]--------------------[ Commit Txn2 ]
-                    Uses Schema: S1                                                 Writes Schema: S1
+            Uses Writer Schema: S1                                          Writes Table Schema in commit metadata: S1
 
 Table Schema:
           [ Not Exists ]-----------------------[ S1 ]----------------------------------[ S1 ]
 ```
 Notes:
 - Txn2 starts when the table does not exist.
-- Txn1 commits before Txn2 validates, creating schema S1.
-- Txn2 validates against schema S1; no conflict occurs.
+- Txn1 commits before Txn2 validates, creating **table schema** S1.
+- Txn2 validates against **table schema** S1; no conflict occurs.
 
 **Scenario 3**
 ```
 Time ---------------------------------------------------------------------------------->
 
 Txn1:    [ Start Txn1 ]------------------------[ Commit Txn1 ]
-            Creates Schema: S1
+      Creates Writer Schema: S1
 
 Txn2:            [ Start Txn2 ]------------------------[ Validate ]----X
-                    Uses Schema: S2
+               Uses Writer Schema: S2
 
 Table Schema:
           [ Not Exists ]-----------------------[ S1 ]----------------------------------------
 ```
 Notes:
-- Txn2 starts when the table does not exist, intending to use schema S2.
-- Txn1 commits before Txn2 validates, creating schema S1.
+- Txn2 starts when the table does not exist, intending to use **writer schema** S2.
+- Txn1 commits before Txn2 validates, creating **table schema** S1.
 - At validation, Txn2 detects schema conflict (S1 vs. S2); transaction fails.
 
 A future improvement is to check the compatibility between S1 and S2 and reconcile properly.
@@ -245,13 +245,13 @@ A future improvement is to check the compatibility between S1 and S2 and reconci
 Time ---------------------------------------------------------------------------------->
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]--------------------[ Commit Txn1 ]
-            Uses Schema: S1                                                     Writes Schema: S1
+      Uses Writer Schema: S1                                         Writes Table Schema in commit metadata: S1
 
 Table Schema:
           [ S1 ]------------------------------------[ S1 ]----------------------------[ S1 ]
 ```
 Notes:
-- Txn1 operates entirely under schema S1. (there is no concurrent writer or the concurrent writer does not evolve the table schema).
+- Txn1 operates entirely under **table schema** S1 (there is no concurrent writer or the concurrent writer does not evolve the **table schema**).
 - No schema changes occur; no conflicts arise.
 
 **Scenario 5**
@@ -259,13 +259,13 @@ Notes:
 Time ---------------------------------------------------------------------------------->
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]--------------------[ Commit Txn1 ]
-            Uses Schema: S2                                                     Writes Schema: S2
+      Uses Writer Schema: S2                                                  Writes Table Schema in commit metadata: S2
 
 Table Schema:
           [ S1 ]------------------------------------[ S1 ]----------------------------[ S2 ]
 ```
 Notes:
-- Txn1 starts with schema S1 and evolves it to S2 within the transaction.
+- Txn1 starts with **writer schema** S1 and evolves the **table schema** to S2 within the transaction.
 - No other transactions interfere; no conflicts occur.
 
 **Scenario 6**
@@ -273,37 +273,37 @@ Notes:
 Time ---------------------------------------------------------------------------------->
 
 Txn2:           [ Start Txn2 ]------------------------[ Commit Txn2 ]
-                   Evolves Schema: S1 to S2
+                   Evolves Table Schema: S1 to S2
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]--------------------[ Commit Txn1 ]
-            Uses Schema: S1                                                     Writes Schema: S2
+      Uses Writer Schema: S1                                                 Writes Table Schema in commit metadata: S2
 
 Table Schema:
           [ S1 ]---------------------------------------[ S2 ]---------------------------------[ S2 ]
 ```
 Notes:
-- Txn1 starts with schema S1.
-- Txn2 commits before Txn1 validates, evolving the schema to S2.
-- Txn1 validates against schema S2; backward compatibility allows it to proceed.
-- Txn1 writes data compatible with S2; commits successfully with the table schema S2, instead of the writer schema S1.
+- Txn1 starts with **writer schema** S1.
+- Txn2 commits before Txn1 validates, evolving the **table schema** to S2.
+- Txn1 validates against **table schema** S2; backward compatibility allows it to proceed.
+- Txn1 writes data compatible with S2; commits successfully with the **table schema** S2, instead of the **writer schema** S1.
 
 **Scenario 7**
 ```
 Time ---------------------------------------------------------------------------------->
 
 Txn2:           [ Start Txn2 ]------------------------[ Commit Txn2 ]
-                   Evolves Schema: S1 to S2
+            Evolves Table Schema: S1 to S2
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]--------------------[ Commit Txn1 ]
-            Uses Schema: S2                                                     Writes Schema: S2
+      Uses Writer Schema: S2                                                  Writes Table Schema in commit metadata: S2
 
 Table Schema:
           [ S1 ]--------------------------[ S2 ]----------------------------------------[ S2 ]
 ```
 Notes:
-- Both Txn1 and Txn2 aim to evolve schema from S1 to S2.
-- Txn2 commits before Txn1 validates, updating schema to S2.
-- Txn1 detects that schema is already S2; no conflict occurs.
+- Both Txn1 and Txn2 aim to evolve **table schema** from S1 to S2.
+- Txn2 commits before Txn1 validates, updating **table schema** to S2.
+- Txn1 detects that the **table schema** is already S2; no conflict occurs.
 - Txn1 commits successfully.
 
 **Scenario 8**
@@ -311,17 +311,17 @@ Notes:
 Time ---------------------------------------------------------------------------------->
 
 Txn2:           [ Start Txn2 ]------------------------[ Commit Txn2 ]
-                   Evolves Schema: S1 to S2
+            Evolves Table Schema: S1 to S2
 
 Txn1:    [ Start Txn1 ]------------------------------[ Validate ]----X
-            Uses Schema: S3
+      Uses Writer Schema: S3
 
 Table Schema:
           [ S1 ]--------------------------------------[ S2 ]-------------------------------------[S2]
 ```
 Notes:
-- Txn1 intends to evolve schema from S1 to S3.
-- Txn2 commits before Txn1 validates, updating schema to S2.
+- Txn1 intends to evolve **table schema** from S1 to S3.
+- Txn2 commits before Txn1 validates, updating **table schema** to S2.
 - At validation, Txn1 detects schema conflict (S2 vs. S3); transaction fails.
 
 A future improvement is to check the compatibility of S2 and S3 trying to reconcile properly.
