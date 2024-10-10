@@ -1,7 +1,8 @@
 # Directories #
 /build/
 target/
-.*/
+.metals/
+.vscode/
 metastore_db/
 
 # OS Files #

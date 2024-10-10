@@ -31,14 +31,14 @@ JIRA: https://issues.apache.org/jira/browse/HUDI-8221
 
 ## Abstract
 
-This RFC proposes to enhance Hudi's concurrency control mechanism to handle concurrent schema evolution scenarios. The current implementation does not adequately address conflicts that may arise when multiple transactions attempt to alter the **table schema** simultaneously. This enhancement aims to detect and prevent such conflicts, ensuring data consistency and integrity in multi-writer environments.
+This RFC proposes to enhance Hudi's concurrency control mechanism to handle concurrent schema evolution scenarios. The current implementation does not adequately address conflicts that may arise when multiple transactions attempt to alter the table schema simultaneously. This enhancement aims to detect and prevent such conflicts, ensuring data consistency and integrity in multi-writer environments.
 
 ## Background
 
 ### Hudi Schema
 In Apache Hudi, schema management is a critical component that ensures data consistency and facilitates efficient data processing, especially in environments where data structures may evolve over time.
 
-The schema of the input data represents the structure of incoming records being ingested into Hudi from various sources. During a write operation, the Hudi write client utilizes a **write schema**, which is typically derived from the input data schema or specified by a schema provider. This **write schema** is applied throughout the transaction to maintain consistency.
+The schema of the input data represents the structure of incoming records being ingested into Hudi from various sources. During a write operation, the Hudi write client utilizes a **writer schema**, which is typically derived from the input data schema or specified by a schema provider. This **writer schema** is applied throughout the transaction to maintain consistency.
 
 Additionally, Hudi stores the **table schema** within the commit metadata on storage, capturing the authoritative schema of the hudi table table at the time of each commit. This stored schema is crucial for readers to correctly interpret the data and for managing schema evolution across different data versions. These schemas are determined through a reconciliation process that considers both the incoming data schema and the existing **table schema**, allowing Hudi to handle schema changes gracefully. Currently, Hudi uses this schema management approach to enable seamless read and write operations, support upserts and deletes, and manage schema evolution, ensuring that the system remains robust even as the underlying data structures change.
 
@@ -46,6 +46,8 @@ Additionally, Hudi stores the **table schema** within the commit metadata on sto
 Hudi supports concurrency control to handle concurrent write operations. However, the existing implementation does not specifically account for schema evolution conflicts. In a multi-writer environment, it's possible for different clients to attempt schema changes concurrently, which can lead to inconsistencies if not properly managed.
 
 Schema evolution is a critical operation that can significantly impact data compatibility and query results. Uncontrolled concurrent schema changes can result in data inconsistencies, failed reads, or incorrect query results. By extending the concurrency control mechanism to handle schema evolution, we can prevent these issues and ensure a more robust and reliable data management system.
+
+## Design
 
 Depending on whether there are concurrent schema evolution transactions, an inflight transaction may see a different latest schema of the table when it checks at different time, as there can always be other transactions committed and potentially changed schema as a result of that in multi-writer scenarios.
 
@@ -65,11 +67,11 @@ We use "txn" as a abbreviation of transaction.
 For timeline graph of each case please refer appendix.
 
 Notes:
-- S1, S2, S3 represent different schemas. The proposed solution does not introduce any new assumptions on compatibility/evolvbility among those schemas. But if "Table Schema when Txn Start" is schema X and Table Schema when Txn Validates is Y, it naturally means Y is compatible and is evolved from X as it is guaranteed by today's implementation.
+- S1, S2, S3 represent different schemas. The proposed solution does not introduce any new assumptions on compatibility among those schemas. But if "Table Schema when Txn Start" is schema X and Table Schema when Txn Validates is Y, it naturally means Y is compatible and is evolved from X as it is guaranteed by today's implementation.
 - 3 schemas to consider:
   + The **table schema** from the last committed txn when the current txn starts.
   + The **table schema** from the last committed txn when the current txn validates.
-  + The **table schema** that the current txn uses.
+  + The **writer schema** that the current txn uses.
 - "Not exists" means the table is empty and **table schema** is not set.
 
 ## Implementation
@@ -82,6 +84,41 @@ The proposed implementation involves the following key changes:
 
 2. Schema conflict detection logic:
    - Follow the graph as explained above.
+
+sudo code:
+```
+// Initialize schemas
+schemaOfTxn = current transaction schema
+schemaAtTxnStart = schema at transaction start (if available)
+schemaAtTxnValidation = schema at transaction validation (if available)
+
+// Case 1: First commit ever
+if schemaAtTxnValidation is null:
+    return schemaOfTxn
+
+// Case 2, 3: Second commit, first one committed during read-write phase
+if schemaAtTxnStart is null:
+    if schemaOfTxn != schemaAtTxnValidation:
+        throw ConcurrentSchemaEvolutionError
+    return schemaOfTxn
+
+// Case 8: Multiple commits, potential concurrent schema evolution
+if schemaAtTxnStart != schemaOfTxn AND
+   schemaAtTxnStart != schemaAtTxnValidation AND
+   schemaOfTxn != schemaAtTxnValidation:
+    throw ConcurrentSchemaEvolutionError
+
+// Compatible case 4,5
+if transaction start instant == transaction validation instant:
+    return schemaOfTxn
+
+// Compatible case 7
+if schemaAtTxnStart == schemaAtTxnValidation:
+    return schemaOfTxn
+
+// Compatible case 6
+return schemaAtTxnValidation
+```
 
 ## Rollout/Adoption Plan
 
@@ -110,7 +147,7 @@ The implementation includes comprehensive test cases in the `TestHoodieClientMul
 # Appendix
 
 ## Q&A
-### How does spark executor know what is the **write schema** to use?
+### How does spark executor know what is the **writer schema** to use?
 It is populated from the writer config. In org.apache.hudi.io.HoodieWriteHandle we have the following code
 ```
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
@@ -201,7 +238,7 @@ Notes:
 - Txn1 commits before Txn2 validates, creating schema S1.
 - At validation, Txn2 detects schema conflict (S1 vs. S2); transaction fails.
 
-A future improvement is to check the compatibility of s1 s2 and reconcile properly.
+A future improvement is to check the compatibility between S1 and S2 and reconcile properly.
 
 **Scenario 4**
 ```
@@ -214,7 +251,7 @@ Table Schema:
           [ S1 ]------------------------------------[ S1 ]----------------------------[ S1 ]
 ```
 Notes:
-- Txn1 operates entirely under schema S1.
+- Txn1 operates entirely under schema S1. (there is no concurrent writer or the concurrent writer does not evolve the table schema).
 - No schema changes occur; no conflicts arise.
 
 **Scenario 5**
@@ -248,7 +285,7 @@ Notes:
 - Txn1 starts with schema S1.
 - Txn2 commits before Txn1 validates, evolving the schema to S2.
 - Txn1 validates against schema S2; backward compatibility allows it to proceed.
-- Txn1 writes data compatible with S2; commits successfully.
+- Txn1 writes data compatible with S2; commits successfully with the table schema S2, instead of the writer schema S1.
 
 **Scenario 7**
 ```
