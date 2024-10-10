@@ -25,6 +25,7 @@ import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
 import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.table.api.EnvironmentSettings;
@@ -41,6 +42,7 @@ import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
 import org.jetbrains.annotations.NotNull;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -177,7 +179,7 @@ public final class HoodieFlinkQuickstart {
     TableResult tableResult = tEnv.executeSql(insert);
     // wait to finish
     try {
-      tableResult.getJobClient().get().getJobExecutionResult().get();
+      tableResult.await();
     } catch (InterruptedException | ExecutionException ex) {
       // ignored
     }
