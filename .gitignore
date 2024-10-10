@@ -2,6 +2,7 @@
 /build/
 target/
 .metals/
+.mvn/
 .vscode/
 metastore_db/
 
