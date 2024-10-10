@@ -19,28 +19,22 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
-import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
-import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord, HoodieReplaceCommitMetadata}
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, handleHollowCommitIfNeeded}
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.log.InstantRange
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
-import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
-import org.apache.hudi.table.HoodieSparkTable
+
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
-import org.apache.hudi.common.table.log.InstantRange
-import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.functions.{col, lit}
@@ -49,10 +43,8 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
-import java.util.stream.{Collector, Collectors}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.reflect.internal.util.TableDef.Column
 
 /**
  * Relation, that implements the Hoodie incremental view.
@@ -92,7 +84,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
       .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-      .limit(optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_LIMIT.key, "-1").toInt)
+      .limit(optParams.getOrElse(
+        DataSourceReadOptions.INCREMENTAL_LIMIT.key,
+        DataSourceReadOptions.INCREMENTAL_LIMIT.defaultValue).toInt)
       .build()
       .analyze()
 
@@ -150,8 +144,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
       // create Replaced file group
-      // todo: clean the static string
-      val replacedInstants = commitsToReturn.filter(_.getAction.equals("replacecommit"))
+      val replacedInstants = commitsToReturn.filter(_.getAction.equals(HoodieTimeline.REPLACE_COMMIT_ACTION))
       val replacedFile = replacedInstants.flatMap { instant =>
         val replaceMetadata = HoodieReplaceCommitMetadata.
           fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])

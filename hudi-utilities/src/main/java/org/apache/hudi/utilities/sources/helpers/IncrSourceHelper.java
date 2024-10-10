@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import java.util.function.Function;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -32,8 +31,8 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
-
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
+
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -43,6 +42,8 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
@@ -273,7 +274,7 @@ public class IncrSourceHelper {
   public static QueryContext withUpdatedCheckpoint(
       QueryContext oldContext,
       SnapshotLoadQuerySplitter.CheckpointWithPredicates checkpointWithPredicates) {
-    return new QueryContext(
+    return QueryContext.create(
         oldContext.getStartInstant().get(),
         checkpointWithPredicates.getEndInstant(),
         oldContext.getInstants(),

@@ -130,7 +130,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
     val needsFiltering = commitTimeMetadataFieldIdx >= 0 && !StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)
     if (needsFiltering) {
-      val filterT: Predicate[InternalRow] = getCommitTimeFilter(includeStartTime, commitTimeMetadataFieldIdx)
+      val filterT: Predicate[InternalRow] = getCommitTimeFilter(commitTimeMetadataFieldIdx)
       iter.filter(filterT.test)
     }
     else {
@@ -138,7 +138,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
   }
 
-  private def getCommitTimeFilter(includeStartTime: Boolean, commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
+  private def getCommitTimeFilter(commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
     if (includedTimestamps != null) {
       new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {

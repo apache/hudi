@@ -371,7 +371,7 @@ public class IncrementalQueryAnalyzer {
     private final List<String> instants;
     private final Option<String> predicateFilter;
 
-    public QueryContext(
+    private QueryContext(
         @Nullable String startInstant,
         @Nullable String endInstant,
         List<String> instants,
