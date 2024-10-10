@@ -319,7 +319,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1", true),
         Seq("cde", "row2", false),
         Seq("def", "row3", false),
         Seq("xyz", "row1", false)
@@ -328,7 +327,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
         Seq(1, "row1", "xyz", "p1")
       )
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
+      verifyQueryPredicate(hudiOpts, "not_record_key_col", "abc")
     }
   }
 
@@ -516,8 +515,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |FROM hudi_metadata('$basePath')
            |WHERE type=7
        """.stripMargin)(
-        Seq("abc", "row1", true),
-        Seq("cde", "row2", true),
         Seq("value1_1", "row1", false),
         Seq("value2_2", "row2", false)
       )
@@ -605,7 +602,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1", true),
         Seq("cde", "row2", false),
         Seq("def", "row3", false),
         Seq("xyz", "row1", false)
@@ -614,7 +610,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       checkAnswer(s"select ts, record_key_col, not_record_key_col, partition_key_col from $tableName where record_key_col = 'row1'")(
         Seq(1, "row1", "xyz", "p1")
       )
-      verifyQueryPredicate(hudiOpts, "not_record_key_col")
+      verifyQueryPredicate(hudiOpts, "not_record_key_col","abc")
     }
   }
 
@@ -770,11 +766,11 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
       // however index definition should still be present
       assertTrue(metaClient.getIndexMetadata.isPresent && metaClient.getIndexMetadata.get.getIndexDefinitions.get(secondaryIndexPartition).getIndexType.equals("secondary_index"))
+
       // update the secondary key column
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1", true),
         Seq("xyz", "row1", false)
       )
     }
@@ -784,9 +780,10 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     assertResult(expects.map(row => Row(row: _*)).toArray.sortBy(_.toString()))(spark.sql(query).collect().sortBy(_.toString()))
   }
 
-  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String): Unit = {
+  private def verifyQueryPredicate(hudiOpts: Map[String, String], columnName: String, nonExistantKey: String = "abcdefghi"): Unit = {
     mergedDfList = mergedDfList :+ spark.read.format("hudi").options(hudiOpts).load(basePath).repartition(1).cache()
-    val secondaryKey = mergedDfList.last.limit(1).collect().map(row => row.getAs(columnName).toString)
+    val secondaryKey = mergedDfList.last.limit(2).collect().filter(row => !row.getAs(columnName).toString.equals(nonExistantKey))
+      .map(row => row.getAs(columnName).toString).head
     val dataFilter = EqualTo(attribute(columnName), Literal(secondaryKey(0)))
     verifyFilePruning(hudiOpts, dataFilter)
   }

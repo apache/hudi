@@ -434,6 +434,18 @@ public enum MetadataPartitionType {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Returns the list of metadata partition types enabled and initialized based on the metadata config and table config.
+   */
+  public static List<MetadataPartitionType> getEnabledAndInitializedPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
+    if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
+      return Collections.emptyList();
+    }
+    return Arrays.stream(getValidValues())
+        .filter(partitionType -> partitionType.isMetadataPartitionEnabled(writeConfig) && partitionType.isMetadataPartitionAvailable(metaClient))
+        .collect(Collectors.toList());
+  }
+
   public static MetadataPartitionType fromPartitionPath(String partitionPath) {
     for (MetadataPartitionType partitionType : getValidValues()) {
       if (partitionPath.equals(partitionType.getPartitionPath()) || partitionPath.startsWith(partitionType.getPartitionPath())) {
