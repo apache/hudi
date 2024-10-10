@@ -80,7 +80,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    TableNotFoundException.checkTableValidity(storage, this.dataBasePath, metaPath);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath, null, null);
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
