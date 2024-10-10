@@ -24,8 +24,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
-
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSparkUtils}
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
@@ -171,6 +170,11 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
         fn()
       }
     }, msg)
-    assertTrue(exp.getMessage.contains("FileNotFoundException"))
+    val expected = if (HoodieSparkUtils.gteqSpark4_0)
+      "[FAILED_READ_FILE.FILE_NOT_EXIST]"
+    else
+      "FileNotFoundException"
+    assertTrue(exp.getMessage.contains(expected),
+      "Expected to contain: " + expected + ", but got: " + exp.getMessage)
   }
 }

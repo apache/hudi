@@ -32,10 +32,10 @@ import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
 import org.apache.hudi.util.JavaConversions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
+
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -258,11 +258,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var dataFilter: Expression = GreaterThan(attribute("c5"), literal("70"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
     dataFilter = GreaterThan(attribute("c5"), literal("90"))
     verifyPruningFileCount(commonOpts, dataFilter)
-    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("'2020-03-28'")))
+    dataFilter = And(dataFilter, GreaterThan(attribute("c6"), literal("2020-03-28")))
     verifyPruningFileCount(commonOpts, dataFilter)
   }
 
@@ -272,12 +272,15 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts, includeLogFiles = true)
     val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(dataFilter))
     val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < getLatestDataFilesCount(opts))
+    val latestDataFilesCount = getLatestDataFilesCount(opts)
+    assertTrue(filteredFilesCount < latestDataFilesCount,
+    "actual filteredFilesCount: " + filteredFilesCount + ", actual latestDataFilesCount: " + latestDataFilesCount)
 
     // with no data skipping
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + (DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "false"), includeLogFiles = true)
     val filesCountWithNoSkipping = fileIndex.listFiles(Seq(), Seq(dataFilter)).flatMap(s => s.files).size
-    assertTrue(filteredFilesCount < filesCountWithNoSkipping)
+    assertTrue(filteredFilesCount < filesCountWithNoSkipping,
+      "actual filteredFilesCount: " + filteredFilesCount + ", actual filesCountWithNoSkipping: " + filesCountWithNoSkipping)
   }
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {

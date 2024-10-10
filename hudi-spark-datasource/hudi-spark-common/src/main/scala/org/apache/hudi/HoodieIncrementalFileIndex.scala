@@ -73,7 +73,7 @@ class HoodieIncrementalFileIndex(override val spark: SparkSession,
               foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
             if (c.nonEmpty) {
               sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
-                new HoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
+                sparkAdapter.createHoodiePartitionFileSliceMapping(partitionValues, c), baseFileStatusesAndLogFileOnly)
             } else {
               sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
                 partitionValues, baseFileStatusesAndLogFileOnly)

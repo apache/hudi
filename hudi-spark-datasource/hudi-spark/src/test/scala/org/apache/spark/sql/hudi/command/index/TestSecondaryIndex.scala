@@ -55,7 +55,11 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           checkAnswer(s"show indexes from default.$tableName")()
 
           checkAnswer(s"create index idx_name on $tableName using lucene (name) options(block_size=1024)")()
-          checkAnswer(s"create index idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)")()
+
+          // create index if not exists idx_price on $tableName using lucene (price options(`order`='desc')) options(block_size=512)
+          // would work
+          // original would fail: create index if not exists idx_price on $tableName using lucene (price options(order='desc')) options(block_size=512)
+          checkAnswer(s"create index idx_price on $tableName using lucene (price options(`order`='desc')) options(block_size=512)")()
 
           // Create an index with multiple columns
           checkException(s"create index idx_id_ts on $tableName using lucene (id, ts)")("Lucene index only support single column")
