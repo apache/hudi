@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.flink.test.util.AbstractTestBase;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -33,8 +34,9 @@ import java.util.List;
 import static org.apache.hudi.examples.quickstart.TestQuickstartData.assertRowsEquals;
 
 /**
- * IT cases for Hoodie table source and sink.
+ * Flink quick start test.
  */
+@ExtendWith(FlinkMiniCluster.class)
 public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   private final HoodieFlinkQuickstart flinkQuickstart = HoodieFlinkQuickstart.instance();
 
