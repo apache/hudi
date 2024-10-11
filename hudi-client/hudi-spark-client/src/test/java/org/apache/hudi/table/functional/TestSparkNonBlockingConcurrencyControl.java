@@ -213,7 +213,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     checkWrittenData(result, 1);
   }
 
-  //Prove that multiple writers will only produce base files for bulk insert
+  // Validate that multiple writers will only produce base files for bulk insert
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testMultiBaseFile(boolean bulkInsertFirst) throws Exception {
