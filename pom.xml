@@ -2317,7 +2317,7 @@
         <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}
         </fasterxml.jackson.dataformat.yaml.version>
         <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
-        <log4j2.version>2.20.0</log4j2.version>
+        <log4j2.version>2.24.1</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
         <skipITs>true</skipITs>
       </properties>
@@ -2326,12 +2326,6 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
-        <dependency>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-log4j12</artifactId>
-          <version>${slf4j.version}</version>
-          <scope>test</scope>
-        </dependency>
         <dependency>
           <groupId>${hive.groupid}</groupId>
           <artifactId>hive-storage-api</artifactId>
@@ -2423,12 +2417,6 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
-        <dependency>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-log4j12</artifactId>
-          <version>${slf4j.version}</version>
-          <scope>test</scope>
-        </dependency>
       </dependencies>
       <activation>
         <property>
@@ -2473,12 +2461,6 @@
         <module>hudi-spark-datasource/hudi-spark3-common</module>
       </modules>
       <dependencies>
-        <dependency>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-log4j12</artifactId>
-          <version>${slf4j.version}</version>
-          <scope>test</scope>
-        </dependency>
         <dependency>
           <groupId>${hive.groupid}</groupId>
           <artifactId>hive-storage-api</artifactId>
