@@ -94,27 +94,27 @@ tableSchemaAtTxnValidation = table schema at transaction validation (if availabl
 
 // Case 1: First commit ever
 if tableSchemaAtTxnValidation is null:
-return writerSchemaOfTxn
+  return writerSchemaOfTxn
 
 // Case 2, 3: Second commit, first one committed during read-write phase
 if tableSchemaAtTxnStart is null:
-if writerSchemaOfTxn != tableSchemaAtTxnValidation:
-throw ConcurrentSchemaEvolutionError
-return writerSchemaOfTxn
+  if writerSchemaOfTxn != tableSchemaAtTxnValidation:
+    throw ConcurrentSchemaEvolutionError
+  return writerSchemaOfTxn
 
 // Case 8: Multiple commits, potential concurrent schema evolution
 if tableSchemaAtTxnStart != writerSchemaOfTxn AND
-tableSchemaAtTxnStart != tableSchemaAtTxnValidation AND
-writerSchemaOfTxn != tableSchemaAtTxnValidation:
-throw ConcurrentSchemaEvolutionError
+    tableSchemaAtTxnStart != tableSchemaAtTxnValidation AND
+    writerSchemaOfTxn != tableSchemaAtTxnValidation:
+  throw ConcurrentSchemaEvolutionError
 
 // Compatible case 4,5
 if transaction start instant == transaction validation instant:
-return writerSchemaOfTxn
+  return writerSchemaOfTxn
 
 // Compatible case 7
 if tableSchemaAtTxnStart == tableSchemaAtTxnValidation:
-return writerSchemaOfTxn
+  return writerSchemaOfTxn
 
 // Compatible case 6
 return tableSchemaAtTxnValidation
