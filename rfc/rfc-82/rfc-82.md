@@ -96,28 +96,30 @@ tableSchemaAtTxnValidation = table schema at transaction validation (if availabl
 if tableSchemaAtTxnValidation is null:
   return writerSchemaOfTxn
 
-// Case 2, 3: Second commit, first one committed during read-write phase
+// Case 2, 3: Second commit, one commit is done concurrently after this commit has started
 if tableSchemaAtTxnStart is null:
   if writerSchemaOfTxn != tableSchemaAtTxnValidation:
     throw ConcurrentSchemaEvolutionError
   return writerSchemaOfTxn
 
-// Case 8: Multiple commits, potential concurrent schema evolution
-if tableSchemaAtTxnStart != writerSchemaOfTxn AND
-    tableSchemaAtTxnStart != tableSchemaAtTxnValidation AND
-    writerSchemaOfTxn != tableSchemaAtTxnValidation:
-  throw ConcurrentSchemaEvolutionError
-
+// Table schema does not change at the pre-commit validation compared to the table schema at the start of the transaction
 // Compatible case 4,5
-if transaction start instant == transaction validation instant:
-  return writerSchemaOfTxn
-
-// Compatible case 7
 if tableSchemaAtTxnStart == tableSchemaAtTxnValidation:
   return writerSchemaOfTxn
 
+// Table schema has changed from the start of the transaction till the pre-commit validation
+
+// Compatible case 7
+if writerSchemaOfTxn == tableSchemaAtTxnValidation:
+  return writerSchemaOfTxn
+
+// Writer schema is different from the table schema at the pre-commit validation
 // Compatible case 6
-return tableSchemaAtTxnValidation
+if writerSchemaOfTxn == tableSchemaAtTxnStart:
+  return tableSchemaAtTxnValidation
+
+// Case 8: Multiple commits, potential concurrent schema evolution
+throw ConcurrentSchemaEvolutionError
 ```
 
 ## Rollout/Adoption Plan
