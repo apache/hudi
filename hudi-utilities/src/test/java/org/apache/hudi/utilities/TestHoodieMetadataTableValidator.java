@@ -22,7 +22,9 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -44,6 +47,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
 import jodd.io.FileUtil;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -75,13 +79,7 @@ import static org.mockito.Mockito.when;
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
 
   private static Stream<Arguments> lastNFileSlicesTestArgs() {
-    return Stream.of(
-        Arguments.of(-1),
-        Arguments.of(1),
-        Arguments.of(3),
-        Arguments.of(4),
-        Arguments.of(5)
-    );
+    return Stream.of(-1, 1, 3, 4, 5).flatMap(i -> Stream.of(Arguments.of(i, true), Arguments.of(i, false)));
   }
 
   @Test
@@ -113,7 +111,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     // validate MDT
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
-    config.basePath = basePath;
+    config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
@@ -124,7 +122,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testAdditionalPartitionsinMDT(boolean testFailureCase) {
+  public void testAdditionalPartitionsinMDT(boolean testFailureCase) throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put("hoodie.table.name", "test_table");
@@ -140,6 +138,10 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
         .mode(SaveMode.Overwrite)
         .save(basePath);
 
+    String partition1 = "PARTITION1";
+    String partition2 = "PARTITION2";
+    String partition3 = "PARTITION3";
+
     HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
     config.basePath = basePath;
     config.validateLatestFileSlices = true;
@@ -147,10 +149,11 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     MockHoodieMetadataTableValidator validator = new MockHoodieMetadataTableValidator(jsc, config);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-
-    String partition1 = "PARTITION1";
-    String partition2 = "PARTITION2";
-    String partition3 = "PARTITION3";
+    HoodieWrapperFileSystem fs = mock(HoodieWrapperFileSystem.class);
+    when(metaClient.getFs()).thenReturn(fs);
+    when(fs.exists(new Path(basePath + "/" + partition1))).thenReturn(true);
+    when(fs.exists(new Path(basePath + "/" + partition2))).thenReturn(true);
+    when(fs.exists(new Path(basePath + "/" + partition3))).thenReturn(true);
 
     // mock list of partitions to return from MDT to have 1 additional partition compared to FS based listing.
     List<String> mdtPartitions = Arrays.asList(partition1, partition2, partition3);
@@ -189,7 +192,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   @ParameterizedTest
   @MethodSource("lastNFileSlicesTestArgs")
-  public void testAdditionalFilesinMetadata(Integer lastNFileSlices) throws IOException {
+  public void testAdditionalFilesinMetadata(Integer lastNFileSlices, boolean ignoreFailed) throws IOException {
     Map<String, String> writeOptions = new HashMap<>();
     writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
     writeOptions.put("hoodie.table.name", "test_table");
@@ -213,7 +216,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
     config.validateAllFileGroups = true;
-    config.ignoreFailed = true;
+    config.ignoreFailed = ignoreFailed;
     HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getHadoopConf().get()).build();
@@ -221,8 +224,48 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     validator.run();
     assertFalse(validator.hasValidationFailure());
 
-    // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges.
+    java.nio.file.Path tempFolderNioPath = tempDir.resolve("temp_folder");
+    java.nio.file.Files.createDirectories(tempFolderNioPath);
+    String tempFolder = tempFolderNioPath.toAbsolutePath().toString();
+    Path tempFolderPath = new Path(tempFolder);
+
+    // lets move one of the log files from latest file slice to the temp dir. so validation w/ latest file slice should fail.
     HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+        new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getSerializableHadoopConf(), metaClient.getBasePathV2().toString(), false),
+        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    FileSlice latestFileSlice = fsView.getLatestFileSlices(StringUtils.EMPTY_STRING).filter(fileSlice -> {
+      return fileSlice.getLogFiles().count() > 0;
+    }).collect(Collectors.toList()).get(0);
+    HoodieLogFile latestLogFile = latestFileSlice.getLogFiles().collect(Collectors.toList()).get(0);
+    metaClient.getFs().moveFromLocalFile(latestLogFile.getPath(), tempFolderPath);
+
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = ignoreFailed;
+
+    HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, config);
+    if (ignoreFailed) {
+      localValidator.run();
+      assertTrue(localValidator.hasValidationFailure());
+      assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+    } else {
+      assertThrows(HoodieValidationException.class, localValidator::run);
+    }
+
+    // lets move back the log file and validate validation suceeds.
+    metaClient.getFs().moveFromLocalFile(new Path(tempFolderPath + "/" + latestLogFile.getFileName()), new Path(basePath));
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = ignoreFailed;
+
+    localValidator = new HoodieMetadataTableValidator(jsc, config);
+    localValidator.run();
+    // no exception should be thrown
+
+    // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges when all file slices are validated.
+    fsView = new HoodieTableFileSystemView(
         new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getSerializableHadoopConf(), metaClient.getBasePathV2().toString(), false),
         metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
@@ -231,13 +274,22 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     HoodieLogFile earliestLogFile = earliestFileSlice.getLogFiles().collect(Collectors.toList()).get(0);
     metaClient.getFs().delete(earliestLogFile.getPath());
 
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    config.ignoreFailed = ignoreFailed;
     HoodieMetadataTableValidator.Config finalConfig = config;
-    HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, finalConfig);
-    localValidator.run();
-    assertTrue(localValidator.hasValidationFailure());
-    assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+    localValidator = new HoodieMetadataTableValidator(jsc, finalConfig);
+    if (ignoreFailed) {
+      localValidator.run();
+      assertTrue(localValidator.hasValidationFailure());
+      assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+    } else {
+      assertThrows(HoodieValidationException.class, localValidator::run);
+    }
 
-    // lets set lastN file slices to 2 and so validation should succeed. (bcoz, there will be mis-match only on first file slice)
+    // lets set lastN file slices to argument value and so validation should succeed. (bcoz, there will be mis-match only on first file slice)
     config = new HoodieMetadataTableValidator.Config();
     config.basePath = "file:" + basePath;
     config.validateLatestFileSlices = true;
@@ -245,14 +297,128 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     if (lastNFileSlices != -1) {
       config.validateLastNFileSlices = lastNFileSlices;
     }
-    config.ignoreFailed = true;
+    config.ignoreFailed = ignoreFailed;
     validator = new HoodieMetadataTableValidator(jsc, config);
-    validator.run();
     if (lastNFileSlices != -1 && lastNFileSlices < 4) {
+      validator.run();
       assertFalse(validator.hasValidationFailure());
     } else {
-      assertTrue(validator.hasValidationFailure());
-      assertTrue(validator.getThrowables().get(0) instanceof HoodieValidationException);
+      if (ignoreFailed) {
+        validator.run();
+        assertTrue(validator.hasValidationFailure());
+        assertTrue(validator.getThrowables().get(0) instanceof HoodieValidationException);
+      } else {
+        assertThrows(HoodieValidationException.class, validator::run);
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testAdditionalPartitionsinMdtEndToEnd(boolean ignoreFailed) throws IOException {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "MERGE_ON_READ");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(),"partition_path");
+    writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2");
+
+    Dataset<Row> inserts = makeInsertDf("000", 100).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    for (int i = 0; i < 6; i++) {
+      inserts.write().format("hudi").options(writeOptions)
+          .mode(SaveMode.Append)
+          .save(basePath);
+    }
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.validateAllFileGroups = true;
+    config.ignoreFailed = ignoreFailed;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getHadoopConf().get()).build();
+
+    validator.run();
+    assertFalse(validator.hasValidationFailure());
+
+    // let's delete one of the partitions, so validation fails
+    metaClient.getFs().delete(new Path(basePath + "/" + HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH));
+
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = ignoreFailed;
+
+    HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, config);
+    if (ignoreFailed) {
+      localValidator.run();
+      assertTrue(localValidator.hasValidationFailure());
+      assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+    } else {
+      assertThrows(HoodieValidationException.class, localValidator::run);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRecordIndexMismatch(boolean ignoreFailed) throws IOException {
+    Map<String, String> writeOptions = new HashMap<>();
+    writeOptions.put(DataSourceWriteOptions.TABLE_NAME().key(), "test_table");
+    writeOptions.put("hoodie.table.name", "test_table");
+    writeOptions.put(DataSourceWriteOptions.TABLE_TYPE().key(), "COPY_ON_WRITE");
+    writeOptions.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    writeOptions.put(DataSourceWriteOptions.PRECOMBINE_FIELD().key(), "timestamp");
+    writeOptions.put(DataSourceWriteOptions.OPERATION().key(),"bulk_insert");
+    writeOptions.put(HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key(), "true");
+
+    Dataset<Row> inserts = makeInsertDf("000", 50).cache();
+    inserts.write().format("hudi").options(writeOptions)
+        .mode(SaveMode.Overwrite)
+        .save(basePath);
+
+    for (int i = 0; i < 6; i++) {
+      makeInsertDf("000", (i + 1) * 100).write().format("hudi").options(writeOptions)
+          .mode(SaveMode.Append)
+          .save(basePath);
+    }
+
+    HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = ignoreFailed;
+    HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, config);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(engineContext.getHadoopConf().get()).build();
+
+    validator.run();
+    assertFalse(validator.hasValidationFailure());
+
+    // lets override one of the latest base file w/ another. so that file slice validation succeeds, but record index comparison fails.
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
+        new FileSystemBackedTableMetadata(engineContext, metaClient.getTableConfig(), metaClient.getSerializableHadoopConf(), metaClient.getBasePathV2().toString(), false),
+        metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    List<HoodieBaseFile> allBaseFiles = fsView.getLatestBaseFiles(StringUtils.EMPTY_STRING).collect(Collectors.toList());
+    metaClient.getFs().copyFromLocalFile(allBaseFiles.get(0).getHadoopPath(), allBaseFiles.get(1).getHadoopPath());
+
+    config = new HoodieMetadataTableValidator.Config();
+    config.basePath = "file:" + basePath;
+    config.validateLatestFileSlices = true;
+    config.ignoreFailed = ignoreFailed;
+
+    HoodieMetadataTableValidator localValidator = new HoodieMetadataTableValidator(jsc, config);
+    if (ignoreFailed) {
+      localValidator.run();
+      assertTrue(localValidator.hasValidationFailure());
+      assertTrue(localValidator.getThrowables().get(0) instanceof HoodieValidationException);
+    } else {
+      assertThrows(HoodieValidationException.class, localValidator::run);
     }
   }
 
