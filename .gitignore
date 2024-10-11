@@ -1,10 +1,10 @@
 # Directories #
 /build/
 target/
+metastore_db/
 .metals/
 .mvn/
 .vscode/
-metastore_db/
 
 # OS Files #
 .DS_Store
