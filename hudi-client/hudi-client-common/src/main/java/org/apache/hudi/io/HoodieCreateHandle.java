@@ -60,8 +60,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected long insertRecordsWritten = 0;
   protected long recordsDeleted = 0;
   private Map<String, HoodieRecord<T>> recordMap;
-  protected boolean useWriterSchema = false;
-  protected final boolean preserveMetadata;
+  private boolean useWriterSchema = false;
+  private final boolean preserveMetadata;
   protected int progressLogIntervalNum;
   protected boolean isCompaction = false;
 
@@ -117,8 +117,8 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
    * Called by the compactor code path.
    */
   public HoodieCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
-                            TaskContextSupplier taskContextSupplier) {
+      String partitionPath, String fileId, Map<String, HoodieRecord<T>> recordMap,
+      TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, hoodieTable, partitionPath, fileId, taskContextSupplier, true);
     this.isCompaction = true;
     this.progressLogIntervalNum = config.getCompactionProgressLogIntervalNum();
@@ -201,7 +201,7 @@ public class HoodieCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected void writeRecord(HoodieRecord<T> record) {
     write(record, useWriterSchema ? writeSchemaWithMetaFields : writeSchema, config.getProps());
   }
-
+  
   @Override
   public IOType getIOType() {
     return IOType.CREATE;

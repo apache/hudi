@@ -215,8 +215,7 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
       records.put((K) key, SpillableMapUtils.generateEmptyPayload(key,
           deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
     } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(
-          new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
       records.put((K) key, record);
     }
   }
