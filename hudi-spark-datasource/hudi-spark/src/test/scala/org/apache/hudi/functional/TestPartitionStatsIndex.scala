@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.PARTITIONPATH_FIELD
+import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -39,9 +39,10 @@ import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 
 import java.util.concurrent.Executors
+import java.util.stream.Stream
 import scala.collection.JavaConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -156,8 +157,8 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
    * Test case to do a write with updates and then validate partition stats with multi-writer.
    */
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionStatsWithMultiWriter(tableType: HoodieTableType): Unit = {
+  @MethodSource(Array("supplyTestArguments"))
+  def testPartitionStatsWithMultiWriter(tableType: HoodieTableType, useUpsert: Boolean): Unit = {
     val hudiOpts = commonOpts ++ Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
       HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
@@ -177,7 +178,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       override def apply(): Boolean = {
         try {
           doWriteAndValidateDataAndPartitionStats(hudiOpts,
-            operation = DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL,
+            operation = if (useUpsert) UPSERT_OPERATION_OPT_VAL else BULK_INSERT_OPERATION_OPT_VAL,
             saveMode = SaveMode.Append,
             validate = false)
           true
@@ -199,67 +200,13 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     assertTrue(f1.value.get.get || f2.value.get.get)
     executor.shutdownNow()
 
-    // 1. Wait until there are three deltacommits.
-    pollForTimeline(basePath, storageConf, 3)
-    // 2. Validate if there are commits overlapped with last commit.
-    assertTrue(checkIfCommitsAreConcurrent())
-    // 3. Validate data and index.
-    validateDataAndPartitionStats()
-  }
-
-  /**
-   * Test case to produce two concurrent ingestion with conflicts.
-   * Then check if the partition stats is correct.
-   */
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testPartitionStatsWithWriteConflits(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts ++ Map(
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
-      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
-      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
-      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
-      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
-    )
-
-    doWriteAndValidateDataAndPartitionStats(hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite,
-      validate = false)
-
-    val executor = Executors.newFixedThreadPool(2)
-    implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
-    val function = new Function0[Boolean] {
-      override def apply(): Boolean = {
-        try {
-          doWriteAndValidateDataAndPartitionStats(hudiOpts,
-            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-            saveMode = SaveMode.Append,
-            validate = false)
-          true
-        } catch {
-          case _: HoodieWriteConflictException => false
-          case e => throw new Exception("Multi write failed", e)
-        }
-      }
+    if (useUpsert) {
+      pollForTimeline(basePath, storageConf, 2)
+      assertTrue(hasPendingCommits)
+    } else {
+      pollForTimeline(basePath, storageConf, 3)
+      assertTrue(checkIfCommitsAreConcurrent())
     }
-    val f1 = Future[Boolean] {
-      function.apply()
-    }
-    val f2 = Future[Boolean] {
-      function.apply()
-    }
-
-    Await.result(f1, Duration("5 minutes"))
-    Await.result(f2, Duration("5 minutes"))
-    assertTrue(f1.value.get.get || f2.value.get.get)
-    executor.shutdownNow()
-
-    // 1. Wait until there are two delta commits.
-    pollForTimeline(basePath, storageConf, 2)
-    // 2. Validate if there are commits overlapped with last commit.
-    assertTrue(hasPendingCommits)
-    // 3. Validate data and index.
     validateDataAndPartitionStats()
   }
 
@@ -459,5 +406,15 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
     new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  }
+}
+
+object TestPartitionStatsIndex {
+  def supplyTestArguments(): Stream[Arguments] = {
+    List(
+      Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.TRUE),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, java.lang.Boolean.FALSE),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.TRUE),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, java.lang.Boolean.FALSE)).asJava.stream()
   }
 }
