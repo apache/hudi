@@ -27,7 +27,6 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -51,6 +50,7 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
@@ -242,7 +242,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         } else {
           assertEquals(fileID, status.getFileId());
         }
-        assertFalse(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+        assertFalse(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
       }
       client0.close();
     }
@@ -257,7 +257,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
       } else {
         assertEquals(fileID, status.getFileId());
       }
-      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+      assertTrue(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
     }
 
     SparkRDDWriteClient client2 = getHoodieWriteClient(config);
@@ -266,7 +266,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.UPSERT, true);
     for (WriteStatus status : writeStatuses2) {
       assertEquals(fileID, status.getFileId());
-      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+      assertTrue(FSUtils.isLogFile(new StoragePath(status.getStat().getPath()).getName()));
     }
 
     // step to commit the 1st txn
