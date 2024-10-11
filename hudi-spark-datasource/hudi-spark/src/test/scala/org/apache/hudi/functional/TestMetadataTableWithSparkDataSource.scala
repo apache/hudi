@@ -22,7 +22,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata
+import org.apache.hudi.common.model.{ActionType, HoodieColumnRangeMetadata}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFileSystemView}
@@ -37,11 +37,10 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.JavaScalaConverters.convertJavaListToScalaSeq
-
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions.{col, explode}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
@@ -49,7 +48,6 @@ import org.junit.jupiter.params.provider.CsvSource
 import java.util
 import java.util.Collections
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -239,10 +237,13 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     val metadataOpts: Map[String, String] = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      // Enable partition stats explicitly, though its default value is true.
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "true",
       DataSourceWriteOptions.TABLE_TYPE.key -> "MERGE_ON_READ",
-      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5"
+      HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "5",
+      HoodieWriteConfig.TABLE_SERVICES_ENABLED.key() -> "false"
     )
-    val combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
+    var combinedOpts: Map[String, String] = partitionedCommonOpts ++ metadataOpts
 
     // Insert T0
     val newRecords = dataGen.generateInserts("000", 100)
@@ -259,7 +260,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
       .setBasePath(s"$basePath/.hoodie/metadata")
       .build
     val timelineT0 = metaClient.getActiveTimeline
-    assertEquals(3, timelineT0.countInstants())
+    assertEquals(4, timelineT0.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT0.lastInstant().get().getAction)
     val t0 = timelineT0.lastInstant().get().getTimestamp
 
@@ -285,7 +286,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T1
     val timelineT1 = metaClient.reloadActiveTimeline()
-    assertEquals(4, timelineT1.countInstants())
+    assertEquals(5, timelineT1.countInstants())
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT1.lastInstant().get().getAction)
     val t1 =  timelineT1.lastInstant().get().getTimestamp
 
@@ -312,8 +313,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T2
     val timelineT2 = metaClient.reloadActiveTimeline()
-    assertEquals(5, timelineT2.countInstants())
-    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.lastInstant().get().getAction)
+    assertEquals(6, timelineT2.getDeltaCommitTimeline.countInstants())
+    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT2.getDeltaCommitTimeline.lastInstant().get().getAction)
     val t2 =  timelineT2.lastInstant().get().getTimestamp
 
     val filesT2 = getFiles(basePath)
@@ -335,6 +336,8 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     //Update T3
     val updatedRecords3 = dataGen.generateUpdates("003", updatedRecords2)
     val updatedRecords3DF = parseRecords(recordsToStrings(updatedRecords3).asScala.toSeq)
+    // Trigger compaction to demonstrate that table services on MDT work well.
+    combinedOpts += (HoodieWriteConfig.TABLE_SERVICES_ENABLED.key() -> "true")
     updatedRecords3DF.write.format(hudi)
       .options(combinedOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
@@ -343,9 +346,9 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
 
     //Validate T3
     val timelineT3 = metaClient.reloadActiveTimeline()
-    assertEquals(7, timelineT3.countInstants())
-    assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timelineT3.getInstants.get(5).getAction)
-    assertEquals(HoodieTimeline.COMMIT_ACTION, timelineT3.lastInstant().get().getAction)
+    assertEquals(7, timelineT3.getDeltaCommitTimeline.countInstants())
+    val actionSet = Set(ActionType.commit.name()).asJava
+    assertTrue(timelineT3.getTimelineOfActions(actionSet).countInstants() > 0)
 
     val filesT3 = getFiles(basePath)
     assertEquals(12, filesT3.size)
