@@ -21,6 +21,8 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -30,16 +32,27 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
  */
 public class HoodieCommonTestHarness {
-
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieCommonTestHarness.class);
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
+  protected static ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;
 
   protected String tableName;
   protected String basePath;
@@ -158,5 +171,75 @@ public class HoodieCommonTestHarness {
    */
   protected HoodieTableType getTableType() {
     return HoodieTableType.COPY_ON_WRITE;
+  }
+
+  public void pollTimelineForAction(String tablePath, StorageConfiguration<?> conf, int numCommits, String action) throws InterruptedException {
+    pollForTimeline(tablePath, conf, numCommits, instant -> instant.getAction().equals(action), true);
+  }
+
+  public void pollForTimeline(String tablePath, StorageConfiguration<?> conf, int commits) throws InterruptedException {
+    pollForTimeline(tablePath, conf, commits, instant -> true, false);
+  }
+
+  private void pollForTimeline(String tablePath, StorageConfiguration<?> conf, int commits, Predicate<HoodieInstant> filter, boolean pullAllCommits)
+      throws InterruptedException {
+    Semaphore semaphore = new Semaphore(1);
+    semaphore.acquire();
+    ScheduledFuture<?> scheduledFuture = getScheduledExecutorService().scheduleWithFixedDelay(() -> {
+      try {
+        HoodieTableMetaClient metaClient =
+            HoodieTableMetaClient.builder().setConf(conf).setBasePath(tablePath).build();
+        HoodieTimeline timeline = pullAllCommits
+            ? metaClient.getActiveTimeline().getAllCommitsTimeline()
+            : metaClient.getActiveTimeline().getCommitsTimeline();
+        List<HoodieInstant> instants = timeline
+            .filterCompletedInstants()
+            .getInstants()
+            .stream()
+            .filter(filter::test)
+            .collect(Collectors.toList());
+        if (instants.size() >= commits) {
+          semaphore.release();
+        }
+      } catch (Exception e) {
+        LOG.warn("Error in polling for timeline", e);
+      }
+    }, 0, 1, TimeUnit.SECONDS);
+    int maxWaitInMinutes = 10;
+    boolean timelineFound = semaphore.tryAcquire(maxWaitInMinutes, TimeUnit.MINUTES);
+    scheduledFuture.cancel(true);
+    if (!timelineFound) {
+      throw new RuntimeException(String.format(
+          "Failed to create timeline in %d minutes", maxWaitInMinutes));
+    }
+  }
+
+  protected ScheduledThreadPoolExecutor getScheduledExecutorService() {
+    if (scheduledThreadPoolExecutor == null || scheduledThreadPoolExecutor.isShutdown()) {
+      scheduledThreadPoolExecutor = new ScheduledThreadPoolExecutor(2);
+      scheduledThreadPoolExecutor.setRemoveOnCancelPolicy(true);
+    }
+    return scheduledThreadPoolExecutor;
+  }
+
+  protected HoodieActiveTimeline getActiveTimeline() {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return metaClient.getActiveTimeline();
+  }
+
+  protected Boolean hasPendingCommits() {
+    HoodieActiveTimeline timeline = getActiveTimeline();
+    HoodieTimeline completedTimeline = timeline.filterCompletedInstants();
+    Set<String> completedInstants = completedTimeline
+        .getInstants()
+        .stream()
+        .map(HoodieInstant::getTimestamp).collect(Collectors.toSet());
+    List<String> pendingInstants = timeline
+        .getInstants()
+        .stream()
+        .map(HoodieInstant::getTimestamp)
+        .filter(t -> !completedInstants.contains(t))
+        .collect(Collectors.toList());
+    return !pendingInstants.isEmpty();
   }
 }

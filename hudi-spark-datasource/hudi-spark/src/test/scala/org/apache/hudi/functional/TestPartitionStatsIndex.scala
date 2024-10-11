@@ -196,9 +196,70 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
     Await.result(f1, Duration("5 minutes"))
     Await.result(f2, Duration("5 minutes"))
-
     assertTrue(f1.value.get.get || f2.value.get.get)
     executor.shutdownNow()
+
+    // 1. Wait until there are three deltacommits.
+    pollForTimeline(basePath, storageConf, 3)
+    // 2. Validate if there are commits overlapped with last commit.
+    assertTrue(checkIfCommitsAreConcurrent())
+    // 3. Validate data and index.
+    validateDataAndPartitionStats()
+  }
+
+  /**
+   * Test case to produce two concurrent ingestion with conflicts.
+   * Then check if the partition stats is correct.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testPartitionStatsWithWriteConflits(tableType: HoodieTableType): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key() -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+      HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key() -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+      HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key() -> classOf[InProcessLockProvider].getName,
+      HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key() -> classOf[SimpleConcurrentFileWritesConflictResolutionStrategy].getName
+    )
+
+    doWriteAndValidateDataAndPartitionStats(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+
+    val executor = Executors.newFixedThreadPool(2)
+    implicit val executorContext: ExecutionContext = ExecutionContext.fromExecutor(executor)
+    val function = new Function0[Boolean] {
+      override def apply(): Boolean = {
+        try {
+          doWriteAndValidateDataAndPartitionStats(hudiOpts,
+            operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+            saveMode = SaveMode.Append,
+            validate = false)
+          true
+        } catch {
+          case _: HoodieWriteConflictException => false
+          case e => throw new Exception("Multi write failed", e)
+        }
+      }
+    }
+    val f1 = Future[Boolean] {
+      function.apply()
+    }
+    val f2 = Future[Boolean] {
+      function.apply()
+    }
+
+    Await.result(f1, Duration("5 minutes"))
+    Await.result(f2, Duration("5 minutes"))
+    assertTrue(f1.value.get.get || f2.value.get.get)
+    executor.shutdownNow()
+
+    // 1. Wait until there are two delta commits.
+    pollForTimeline(basePath, storageConf, 2)
+    // 2. Validate if there are commits overlapped with last commit.
+    assertTrue(hasPendingCommits)
+    // 3. Validate data and index.
     validateDataAndPartitionStats()
   }
 

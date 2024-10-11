@@ -133,7 +133,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
   protected SparkSession sparkSession;
   protected SQLContext sqlContext;
   protected ExecutorService executorService;
-  protected HoodieTableMetaClient metaClient;
   protected SparkRDDWriteClient writeClient;
   protected SparkRDDReadClient readClient;
   protected HoodieTableFileSystemView tableView;

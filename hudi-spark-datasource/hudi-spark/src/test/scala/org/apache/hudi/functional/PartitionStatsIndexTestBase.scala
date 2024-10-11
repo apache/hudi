@@ -30,11 +30,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.functional.PartitionStatsIndexTestBase.{checkIfOverlapped}
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JavaConversions
-
 import org.apache.spark.sql.functions.{col, not}
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -42,7 +42,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Collectors
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.matching.Regex
@@ -275,5 +274,26 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
       case None =>
         false
     }
+  }
+
+  // Check if the last instant has overlapped with other instants.
+  def checkIfCommitsAreConcurrent(): Boolean = {
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val timeline = metaClient.getActiveTimeline.filterCompletedInstants()
+    val instants = timeline.getInstants.asScala
+    val lastInstant = instants.last
+    val instantsWithoutLastOne = instants.dropRight(1).toList
+    findConcurrentInstants(lastInstant, instantsWithoutLastOne).nonEmpty
+  }
+
+  def findConcurrentInstants(givenInstant: HoodieInstant, instants: List[HoodieInstant]): List[HoodieInstant] = {
+    instants.filter(i => checkIfOverlapped(i, givenInstant))
+  }
+}
+
+object PartitionStatsIndexTestBase {
+  // Check if two completed instants are overlapped in time.
+  def checkIfOverlapped(a: HoodieInstant, b: HoodieInstant): Boolean = {
+    !(a.getCompletionTime.compareTo(b.getTimestamp) < 0 || a.getTimestamp.compareTo(b.getCompletionTime) > 0)
   }
 }
