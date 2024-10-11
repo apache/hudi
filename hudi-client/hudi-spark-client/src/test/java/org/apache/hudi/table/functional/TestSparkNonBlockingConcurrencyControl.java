@@ -219,7 +219,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
   public void testMultiBaseFile(boolean bulkInsertFirst) throws Exception {
     HoodieWriteConfig config = createHoodieWriteConfig(true);
     metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
-    //there should only be a single filegroup, so we will verify that it is consistent
+    // there should only be a single filegroup, so we will verify that it is consistent
     String fileID = null;
 
     // if there is not a bulk insert first, then we will write to log files for a filegroup
