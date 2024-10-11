@@ -97,7 +97,7 @@ public class FileSlice implements Serializable {
   }
 
   public FileSlice withLogFiles(boolean includeLogFiles) {
-    if (includeLogFiles) {
+    if (includeLogFiles || !hasLogFiles()) {
       return this;
     } else {
       return new FileSlice(this, false);
