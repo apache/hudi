@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -580,6 +581,8 @@ public class ConfigUtils {
     if (found) {
       throw new IllegalArgumentException(
           "hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+    } else if (!storage.exists(metaPath)) {
+      throw new TableNotFoundException(metaPath.toString());
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }

@@ -33,7 +33,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
@@ -80,7 +79,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
-    TableNotFoundException.checkTableValidity(storage, this.dataBasePath, metaPath);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath, null, null);
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
