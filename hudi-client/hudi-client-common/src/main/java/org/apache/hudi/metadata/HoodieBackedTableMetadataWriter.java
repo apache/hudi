@@ -1053,7 +1053,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * Update functional index from {@link HoodieCommitMetadata}.
    */
   private void updateFunctionalIndexIfPresent(HoodieCommitMetadata commitMetadata, String instantTime, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
-    if (!dataWriteConfig.getMetadataConfig().isFunctionalIndexEnabled()) {
+    if (!MetadataPartitionType.FUNCTIONAL_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
       return;
     }
     dataMetaClient.getTableConfig().getMetadataPartitions()
