@@ -237,13 +237,11 @@ case class HoodieFileIndex(spark: SparkSession,
       prunePartitionsAndGetFileSlices(dataFilters, partitionFilters)
     hasPushedDownPartitionPredicates = true
 
-    val prunedPartitionsAndFileSlicesWithLogs = prunedPartitionsAndFileSlices.map(s => (s._1, s._2.map(f => f.withLogFiles(includeLogFiles))))
-
     // If there are no data filters, return all the file slices.
     // If isPartitionPurge is true, this fun is trigger by HoodiePruneFileSourcePartitions, don't look up candidate files
     // If there are no file slices, return empty list.
-    if (prunedPartitionsAndFileSlicesWithLogs.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
-      prunedPartitionsAndFileSlicesWithLogs
+    if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
+      prunedPartitionsAndFileSlices
     } else {
       // Look up candidate files names in the col-stats or record level index, if all of the following conditions are true
       //    - Data-skipping is enabled
@@ -251,7 +249,7 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
       val candidateFilesNamesOpt: Option[Set[String]] =
-        lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlicesWithLogs, isPruned) match {
+        lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, isPruned) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -267,7 +265,7 @@ case class HoodieFileIndex(spark: SparkSession,
       var totalFileSliceSize = 0
       var candidateFileSliceSize = 0
 
-      val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlicesWithLogs.map {
+      val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlices.map {
         case (partitionOpt, fileSlices) =>
           // Filter in candidate files based on the col-stats or record level index lookup
           val candidateFileSlices: Seq[FileSlice] = {
@@ -346,7 +344,8 @@ case class HoodieFileIndex(spark: SparkSession,
       }
 
     (prunedPartitionsTuple._1, getInputFileSlices(prunedPartitionsTuple._2: _*).asScala.map(
-      { case (partition, fileSlices) => (Option.apply(partition), fileSlices.asScala.toSeq) }).toSeq)
+      { case (partition, fileSlices) =>
+        (Option.apply(partition), fileSlices.asScala.map(f => f.withLogFiles(includeLogFiles)).toSeq) }).toSeq)
   }
 
   /**
