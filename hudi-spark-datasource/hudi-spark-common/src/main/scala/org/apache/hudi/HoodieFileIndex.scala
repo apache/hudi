@@ -175,7 +175,7 @@ case class HoodieFileIndex(spark: SparkSession,
           val baseFileStatusesAndLogFileOnly: Seq[FileStatus] = fileSlices.map(slice => {
             if (slice.getBaseFile.isPresent) {
               slice.getBaseFile.get().getPathInfo
-            } else if (includeLogFiles && slice.getLogFiles.findAny().isPresent) {
+            } else if (slice.hasLogFiles) {
               slice.getLogFiles.findAny().get().getPathInfo
             } else {
               null
@@ -183,9 +183,7 @@ case class HoodieFileIndex(spark: SparkSession,
           }).filter(slice => slice != null)
             .map(fileInfo => new FileStatus(fileInfo.getLength, fileInfo.isDirectory, 0, fileInfo.getBlockSize,
               fileInfo.getModificationTime, new Path(fileInfo.getPath.toUri)))
-          val c = fileSlices.filter(f => (includeLogFiles && f.getLogFiles.findAny().isPresent)
-            || (f.getBaseFile.isPresent && f.getBaseFile.get().getBootstrapBaseFile.isPresent)).
-            foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
+          val c = fileSlices.filter(f => f.hasLogFiles || f.hasBootstrapBase).foldLeft(Map[String, FileSlice]()) { (m, f) => m + (f.getFileId -> f) }
           val convertedPartitionValues = convertTimestampPartitionValues(partitionOpt.get.values, timestampPartitionIndexes, shouldUseStringTypeForTimestampPartitionKeyType)
           if (c.nonEmpty) {
             sparkAdapter.getSparkPartitionedFileUtils.newPartitionDirectory(
@@ -198,11 +196,7 @@ case class HoodieFileIndex(spark: SparkSession,
         } else {
           val allCandidateFiles: Seq[FileStatus] = fileSlices.flatMap(fs => {
             val baseFileStatusOpt = getBaseFileInfo(Option.apply(fs.getBaseFile.orElse(null)))
-            val logPathInfoStream = if (includeLogFiles) {
-              fs.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
-            } else {
-              java.util.stream.Stream.empty()
-            }
+            val logPathInfoStream = fs.getLogFiles.map[StoragePathInfo](JFunction.toJavaFunction[HoodieLogFile, StoragePathInfo](lf => lf.getPathInfo))
             val files = logPathInfoStream.collect(Collectors.toList[StoragePathInfo]).asScala
             baseFileStatusOpt.foreach(f => files.append(f))
             files
@@ -243,11 +237,13 @@ case class HoodieFileIndex(spark: SparkSession,
       prunePartitionsAndGetFileSlices(dataFilters, partitionFilters)
     hasPushedDownPartitionPredicates = true
 
+    val prunedPartitionsAndFileSlicesWithLogs = prunedPartitionsAndFileSlices.map(s => (s._1, s._2.map(f => f.withLogFiles(includeLogFiles))))
+
     // If there are no data filters, return all the file slices.
     // If isPartitionPurge is true, this fun is trigger by HoodiePruneFileSourcePartitions, don't look up candidate files
     // If there are no file slices, return empty list.
-    if (prunedPartitionsAndFileSlices.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
-      prunedPartitionsAndFileSlices
+    if (prunedPartitionsAndFileSlicesWithLogs.isEmpty || dataFilters.isEmpty || isPartitionPruned ) {
+      prunedPartitionsAndFileSlicesWithLogs
     } else {
       // Look up candidate files names in the col-stats or record level index, if all of the following conditions are true
       //    - Data-skipping is enabled
@@ -255,7 +251,7 @@ case class HoodieFileIndex(spark: SparkSession,
       //    - Record-level Index is present
       //    - List of predicates (filters) is present
       val candidateFilesNamesOpt: Option[Set[String]] =
-        lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlices, isPruned) match {
+        lookupCandidateFilesInMetadataTable(dataFilters, prunedPartitionsAndFileSlicesWithLogs, isPruned) match {
         case Success(opt) => opt
         case Failure(e) =>
           logError("Failed to lookup candidate files in File Index", e)
@@ -271,7 +267,7 @@ case class HoodieFileIndex(spark: SparkSession,
       var totalFileSliceSize = 0
       var candidateFileSliceSize = 0
 
-      val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlices.map {
+      val prunedPartitionsAndFilteredFileSlices = prunedPartitionsAndFileSlicesWithLogs.map {
         case (partitionOpt, fileSlices) =>
           // Filter in candidate files based on the col-stats or record level index lookup
           val candidateFileSlices: Seq[FileSlice] = {
