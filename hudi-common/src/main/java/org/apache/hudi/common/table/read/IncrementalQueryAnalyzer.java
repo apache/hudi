@@ -504,16 +504,5 @@ public class IncrementalQueryAnalyzer {
     public Option<String> getPredicateFilter() {
       return predicateFilter;
     }
-
-    public QueryContext withUpdatedEndInstant(String endInstant) {
-      return new QueryContext(
-          startInstant.get(),
-          endInstant,
-          instants,
-          archivedInstants,
-          activeInstants,
-          activeTimeline,archivedTimeline,
-          null);
-    }
   }
 }
