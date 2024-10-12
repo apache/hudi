@@ -185,16 +185,16 @@ public class HoodieIncrSource extends RowSource {
         sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
-    String startTime = analyzer.getStartTime().get();
+    String completionTimeToResumeFrom = analyzer.getStartTime().get();
     int numInstantsPerFetch = analyzer.getLimit();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
-    String endTime;
+    String completionTimeToStopAt;
     if (queryContext.isEmpty()
-        || (endTime = queryContext.getMaxCompletionTime()).equals(startTime)) {
+        || (completionTimeToStopAt = queryContext.getMaxCompletionTime()).equals(completionTimeToResumeFrom)) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), startTime);
+      return Pair.of(Option.empty(), completionTimeToResumeFrom);
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -206,7 +206,7 @@ public class HoodieIncrSource extends RowSource {
       reader = reader.options(optionsMap);
     }
     boolean shouldFullScan =
-        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(startTime)
+        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(completionTimeToResumeFrom)
         && missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
     Dataset<Row> source;
     if (instantRange.isEmpty() || shouldFullScan) {
@@ -218,7 +218,7 @@ public class HoodieIncrSource extends RowSource {
       if (snapshotLoadQuerySplitter.isPresent()) {
         queryContext = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
         // update endTime/next checkpoint
-        endTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
+        completionTimeToStopAt = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
       }
       Set<String> validInstants = new HashSet<>(queryContext.getInstants());
       snapshot = queryContext.getPredicateFilter().map(snapshot::filter).orElse(snapshot);
@@ -235,8 +235,8 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_INSTANTTIME().key(), startTime)
-          .option(END_INSTANTTIME().key(), endTime)
+          .option(BEGIN_INSTANTTIME().key(), completionTimeToResumeFrom)
+          .option(END_INSTANTTIME().key(), completionTimeToStopAt)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
@@ -262,7 +262,7 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
-    return Pair.of(Option.of(src), endTime);
+    return Pair.of(Option.of(src), completionTimeToStopAt);
   }
 
   // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.
