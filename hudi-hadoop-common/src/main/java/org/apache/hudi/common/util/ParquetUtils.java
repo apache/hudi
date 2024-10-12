@@ -447,7 +447,7 @@ public class ParquetUtils extends FileFormatUtils {
       synchronized (primitiveType.stringifier()) {
         // Date logical type is implemented as a signed INT32
         // REF: https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-        return java.sql.Date.valueOf(
+        return java.time.LocalDate.parse(
             primitiveType.stringifier().stringify((Integer) val)
         );
       }
