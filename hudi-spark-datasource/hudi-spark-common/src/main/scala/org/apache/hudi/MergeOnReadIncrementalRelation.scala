@@ -188,9 +188,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getCompletionTime)
 
-  protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStartsByCompletionTime(startTimestamp)
+  protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 
-  protected def endInstantArchived: Boolean = super.timeline.isBeforeTimelineStartsByCompletionTime(endTimestamp)
+  protected def endInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty && queryContext.getActiveInstants.isEmpty
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
