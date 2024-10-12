@@ -27,8 +27,8 @@ import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
-
 import org.apache.hudi.utilities.sources.HoodieRetryingKafkaConsumer;
+
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -115,7 +115,7 @@ public class KafkaOffsetGen {
      * Compute the offset ranges to read from Kafka, while handling newly added partitions, skews, event limits.
      *
      * @param fromOffsetMap offsets where we left off last time
-     * @param toOffsetMap offsets of where each partitions is currently at
+     * @param toOffsetMap offsets of where each partition is currently at
      * @param numEvents maximum number of events to read.
      * @param minPartitions minimum partitions used for
      */
@@ -177,7 +177,7 @@ public class KafkaOffsetGen {
           }
         }
       }
-      // We need to ensure every partition is part of returned offset ranges even if we are not consuming any new msgs (for instance, if its already caught up).
+      // We need to ensure every partition is part of returned offset ranges even if we are not consuming any new msgs (for instance, if it's already caught up).
       // as this will be tracked as the checkpoint, we need to ensure all partitions are part of final ranges.
       Map<TopicPartition, List<OffsetRange>> missedRanges = fromOffsetMap.entrySet().stream()
               .filter((kv) -> !finalRanges.containsKey(kv.getKey()))
@@ -411,8 +411,8 @@ public class KafkaOffsetGen {
     Map<TopicPartition, Long> lastOffsets = consumer.endOffsets(topicPartitions);
 
     for (Map.Entry<TopicPartition, Long> entry : lastOffsets.entrySet()) {
-      Long offect = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
-      delayCount += entry.getValue() - offect > 0 ? entry.getValue() - offect : 0L;
+      Long offset = checkpointOffsets.getOrDefault(entry.getKey(), 0L);
+      delayCount += entry.getValue() - offset > 0 ? entry.getValue() - offset : 0L;
     }
     return delayCount;
   }
