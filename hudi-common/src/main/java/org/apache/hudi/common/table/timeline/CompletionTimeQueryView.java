@@ -55,6 +55,9 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
 
   private static final long MILLI_SECONDS_IN_ONE_DAY = 24 * 3600 * 1000;
 
+  private static final Function<String, String> GET_INSTANT_ONE_DAY_BEFORE = instant ->
+      HoodieInstantTimeGenerator.instantTimeMinusMillis(instant, MILLI_SECONDS_IN_ONE_DAY);
+
   private final HoodieTableMetaClient metaClient;
 
   /**
@@ -202,7 +205,12 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       Option<String> rangeEndCompletionTime,
       InstantRange.RangeType rangeType) {
     // assumes any instant/transaction lasts at most 1 day to optimize the query efficiency.
-    return getStartTimes(timeline, rangeStartCompletionTime, rangeEndCompletionTime, rangeType, s -> HoodieInstantTimeGenerator.instantTimeMinusMillis(s, MILLI_SECONDS_IN_ONE_DAY));
+    return getStartTimes(
+        timeline,
+        rangeStartCompletionTime,
+        rangeEndCompletionTime,
+        rangeType,
+        GET_INSTANT_ONE_DAY_BEFORE);
   }
 
   /**
@@ -220,8 +228,12 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       String rangeStartCompletionTime,
       String rangeEndCompletionTime,
       Function<String, String> earliestInstantTimeFunc) {
-    return getStartTimes(metaClient.getCommitsTimeline().filterCompletedInstants(), Option.ofNullable(rangeStartCompletionTime), Option.ofNullable(rangeEndCompletionTime),
-        InstantRange.RangeType.CLOSED_CLOSED, earliestInstantTimeFunc);
+    return getStartTimes(
+        metaClient.getCommitsTimeline().filterCompletedInstants(),
+        Option.ofNullable(rangeStartCompletionTime),
+        Option.ofNullable(rangeEndCompletionTime),
+        InstantRange.RangeType.CLOSED_CLOSED,
+        earliestInstantTimeFunc);
   }
 
   /**
@@ -239,8 +251,12 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       String rangeStartCompletionTime,
       String rangeEndCompletionTime,
       RangeType rangeType) {
-    return getStartTimes(metaClient.getCommitsTimeline().filterCompletedInstants(), Option.ofNullable(rangeStartCompletionTime), Option.ofNullable(rangeEndCompletionTime),
-        rangeType, s -> HoodieInstantTimeGenerator.instantTimeMinusMillis(s, MILLI_SECONDS_IN_ONE_DAY));
+    return getStartTimes(
+        metaClient.getCommitsTimeline().filterCompletedInstants(),
+        Option.ofNullable(rangeStartCompletionTime),
+        Option.ofNullable(rangeEndCompletionTime),
+        rangeType,
+        GET_INSTANT_ONE_DAY_BEFORE);
   }
 
   /**
