@@ -284,6 +284,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
   }
 
   private def fullTableScanDataFrame(startInstantTime: String, endInstantTime: String): DataFrame = {
+    val commitTimesToReturn = commitsToReturn.map(_.getTimestamp)
     val hudiDF = sqlContext.read
       .format("hudi_v1")
       .schema(usedSchema)
@@ -293,6 +294,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         startInstantTime))
       .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         endInstantTime))
+      .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*))
 
     // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
     val fieldNames = usedSchema.fieldNames
