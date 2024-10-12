@@ -16,39 +16,28 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.table.format.cow.vector;
+package org.apache.hudi.table.format.cow.vector.reader;
 
-import org.apache.flink.table.data.MapData;
-import org.apache.flink.table.data.columnar.vector.MapColumnVector;
-import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
+import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 
+import java.io.IOException;
+
 /**
- * This class represents a nullable heap map column vector.
+ * Empty {@link ColumnReader}.
+ * <p>
+ * This reader is to handle parquet files that have not been updated to the latest Schema.
+ * When reading a parquet file with the latest schema, parquet file might not have the new field.
+ * The EmptyColumnReader is used to handle such scenarios.
  */
-public class HeapMapColumnVector extends AbstractHeapVector
-    implements WritableColumnVector, MapColumnVector {
+public class EmptyColumnReader implements ColumnReader<WritableColumnVector> {
 
-  private WritableColumnVector keys;
-  private WritableColumnVector values;
-
-  public HeapMapColumnVector(int len, WritableColumnVector keys, WritableColumnVector values) {
-    super(len);
-    this.keys = keys;
-    this.values = values;
-  }
-
-  public WritableColumnVector getKeys() {
-    return keys;
-  }
-
-  public WritableColumnVector getValues() {
-    return values;
+  public EmptyColumnReader() {
   }
 
   @Override
-  public MapData getMap(int rowId) {
-    return new ColumnarGroupMapData(keys, values, rowId);
+  public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {
+    vector.fillWithNulls();
   }
 }
 

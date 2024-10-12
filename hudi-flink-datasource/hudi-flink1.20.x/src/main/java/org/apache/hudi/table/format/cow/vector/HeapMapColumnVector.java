@@ -51,4 +51,3 @@ public class HeapMapColumnVector extends AbstractHeapVector
     return new ColumnarGroupMapData(keys, values, rowId);
   }
 }
-

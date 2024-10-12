@@ -18,37 +18,37 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
-import org.apache.flink.table.data.MapData;
-import org.apache.flink.table.data.columnar.vector.MapColumnVector;
+import org.apache.flink.table.data.columnar.ColumnarRowData;
+import org.apache.flink.table.data.columnar.vector.RowColumnVector;
+import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 
 /**
- * This class represents a nullable heap map column vector.
+ * This class represents a nullable heap row column vector.
  */
-public class HeapMapColumnVector extends AbstractHeapVector
-    implements WritableColumnVector, MapColumnVector {
+public class HeapRowColumnVector extends AbstractHeapVector
+    implements WritableColumnVector, RowColumnVector {
 
-  private WritableColumnVector keys;
-  private WritableColumnVector values;
+  public WritableColumnVector[] vectors;
 
-  public HeapMapColumnVector(int len, WritableColumnVector keys, WritableColumnVector values) {
+  public HeapRowColumnVector(int len, WritableColumnVector... vectors) {
     super(len);
-    this.keys = keys;
-    this.values = values;
-  }
-
-  public WritableColumnVector getKeys() {
-    return keys;
-  }
-
-  public WritableColumnVector getValues() {
-    return values;
+    this.vectors = vectors;
   }
 
   @Override
-  public MapData getMap(int rowId) {
-    return new ColumnarGroupMapData(keys, values, rowId);
+  public ColumnarRowData getRow(int i) {
+    ColumnarRowData columnarRowData = new ColumnarRowData(new VectorizedColumnBatch(vectors));
+    columnarRowData.setRowId(i);
+    return columnarRowData;
+  }
+
+  @Override
+  public void reset() {
+    super.reset();
+    for (WritableColumnVector vector : vectors) {
+      vector.reset();
+    }
   }
 }
-

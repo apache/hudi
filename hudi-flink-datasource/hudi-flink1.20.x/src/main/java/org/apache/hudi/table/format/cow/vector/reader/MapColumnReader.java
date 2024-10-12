@@ -53,4 +53,3 @@ public class MapColumnReader implements ColumnReader<WritableColumnVector> {
     }
   }
 }
-

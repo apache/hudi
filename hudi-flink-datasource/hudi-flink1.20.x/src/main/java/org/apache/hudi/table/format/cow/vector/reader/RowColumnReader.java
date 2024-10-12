@@ -18,39 +18,46 @@
 
 package org.apache.hudi.table.format.cow.vector.reader;
 
-import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
+import org.apache.hudi.table.format.cow.vector.HeapRowColumnVector;
 
 import org.apache.flink.formats.parquet.vector.reader.ColumnReader;
-import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
- * Map {@link ColumnReader}.
+ * Row {@link ColumnReader}.
  */
-public class MapColumnReader implements ColumnReader<WritableColumnVector> {
+public class RowColumnReader implements ColumnReader<WritableColumnVector> {
 
-  private final ArrayColumnReader keyReader;
-  private final ColumnReader<WritableColumnVector> valueReader;
+  private final List<ColumnReader> fieldReaders;
 
-  public MapColumnReader(
-      ArrayColumnReader keyReader, ColumnReader<WritableColumnVector> valueReader) {
-    this.keyReader = keyReader;
-    this.valueReader = valueReader;
+  public RowColumnReader(List<ColumnReader> fieldReaders) {
+    this.fieldReaders = fieldReaders;
   }
 
   @Override
   public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {
-    HeapMapColumnVector mapColumnVector = (HeapMapColumnVector) vector;
-    AbstractHeapVector keyArrayColumnVector = (AbstractHeapVector) (mapColumnVector.getKeys());
-    keyReader.readToVector(readNumber, mapColumnVector.getKeys());
-    valueReader.readToVector(readNumber, mapColumnVector.getValues());
-    for (int i = 0; i < keyArrayColumnVector.getLen(); i++) {
-      if (keyArrayColumnVector.isNullAt(i)) {
-        mapColumnVector.setNullAt(i);
+    HeapRowColumnVector rowColumnVector = (HeapRowColumnVector) vector;
+    WritableColumnVector[] vectors = rowColumnVector.vectors;
+    // row vector null array
+    boolean[] isNulls = new boolean[readNumber];
+    for (int i = 0; i < vectors.length; i++) {
+      fieldReaders.get(i).readToVector(readNumber, vectors[i]);
+
+      for (int j = 0; j < readNumber; j++) {
+        if (i == 0) {
+          isNulls[j] = vectors[i].isNullAt(j);
+        } else {
+          isNulls[j] = isNulls[j] && vectors[i].isNullAt(j);
+        }
+        if (i == vectors.length - 1 && isNulls[j]) {
+          // rowColumnVector[j] is null only when all fields[j] of rowColumnVector[j] is
+          // null
+          rowColumnVector.setNullAt(j);
+        }
       }
     }
   }
 }
-
