@@ -24,7 +24,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
@@ -227,7 +227,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   }
 
   // use instants from queryContext
-  protected lazy val startTs: String = getStrictlyLowerTimestamp(includedCommits.head.getTimestamp)
+  protected lazy val startTs: String = instantTimeMinusMillis(includedCommits.head.getTimestamp, 1)
 
   protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
 

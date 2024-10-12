@@ -49,7 +49,7 @@ import org.slf4j.LoggerFactory;
 import java.util.function.Function;
 
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -117,7 +117,9 @@ public class IncrSourceHelper {
       if (missingCheckpointStrategy != null) {
         if (missingCheckpointStrategy == MissingCheckpointStrategy.READ_LATEST) {
           Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-          return lastInstant.map(hoodieInstant -> getStrictlyLowerTimestamp(timestampForLastInstant.apply(hoodieInstant))).orElse(DEFAULT_BEGIN_TIMESTAMP);
+          return lastInstant.map(
+              hoodieInstant -> instantTimeMinusMillis(timestampForLastInstant.apply(hoodieInstant), 1))
+              .orElse(DEFAULT_BEGIN_TIMESTAMP);
         } else {
           return DEFAULT_BEGIN_TIMESTAMP;
         }
@@ -197,7 +199,7 @@ public class IncrSourceHelper {
               .filterCompletedInstants()
               .lastInstant();
           startTime = lastInstant
-              .map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getCompletionTime()))
+              .map(hoodieInstant -> instantTimeMinusMillis(hoodieInstant.getCompletionTime(), 1))
               .orElse(DEFAULT_BEGIN_TIMESTAMP);
           break;
         default:
