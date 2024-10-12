@@ -240,7 +240,7 @@ public class HoodieIncrSource extends RowSource {
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
-          .option(DataSourceReadOptions.INCREMENTAL_LIMIT().key(), numInstantsPerFetch)
+          .option(HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.key(), numInstantsPerFetch)
           .load(srcPath);
     }
 

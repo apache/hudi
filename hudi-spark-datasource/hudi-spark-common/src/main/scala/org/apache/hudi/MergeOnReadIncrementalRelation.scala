@@ -210,9 +210,6 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
       .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
-      .limit(optParams.getOrElse(
-        DataSourceReadOptions.INCREMENTAL_LIMIT.key,
-        DataSourceReadOptions.INCREMENTAL_LIMIT.defaultValue).toInt)
       .build()
       .analyze()
 
