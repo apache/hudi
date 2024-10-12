@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieWriteConflictException
+import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.table.HoodieSparkTable
@@ -46,7 +46,7 @@ import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments.arguments
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
-import org.scalatest.Assertions.assertResult
+import org.scalatest.Assertions.{assertResult, assertThrows}
 
 import java.util.concurrent.Executors
 import scala.collection.JavaConverters
@@ -77,6 +77,39 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
   var metaClient: HoodieTableMetaClient = _
 
   override def conf: SparkConf = conf(getSparkSqlConf)
+
+  @Test
+  def testSecondaryIndexWithoutRecordIndex(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_3) {
+      tableName += "test_secondary_index_without_rli"
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  ts bigint,
+           |  record_key_col string,
+           |  not_record_key_col string,
+           |  partition_key_col string
+           |) using hudi
+           | options (
+           |  primaryKey ='record_key_col',
+           |  hoodie.metadata.enable = 'true',
+           |  hoodie.datasource.write.recordkey.field = 'record_key_col',
+           |  hoodie.enable.data.skipping = 'true'
+           | )
+           | partitioned by(partition_key_col)
+           | location '$basePath'
+       """.stripMargin)
+      // do a couple of inserts
+      spark.sql("set hoodie.parquet.small.file.limit=0")
+      spark.sql(s"insert into $tableName values(1, 'row1', 'abc', 'p1')")
+      spark.sql(s"insert into $tableName values(2, 'row2', 'cde', 'p2')")
+      // create secondary index without RLI and assert exception
+      assertThrows[HoodieMetadataIndexException] {
+        spark.sql(s"create index idx_not_record_key_col on $tableName using secondary_index(not_record_key_col)")
+      }
+    }
+  }
 
   @ParameterizedTest
   @MethodSource(Array("testSecondaryIndexPruningParameters"))
