@@ -328,7 +328,6 @@ public class TimelineUtils {
           timeline = writeTimeline;
         } else {
           timeline = metaClient.getArchivedTimeline(instants.get(0))
-              .mergeTimeline(writeTimeline)
               .mergeTimeline(writeTimeline);
         }
       }
