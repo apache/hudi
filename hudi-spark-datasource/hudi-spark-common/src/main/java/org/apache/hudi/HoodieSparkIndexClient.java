@@ -88,7 +88,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     }
     checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
 
-    if (!isEligibleForIndexing(metaClient, indexType)) {
+    if (!isEligibleForIndexing(metaClient, indexType, options)) {
       throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + indexName);
     }
 
@@ -174,11 +174,12 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     return writeConfig;
   }
 
-  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType) {
+  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options) {
     // for secondary index, record index is a must
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
-      return metaClient.getTableConfig().getMetadataPartitions().stream()
-          .anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+      // either record index is enabled or record index partition is already present
+      return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()))
+          || Boolean.parseBoolean(options.getOrDefault(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue().toString()));
     }
     return true;
   }
