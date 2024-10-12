@@ -358,3 +358,9 @@ ab7ad5f149 [ENG-14556][HUDI-8276] Add support for File path regex for Hoodie Inc
 6d2a0afd24ff [AUDIT-993] Remove protobuf shading from utilities and utilities-slim bundle (#958)
 55b31380fdb3 [ENG-15261][INTERNAL] split out functional tests into own step in GH actions (#953)
 e481e769241b [AUDIT-993] Changelog for release-v1.37.0 (#957)
+
+---[2024-10-13 00:09:44] [changelog-release-v1.38.0] ---
+ac2cb4d95e [ENG-14712][HUDI-8126] Support proto messages for spark kryo serializer excluding DynamicMessages (#968)
+0c9cb2c74b [ENG-15012][HUDI-8331] Remove excessive table validity check (#967)
+f21f1807b2 [ENG-15634][INTERNAL] Fixing failure handling with HoodieMetadataTableValidator (#961)
+b74c97d91c [AUDIT-993] Changelog for release-v1.37.1 (#960)
