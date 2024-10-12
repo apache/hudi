@@ -207,12 +207,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
       val startInstantTime = queryContext.getStartInstant.get()
-      val startInstantArchived = commitTimeline.isBeforeTimelineStarts(startInstantTime)
+      val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
       val endInstantTime = queryContext.getEndInstant.get()
-      val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
-      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
-        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
+      val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
+        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
       } else {
         if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
