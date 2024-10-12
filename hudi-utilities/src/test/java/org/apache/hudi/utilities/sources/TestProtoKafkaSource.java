@@ -22,7 +22,6 @@ import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.schema.ProtoClassBasedSchemaProvider;
@@ -41,7 +40,6 @@ import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
-import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Message;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.UInt32Value;
@@ -58,6 +56,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -68,7 +67,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -105,10 +103,9 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     return new SourceFormatAdapter(protoKafkaSource);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testProtoKafkaSourceWithConfluentProtoDeserialization(boolean persistSourceRdd) {
-    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_" + persistSourceRdd;
+  @Test
+  public void testProtoKafkaSourceWithConfluentProtoDeserialization() {
+    final String topic = TEST_TOPIC_PREFIX + "testProtoKafkaSourceWithConfluentDeserializer_";
     testUtils.createTopic(topic, 2);
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
     props.put(KAFKA_PROTO_VALUE_DESERIALIZER_CLASS.key(),
@@ -116,8 +113,7 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     props.put("schema.registry.url", MOCK_REGISTRY_URL);
     props.put("hoodie.streamer.schemaprovider.registry.url", MOCK_REGISTRY_URL);
     props.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key(), "true");
-    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
-    props.setProperty(HoodieWriteConfig.TAGGED_RECORD_STORAGE_LEVEL_VALUE.key(), "MEMORY_ONLY");
+    props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(true));
     // class name is not required so we'll remove it
     props.remove(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key());
     SchemaProvider schemaProvider = new SchemaRegistryProvider(props, jsc());
@@ -126,17 +122,10 @@ public class TestProtoKafkaSource extends BaseTestKafkaSource {
     sendMessagesToKafkaWithConfluentSerializer(topic, 2, messages);
     // Assert messages are read correctly
     JavaRDD<Message> messagesRead = protoKafkaSource.fetchNext(Option.empty(), 1000).getBatch().get();
-    List<Message> protoMessages = messagesRead.collect();
-    assertEquals(1000, protoMessages.size());
-    Set<Sample> messagesConsumed = protoMessages.stream().map(message -> {
-      try {
-        return Sample.parseFrom(message.toByteArray());
-      } catch (InvalidProtocolBufferException e) {
-        throw new RuntimeException(e);
-      }
-    }).collect(Collectors.toSet());
-    assertEquals(new HashSet<>(messages), messagesConsumed);
-    verifyRddsArePersistedAndReleased(protoKafkaSource, messagesRead.rdd().toDebugString(), persistSourceRdd);
+    assertEquals(
+        messages.stream().map(this::protoToJson).collect(Collectors.toSet()),
+        new HashSet<>(messagesRead.map(message -> PRINTER.print(message)).collect())
+    );
   }
 
   @ParameterizedTest

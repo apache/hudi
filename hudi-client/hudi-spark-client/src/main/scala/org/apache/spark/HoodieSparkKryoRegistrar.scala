@@ -21,7 +21,7 @@ package org.apache.spark
 import com.esotericsoftware.kryo.io.{Input, Output}
 import com.esotericsoftware.kryo.{Kryo, Serializer}
 import com.esotericsoftware.kryo.serializers.JavaSerializer
-import com.google.protobuf.{DynamicMessage, Message}
+import com.google.protobuf.Message
 import com.twitter.chill.protobuf.ProtobufSerializer
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.config.SerializableConfiguration
@@ -66,7 +66,6 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     kryo.register(classOf[SerializableConfiguration], new JavaSerializer())
     // NOTE: Protobuf objects are not serializable by default using kryo, need to register them explicitly.
     kryo.addDefaultSerializer(classOf[Message], new ProtobufSerializer())
-    kryo.register(classOf[DynamicMessage], new ProtobufDynamicMessageSerializer())
   }
 
   /**
