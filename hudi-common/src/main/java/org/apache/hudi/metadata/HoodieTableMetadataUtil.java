@@ -1895,7 +1895,8 @@ public class HoodieTableMetadataUtil {
       } else {
         readerSchema = tableSchema;
       }
-      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
+          metaClient.getActiveTimeline().getCommitsTimeline().lastInstant().map(HoodieInstant::getTimestamp).orElse(""));
     });
   }
 
@@ -1930,7 +1931,8 @@ public class HoodieTableMetadataUtil {
       } else {
         readerSchema = tableSchema;
       }
-      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition);
+      return createSecondaryIndexGenerator(metaClient, engineType, logFilePaths, readerSchema, partition, dataFilePath, indexDefinition,
+          metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(""));
     });
   }
 
@@ -1938,7 +1940,8 @@ public class HoodieTableMetadataUtil {
                                                                               EngineType engineType, List<String> logFilePaths,
                                                                               Schema tableSchema, String partition,
                                                                               Option<StoragePath> dataFilePath,
-                                                                              HoodieIndexDefinition indexDefinition) throws Exception {
+                                                                              HoodieIndexDefinition indexDefinition,
+                                                                              String instantTime) throws Exception {
     final String basePath = metaClient.getBasePath().toString();
     final StorageConfiguration<?> storageConf = metaClient.getStorageConf();
 
@@ -1950,10 +1953,10 @@ public class HoodieTableMetadataUtil {
 
     HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(metaClient.getStorage())
-        .withBasePath(basePath)
+        .withBasePath(metaClient.getBasePath())
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(tableSchema)
-        .withLatestInstantTime(metaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::getTimestamp).orElse(""))
+        .withLatestInstantTime(instantTime)
         .withReverseReader(false)
         .withMaxMemorySizeInBytes(storageConf.getLong(MAX_MEMORY_FOR_COMPACTION.key(), DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES))
         .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue())

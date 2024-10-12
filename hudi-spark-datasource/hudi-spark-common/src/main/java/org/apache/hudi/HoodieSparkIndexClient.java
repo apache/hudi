@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieFunctionalIndexException;
+import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.functional.BaseHoodieIndexClient;
 
@@ -84,9 +84,13 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   public void create(HoodieTableMetaClient metaClient, String indexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options) {
     indexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + indexName : PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX + indexName;
     if (indexExists(metaClient, indexName)) {
-      throw new HoodieFunctionalIndexException("Index already exists: " + indexName);
+      throw new HoodieMetadataIndexException("Index already exists: " + indexName);
     }
     checkArgument(columns.size() == 1, "Only one column can be indexed for functional or secondary index.");
+
+    if (!isEligibleForIndexing(metaClient, indexType, options)) {
+      throw new HoodieMetadataIndexException("Not eligible for indexing: " + indexType + ", indexName: " + indexName);
+    }
 
     if (!metaClient.getTableConfig().getIndexDefinitionPath().isPresent()
         || !metaClient.getIndexMetadata().isPresent()
@@ -107,7 +111,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
         // build index
         writeClient.index(indexInstantTime.get());
       } else {
-        throw new HoodieFunctionalIndexException("Scheduling of index action did not return any instant.");
+        throw new HoodieMetadataIndexException("Scheduling of index action did not return any instant.");
       }
     }
   }
@@ -118,7 +122,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       if (ignoreIfNotExists) {
         return;
       } else {
-        throw new HoodieFunctionalIndexException("Index does not exist: " + indexName);
+        throw new HoodieMetadataIndexException("Index does not exist: " + indexName);
       }
     }
 
@@ -168,5 +172,15 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
     HoodieIndexingConfig.fromIndexDefinition(indexDefinition).getProps().forEach((key, value) -> writeConfig.put(key.toString(), value.toString()));
     return writeConfig;
+  }
+
+  private static boolean isEligibleForIndexing(HoodieTableMetaClient metaClient, String indexType, Map<String, String> options) {
+    // for secondary index, record index is a must
+    if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
+      // either record index is enabled or record index partition is already present
+      return metaClient.getTableConfig().getMetadataPartitions().stream().anyMatch(partition -> partition.equals(MetadataPartitionType.RECORD_INDEX.getPartitionPath()))
+          || Boolean.parseBoolean(options.getOrDefault(RECORD_INDEX_ENABLE_PROP.key(), RECORD_INDEX_ENABLE_PROP.defaultValue().toString()));
+    }
+    return true;
   }
 }

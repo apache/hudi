@@ -20,15 +20,15 @@
 package org.apache.hudi.exception;
 
 /**
- * Exception for Hudi functional index.
+ * Exception for Hudi index.
  */
-public class HoodieFunctionalIndexException extends HoodieException {
+public class HoodieMetadataIndexException extends HoodieException {
 
-  public HoodieFunctionalIndexException(String message) {
+  public HoodieMetadataIndexException(String message) {
     super(message);
   }
 
-  public HoodieFunctionalIndexException(String message, Throwable t) {
+  public HoodieMetadataIndexException(String message, Throwable t) {
     super(message, t);
   }
 }
