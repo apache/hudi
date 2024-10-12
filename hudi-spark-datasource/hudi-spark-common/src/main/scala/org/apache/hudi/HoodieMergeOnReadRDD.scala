@@ -71,6 +71,7 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param includeStartTime whether to include the commit with the commitTime
  * @param startTimestamp start timestamp to filter records
  * @param endTimestamp end timestamp to filter records
+ * @param includedTimestamps timestamps used to filter records
  */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -128,7 +129,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && !StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)
+    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && (includedTimestamps != null || (!StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)))
     if (needsFiltering) {
       val filterT: Predicate[InternalRow] = getCommitTimeFilter(commitTimeMetadataFieldIdx)
       iter.filter(filterT.test)
