@@ -54,13 +54,13 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLUSTERING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
-import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * TimelineUtils provides a common way to query incremental meta-data changes for a hoodie table.
@@ -103,7 +103,7 @@ public class TimelineUtils {
         })
         .filter(pair -> isDeletePartition(pair.getRight().getOperationType()))
         .flatMap(pair -> pair.getRight().getPartitionToReplaceFileIds().keySet().stream()
-            .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getTimestamp()))
+            .map(partition -> new AbstractMap.SimpleEntry<>(partition, pair.getLeft().getRequestTime()))
         ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (existing, replace) -> replace));
     // cleaner could delete a partition when there are no active filegroups in the partition
     HoodieTimeline cleanerTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants();
@@ -113,7 +113,7 @@ public class TimelineUtils {
             HoodieCleanMetadata cleanMetadata = TimelineMetadataUtils.deserializeHoodieCleanMetadata(cleanerTimeline.getInstantDetails(instant).get());
             cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
               if (partitionMetadata.getIsPartitionDeleted()) {
-                partitionToLatestDeleteTimestamp.put(partition, instant.getTimestamp());
+                partitionToLatestDeleteTimestamp.put(partition, instant.getRequestTime());
               }
             });
           } catch (IOException e) {
@@ -129,12 +129,12 @@ public class TimelineUtils {
         .reduce((left, right) -> compareTimestamps(left, LESSER_THAN, right) ? left : right)
         .get();
     Map<String, String> partitionToLatestWriteTimestamp = completedTimeline.getInstantsAsStream()
-        .filter(instant -> compareTimestamps(instant.getTimestamp(), GREATER_THAN_OR_EQUALS, earliestDeleteTimestamp))
+        .filter(instant -> compareTimestamps(instant.getRequestTime(), GREATER_THAN_OR_EQUALS, earliestDeleteTimestamp))
         .flatMap(instant -> {
           try {
             HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
             return commitMetadata.getWritePartitionPaths().stream()
-                .map(partition -> new AbstractMap.SimpleEntry<>(partition, instant.getTimestamp()));
+                .map(partition -> new AbstractMap.SimpleEntry<>(partition, instant.getRequestTime()));
           } catch (IOException e) {
             throw new HoodieIOException("Failed to get partitions writes at " + instant, e);
           }
@@ -235,7 +235,7 @@ public class TimelineUtils {
    */
   public static Map<String, Option<String>> getAllExtraMetadataForKey(HoodieTableMetaClient metaClient, String extraMetadataKey) {
     return metaClient.getCommitsTimeline().filterCompletedInstants().getReverseOrderedInstants().collect(Collectors.toMap(
-        HoodieInstant::getTimestamp, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
+        HoodieInstant::getRequestTime, instant -> getMetadataValue(metaClient, extraMetadataKey, instant)));
   }
 
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
@@ -267,7 +267,7 @@ public class TimelineUtils {
     }
   }
 
-  public static HoodieDefaultTimeline getTimeline(HoodieTableMetaClient metaClient, boolean includeArchivedTimeline) {
+  public static HoodieTimeline getTimeline(HoodieTableMetaClient metaClient, boolean includeArchivedTimeline) {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
     if (includeArchivedTimeline) {
       HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
@@ -286,19 +286,19 @@ public class TimelineUtils {
    */
   public static HoodieTimeline getCommitsTimelineAfter(
       HoodieTableMetaClient metaClient, String exclusiveStartInstantTime, Option<String> lastMaxCompletionTime) {
-    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
 
-    HoodieDefaultTimeline timeline = writeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
+    HoodieTimeline timeline = writeTimeline.isBeforeTimelineStarts(exclusiveStartInstantTime)
         ? metaClient.getArchivedTimeline(exclusiveStartInstantTime).mergeTimeline(writeTimeline)
         : writeTimeline;
 
-    HoodieDefaultTimeline timelineSinceLastSync = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
-        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE);
+    HoodieTimeline timelineSinceLastSync = (HoodieTimeline) (((HoodieTimeline) timeline).getCommitsTimeline()
+        .findInstantsAfter(exclusiveStartInstantTime, Integer.MAX_VALUE));
 
     if (lastMaxCompletionTime.isPresent()) {
       // Get 'hollow' instants that have less instant time than exclusiveStartInstantTime but with greater commit completion time
-      HoodieDefaultTimeline hollowInstantsTimeline = (HoodieDefaultTimeline) timeline.getCommitsTimeline()
-          .filter(s -> compareTimestamps(s.getTimestamp(), LESSER_THAN, exclusiveStartInstantTime))
+      HoodieTimeline hollowInstantsTimeline = ((HoodieTimeline) timeline).getCommitsTimeline()
+          .filter(s -> compareTimestamps(s.getRequestTime(), LESSER_THAN, exclusiveStartInstantTime))
           .filter(s -> compareTimestamps(s.getCompletionTime(), GREATER_THAN, lastMaxCompletionTime.get()));
       if (!hollowInstantsTimeline.empty()) {
         return timelineSinceLastSync.mergeTimeline(hollowInstantsTimeline);
@@ -377,11 +377,11 @@ public class TimelineUtils {
   public static void validateTimestampAsOf(HoodieTableMetaClient metaClient, String timestampAsOf) {
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant))
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getTimelineLayout().getInstantFactory()))
         .firstInstant();
 
     if (firstIncompleteCommit.isPresent()) {
-      String incompleteCommitTime = firstIncompleteCommit.get().getTimestamp();
+      String incompleteCommitTime = firstIncompleteCommit.get().getRequestTime();
       if (compareTimestamps(timestampAsOf, GREATER_THAN_OR_EQUALS, incompleteCommitTime)) {
         throw new HoodieTimeTravelException(String.format(
             "Time travel's timestamp '%s' must be earlier than the first incomplete commit timestamp '%s'.",
@@ -397,7 +397,7 @@ public class TimelineUtils {
         HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanOpt.get());
         String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
         if (!StringUtils.isNullOrEmpty(earliestCommitToRetain)) {
-          ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(earliestCommitToRetain, LESSER_THAN_OR_EQUALS, timestampAsOf),
+          ValidationUtils.checkArgument(compareTimestamps(earliestCommitToRetain, LESSER_THAN_OR_EQUALS, timestampAsOf),
               "Cleaner cleaned up the timestamp of interest. Please ensure sufficient commits are retained with cleaner "
                   + "for Timestamp as of query to work");
         } else {
@@ -405,7 +405,7 @@ public class TimelineUtils {
           // so, lets check if timestamp of interest is archived based on first entry in active timeline
           Option<HoodieInstant> firstCompletedInstant = metaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants().firstInstant();
           if (firstCompletedInstant.isPresent()) {
-            ValidationUtils.checkArgument(HoodieTimeline.compareTimestamps(firstCompletedInstant.get().getTimestamp(), LESSER_THAN_OR_EQUALS, timestampAsOf),
+            ValidationUtils.checkArgument(compareTimestamps(firstCompletedInstant.get().getRequestTime(), LESSER_THAN_OR_EQUALS, timestampAsOf),
                 "Please ensure sufficient commits are retained (uncleaned and un-archived) for timestamp as of query to work.");
           }
         }
@@ -428,17 +428,17 @@ public class TimelineUtils {
 
     Option<HoodieInstant> firstIncompleteCommit = metaClient.getCommitsTimeline()
         .filterInflightsAndRequested()
-        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant))
+        .filter(instant -> !ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), instant, metaClient.getTimelineLayout().getInstantFactory()))
         .firstInstant();
 
     boolean noHollowCommit = firstIncompleteCommit
-        .map(i -> completedCommitTimeline.findInstantsAfter(i.getTimestamp()).empty())
+        .map(i -> completedCommitTimeline.findInstantsAfter(i.getRequestTime()).empty())
         .orElse(true);
     if (noHollowCommit) {
       return completedCommitTimeline;
     }
 
-    String hollowCommitTimestamp = firstIncompleteCommit.get().getTimestamp();
+    String hollowCommitTimestamp = firstIncompleteCommit.get().getRequestTime();
     switch (handlingMode) {
       case FAIL:
         throw new HoodieException(String.format(
@@ -463,7 +463,7 @@ public class TimelineUtils {
    */
   public static HoodieTimeline concatTimeline(HoodieTimeline timeline1, HoodieTimeline timeline2,
                                               HoodieTableMetaClient metaClient) {
-    return new HoodieDefaultTimeline(Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
+    return metaClient.getTimelineLayout().getTimelineFactory().createDefaultTimeline(Stream.concat(timeline1.getInstantsAsStream(), timeline2.getInstantsAsStream()).sorted(),
         instant -> metaClient.getActiveTimeline().getInstantDetails(instant));
   }
 

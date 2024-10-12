@@ -26,11 +26,11 @@ import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -174,8 +174,10 @@ class Spark35LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
         val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
         val storage = new HoodieHadoopStorage(tablePath, sharedConf)
+        //TODO: HARDCODED TIMELINE OBJECT
         InternalSchemaCache.getInternalSchemaByVersionId(
-          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits)
+          commitInstantTime, tablePath, storage, if (validCommits == null) "" else validCommits,
+          new InstantFileNameParserV2())
       } else {
         null
       }

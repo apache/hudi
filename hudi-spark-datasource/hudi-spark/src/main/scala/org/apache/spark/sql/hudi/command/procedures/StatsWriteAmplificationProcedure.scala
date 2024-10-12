@@ -60,7 +60,7 @@ class StatsWriteAmplificationProcedure extends BaseProcedure with ProcedureBuild
         if (commit.fetchTotalUpdateRecordsWritten() > 0) {
           waf = df.format(commit.fetchTotalRecordsWritten().toFloat / commit.fetchTotalUpdateRecordsWritten())
         }
-        rows.add(Row(instantTime.getTimestamp, commit.fetchTotalUpdateRecordsWritten, commit.fetchTotalRecordsWritten, waf))
+        rows.add(Row(instantTime.getRequestTime, commit.fetchTotalUpdateRecordsWritten, commit.fetchTotalRecordsWritten, waf))
         totalRecordsUpserted = totalRecordsUpserted + commit.fetchTotalUpdateRecordsWritten()
         totalRecordsWritten = totalRecordsWritten + commit.fetchTotalRecordsWritten()
       }

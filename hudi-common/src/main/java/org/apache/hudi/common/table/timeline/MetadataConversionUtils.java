@@ -61,7 +61,7 @@ public class MetadataConversionUtils {
       return createMetaWrapperForEmptyInstant(hoodieInstant);
     }
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
-    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getRequestTime());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
     archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {
@@ -185,7 +185,7 @@ public class MetadataConversionUtils {
 
   public static HoodieArchivedMetaEntry createMetaWrapperForEmptyInstant(HoodieInstant hoodieInstant) {
     HoodieArchivedMetaEntry archivedMetaWrapper = new HoodieArchivedMetaEntry();
-    archivedMetaWrapper.setCommitTime(hoodieInstant.getTimestamp());
+    archivedMetaWrapper.setCommitTime(hoodieInstant.getRequestTime());
     archivedMetaWrapper.setActionState(hoodieInstant.getState().name());
     archivedMetaWrapper.setStateTransitionTime(hoodieInstant.getCompletionTime());
     switch (hoodieInstant.getAction()) {

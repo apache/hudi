@@ -642,7 +642,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
               .getOperationType == WriteOperationType.COMPACT))
           .lastInstant()
         val compactionBaseFile = metadataTableFSView.getAllBaseFiles("secondary_index_idx_not_record_key_col")
-          .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+          .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getRequestTime)))
           .findAny()
         assertTrue(compactionBaseFile.isPresent)
       } finally {
@@ -701,7 +701,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     var totalLatestDataFiles = 0L
     val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
     try {
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getRequestTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

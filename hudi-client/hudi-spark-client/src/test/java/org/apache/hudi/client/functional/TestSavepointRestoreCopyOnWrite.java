@@ -159,7 +159,7 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
         HoodieSparkTable.create(client.getConfig(), context)
             .scheduleRollback(context, client.createNewInstantTime(), pendingInstant, false, true, false);
       }
-      Option<String> rollbackInstant = metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().map(HoodieInstant::getTimestamp);
+      Option<String> rollbackInstant = metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().map(HoodieInstant::getRequestTime);
       assertTrue(rollbackInstant.isPresent(), "The latest instant should be a rollback");
       // write another batch
       insertBatch(hoodieWriteConfig, client, client.createNewInstantTime(),

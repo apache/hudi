@@ -48,6 +48,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -145,7 +146,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
         CommitUtils.buildMetadata(Collections.emptyList(), partitionToReplaceFileIds, Option.empty(), WriteOperationType.INSERT_OVERWRITE, "", HoodieTimeline.REPLACE_COMMIT_ACTION);
 
     HoodieActiveTimeline commitTimeline = metaClient.getActiveTimeline();
-    HoodieInstant instant1 = new HoodieInstant(true, HoodieTimeline.CLUSTERING_ACTION, commitTime1);
+    HoodieInstant instant1 = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, commitTime1);
     saveAsComplete(
         commitTimeline,
         instant1,
@@ -184,7 +185,7 @@ public class TestHoodieTableFSViewWithClustering extends HoodieCommonTestHarness
     if (inflight.getAction().equals(HoodieTimeline.COMPACTION_ACTION)) {
       timeline.transitionCompactionInflightToComplete(true, inflight, data);
     } else {
-      HoodieInstant requested = new HoodieInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.getTimestamp());
+      HoodieInstant requested = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, inflight.getAction(), inflight.getRequestTime());
       timeline.createNewInstant(requested);
       timeline.transitionRequestedToInflight(requested, Option.empty());
       if (inflight.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {

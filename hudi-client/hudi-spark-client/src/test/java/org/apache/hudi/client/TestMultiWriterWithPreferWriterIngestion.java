@@ -189,7 +189,7 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     future2.get();
     future3.get();
     Set<String> completedInstants = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
+        .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getRequestTime)
         .collect(Collectors.toSet());
     Assertions.assertTrue(validInstants.containsAll(completedInstants));
   }

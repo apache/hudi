@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,11 +69,11 @@ public class TestHoodieFileGroup {
   @Test
   public void testCommittedFileSlicesWithSavepointAndHoles() {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "01"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "01"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "03"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "05") // this can be DELTA_COMMIT/REPLACE_COMMIT as well
     ).collect(Collectors.toList()));
     HoodieFileGroup fileGroup = new HoodieFileGroup("", "data", activeTimeline.filterCompletedAndCompactionInstants());
     for (int i = 0; i < 7; i++) {
@@ -89,11 +90,11 @@ public class TestHoodieFileGroup {
   @Test
   public void testGetBaseInstantTime() {
     MockHoodieTimeline activeTimeline = new MockHoodieTimeline(Stream.of(
-        new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002", "011"), // finishes in the last
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003", "007"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "004", "006"),
-        new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "005", "007")
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.DELTA_COMMIT_ACTION, "001", "001"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "002", "011"), // finishes in the last
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003", "007"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, "004", "006"),
+        INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "005", "007")
     ).collect(Collectors.toList()));
 
     CompletionTimeQueryView queryView = getMockCompletionTimeQueryView(activeTimeline);
@@ -135,7 +136,7 @@ public class TestHoodieFileGroup {
 
   private CompletionTimeQueryView getMockCompletionTimeQueryView(MockHoodieTimeline activeTimeline) {
     Map<String, String> completionTimeMap = activeTimeline.filterCompletedInstants().getInstantsAsStream()
-        .collect(Collectors.toMap(HoodieInstant::getTimestamp, HoodieInstant::getCompletionTime));
+        .collect(Collectors.toMap(HoodieInstant::getRequestTime, HoodieInstant::getCompletionTime));
     CompletionTimeQueryView queryView = mock(CompletionTimeQueryView.class);
     when(queryView.getCompletionTime(any(String.class), any(String.class)))
         .thenAnswer((InvocationOnMock invocationOnMock) -> {

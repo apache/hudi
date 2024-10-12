@@ -69,9 +69,9 @@ public class TimelineMetadataUtils {
                                                              List<HoodieInstant> instants,
                                                              Map<String, List<HoodieRollbackMetadata>> instantToRollbackMetadata) {
     return new HoodieRestoreMetadata(startRestoreTime, durationInMs,
-        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        instants.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(instantToRollbackMetadata), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.getRequestTime(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieRollbackMetadata convertRollbackMetadata(String startRollbackTime, Option<Long> durationInMs,
@@ -88,9 +88,9 @@ public class TimelineMetadataUtils {
     }
 
     return new HoodieRollbackMetadata(startRollbackTime, durationInMs.orElseGet(() -> -1L), totalDeleted,
-        instants.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()),
+        instants.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList()),
         Collections.unmodifiableMap(partitionMetadataBuilder), DEFAULT_VERSION,
-        instants.stream().map(instant -> new HoodieInstantInfo(instant.getTimestamp(), instant.getAction())).collect(Collectors.toList()));
+        instants.stream().map(instant -> new HoodieInstantInfo(instant.getRequestTime(), instant.getAction())).collect(Collectors.toList()));
   }
 
   public static HoodieSavepointMetadata convertSavepointMetadata(String user, String comment,

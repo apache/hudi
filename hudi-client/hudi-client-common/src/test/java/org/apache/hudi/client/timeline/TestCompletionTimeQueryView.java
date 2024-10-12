@@ -19,14 +19,15 @@
 package org.apache.hudi.client.timeline;
 
 import org.apache.hudi.DummyActiveAction;
+import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.ActiveAction;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.CompletionTimeQueryView;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -48,6 +49,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,11 +137,11 @@ public class TestCompletionTimeQueryView {
       testTable.addCommit(instantTime, Option.of(completionTime), Option.of(metadata));
       activeActions.add(
           new DummyActiveAction(
-              new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
+              INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime),
               serializeCommitMetadata(metadata).get()));
     }
     testTable.addRequestedCommit(String.format("%08d", 11));
-    List<HoodieInstant> instants = new HoodieActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
+    List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
     LSMTimelineWriter writer = LSMTimelineWriter.getInstance(writeConfig, getMockHoodieTable(metaClient));
     // archive [1,2], [3,4], [5,6] separately
     writer.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
@@ -145,8 +149,8 @@ public class TestCompletionTimeQueryView {
     writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
     // reconcile the active timeline
     instants.subList(0, 3 * 6).forEach(
-        instant -> HoodieActiveTimeline.deleteInstantFile(metaClient.getStorage(),
-            metaClient.getMetaPath(), instant));
+        instant -> ActiveTimelineUtils.deleteInstantFile(metaClient.getStorage(),
+            metaClient.getMetaPath(), instant, INSTANT_FILE_NAME_FACTORY));
     ValidationUtils.checkState(
         metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
         "should archive 6 instants with 4 as active");

@@ -53,6 +53,7 @@ import static org.apache.hudi.common.testutils.FileCreateUtils.createBaseFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.createLogFile;
 import static org.apache.hudi.common.testutils.FileCreateUtils.logFileName;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION_PATHS;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -137,23 +138,23 @@ public class CompactionTestUtils {
   public static void scheduleCompaction(HoodieTableMetaClient metaClient, String instantTime,
       HoodieCompactionPlan compactionPlan) throws IOException {
     metaClient.getActiveTimeline().saveToCompactionRequested(
-        new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
+        INSTANT_FACTORY.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime),
         TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
   }
 
   public static void createDeltaCommit(HoodieTableMetaClient metaClient, String instantTime) {
-    HoodieInstant requested = new HoodieInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
+    HoodieInstant requested = INSTANT_FACTORY.createNewInstant(State.REQUESTED, DELTA_COMMIT_ACTION, instantTime);
     metaClient.getActiveTimeline().createNewInstant(requested);
     metaClient.getActiveTimeline().transitionRequestedToInflight(requested, Option.empty());
     metaClient.getActiveTimeline().saveAsComplete(
-        new HoodieInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, DELTA_COMMIT_ACTION, instantTime), Option.empty());
   }
 
   public static void scheduleInflightCompaction(HoodieTableMetaClient metaClient, String instantTime,
       HoodieCompactionPlan compactionPlan) throws IOException {
     scheduleCompaction(metaClient, instantTime, compactionPlan);
     metaClient.getActiveTimeline()
-        .transitionCompactionRequestedToInflight(new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
+        .transitionCompactionRequestedToInflight(INSTANT_FACTORY.createNewInstant(State.REQUESTED, COMPACTION_ACTION, instantTime));
   }
 
   public static HoodieCompactionPlan createCompactionPlan(HoodieTableMetaClient metaClient, String instantTime,

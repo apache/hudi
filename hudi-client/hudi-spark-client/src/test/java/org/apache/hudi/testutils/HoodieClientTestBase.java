@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -51,6 +50,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForKeys;
 import static org.apache.hudi.testutils.Assertions.assertPartitionMetadataForRecords;
@@ -487,7 +487,7 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
     if (assertForCommit) {
       assertEquals(expTotalCommits, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
           "Expecting " + expTotalCommits + " commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(),
           "Latest commit should be " + newCommitTime);
       if (filterForCommitTimeWithAssert) { // when meta cols are disabled, we can't really do per commit assertion.
         assertEquals(expRecordsInThisCommit,
@@ -534,12 +534,12 @@ public class HoodieClientTestBase extends HoodieSparkClientTestHarness {
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
+    HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
 
     if (assertForCommit) {
       assertEquals(3, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
           "Expecting 3 commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(),
           "Latest commit should be " + newCommitTime);
       if (filerForCommitTimeWithAssert) { // if meta cols are disabled, we can't do assertion based on assertion time
         assertEquals(expRecordsInThisCommit,

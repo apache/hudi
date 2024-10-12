@@ -20,6 +20,7 @@ package org.apache.hudi.table.action.savepoint;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieRollbackException;
@@ -33,7 +34,8 @@ public class SavepointHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(SavepointHelpers.class);
 
   public static void deleteSavepoint(HoodieTable table, String savepointTime) {
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    InstantFactory instantFactory = table.getInstantFactory();
+    HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
       LOG.warn("No savepoint present " + savepointTime);
@@ -41,7 +43,7 @@ public class SavepointHelpers {
     }
 
     table.getActiveTimeline().revertToInflight(savePoint);
-    table.getActiveTimeline().deleteInflight(new HoodieInstant(true, HoodieTimeline.SAVEPOINT_ACTION, savepointTime));
+    table.getActiveTimeline().deleteInflight(instantFactory.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.SAVEPOINT_ACTION, savepointTime));
     LOG.info("Savepoint " + savepointTime + " deleted");
   }
 
@@ -53,13 +55,14 @@ public class SavepointHelpers {
         .filterCompletedAndCompactionInstants()
         .lastInstant();
     ValidationUtils.checkArgument(lastInstant.isPresent());
-    ValidationUtils.checkArgument(lastInstant.get().getTimestamp().equals(savepointTime),
+    ValidationUtils.checkArgument(lastInstant.get().getRequestTime().equals(savepointTime),
         savepointTime + " is not the last commit after restoring to savepoint, last commit was "
-            + lastInstant.get().getTimestamp());
+            + lastInstant.get().getRequestTime());
   }
 
   public static void validateSavepointPresence(HoodieTable table, String savepointTime) {
-    HoodieInstant savePoint = new HoodieInstant(false, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
+    InstantFactory instantFactory = table.getInstantFactory();
+    HoodieInstant savePoint = instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, savepointTime);
     boolean isSavepointPresent = table.getCompletedSavepointTimeline().containsInstant(savePoint);
     if (!isSavepointPresent) {
       throw new HoodieRollbackException("No savepoint for instantTime " + savepointTime);

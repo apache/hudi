@@ -20,16 +20,17 @@ package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
-import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata
 import org.apache.hudi.common.table.timeline.{ActiveAction, CompletionTimeQueryView, HoodieArchivedTimeline, HoodieInstant, LSMTimeline}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FACTORY, TIMELINE_FACTORY}
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.table.HoodieJavaTable
 
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
 import org.apache.spark.hudi.benchmark.{HoodieBenchmark, HoodieBenchmarkBase}
 
 import java.util
@@ -69,7 +70,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         val instantTime = startTs + i + ""
         val completionTime = startTs + i + 1000 + ""
         val action = if (i % 2 == 0) "delta_commit" else "commit"
-        val instant = new HoodieInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime)
+        val instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, action, instantTime, completionTime)
         val metadata: HoodieCommitMetadata = HoodieTestTable.of(metaClient).createCommitMetadata(instantTime, WriteOperationType.INSERT, util.Arrays.asList("par1", "par2"), 10, false)
         val serializedMetadata = serializeCommitMetadata(metadata).get()
         instantBuffer.add(new DummyActiveAction(instant, serializedMetadata))
@@ -83,10 +84,10 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
 
       val benchmark = new HoodieBenchmark("pref load archived instants", commitsNum, 3)
       benchmark.addCase("read slim instants") { _ =>
-        new HoodieArchivedTimeline(metaClient)
+        TIMELINE_FACTORY.createArchivedTimeline(metaClient)
       }
       benchmark.addCase("read instants with commit metadata") { _ =>
-        new HoodieArchivedTimeline(metaClient, startInstant)
+        TIMELINE_FACTORY.createArchivedTimeline(metaClient, startInstant)
       }
       // for scala compatibility
       val earliestStartTimeFunc: java.util.function.Function[String, String] = new java.util.function.Function[String, String] {

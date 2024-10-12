@@ -169,7 +169,7 @@ public class IncrementalQueryAnalyzer {
       List<HoodieInstant> activeInstants = new ArrayList<>();
       HoodieTimeline archivedReadTimeline = null;
       if (!activeInstantTime.isEmpty()) {
-        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
+        activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getRequestTime())).collect(Collectors.toList());
         if (limit > 0 && limit < activeInstants.size()) {
           // streaming read speed limit, limits the maximum number of commits allowed to read for each run
           activeInstants = activeInstants.subList(0, limit);
@@ -177,9 +177,9 @@ public class IncrementalQueryAnalyzer {
       }
       if (!archivedInstantTime.isEmpty()) {
         archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTime.get(0));
-        archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getTimestamp())).collect(Collectors.toList());
+        archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.getRequestTime())).collect(Collectors.toList());
       }
-      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::getRequestTime).collect(Collectors.toList());
       if (instants.isEmpty()) {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;

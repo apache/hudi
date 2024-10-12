@@ -209,7 +209,7 @@ public class TestRemoteFileSystemViewWithMetadataTable extends HoodieSparkClient
         new RemoteHoodieTableFileSystemView("localhost", timelineServerPort, newMetaClient);
 
     List<TestViewLookUpCallable> callableList = lookupList.stream()
-        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getTimestamp(), basePathStr))
+        .map(pair -> new TestViewLookUpCallable(view, pair, compactionCommit.getRequestTime(), basePathStr))
         .collect(Collectors.toList());
     List<Future<Boolean>> resultList = new ArrayList<>();
 

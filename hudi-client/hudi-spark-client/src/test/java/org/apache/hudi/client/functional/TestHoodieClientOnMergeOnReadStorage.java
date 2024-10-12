@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.assertDataInMORTable;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -399,7 +400,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       lcClient.logCompact(logCompactionTimeStamp.get());
 
       // Rollback the log compaction commit.
-      HoodieInstant instant = new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionTimeStamp.get());
+      HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION, logCompactionTimeStamp.get());
       getHoodieTable(metaClient, config).rollbackInflightLogCompaction(instant);
 
       // Validate timeline.
@@ -409,8 +410,8 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       assertEquals(HoodieTimeline.ROLLBACK_ACTION, rollbackInstant.getAction());
 
       // Validate block instant times.
-      validateBlockInstantsBeforeAndAfterRollback(config, prevCommitTime, rollbackInstant.getTimestamp());
-      prevCommitTime = rollbackInstant.getTimestamp();
+      validateBlockInstantsBeforeAndAfterRollback(config, prevCommitTime, rollbackInstant.getRequestTime());
+      prevCommitTime = rollbackInstant.getRequestTime();
 
       // Do one more upsert
       newCommitTime = client.createNewInstantTime();
@@ -521,7 +522,7 @@ public class TestHoodieClientOnMergeOnReadStorage extends HoodieClientTestBase {
       }
       boolean logCompactionInstantArchived = false;
       Map<String, List<HoodieInstant>> instantsMap = metaClient.getArchivedTimeline().getInstantsAsStream()
-          .collect(Collectors.groupingBy(HoodieInstant::getTimestamp));
+          .collect(Collectors.groupingBy(HoodieInstant::getRequestTime));
       for (String logCompactionTimeStamp : logCompactionInstantTimes) {
         List<HoodieInstant> instants = instantsMap.get(logCompactionTimeStamp);
         if (instants == null) {

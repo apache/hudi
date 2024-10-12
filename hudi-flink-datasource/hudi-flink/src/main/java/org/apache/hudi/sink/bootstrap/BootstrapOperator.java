@@ -209,7 +209,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
       Schema schema = new TableSchemaResolver(this.hoodieTable.getMetaClient()).getTableAvroSchema();
 
       List<FileSlice> fileSlices = this.hoodieTable.getSliceView()
-          .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getTimestamp())
+          .getLatestMergedFileSlicesBeforeOrOn(partitionPath, latestCommitTime.get().getRequestTime())
           .collect(toList());
 
       for (FileSlice fileSlice : fileSlices) {
@@ -240,7 +240,7 @@ public class BootstrapOperator<I, O extends HoodieRecord<?>>
             .map(logFile -> logFile.getPath().toString())
             .collect(toList());
 
-        try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getTimestamp(),
+        try (HoodieMergedLogRecordScanner scanner = FormatUtils.logScanner(logPaths, schema, latestCommitTime.get().getRequestTime(),
             writeConfig, hadoopConf)) {
           for (String recordKey : scanner.getRecords().keySet()) {
             output.collect(new StreamRecord(new IndexRecord(generateHoodieRecord(new HoodieKey(recordKey, partitionPath), fileSlice))));

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.marker.MarkerType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -105,7 +104,6 @@ public class HoodieMetadataWriteUtils {
     // Create the write config for the metadata table by borrowing options from the main write config.
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
         .withEngineType(writeConfig.getEngineType())
-        .withTimelineLayoutVersion(TimelineLayoutVersion.CURR_VERSION)
         .withWriteTableVersion(writeConfig.getWriteVersion().versionCode())
         .withMergeAllowDuplicateOnInserts(false)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder()

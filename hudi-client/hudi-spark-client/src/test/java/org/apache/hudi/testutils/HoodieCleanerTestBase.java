@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.bootstrap.index.TestBootstrapIndex.generateBootstrapIndex;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,7 +118,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     }
 
     if (simulateRetryFailure) {
-      HoodieInstant completedCleanInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs);
+      HoodieInstant completedCleanInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, cleanInstantTs);
       HoodieCleanMetadata metadata = CleanerUtils.getCleanerMetadata(metaClient, completedCleanInstant);
       metadata.getPartitionMetadata().values().forEach(p -> {
         String dirPath = metaClient.getBasePath() + "/" + p.getPartitionPath();
@@ -136,7 +137,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
         HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
             metaClient.getStorageConf(),
             HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
-        HoodieInstant deltaCommit = new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
+        HoodieInstant deltaCommit = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, cleanInstantTs);
         metadataMetaClient.reloadActiveTimeline().revertToInflight(deltaCommit);
       }
 
@@ -159,7 +160,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
             .withFailedDeletes(x.getFailedDeleteFiles()).withSuccessfulDeletes(x.getSuccessDeleteFiles())
             .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(x.getDeletePathPatterns())
             .withEarliestCommitRetained(Option.ofNullable(cleanMetadata1.getEarliestCommitToRetain() != null
-                ? new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000")
+                ? INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000")
                 : null))
             .build())
         .collect(Collectors.toMap(HoodieCleanStat::getPartitionPath, x -> x));
@@ -169,7 +170,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
           .withFailedDeletes(s.getFailedDeleteFiles()).withSuccessfulDeletes(s.getSuccessDeleteFiles())
           .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(s.getDeletePathPatterns())
           .withEarliestCommitRetained(Option.ofNullable(s.getEarliestCommitToRetain())
-              .map(y -> new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, y)))
+              .map(y -> INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, y)))
           .withSuccessfulDeleteBootstrapBaseFiles(x.getSuccessDeleteFiles())
           .withFailedDeleteBootstrapBaseFiles(x.getFailedDeleteFiles())
           .withDeleteBootstrapBasePathPatterns(x.getDeletePathPatterns()).build());
@@ -212,7 +213,7 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
       metadataWriter.performTableServices(Option.of(instantTime));
       metadataWriter.updateFromWriteStatuses(commitMeta, context.emptyHoodieData(), instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
           serializeCommitMetadata(commitMeta));
       metaClient = HoodieTableMetaClient.reload(metaClient);
     }

@@ -312,7 +312,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     doWriteAndValidateDataAndPartitionStats(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestClusteringInstant.get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
+    assertTrue(getLatestClusteringInstant.get().getRequestTime.compareTo(lastClusteringInstant.get().getRequestTime) > 0)
     assertEquals(getLatestClusteringInstant, metaClient.getActiveTimeline.lastInstant())
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
@@ -354,7 +354,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)
-        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getRequestTime)))
         .findAny()
       assertTrue(compactionBaseFile.isPresent)
     } finally {
@@ -395,7 +395,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getRequestTime)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

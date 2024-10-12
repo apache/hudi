@@ -48,6 +48,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparatorUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -163,6 +164,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -803,8 +806,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.retryLastPendingInlineClusteringJob = true;
     HoodieDeltaStreamer ds2 = new HoodieDeltaStreamer(cfg, jsc);
     ds2.sync();
-    String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
-    assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
+    String completeClusteringTimeStamp = meta.reloadActiveTimeline().getCompletedReplaceTimeline().lastInstant().get().getRequestTime();
+    assertEquals(clusteringRequest.getRequestTime(), completeClusteringTimeStamp);
     TestHelpers.assertAtLeastNCommits(2, tableBasePath);
     TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath);
   }
@@ -840,7 +843,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieTableMetaClient meta = HoodieTestUtils.createMetaClient(storage, tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
     HoodieInstant commitInstant = timeline.lastInstant().get();
-    String commitFileName = tableBasePath + "/.hoodie/" + commitInstant.getFileName();
+    String commitFileName = tableBasePath + "/.hoodie/" + INSTANT_FILE_NAME_FACTORY.getFileName(commitInstant);
     fs.delete(new Path(commitFileName), false);
 
     // sync again
@@ -1227,12 +1230,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     HoodieClusteringJob scheduleAndExecute = initialHoodieClusteringJob(tableBasePath, null, false, "scheduleAndExecute", retryLastFailedClusteringJob, HoodieRecordType.AVRO);
     scheduleAndExecute.cluster(0);
 
-    String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().getTimestamp();
+    String completeClusteringTimeStamp = meta.getActiveTimeline().reload().getCompletedReplaceTimeline().lastInstant().get().getRequestTime();
 
     if (retryLastFailedClusteringJob) {
-      assertEquals(clusteringRequest.getTimestamp(), completeClusteringTimeStamp);
+      assertEquals(clusteringRequest.getRequestTime(), completeClusteringTimeStamp);
     } else {
-      assertFalse(clusteringRequest.getTimestamp().equalsIgnoreCase(completeClusteringTimeStamp));
+      assertFalse(clusteringRequest.getRequestTime().equalsIgnoreCase(completeClusteringTimeStamp));
     }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
@@ -1666,7 +1669,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     ds2.sync();
     mClient = createMetaClient(jsc, tableBasePath);
     HoodieInstant newLastFinished = mClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
-    assertTrue(HoodieTimeline.compareTimestamps(newLastFinished.getTimestamp(), HoodieTimeline.GREATER_THAN, lastFinished.getTimestamp()
+    assertTrue(InstantComparatorUtils.compareTimestamps(newLastFinished.getRequestTime(), GREATER_THAN, lastFinished.getRequestTime()
     ));
 
     // Ensure it is empty

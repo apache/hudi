@@ -152,7 +152,7 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
     Using(getTableFileSystenView(opts)) { fsView =>
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getRequestTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

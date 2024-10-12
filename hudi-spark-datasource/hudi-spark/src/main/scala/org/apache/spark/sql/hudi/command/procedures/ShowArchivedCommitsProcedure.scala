@@ -19,9 +19,8 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.common.model.HoodieCommitMetadata
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieDefaultTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.{ActiveTimelineUtils, HoodieInstant, HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.util.StringUtils
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
@@ -29,7 +28,6 @@ import java.time.ZonedDateTime
 import java.util
 import java.util.function.Supplier
 import java.util.{Collections, Date}
-
 import scala.collection.JavaConverters._
 
 class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure with ProcedureBuilder {
@@ -96,7 +94,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     val archivedTimeline = metaClient.getArchivedTimeline
     try {
       archivedTimeline.loadInstantDetailsInMemory(startTs, endTs)
-      val timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs)
+      val timelineRange = archivedTimeline.findInstantsInRange(startTs, endTs).asInstanceOf[HoodieTimeline]
       if (includeExtraMetadata) {
         getCommitsWithMetadata(timelineRange, limit)
       } else {
@@ -110,7 +108,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   override def build: Procedure = new ShowArchivedCommitsProcedure(includeExtraMetadata)
 
-  private def getCommitsWithMetadata(timeline: HoodieDefaultTimeline,
+  private def getCommitsWithMetadata(timeline: HoodieTimeline,
                                      limit: Int): Seq[Row] = {
     import scala.collection.JavaConverters._
 
@@ -122,7 +120,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
       for (partitionWriteStat <- commitMetadata.getPartitionToWriteStats.entrySet.asScala) {
         for (hoodieWriteStat <- partitionWriteStat.getValue.asScala) {
           rows.add(Row(
-            commit.getTimestamp, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
+            commit.getRequestTime, commit.getCompletionTime, commit.getAction, hoodieWriteStat.getPartitionPath,
             hoodieWriteStat.getFileId, hoodieWriteStat.getPrevCommit, hoodieWriteStat.getNumWrites,
             hoodieWriteStat.getNumInserts, hoodieWriteStat.getNumDeletes, hoodieWriteStat.getNumUpdateWrites,
             hoodieWriteStat.getTotalWriteErrors, hoodieWriteStat.getTotalLogBlocks, hoodieWriteStat.getTotalCorruptLogBlock,
@@ -135,24 +133,25 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
   }
 
-  private def getSortCommits(timeline: HoodieDefaultTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
+  private def getSortCommits(timeline: HoodieTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
     val rows = new util.ArrayList[Row]
     // timeline can be read from multiple files. So sort is needed instead of reversing the collection
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
-    Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+    val layout = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion)
+    Collections.sort(newCommits, layout.getInstantComparator.getRequestTimePrimaryOrderingComparator.reversed)
     (rows, newCommits)
   }
 
-  def getCommits(timeline: HoodieDefaultTimeline,
+  def getCommits(timeline: HoodieTimeline,
                  limit: Int): Seq[Row] = {
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
 
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = HoodieCommitMetadata.fromBytes(timeline.getInstantDetails(commit).get, classOf[HoodieCommitMetadata])
-      rows.add(Row(commit.getTimestamp, commit.getCompletionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
+      rows.add(Row(commit.getRequestTime, commit.getCompletionTime, commitMetadata.fetchTotalBytesWritten, commitMetadata.fetchTotalFilesInsert,
         commitMetadata.fetchTotalFilesUpdated, commitMetadata.fetchTotalPartitionsWritten,
         commitMetadata.fetchTotalRecordsWritten, commitMetadata.fetchTotalUpdateRecordsWritten,
         commitMetadata.fetchTotalWriteErrors))
@@ -163,7 +162,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
 
   def getTimeDaysAgo(numberOfDays: Int): String = {
     val date = Date.from(ZonedDateTime.now.minusDays(numberOfDays).toInstant)
-    HoodieActiveTimeline.formatDate(date)
+    ActiveTimelineUtils.formatDate(date)
   }
 }
 

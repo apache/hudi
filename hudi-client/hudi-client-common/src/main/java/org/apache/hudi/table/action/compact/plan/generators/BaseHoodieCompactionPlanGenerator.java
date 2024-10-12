@@ -119,7 +119,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
     String lastCompletedInstantTime = hoodieTable.getMetaClient()
         .getActiveTimeline().getTimelineOfActions(CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION,
             HoodieTimeline.ROLLBACK_ACTION, HoodieTimeline.DELTA_COMMIT_ACTION))
-        .filterCompletedInstants().lastInstant().get().getTimestamp();
+        .filterCompletedInstants().lastInstant().get().getRequestTime();
     LOG.info("Last completed instant time " + lastCompletedInstantTime);
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
 

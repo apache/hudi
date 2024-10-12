@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -73,6 +72,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -162,7 +162,7 @@ public class ITTestHoodieFlinkCompactor {
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
           table.getMetaClient(), compactionInstantTime);
 
-      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant instant = INSTANT_FACTORY.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
@@ -236,12 +236,13 @@ public class ITTestHoodieFlinkCompactor {
         new UpgradeDowngrade(metaClient, writeClient.getConfig(), writeClient.getEngineContext(), FlinkUpgradeDowngradeHelper.getInstance()).run(HoodieTableVersion.SIX, "none");
       }
 
+      table = writeClient.getHoodieTable();
       // generate compaction plan
       // should support configurable commit metadata
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
           table.getMetaClient(), compactionInstantTime);
 
-      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant instant = INSTANT_FACTORY.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 
@@ -362,7 +363,7 @@ public class ITTestHoodieFlinkCompactor {
 
     // Mark instant as compaction inflight
     for (String compactionInstantTime : compactionInstantTimeList) {
-      HoodieInstant hoodieInstant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant hoodieInstant = INSTANT_FACTORY.getCompactionRequestedInstant(compactionInstantTime);
       table.getActiveTimeline().transitionCompactionRequestedToInflight(hoodieInstant);
     }
     table.getMetaClient().reloadActiveTimeline();
@@ -483,7 +484,7 @@ public class ITTestHoodieFlinkCompactor {
       HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
           table.getMetaClient(), compactionInstantTime);
 
-      HoodieInstant instant = HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime);
+      HoodieInstant instant = INSTANT_FACTORY.getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
       table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
 

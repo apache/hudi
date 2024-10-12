@@ -18,16 +18,14 @@
 
 package org.apache.hudi.common.table.timeline;
 
-import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant.State;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Objects;
-import java.util.function.BiPredicate;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -39,7 +37,6 @@ import java.util.stream.Stream;
  * this can be chained.
  *
  * @see HoodieTableMetaClient
- * @see HoodieDefaultTimeline
  * @see HoodieInstant
  * @since 0.3.0
  */
@@ -83,8 +80,8 @@ public interface HoodieTimeline extends Serializable {
   String REQUESTED_ROLLBACK_EXTENSION = "." + ROLLBACK_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_SAVEPOINT_EXTENSION = "." + SAVEPOINT_ACTION + INFLIGHT_EXTENSION;
   String REQUESTED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, REQUESTED_EXTENSION);
-  String COMPLETED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, COMPLETED_EXTENSION);
   String REQUESTED_COMPACTION_EXTENSION = StringUtils.join(".", REQUESTED_COMPACTION_SUFFIX);
+  String COMPLETED_COMPACTION_SUFFIX = StringUtils.join(COMPACTION_ACTION, COMPLETED_EXTENSION);
   String INFLIGHT_COMPACTION_EXTENSION = StringUtils.join(".", COMPACTION_ACTION, INFLIGHT_EXTENSION);
   String REQUESTED_RESTORE_EXTENSION = "." + RESTORE_ACTION + REQUESTED_EXTENSION;
   String INFLIGHT_RESTORE_EXTENSION = "." + RESTORE_ACTION + INFLIGHT_EXTENSION;
@@ -157,12 +154,13 @@ public interface HoodieTimeline extends Serializable {
   HoodieTimeline filterCompletedInstants();
 
   // TODO: Check if logcompaction also needs to be included in this API.
+
   /**
    * Filter this timeline to just include the completed + compaction (inflight + requested) instants A RT filesystem
    * view is constructed with this timeline so that file-slice after pending compaction-requested instant-time is also
    * considered valid. A RT file-system view for reading must then merge the file-slices before and after pending
    * compaction instant so that all delta-commits are read.
-   * 
+   *
    * @return New instance of HoodieTimeline with just completed instants
    */
   HoodieTimeline filterCompletedAndCompactionInstants();
@@ -178,7 +176,7 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Timeline to just include commits (commit/deltacommit), compaction and replace actions.
-   * 
+   *
    * @return
    */
   HoodieTimeline getWriteTimeline();
@@ -201,7 +199,7 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * Filter this timeline to just include requested and inflight compaction instants.
-   * 
+   *
    * @return
    */
   HoodieTimeline filterPendingCompactionTimeline();
@@ -270,7 +268,8 @@ public interface HoodieTimeline extends Serializable {
    */
   HoodieTimeline findInstantsInClosedRange(String startTs, String endTs);
 
-  /**`
+  /**
+   * `
    * Create a new Timeline with instants after startTs and before or on endTs
    * by state transition timestamp of actions.
    */
@@ -305,7 +304,7 @@ public interface HoodieTimeline extends Serializable {
    * Create new timeline with all instants before or equals specified time.
    */
   HoodieTimeline findInstantsBeforeOrEquals(String instantTime);
-  
+
   /**
    * Custom Filter of Instants.
    */
@@ -339,13 +338,6 @@ public interface HoodieTimeline extends Serializable {
   Option<HoodieInstant> firstInstant();
 
   /**
-   * @param action Instant action String.
-   * @param state  Instant State.
-   * @return first instant of a specific action and state if available
-   */
-  Option<HoodieInstant> firstInstant(String action, State state);
-
-  /**
    * @return nth completed instant from the first completed instant
    */
   Option<HoodieInstant> nthInstant(int n);
@@ -355,10 +347,9 @@ public interface HoodieTimeline extends Serializable {
    */
   Option<HoodieInstant> lastInstant();
 
-
   /**
    * Get hash of timeline.
-   * 
+   *
    * @return
    */
   String getTimelineHash();
@@ -380,7 +371,7 @@ public interface HoodieTimeline extends Serializable {
 
   /**
    * @return true if the passed instant is present as a completed instant on the timeline or if the instant is before
-   *         the first completed instant in the timeline
+   * the first completed instant in the timeline
    */
   boolean containsOrBeforeTimelineStarts(String ts);
 
@@ -395,8 +386,16 @@ public interface HoodieTimeline extends Serializable {
   List<HoodieInstant> getInstants();
 
   /**
+   * First instant that matches the action and state
+   * @param action
+   * @param state
+   * @return
+   */
+  Option<HoodieInstant> firstInstant(String action, HoodieInstant.State state);
+
+  /**
    * @return Get the stream of completed instants in reverse order TODO Change code references to getInstants() that
-   *         reverse the instants later on to use this method instead.
+   * reverse the instants later on to use this method instead.
    */
   Stream<HoodieInstant> getReverseOrderedInstants();
 
@@ -422,23 +421,22 @@ public interface HoodieTimeline extends Serializable {
   /**
    * get the most recent cluster commit if present
    */
-  public Option<HoodieInstant> getLastClusteringInstant();
+  Option<HoodieInstant> getLastClusteringInstant();
 
   /**
    * get the most recent pending cluster commit if present
-   *
    */
-  public Option<HoodieInstant> getLastPendingClusterInstant();
-  
+  Option<HoodieInstant> getLastPendingClusterInstant();
+
   /**
    * get the least recent pending cluster commit if present
    */
-  public Option<HoodieInstant> getFirstPendingClusterInstant();
+  Option<HoodieInstant> getFirstPendingClusterInstant();
 
   /**
    * return true if instant is a pending clustering commit, otherwise false
    */
-  public boolean isPendingClusteringInstant(String instantTime);
+  boolean isPendingClusteringInstant(String instantTime);
 
   /**
    * Read the completed instant details.
@@ -448,305 +446,81 @@ public interface HoodieTimeline extends Serializable {
   boolean isEmpty(HoodieInstant instant);
 
   /**
-   * Helper methods to compare instants.
-   **/
-  BiPredicate<String, String> EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) == 0;
-  BiPredicate<String, String> GREATER_THAN_OR_EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) >= 0;
-  BiPredicate<String, String> GREATER_THAN = (commit1, commit2) -> commit1.compareTo(commit2) > 0;
-  BiPredicate<String, String> LESSER_THAN_OR_EQUALS = (commit1, commit2) -> commit1.compareTo(commit2) <= 0;
-  BiPredicate<String, String> LESSER_THAN = (commit1, commit2) -> commit1.compareTo(commit2) < 0;
-
-  static boolean compareTimestamps(String commit1, BiPredicate<String, String> predicateToApply, String commit2) {
-    return predicateToApply.test(commit1, commit2);
-  }
+   * Get all instants (commits, delta commits) that produce new data, in the active timeline.
+   */
+  HoodieTimeline getCommitsTimeline();
 
   /**
-   * Returns smaller of the two given timestamps. Returns the non null argument if one of the argument is null.
+   * Get all instants (commits, delta commits, replace, compaction) that produce new data or merge file, in the active timeline.
    */
-  static String minTimestamp(String commit1, String commit2) {
-    if (StringUtils.isNullOrEmpty(commit1)) {
-      return commit2;
-    } else if (StringUtils.isNullOrEmpty(commit2)) {
-      return commit1;
-    }
-    return minInstant(commit1, commit2);
-  }
+  HoodieTimeline getCommitsAndCompactionTimeline();
 
   /**
-   * Returns smaller of the two given instants compared by their respective timestamps.
-   * Returns the non null argument if one of the argument is null.
+   * Get all instants (commits, delta commits, compaction, clean, savepoint, rollback, replace commits, index) that result in actions,
+   * in the active timeline.
    */
-  static HoodieInstant minTimestampInstant(HoodieInstant instant1, HoodieInstant instant2) {
-    String commit1 = instant1 != null ? instant1.getTimestamp() : null;
-    String commit2 = instant2 != null ? instant2.getTimestamp() : null;
-    String minTimestamp = minTimestamp(commit1, commit2);
-    return Objects.equals(minTimestamp, commit1) ? instant1 : instant2;
-  }
+  HoodieTimeline getAllCommitsTimeline();
 
   /**
-   * Returns the smaller of the given two instants.
+   * Get only pure commit and replace commits (inflight and completed) in the active timeline.
    */
-  static String minInstant(String instant1, String instant2) {
-    return compareTimestamps(instant1, LESSER_THAN, instant2) ? instant1 : instant2;
-  }
+  HoodieTimeline getCommitAndReplaceTimeline();
 
   /**
-   * Returns the greater of the given two instants.
+   * Get only pure commits (inflight and completed) in the active timeline.
    */
-  static String maxInstant(String instant1, String instant2) {
-    return compareTimestamps(instant1, GREATER_THAN, instant2) ? instant1 : instant2;
-  }
+  HoodieTimeline getCommitTimeline();
 
   /**
-   * Return true if specified timestamp is in range (startTs, endTs].
+   * Get only the delta commits (inflight and completed) in the active timeline.
    */
-  static boolean isInRange(String timestamp, String startTs, String endTs) {
-    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN, startTs)
-            && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
-  }
+  HoodieTimeline getDeltaCommitTimeline();
 
   /**
-   * Return true if specified timestamp is in range [startTs, endTs).
+   * Get a timeline of a specific set of actions. useful to create a merged timeline of multiple actions.
+   *
+   * @param actions actions allowed in the timeline
    */
-  static boolean isInClosedOpenRange(String timestamp, String startTs, String endTs) {
-    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
-        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN, endTs);
-  }
+  HoodieTimeline getTimelineOfActions(Set<String> actions);
 
   /**
-   * Return true if specified timestamp is in range [startTs, endTs].
+   * Get only the cleaner action (inflight and completed) in the active timeline.
    */
-  static boolean isInClosedRange(String timestamp, String startTs, String endTs) {
-    return HoodieTimeline.compareTimestamps(timestamp, GREATER_THAN_OR_EQUALS, startTs)
-        && HoodieTimeline.compareTimestamps(timestamp, LESSER_THAN_OR_EQUALS, endTs);
-  }
-
-  static HoodieInstant getRequestedInstant(final HoodieInstant instant) {
-    return new HoodieInstant(State.REQUESTED, instant.getAction(), instant.getTimestamp());
-  }
-
-  static HoodieInstant getCleanRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, CLEAN_ACTION, timestamp);
-  }
-
-  static HoodieInstant getCleanInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, CLEAN_ACTION, timestamp);
-  }
-
-  static HoodieInstant getCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, COMPACTION_ACTION, timestamp);
-  }
-
-  static HoodieInstant getCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, COMPACTION_ACTION, timestamp);
-  }
-
-  // Returns Log compaction requested instant
-  static HoodieInstant getLogCompactionRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, LOG_COMPACTION_ACTION, timestamp);
-  }
-
-  // Returns Log compaction inflight instant
-  static HoodieInstant getLogCompactionInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, LOG_COMPACTION_ACTION, timestamp);
-  }
-
-  static HoodieInstant getReplaceCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, REPLACE_COMMIT_ACTION, timestamp);
-  }
-
-  static HoodieInstant getReplaceCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, REPLACE_COMMIT_ACTION, timestamp);
-  }
-
-  static HoodieInstant getClusteringCommitRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, CLUSTERING_ACTION, timestamp);
-  }
-
-  static HoodieInstant getClusteringCommitInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, CLUSTERING_ACTION, timestamp);
-  }
-
-  static HoodieInstant getRollbackRequestedInstant(HoodieInstant instant) {
-    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
-  }
-
-  static HoodieInstant getRestoreRequestedInstant(HoodieInstant instant) {
-    return instant.isRequested() ? instant : HoodieTimeline.getRequestedInstant(instant);
-  }
-
-  static HoodieInstant getIndexRequestedInstant(final String timestamp) {
-    return new HoodieInstant(State.REQUESTED, INDEXING_ACTION, timestamp);
-  }
-
-  static HoodieInstant getIndexInflightInstant(final String timestamp) {
-    return new HoodieInstant(State.INFLIGHT, INDEXING_ACTION, timestamp);
-  }
+  HoodieTimeline getCleanerTimeline();
 
   /**
-   * Returns the inflight instant corresponding to the instant being passed. Takes care of changes in action names
-   * between inflight and completed instants (compaction <=> commit) and (logcompaction <==> deltacommit).
-   * @param instant Hoodie Instant
-   * @param metaClient Hoodie metaClient to fetch tableType and fileSystem.
-   * @return Inflight Hoodie Instant
+   * Get only the rollback action (inflight and completed) in the active timeline.
    */
-  static HoodieInstant getInflightInstant(final HoodieInstant instant, final HoodieTableMetaClient metaClient) {
-    if (metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-      if (instant.getAction().equals(COMMIT_ACTION)) {
-        return new HoodieInstant(true, COMPACTION_ACTION, instant.getTimestamp());
-      } else if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
-        // Deltacommit is used by both ingestion and logcompaction.
-        // So, distinguish both of them check for the inflight file being present.
-        HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-        Option<HoodieInstant> logCompactionInstant = Option.fromJavaOptional(rawActiveTimeline.getInstantsAsStream()
-            .filter(hoodieInstant -> hoodieInstant.getTimestamp().equals(instant.getTimestamp())
-                && LOG_COMPACTION_ACTION.equals(hoodieInstant.getAction())).findFirst());
-        if (logCompactionInstant.isPresent()) {
-          return new HoodieInstant(true, LOG_COMPACTION_ACTION, instant.getTimestamp());
-        }
-      }
-    }
-    return new HoodieInstant(true, instant.getAction(), instant.getTimestamp());
-  }
+  HoodieTimeline getRollbackTimeline();
 
-  static String makeCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.COMMIT_EXTENSION);
-  }
+  /**
+   * Get only the rollback and restore action (inflight and completed) in the active timeline.
+   */
+  HoodieTimeline getRollbackAndRestoreTimeline();
 
-  static String makeInflightCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_COMMIT_EXTENSION);
-  }
+  /**
+   * Get only the save point action (inflight and completed) in the active timeline.
+   */
+  HoodieTimeline getSavePointTimeline();
 
-  static String makeRequestedCommitFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMMIT_EXTENSION);
-  }
+  /**
+   * Get only the restore action (inflight and completed) in the active timeline.
+   */
+  HoodieTimeline getRestoreTimeline();
 
-  static String makeCleanerFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.CLEAN_EXTENSION);
-  }
+  /**
+   * Merge this timeline with the given timeline.
+   */
+  HoodieTimeline mergeTimeline(HoodieTimeline timeline);
 
-  static String makeRequestedCleanerFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLEAN_EXTENSION);
-  }
+  /**
+   * Set Instants directly.
+   */
+  void setInstants(List<HoodieInstant> instants);
 
-  static String makeInflightCleanerFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLEAN_EXTENSION);
-  }
-
-  static String makeRollbackFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.ROLLBACK_EXTENSION);
-  }
-
-  static String makeRequestedRollbackFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_ROLLBACK_EXTENSION);
-  }
-
-  static String makeRequestedRestoreFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_RESTORE_EXTENSION);
-  }
-
-  static String makeInflightRollbackFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_ROLLBACK_EXTENSION);
-  }
-
-  static String makeInflightSavePointFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_SAVEPOINT_EXTENSION);
-  }
-
-  static String makeSavePointFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.SAVEPOINT_EXTENSION);
-  }
-
-  static String makeInflightDeltaFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_DELTA_COMMIT_EXTENSION);
-  }
-
-  static String makeRequestedDeltaFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_DELTA_COMMIT_EXTENSION);
-  }
-
-  static String makeInflightCompactionFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_COMPACTION_EXTENSION);
-  }
-
-  static String makeRequestedCompactionFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_COMPACTION_EXTENSION);
-  }
-
-  // Log compaction action
-  static String makeInflightLogCompactionFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_LOG_COMPACTION_EXTENSION);
-  }
-
-  static String makeRequestedLogCompactionFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_LOG_COMPACTION_EXTENSION);
-  }
-
-  static String makeRestoreFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.RESTORE_EXTENSION);
-  }
-
-  static String makeInflightRestoreFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_RESTORE_EXTENSION);
-  }
-
-  static String makeReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REPLACE_COMMIT_EXTENSION);
-  }
-
-  static String makeInflightReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_REPLACE_COMMIT_EXTENSION);
-  }
-
-  static String makeRequestedReplaceFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_REPLACE_COMMIT_EXTENSION);
-  }
-
-  static String makeRequestedClusteringFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_CLUSTERING_COMMIT_EXTENSION);
-  }
-
-  static String makeInflightClusteringFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_CLUSTERING_COMMIT_EXTENSION);
-  }
-
-  static String makeDeltaFileName(String instantTime) {
-    return instantTime + HoodieTimeline.DELTA_COMMIT_EXTENSION;
-  }
-
-  static String getCommitFromCommitFile(String commitFileName) {
-    return commitFileName.split("\\.")[0];
-  }
-
-  static String makeFileNameAsComplete(String fileName) {
-    return fileName.replace(HoodieTimeline.INFLIGHT_EXTENSION, "");
-  }
-
-  static String makeFileNameAsInflight(String fileName) {
-    return StringUtils.join(fileName, HoodieTimeline.INFLIGHT_EXTENSION);
-  }
-
-  static String makeIndexCommitFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INDEX_COMMIT_EXTENSION);
-  }
-
-  static String makeInflightIndexFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.INFLIGHT_INDEX_COMMIT_EXTENSION);
-  }
-
-  static String makeRequestedIndexFileName(String instant) {
-    return StringUtils.join(instant, HoodieTimeline.REQUESTED_INDEX_COMMIT_EXTENSION);
-  }
-
-  static String makeSchemaFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.SAVE_SCHEMA_ACTION_EXTENSION);
-  }
-
-  static String makeInflightSchemaFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.INFLIGHT_SAVE_SCHEMA_ACTION_EXTENSION);
-  }
-
-  static String makeRequestSchemaFileName(String instantTime) {
-    return StringUtils.join(instantTime, HoodieTimeline.REQUESTED_SAVE_SCHEMA_ACTION_EXTENSION);
-  }
+  /**
+   * Get layout version of this timeline
+   * @return
+   */
+  TimelineLayoutVersion getTimelineLayoutVersion();
 }

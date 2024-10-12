@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
@@ -67,6 +66,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFile;
 
 /**
@@ -152,7 +154,7 @@ public class HoodieClientTestUtils {
 
   public static Dataset<Row> readCommit(String basePath, SQLContext sqlContext, HoodieTimeline commitTimeline,
                                         String instantTime, boolean filterByCommitTime) {
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieInstant commitInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
     }
@@ -203,7 +205,7 @@ public class HoodieClientTestUtils {
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
         Stream<GenericRecord> genericRecordStream = readHFile(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), paths);
         if (lastCommitTimeOpt.isPresent()) {
-          return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
+          return genericRecordStream.filter(gr -> compareTimestamps(lastCommitTimeOpt.get(), LESSER_THAN,
               gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
               .count();
         } else {

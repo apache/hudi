@@ -100,6 +100,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.serializeCommitMetadata;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
 import static org.apache.hudi.hadoop.realtime.HoodieRealtimeRecordReader.REALTIME_SKIP_MERGE_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -976,7 +977,7 @@ public class TestHoodieRealtimeRecordReader {
   private File createCompactionFile(java.nio.file.Path basePath, String commitTime)
       throws IOException {
     File file = basePath.resolve(".hoodie")
-        .resolve(HoodieTimeline.makeRequestedCompactionFileName(commitTime)).toFile();
+        .resolve(INSTANT_FILE_NAME_FACTORY.makeRequestedCompactionFileName(commitTime)).toFile();
     assertTrue(file.createNewFile());
     FileOutputStream os = new FileOutputStream(file);
     try {

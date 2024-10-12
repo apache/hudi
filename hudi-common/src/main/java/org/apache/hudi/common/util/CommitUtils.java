@@ -23,10 +23,9 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -125,7 +124,7 @@ public class CommitUtils {
     return commitMetadata;
   }
 
-  public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieDefaultTimeline timeline, HoodieInstant instant) {
+  public static Option<HoodieCommitMetadata> buildMetadataFromInstant(HoodieTimeline timeline, HoodieInstant instant) {
     try {
       HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
           timeline.getInstantDetails(instant).get(),

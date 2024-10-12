@@ -41,7 +41,6 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
@@ -104,6 +103,10 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NAME;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -715,7 +718,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     if (assertForCommit) {
       assertEquals(expTotalCommits, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
           "Expecting " + expTotalCommits + " commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(),
           "Latest commit should be " + newCommitTime);
       if (filterForCommitTimeWithAssert) { // when meta cols are disabled, we can't really do per commit assertion.
         assertEquals(expRecordsInThisCommit, numRowsInCommit(basePath, timeline, newCommitTime, true),
@@ -886,12 +889,12 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
     // verify that there is a commit
     HoodieTableMetaClient metaClient = createMetaClient();
-    HoodieTimeline timeline = new HoodieActiveTimeline(metaClient).getCommitAndReplaceTimeline();
+    HoodieTimeline timeline = TIMELINE_FACTORY.createActiveTimeline(metaClient).getCommitAndReplaceTimeline();
 
     if (assertForCommit) {
       assertEquals(3, timeline.findInstantsAfter(initCommitTime, Integer.MAX_VALUE).countInstants(),
           "Expecting 3 commits.");
-      assertEquals(newCommitTime, timeline.lastInstant().get().getTimestamp(),
+      assertEquals(newCommitTime, timeline.lastInstant().get().getRequestTime(),
           "Latest commit should be " + newCommitTime);
       if (filerForCommitTimeWithAssert) { // if meta cols are disabled, we can't do assertion based on assertion time
         assertEquals(expRecordsInThisCommit, numRowsInCommit(basePath, timeline, newCommitTime, true),
@@ -919,7 +922,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
 
   public long numRowsInCommit(String basePath, HoodieTimeline commitTimeline,
                               String instantTime, boolean filterByCommitTime) {
-    HoodieInstant commitInstant = new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, instantTime);
+    HoodieInstant commitInstant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime);
     if (!commitTimeline.containsInstant(commitInstant)) {
       throw new HoodieException("No commit exists at " + instantTime);
     }
@@ -1009,7 +1012,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       } else if (paths[0].endsWith(HoodieFileFormat.HFILE.getFileExtension())) {
         Stream<GenericRecord> genericRecordStream = readHFile(context.getStorageConf(), paths);
         if (lastCommitTimeOpt.isPresent()) {
-          return genericRecordStream.filter(gr -> HoodieTimeline.compareTimestamps(lastCommitTimeOpt.get(), HoodieActiveTimeline.LESSER_THAN,
+          return genericRecordStream.filter(gr -> compareTimestamps(lastCommitTimeOpt.get(), LESSER_THAN,
                   gr.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString()))
               .count();
         } else {

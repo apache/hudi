@@ -62,6 +62,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeIncrementalCommitTimes;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.table.TestCleaner.insertFirstBigBatchForClientCleanerTest;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.HoodieClientTestBase.wrapRecordsGenFunctionForPreppedCalls;
@@ -167,7 +168,7 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
       List<String> instantTimes = makeIncrementalCommitTimes(9, 1, 10);
       String compactionTime = instantTimes.get(0);
       table.getActiveTimeline().saveToCompactionRequested(
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionTime),
           TimelineMetadataUtils.serializeCompactionPlan(compactionPlan));
 
       instantTimes = instantTimes.subList(1, instantTimes.size());

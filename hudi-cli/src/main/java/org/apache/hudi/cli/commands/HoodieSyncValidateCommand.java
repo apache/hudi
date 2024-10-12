@@ -34,6 +34,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.cli.utils.CommitUtil.countNewRecords;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 
 /**
  * CLI command to display sync options.
@@ -74,12 +76,12 @@ public class HoodieSyncValidateCommand {
     }
 
     String targetLatestCommit =
-        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getTimestamp() : "0";
+        targetTimeline.getInstants().iterator().hasNext() ? targetTimeline.lastInstant().get().getRequestTime() : "0";
     String sourceLatestCommit =
-        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getTimestamp() : "0";
+        sourceTimeline.getInstants().iterator().hasNext() ? sourceTimeline.lastInstant().get().getRequestTime() : "0";
 
     if (sourceLatestCommit != null
-        && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) {
+        && compareTimestamps(targetLatestCommit, GREATER_THAN, sourceLatestCommit)) {
       // source is behind the target
       return getString(target, targetTimeline, source, sourceCount, targetCount, sourceLatestCommit);
     } else {
@@ -97,7 +99,7 @@ public class HoodieSyncValidateCommand {
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount);
     } else {
       long newInserts = countNewRecords(target,
-          commitsToCatchup.stream().map(HoodieInstant::getTimestamp).collect(Collectors.toList()));
+          commitsToCatchup.stream().map(HoodieInstant::getRequestTime).collect(Collectors.toList()));
       return "Count difference now is (count(" + target.getTableConfig().getTableName() + ") - count("
           + source.getTableConfig().getTableName() + ") == " + (targetCount - sourceCount) + ". Catch up count is "
           + newInserts;

@@ -66,6 +66,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,7 +85,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCleanMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.CLEAN_ACTION, newCommitTime), metaClient);
     assertEquals(State.COMPLETED.toString(), metaEntry.getActionState());
     assertEquals(newCommitTime, metaEntry.getHoodieCleanMetadata().getStartCleanTime());
   }
@@ -93,7 +95,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieReplaceCommitMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE.toString());
   }
@@ -103,7 +105,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-            new HoodieInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+            INSTANT_FACTORY.createNewInstant(State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.REQUESTED.toString());
     assertNull(metaEntry.getHoodieRequestedReplaceMetadata());
   }
@@ -113,7 +115,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, true);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-            new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+            INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
     assertNull(metaEntry.getHoodieInflightReplaceMetadata());
   }
@@ -123,7 +125,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createReplace(newCommitTime, WriteOperationType.INSERT_OVERWRITE_TABLE, false);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.INFLIGHT, HoodieTimeline.REPLACE_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.INFLIGHT.toString());
     assertEquals(metaEntry.getHoodieInflightReplaceMetadata().getOperationType(), WriteOperationType.INSERT_OVERWRITE_TABLE.name());
   }
@@ -133,7 +135,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createCommitMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieCommitMetadata().getOperationType(), WriteOperationType.INSERT.toString());
   }
@@ -143,7 +145,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createDeltaCommitMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), metaClient);
+            INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getActionType(), HoodieTimeline.DELTA_COMMIT_ACTION);
   }
@@ -153,7 +155,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     String newCommitTime = HoodieTestTable.makeNewCommitTime();
     createRollbackMetadata(newCommitTime);
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieRollbackMetadata().getStartRollbackTime(), newCommitTime);
   }
@@ -167,7 +169,7 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
     // So we have to reload here to get all commits written before.
     metaClient.reloadActiveTimeline();
     HoodieArchivedMetaEntry metaEntry = MetadataConversionUtils.createMetaWrapper(
-        new HoodieInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
+        INSTANT_FACTORY.createNewInstant(State.COMPLETED, HoodieTimeline.COMMIT_ACTION, newCommitTime), metaClient);
     assertEquals(metaEntry.getActionState(), State.COMPLETED.toString());
     assertEquals(metaEntry.getHoodieCommitMetadata().getOperationType(), WriteOperationType.COMPACT.toString());
   }
@@ -406,8 +408,8 @@ public class TestMetadataConversionUtils extends HoodieCommonTestHarness {
   }
 
   private ActiveAction getActiveInstant(String instantTime) {
-    HoodieActiveTimeline rawActiveTimeline = new HoodieActiveTimeline(metaClient, false);
-    List<HoodieInstant> instants = rawActiveTimeline.getInstantsAsStream().filter(instant -> instant.getTimestamp().equals(instantTime)).collect(Collectors.toList());
+    HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
+    List<HoodieInstant> instants = rawActiveTimeline.getInstantsAsStream().filter(instant -> instant.getRequestTime().equals(instantTime)).collect(Collectors.toList());
     return ActiveAction.fromInstants(instants);
   }
 }

@@ -20,9 +20,10 @@ package org.apache.hudi.cli.utils;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
@@ -37,9 +38,10 @@ public class CommitUtil {
   public static long countNewRecords(HoodieTableMetaClient metaClient, List<String> commitsToCatchup) throws IOException {
     long totalNew = 0;
     HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
+    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
     for (String commit : commitsToCatchup) {
       HoodieCommitMetadata c = HoodieCommitMetadata.fromBytes(
-          timeline.getInstantDetails(new HoodieInstant(false, HoodieTimeline.COMMIT_ACTION, commit)).get(),
+          timeline.getInstantDetails(instantFactory.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, commit)).get(),
           HoodieCommitMetadata.class);
       totalNew += c.fetchTotalRecordsWritten() - c.fetchTotalUpdateRecordsWritten();
     }
@@ -48,6 +50,6 @@ public class CommitUtil {
 
   public static String getTimeDaysAgo(int numberOfDays) {
     Date date = Date.from(ZonedDateTime.now().minusDays(numberOfDays).toInstant());
-    return HoodieActiveTimeline.formatDate(date);
+    return ActiveTimelineUtils.formatDate(date);
   }
 }

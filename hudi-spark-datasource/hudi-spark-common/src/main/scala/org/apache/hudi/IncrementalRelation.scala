@@ -103,7 +103,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     } else {
       commitTimeline.findInstantsInRange(
         optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key),
-        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp))
+        optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getRequestTime))
     }
   }
   private val commitsToReturn = commitsTimelineToReturn.getInstantsAsStream.iterator().asScala.toList
@@ -116,7 +116,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
       InternalSchema.getEmptyInternalSchema
     } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getTimestamp.toLong, metaClient)
+      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.getRequestTime.toLong, metaClient)
     } else {
       schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
     }
@@ -171,7 +171,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
           .get, classOf[HoodieCommitMetadata])
 
-        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
+        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getRequestTime) {
           metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
             replacedFile.contains(k) && v.startsWith(replacedFile(k))
           }
@@ -201,8 +201,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
         }
       }
       // pass internalSchema to hadoopConf, so it can be used in executors.
+      val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameFactory;
       val validCommits = metaClient
-        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
+        .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameFactory.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
@@ -222,7 +223,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       val startInstantTime = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
       val startInstantArchived = commitTimeline.isBeforeTimelineStarts(startInstantTime)
-      val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
+      val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getRequestTime)
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
       val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
@@ -282,9 +283,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                   .load(filteredRegularFullPaths.toList: _*)
                   .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    commitsToReturn.head.getTimestamp))
+                    commitsToReturn.head.getRequestTime))
                   .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-                    commitsToReturn.last.getTimestamp)))
+                    commitsToReturn.last.getRequestTime)))
               } catch {
                 case e : AnalysisException =>
                   if (e.getMessage.contains("Path does not exist")) {

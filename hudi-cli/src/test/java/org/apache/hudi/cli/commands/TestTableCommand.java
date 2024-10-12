@@ -32,7 +32,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGeneratorType;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
@@ -239,7 +238,7 @@ public class TestTableCommand extends CLIFunctionalTestHarness {
     HoodieCLI.conf = storageConf();
     new TableCommand().createTable(
         tablePath, tableName, HoodieTableType.COPY_ON_WRITE.name(),
-        "", TimelineLayoutVersion.VERSION_1, HoodieTableVersion.current().versionCode(),
+        "", HoodieTableVersion.current().versionCode(),
         "org.apache.hudi.common.model.HoodieAvroPayload");
 
     String schemaStr = "{\n"

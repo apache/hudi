@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.functional;
 
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -238,7 +238,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createInsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
+    long startTime = ActiveTimelineUtils.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     for (long recordNum = 0; recordNum < 96; recordNum++) {
       records.add(new HoodieTestDataGenerator().generateGenericRecord(Long.toString(recordNum), "0", "rider-" + recordNum, "driver-" + recordNum, startTime + TimeUnit.HOURS.toSeconds(recordNum)));
@@ -255,7 +255,7 @@ public class TestHDFSParquetImporter extends FunctionalTestHarness implements Se
 
   public List<GenericRecord> createUpsertRecords(Path srcFolder) throws ParseException, IOException {
     Path srcFile = new Path(srcFolder.toString(), "file1.parquet");
-    long startTime = HoodieActiveTimeline.parseDateFromInstantTime("20170203000000").getTime() / 1000;
+    long startTime = ActiveTimelineUtils.parseDateFromInstantTime("20170203000000").getTime() / 1000;
     List<GenericRecord> records = new ArrayList<GenericRecord>();
     // 10 for update
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();

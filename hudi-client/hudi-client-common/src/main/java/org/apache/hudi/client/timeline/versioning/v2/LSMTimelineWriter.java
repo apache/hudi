@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.client.timeline;
+package org.apache.hudi.client.timeline.versioning.v2;
 
 import org.apache.hudi.avro.model.HoodieLSMTimelineInstant;
 import org.apache.hudi.common.engine.HoodieEngineContext;

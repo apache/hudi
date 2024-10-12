@@ -50,6 +50,6 @@ public class WriteStatBasedIndexingCatchupTask extends AbstractIndexingCatchupTa
   public void updateIndexForWriteAction(HoodieInstant instant) throws IOException {
     HoodieCommitMetadata commitMetadata = HoodieCommitMetadata.fromBytes(
         metaClient.getActiveTimeline().getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-    metadataWriter.updateFromWriteStatuses(commitMetadata, engineContext.emptyHoodieData(), instant.getTimestamp());
+    metadataWriter.updateFromWriteStatuses(commitMetadata, engineContext.emptyHoodieData(), instant.getRequestTime());
   }
 }

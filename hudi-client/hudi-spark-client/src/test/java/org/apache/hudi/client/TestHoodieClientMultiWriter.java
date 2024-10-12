@@ -280,7 +280,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     List<String> completedInstant = metaClient.reloadActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants().getInstants().stream()
-        .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
+        .map(HoodieInstant::getRequestTime).collect(Collectors.toList());
 
     assertEquals(3, completedInstant.size());
     assertTrue(completedInstant.contains(nextCommitTime1));
@@ -577,12 +577,12 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     String pendingCompactionTime = (tableType == HoodieTableType.MERGE_ON_READ)
         ? metaClient.reloadActiveTimeline().filterPendingCompactionTimeline()
-        .firstInstant().get().getTimestamp()
+        .firstInstant().get().getRequestTime()
         : "";
     Option<HoodieInstant> pendingCleanInstantOp = metaClient.reloadActiveTimeline().getCleanerTimeline().filterInflightsAndRequested()
         .firstInstant();
     String pendingCleanTime = pendingCleanInstantOp.isPresent()
-        ? pendingCleanInstantOp.get().getTimestamp()
+        ? pendingCleanInstantOp.get().getRequestTime()
         : client.createNewInstantTime();
 
     CountDownLatch runCountDownLatch = new CountDownLatch(threadCount);
@@ -621,9 +621,9 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     validInstants.addAll(
         metaClient.reloadActiveTimeline().getCompletedReplaceTimeline()
-            .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp).collect(Collectors.toSet()));
+            .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getRequestTime).collect(Collectors.toSet()));
     Set<String> completedInstants = metaClient.reloadActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getTimestamp)
+        .filterCompletedInstants().getInstantsAsStream().map(HoodieInstant::getRequestTime)
         .collect(Collectors.toSet());
     assertTrue(validInstants.containsAll(completedInstants));
 

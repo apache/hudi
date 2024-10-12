@@ -27,7 +27,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -66,6 +65,7 @@ import java.util.SortedMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -181,7 +181,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // create one inflight instance.
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_FACTORY.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // create one compaction instance before exist inflight instance.
@@ -209,7 +209,7 @@ public class TestHoodieCompactor extends HoodieSparkClientTestHarness {
       // commit 3 (inflight)
       newCommitTime = "102";
       writeClient.startCommitWithTime(newCommitTime);
-      metaClient.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(State.REQUESTED,
+      metaClient.getActiveTimeline().transitionRequestedToInflight(INSTANT_FACTORY.createNewInstant(State.REQUESTED,
           HoodieTimeline.DELTA_COMMIT_ACTION, newCommitTime), Option.empty());
 
       // check that compaction will not be scheduled

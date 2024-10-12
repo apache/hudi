@@ -394,7 +394,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     ExecutorService service = Executors.newFixedThreadPool(2);
     HoodieTableMetaClient meta = createMetaClient(new HadoopStorageConfiguration(hadoopConf), tableBasePath);
     HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    String lastSuccessfulCommit = timeline.lastInstant().get().getTimestamp();
+    String lastSuccessfulCommit = timeline.lastInstant().get().getRequestTime();
     // Condition for parallel ingestion job
     Function<Boolean, Boolean> conditionForRegularIngestion = (r) -> {
       if (tableType.equals(HoodieTableType.MERGE_ON_READ)) {

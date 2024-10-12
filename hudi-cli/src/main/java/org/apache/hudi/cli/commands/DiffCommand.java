@@ -19,13 +19,15 @@
 
 package org.apache.hudi.cli.commands;
 
+import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.HoodieTableHeaderFields;
 import org.apache.hudi.cli.utils.CLIUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
-import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.NumericUtils;
 import org.apache.hudi.common.util.Option;
 
@@ -65,7 +67,7 @@ public class DiffCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly,
       @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
           defaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
-    HoodieDefaultTimeline timeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
+    HoodieTimeline timeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     return printCommitsWithMetadataForFileId(timeline, limit, sortByField, descending, headerOnly, "", fileId);
   }
 
@@ -82,11 +84,11 @@ public class DiffCommand {
       @ShellOption(value = {"--headeronly"}, help = "Print Header Only", defaultValue = "false") final boolean headerOnly,
       @ShellOption(value = {"--includeArchivedTimeline"}, help = "Include archived commits as well",
           defaultValue = "false") final boolean includeArchivedTimeline) throws IOException {
-    HoodieDefaultTimeline timeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
+    HoodieTimeline timeline = CLIUtils.getTimelineInRange(startTs, endTs, includeArchivedTimeline);
     return printCommitsWithMetadataForPartition(timeline, limit, sortByField, descending, headerOnly, "", partitionPath);
   }
 
-  private String printCommitsWithMetadataForFileId(HoodieDefaultTimeline timeline,
+  private String printCommitsWithMetadataForFileId(HoodieTimeline timeline,
                                                    final Integer limit,
                                                    final String sortByField,
                                                    final boolean descending,
@@ -96,7 +98,7 @@ public class DiffCommand {
     return printDiffWithMetadata(timeline, limit, sortByField, descending, headerOnly, tempTableName, fileId, FILE_ID_CHECKER);
   }
 
-  private String printCommitsWithMetadataForPartition(HoodieDefaultTimeline timeline,
+  private String printCommitsWithMetadataForPartition(HoodieTimeline timeline,
                                                       final Integer limit,
                                                       final String sortByField,
                                                       final boolean descending,
@@ -106,11 +108,12 @@ public class DiffCommand {
     return printDiffWithMetadata(timeline, limit, sortByField, descending, headerOnly, tempTableName, partition, PARTITION_CHECKER);
   }
 
-  private String printDiffWithMetadata(HoodieDefaultTimeline timeline, Integer limit, String sortByField, boolean descending, boolean headerOnly, String tempTableName, String diffEntity,
+  private String printDiffWithMetadata(HoodieTimeline timeline, Integer limit, String sortByField, boolean descending, boolean headerOnly, String tempTableName, String diffEntity,
                                        BiFunction<HoodieWriteStat, String, Boolean> diffEntityChecker) throws IOException {
     List<Comparable[]> rows = new ArrayList<>();
+    InstantComparator instantComparator = HoodieCLI.getTableMetaClient().getTimelineLayout().getInstantComparator();
     List<HoodieInstant> commits = timeline.getCommitsTimeline().filterCompletedInstants()
-        .getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed()).collect(Collectors.toList());
+        .getInstantsAsStream().sorted(instantComparator.getRequestTimePrimaryOrderingComparator().reversed()).collect(Collectors.toList());
 
     for (final HoodieInstant commit : commits) {
       Option<byte[]> instantDetails = timeline.getInstantDetails(commit);
@@ -139,7 +142,7 @@ public class DiffCommand {
     if (checker.apply(hoodieWriteStat, value)) {
       rows.add(new Comparable[] {
           commit.getAction(),
-          commit.getTimestamp(),
+          commit.getRequestTime(),
           hoodieWriteStat.getPartitionPath(),
           hoodieWriteStat.getFileId(),
           hoodieWriteStat.getPrevCommit(),

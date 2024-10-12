@@ -141,7 +141,7 @@ class RunClusteringProcedure extends BaseProcedure
     }
 
     val pendingClusteringInstants = ClusteringUtils.getAllPendingClusteringPlans(metaClient)
-      .iterator().asScala.map(_.getLeft.getTimestamp).toSeq.sortBy(f => f)
+      .iterator().asScala.map(_.getLeft.getRequestTime).toSeq.sortBy(f => f)
 
     var (filteredPendingClusteringInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingClusteringInstants, specificInstants.asInstanceOf[Option[String]], op.asInstanceOf[Option[String]], limit.asInstanceOf[Option[Int]])
@@ -171,9 +171,9 @@ class RunClusteringProcedure extends BaseProcedure
       }
 
       val clusteringInstants = metaClient.reloadActiveTimeline().getInstants.iterator().asScala
-        .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && filteredPendingClusteringInstants.contains(p.getTimestamp))
+        .filter(p => p.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION && filteredPendingClusteringInstants.contains(p.getRequestTime))
         .toSeq
-        .sortBy(f => f.getTimestamp)
+        .sortBy(f => f.getRequestTime)
         .reverse
 
       val clusteringPlans = clusteringInstants.map(instant =>
@@ -182,12 +182,12 @@ class RunClusteringProcedure extends BaseProcedure
 
       if (showInvolvedPartitions) {
         clusteringPlans.map { p =>
-          Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(),
+          Row(p.get().getLeft.getRequestTime, p.get().getRight.getInputGroups.size(),
             p.get().getLeft.getState.name(), HoodieCLIUtils.extractPartitions(p.get().getRight.getInputGroups.asScala.toSeq))
         }
       } else {
         clusteringPlans.map { p =>
-          Row(p.get().getLeft.getTimestamp, p.get().getRight.getInputGroups.size(), p.get().getLeft.getState.name(), "*")
+          Row(p.get().getLeft.getRequestTime, p.get().getRight.getInputGroups.size(), p.get().getLeft.getState.name(), "*")
         }
       }
     } finally {

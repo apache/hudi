@@ -29,6 +29,16 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.TimelineFactory;
+import org.apache.hudi.common.table.timeline.TimelineLayout;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameFactoryV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.TimelineV2Factory;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -70,6 +80,10 @@ public class HoodieTestUtils {
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
+  public static final InstantFactory INSTANT_FACTORY = new InstantFactoryV2();
+  public static final TimelineFactory TIMELINE_FACTORY = new TimelineV2Factory(TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION));
+  public static final InstantFileNameFactory INSTANT_FILE_NAME_FACTORY = new InstantFileNameFactoryV2();
+  public static final InstantFileNameParser INSTANT_FILE_NAME_PARSER = new InstantFileNameParserV2();
 
   public static StorageConfiguration<Configuration> getDefaultStorageConf() {
     return (StorageConfiguration<Configuration>) ReflectionUtils.loadClass(HADOOP_STORAGE_CONF,
@@ -349,7 +363,7 @@ public class HoodieTestUtils {
 
   public static HoodieInstant getCompleteInstant(HoodieStorage storage, StoragePath parent,
                                                  String instantTime, String action) {
-    return new HoodieInstant(getCompleteInstantFileInfo(storage, parent, instantTime, action));
+    return INSTANT_FACTORY.createNewInstant(getCompleteInstantFileInfo(storage, parent, instantTime, action));
   }
 
   public static StoragePath getCompleteInstantPath(HoodieStorage storage, StoragePath parent,

@@ -382,7 +382,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     var totalLatestDataFiles = 0L
     val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(metaClient)
     try {
-      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+      fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getRequestTime)
         .values()
         .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
           (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

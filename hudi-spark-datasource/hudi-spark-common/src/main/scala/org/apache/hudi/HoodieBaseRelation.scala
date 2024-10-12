@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter, BaseFileReader}
+import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
@@ -30,7 +30,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieFileFormat.HFILE
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
@@ -48,7 +48,6 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -57,7 +56,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Row, SparkSession, SQLContext}
+import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.{convertToCatalystExpression, generateUnsafeProjection}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -295,7 +294,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     metaClient.getCommitsAndCompactionTimeline.filterCompletedInstants
 
   private def queryTimestamp: Option[String] =
-    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getTimestamp))
+    specifiedQueryTimestamp.orElse(toScalaOption(timeline.lastInstant()).map(_.getRequestTime))
 
   /**
    * Returns true in case table supports Schema on Read (Schema Evolution)
@@ -694,7 +693,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     val internalSchema = internalSchemaOpt.getOrElse(InternalSchema.getEmptyInternalSchema)
     val querySchemaString = SerDeHelper.toJson(internalSchema)
     if (!isNullOrEmpty(querySchemaString)) {
-      val validCommits = timeline.getInstants.iterator.asScala.map(_.getFileName).mkString(",")
+      val instantFileNameFactory = TimelineLayout.getLayout(timeline.getTimelineLayoutVersion).getInstantFileNameFactory
+      val validCommits = timeline.getInstants.iterator.asScala.map(instant => instantFileNameFactory.getFileName(instant)).mkString(",")
 
       conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)

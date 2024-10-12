@@ -20,7 +20,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.DummyActiveAction;
-import org.apache.hudi.client.timeline.LSMTimelineWriter;
+import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -64,13 +65,13 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
     writeArchivedTimeline(10, 10000000);
     // now we got 500 instants spread in 5 parquets.
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline("10000043");
-    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getTimestamp).orElse(""), is("10000043"));
-    assertThat(archivedTimeline.lastInstant().map(HoodieInstant::getTimestamp).orElse(""), is("10000050"));
+    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getRequestTime).orElse(""), is("10000043"));
+    assertThat(archivedTimeline.lastInstant().map(HoodieInstant::getRequestTime).orElse(""), is("10000050"));
     // load incrementally
     archivedTimeline.reload("10000034");
-    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getTimestamp).orElse(""), is("10000034"));
+    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getRequestTime).orElse(""), is("10000034"));
     archivedTimeline.reload("10000011");
-    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getTimestamp).orElse(""), is("10000011"));
+    assertThat(archivedTimeline.firstInstant().map(HoodieInstant::getRequestTime).orElse(""), is("10000011"));
   }
 
   // -------------------------------------------------------------------------
@@ -90,7 +91,7 @@ public class TestHoodieArchivedTimeline extends HoodieCommonTestHarness {
       long instantTimeTs = startTs + i;
       String instantTime = String.valueOf(instantTimeTs);
       String completionTime = String.valueOf(instantTimeTs + 10);
-      HoodieInstant instant = new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime);
+      HoodieInstant instant = INSTANT_FACTORY.createNewInstant(HoodieInstant.State.COMPLETED, "commit", instantTime, completionTime);
       HoodieCommitMetadata metadata  = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       byte[] serializedMetadata = TimelineMetadataUtils.serializeCommitMetadata(metadata).get();
       instantBuffer.add(new DummyActiveAction(instant, serializedMetadata));

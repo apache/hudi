@@ -50,7 +50,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.RECORD_MERGE_MODE;
-import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_1;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.EXTRA_TYPE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.FARE_NESTED_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_IS_DELETED_SCHEMA;
@@ -169,7 +168,6 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
         .fromMetaClient(metaClient)
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setRecordMergeMode(RecordMergeMode.valueOf(RECORD_MERGE_MODE.defaultValue()))
-        .setTimelineLayoutVersion(VERSION_1)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfig(TRIP_EXAMPLE_SCHEMA, shouldAllowDroppedColumns);
@@ -257,7 +255,6 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
     // Create the table
     HoodieTableMetaClient.newTableBuilder()
         .fromMetaClient(metaClient)
-        .setTimelineLayoutVersion(VERSION_1)
         .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
 
     HoodieWriteConfig hoodieWriteConfig = getWriteConfigBuilder(TRIP_EXAMPLE_SCHEMA)
@@ -314,7 +311,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
     // new commit
     HoodieTimeline curTimeline = metaClient.reloadActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants();
-    assertTrue(curTimeline.lastInstant().get().getTimestamp().equals("006"));
+    assertTrue(curTimeline.lastInstant().get().getRequestTime().equals("006"));
     checkReadRecords("000", 3 * numRecords);
 
     // Updating with evolved schema is allowed
@@ -363,7 +360,7 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
   private void checkLatestDeltaCommit(String instantTime) {
     HoodieTimeline timeline = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     assertEquals(HoodieTimeline.DELTA_COMMIT_ACTION, timeline.lastInstant().get().getAction());
-    assertEquals(instantTime, timeline.lastInstant().get().getTimestamp());
+    assertEquals(instantTime, timeline.lastInstant().get().getRequestTime());
   }
 
   private List<HoodieRecord> generateInsertsWithSchema(String commitTime, int numRecords, String schemaStr) {

@@ -42,6 +42,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantFactory;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
@@ -760,6 +761,10 @@ public class HoodieStreamer implements Serializable {
     @Override
     protected Pair<CompletableFuture, ExecutorService> startService() {
       ExecutorService executor = Executors.newFixedThreadPool(1);
+      HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
+          .setConf(this.storage.getConf().newInstance())
+          .setBasePath(cfg.targetBasePath).setLoadActiveTimelineOnLoad(false).build();
+      final InstantFactory instantFactory = meta.getTimelineLayout().getInstantFactory();
       return Pair.of(CompletableFuture.supplyAsync(() -> {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
@@ -789,7 +794,7 @@ public class HoodieStreamer implements Serializable {
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(streamSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
                 LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");
-                asyncCompactService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED,
+                asyncCompactService.get().enqueuePendingAsyncServiceInstant(instantFactory.createNewInstant(State.REQUESTED,
                     HoodieTimeline.COMPACTION_ACTION, scheduledCompactionInstantAndRDD.get().getLeft().get()));
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
                 if (asyncCompactService.get().hasError()) {
@@ -801,7 +806,7 @@ public class HoodieStreamer implements Serializable {
                 Option<String> clusteringInstant = streamSync.getClusteringInstantOpt();
                 if (clusteringInstant.isPresent()) {
                   LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
-                  asyncClusteringService.get().enqueuePendingAsyncServiceInstant(new HoodieInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()));
+                  asyncClusteringService.get().enqueuePendingAsyncServiceInstant(instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()));
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
                   if (asyncClusteringService.get().hasError()) {
                     error = true;
