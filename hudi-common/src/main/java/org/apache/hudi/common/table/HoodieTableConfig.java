@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
@@ -371,6 +372,8 @@ public class HoodieTableConfig extends HoodieConfig {
     // If we are here then after all retries either no hoodie.properties was found or only an invalid file was found.
     if (found) {
       throw new IllegalArgumentException("hoodie.properties file seems invalid. Please check for left over `.updated` files if any, manually copy it to hoodie.properties and retry");
+    } else if (!fs.exists(new Path(metaPath))) {
+      throw new TableNotFoundException(metaPath);
     } else {
       throw new HoodieIOException("Could not load Hoodie properties from " + cfgPath);
     }
