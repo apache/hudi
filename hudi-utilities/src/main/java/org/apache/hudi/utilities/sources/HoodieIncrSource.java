@@ -22,17 +22,13 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.table.log.InstantRange.RangeType;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -62,14 +58,12 @@ import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.getStrictlyLowerTimestamp;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.UtilHelpers.createRecordMerger;
-import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.DEFAULT_BEGIN_TIMESTAMP;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesceOrRepartition;
 
 public class HoodieIncrSource extends RowSource {
@@ -187,58 +181,12 @@ public class HoodieIncrSource extends RowSource {
       missingCheckpointStrategy = IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST;
     }
 
-    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration()))
-        .setBasePath(srcPath)
-        .setLoadActiveTimelineOnLoad(true)
-        .build();
-
-    int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
-
-    String startTime;
-    if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
-      startTime = lastCkptStr.get();
-    } else if (missingCheckpointStrategy != null) {
-      switch (missingCheckpointStrategy) {
-        case READ_UPTO_LATEST_COMMIT:
-          startTime = DEFAULT_BEGIN_TIMESTAMP;
-          // disrespect numInstantsFromConfig when reading up to latest
-          numInstantsFromConfig = -1;
-          break;
-        case READ_LATEST:
-          Option<HoodieInstant> lastInstant = metaClient
-              .getCommitsAndCompactionTimeline()
-              .filterCompletedInstants()
-              .lastInstant();
-          startTime = lastInstant
-              .map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getCompletionTime()))
-              .orElse(DEFAULT_BEGIN_TIMESTAMP);
-          break;
-        default:
-          throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
-      }
-    } else {
-      throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
-          + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
-    }
-
-    final int numInstantsFromConfigFinal = numInstantsFromConfig;
-    // If source profile exists, use the numInstants from source profile.
-    int numInstantsPerFetch = getLatestSourceProfile().map(sourceProfile -> {
-      int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
-          numInstantsFromSourceProfile, numInstantsFromConfigFinal);
-      return numInstantsFromSourceProfile;
-    }).orElse(numInstantsFromConfig);
-
-    IncrementalQueryAnalyzer analyzer = IncrementalQueryAnalyzer.builder()
-        .metaClient(metaClient)
-        .startTime(startTime)
-        .endTime(null)
-        .rangeType(RangeType.OPEN_CLOSED)
-        .limit(numInstantsPerFetch)
-        .build();
-
+    IncrementalQueryAnalyzer analyzer = IncrSourceHelper.getIncrementalQueryAnalyzer(
+        sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
+        getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
+        getLatestSourceProfile());
+    String startTime = analyzer.getStartTime().get();
+    int numInstantsPerFetch = analyzer.getLimit();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
@@ -292,7 +240,7 @@ public class HoodieIncrSource extends RowSource {
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
-          .option(DataSourceReadOptions.INCREMENTAL_LIMIT().key(), numInstantsFromConfig)
+          .option(DataSourceReadOptions.INCREMENTAL_LIMIT().key(), numInstantsPerFetch)
           .load(srcPath);
     }
 

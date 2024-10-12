@@ -137,6 +137,14 @@ public class IncrementalQueryAnalyzer {
     this.limit = limit;
   }
 
+  public Option<String> getStartTime() {
+    return startTime;
+  }
+
+  public int getLimit() {
+    return limit;
+  }
+
   /**
    * Returns a builder.
    */

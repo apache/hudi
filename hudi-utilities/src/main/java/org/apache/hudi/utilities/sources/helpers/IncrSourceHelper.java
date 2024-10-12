@@ -21,6 +21,8 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.InstantRange.RangeType;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -32,6 +34,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
+import org.apache.hudi.utilities.streamer.SourceProfile;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -163,6 +166,64 @@ public class IncrSourceHelper {
           previousInstantTime, beginInstantTime, lastInstant.get().getTimestamp(),
           orderColumn, keyColumn, limitColumn);
     }
+  }
+
+  public static IncrementalQueryAnalyzer getIncrementalQueryAnalyzer(
+      JavaSparkContext jssc,
+      String srcPath,
+      Option<String> lastCkptStr,
+      MissingCheckpointStrategy missingCheckpointStrategy,
+      int numInstantsFromConfig,
+      Option<SourceProfile<Integer>> latestSourceProfile) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()))
+        .setBasePath(srcPath)
+        .setLoadActiveTimelineOnLoad(true)
+        .build();
+
+    String startTime;
+    if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
+      startTime = lastCkptStr.get();
+    } else if (missingCheckpointStrategy != null) {
+      switch (missingCheckpointStrategy) {
+        case READ_UPTO_LATEST_COMMIT:
+          startTime = DEFAULT_BEGIN_TIMESTAMP;
+          // disrespect numInstantsFromConfig when reading up to latest
+          numInstantsFromConfig = -1;
+          break;
+        case READ_LATEST:
+          Option<HoodieInstant> lastInstant = metaClient
+              .getCommitsAndCompactionTimeline()
+              .filterCompletedInstants()
+              .lastInstant();
+          startTime = lastInstant
+              .map(hoodieInstant -> getStrictlyLowerTimestamp(hoodieInstant.getCompletionTime()))
+              .orElse(DEFAULT_BEGIN_TIMESTAMP);
+          break;
+        default:
+          throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
+      }
+    } else {
+      throw new IllegalArgumentException("Missing begin instant for incremental pull. For reading from latest "
+          + "committed instant set hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy to a valid value");
+    }
+
+    final int numInstantsFromConfigFinal = numInstantsFromConfig;
+    // If source profile exists, use the numInstants from source profile.
+    int numInstantsPerFetch = latestSourceProfile.map(sourceProfile -> {
+      int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
+      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+          numInstantsFromSourceProfile, numInstantsFromConfigFinal);
+      return numInstantsFromSourceProfile;
+    }).orElse(numInstantsFromConfig);
+
+    return IncrementalQueryAnalyzer.builder()
+        .metaClient(metaClient)
+        .startTime(startTime)
+        .endTime(null)
+        .rangeType(RangeType.OPEN_CLOSED)
+        .limit(numInstantsPerFetch)
+        .build();
   }
 
   /**
