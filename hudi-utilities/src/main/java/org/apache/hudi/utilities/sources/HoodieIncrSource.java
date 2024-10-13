@@ -186,7 +186,6 @@ public class HoodieIncrSource extends RowSource {
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
     String completionTimeToResumeFrom = analyzer.getStartTime().get();
-    int numInstantsPerFetch = analyzer.getLimit();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
@@ -240,7 +239,6 @@ public class HoodieIncrSource extends RowSource {
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
-          .option(HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH.key(), numInstantsPerFetch)
           .load(srcPath);
     }
 

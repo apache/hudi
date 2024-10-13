@@ -141,10 +141,6 @@ public class IncrementalQueryAnalyzer {
     return startTime;
   }
 
-  public int getLimit() {
-    return limit;
-  }
-
   /**
    * Returns a builder.
    */
