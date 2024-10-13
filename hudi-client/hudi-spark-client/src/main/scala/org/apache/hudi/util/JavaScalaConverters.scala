@@ -63,10 +63,10 @@ object JavaScalaConverters {
   }
 
   /**
-   * @param javProperties properties in [[java.util.Properties]]
+   * @param javaProperties properties in [[java.util.Properties]]
    * @return map in Scala [[Map]].
    */
-  def convertJavaPropertiesToScalaMap(javProperties: java.util.Properties): Map[String, String] = {
-    javProperties.asScala.toMap
+  def convertJavaPropertiesToScalaMap(javaProperties: java.util.Properties): Map[String, String] = {
+    javaProperties.asScala.toMap
   }
 }

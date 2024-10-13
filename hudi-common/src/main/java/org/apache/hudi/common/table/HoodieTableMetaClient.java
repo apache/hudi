@@ -51,7 +51,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -160,7 +159,6 @@ public class HoodieTableMetaClient implements Serializable {
     this.storage = storage;
     this.basePath = new StoragePath(basePath);
     this.metaPath = new StoragePath(basePath, METAFOLDER_NAME);
-    TableNotFoundException.checkTableValidity(this.storage, this.basePath, metaPath);
     this.tableConfig = new HoodieTableConfig(this.storage, metaPath, recordMergeMode, payloadClassName, recordMergerStrategy);
     this.indexMetadataOpt = getIndexMetadata();
     this.tableType = tableConfig.getTableType();

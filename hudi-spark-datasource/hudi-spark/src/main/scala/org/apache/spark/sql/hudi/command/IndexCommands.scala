@@ -52,8 +52,9 @@ case class CreateIndexCommand(table: CatalogTable,
     columns.map(c => columnsMap.put(c._1.mkString("."), c._2.asJava))
 
     if (options.contains("func") || indexType.equals("secondary_index")) {
+      val extraOpts = options ++ table.properties
       HoodieSparkIndexClient.getInstance(sparkSession).create(
-        metaClient, indexName, indexType, columnsMap, options.asJava)
+        metaClient, indexName, indexType, columnsMap, extraOpts.asJava)
     } else {
       SecondaryIndexManager.getInstance().create(
         metaClient, indexName, indexType, ignoreIfExists, columnsMap, options.asJava)

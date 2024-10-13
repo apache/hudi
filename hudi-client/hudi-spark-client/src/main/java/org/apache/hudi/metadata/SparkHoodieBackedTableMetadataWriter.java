@@ -163,8 +163,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf) {
-    HoodieFunctionalIndex<Column, Column> functionalIndex =
-        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -175,11 +173,12 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     //       HUDI-6994 will address this.
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
-    String basePath = metaClient.getBasePath().toString();
 
     // Group FileSlices by partition
     Map<String, List<FileSlice>> partitionToFileSlicesMap = partitionFileSlicePairs.stream()
         .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
+    HoodieFunctionalIndex<Column, Column> functionalIndex =
+        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
     List<HoodieRecord> allRecords = new ArrayList<>();
     for (Map.Entry<String, List<FileSlice>> entry : partitionToFileSlicesMap.entrySet()) {
       String partition = entry.getKey();

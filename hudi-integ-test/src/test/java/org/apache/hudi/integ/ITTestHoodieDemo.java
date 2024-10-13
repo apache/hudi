@@ -131,8 +131,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
-    // TODO(HUDI-8271): fix incremental queries in integration tests on Hive
-    // testIncrementalHiveQueryBeforeCompaction();
+    testIncrementalHiveQueryBeforeCompaction();
     testIncrementalSparkSQLQuery();
 
     // compaction
@@ -142,7 +141,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     // testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
-    // testIncrementalHiveQueryAfterCompaction();
+    testIncrementalHiveQueryAfterCompaction();
   }
 
   @Test
@@ -453,15 +452,14 @@ public class ITTestHoodieDemo extends ITTestBase {
 
   private void testSparkSQLAfterSecondBatch() throws Exception {
     Pair<String, String> stdOutErrPair = executeSparkSQLCommand(SPARKSQL_BATCH2_COMMANDS, true);
-    // TODO(HUDI-8273): fix RO queries on bootstrapped MOR tables
     assertStdOutContains(stdOutErrPair,
-        "+------+-------------------+\n|GOOG  |2018-08-31 10:59:00|\n+------+-------------------+", 5);
+        "+------+-------------------+\n|GOOG  |2018-08-31 10:59:00|\n+------+-------------------+", 4);
 
     assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 09:59:00|6330  |1230.5   |1230.02 |", 6);
-    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 5);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:59:00|9021  |1227.1993|1227.215|", 4);
     assertStdOutContains(stdOutErrPair,
-        "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 1);
-    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:29:00|3391  |1230.1899|1230.085|", 1);
+        "+------+-------------------+\n|GOOG  |2018-08-31 10:29:00|\n+------+-------------------+", 2);
+    assertStdOutContains(stdOutErrPair, "|GOOG  |2018-08-31 10:29:00|3391  |1230.1899|1230.085|", 2);
   }
 
   private void testIncrementalHiveQuery(String minCommitTimeScript, String incrementalCommandsFile,
