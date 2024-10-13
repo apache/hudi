@@ -76,6 +76,7 @@ object HoodieCreateRecordUtils {
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
     val autoGenerateRecordKeys: Boolean = !parameters.asJava.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
+    val isPrecombinePresent = !StringUtils.isNullOrEmpty(config.getString(PRECOMBINE_FIELD))
 
     var shouldCombine = false
     if (preppedWriteOperation && !preppedSparkSqlWrites && !preppedSparkSqlMergeInto) {// prepped pk less via spark-ds
@@ -143,8 +144,8 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
 
-            val hoodieRecord = if (shouldCombine && !precombineEmpty) {
-              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, precombine,
+            val hoodieRecord = if (shouldCombine && isPrecombinePresent) {
+              val orderingVal = HoodieAvroUtils.getNestedFieldVal(avroRec, config.getString(PRECOMBINE_FIELD),
                 false, consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]
               DataSourceUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getString(PAYLOAD_CLASS_NAME), recordLocation)
