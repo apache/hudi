@@ -97,7 +97,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       includeStartTime = false,
       startTimestamp = startTs,
       endTimestamp = endTs,
-      includedTimestamps = includedCommits.map(_.getTimestamp).toSet)
+      includedInstantTimeSet = includedCommits.map(_.getTimestamp).toSet)
   }
 
   override protected def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): List[HoodieMergeOnReadFileSplit] = {

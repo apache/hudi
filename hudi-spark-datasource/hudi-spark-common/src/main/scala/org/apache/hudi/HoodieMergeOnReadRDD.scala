@@ -71,7 +71,7 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  * @param includeStartTime whether to include the commit with the commitTime
  * @param startTimestamp start timestamp to filter records
  * @param endTimestamp end timestamp to filter records
- * @param includedTimestamps timestamps used to filter records
+ * @param includedInstantTimeSet timestamps used to filter records
  */
 class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            @transient config: Configuration,
@@ -84,7 +84,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
                            includeStartTime: Boolean = false,
                            startTimestamp: String = null,
                            endTimestamp: String = null,
-                           includedTimestamps: Set[String] = null)
+                           includedInstantTimeSet: Set[String] = null)
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -129,7 +129,7 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
     }
 
     val commitTimeMetadataFieldIdx = requiredSchema.structTypeSchema.fieldNames.indexOf(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
-    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && (includedTimestamps != null || (!StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)))
+    val needsFiltering = commitTimeMetadataFieldIdx >= 0 && (includedInstantTimeSet != null || (!StringUtils.isNullOrEmpty(startTimestamp) && !StringUtils.isNullOrEmpty(endTimestamp)))
     if (needsFiltering) {
       val filterT: Predicate[InternalRow] = getCommitTimeFilter(commitTimeMetadataFieldIdx)
       iter.filter(filterT.test)
@@ -140,11 +140,11 @@ class HoodieMergeOnReadRDD(@transient sc: SparkContext,
   }
 
   private def getCommitTimeFilter(commitTimeMetadataFieldIdx: Int): Predicate[InternalRow] = {
-    if (includedTimestamps != null) {
+    if (includedInstantTimeSet != null) {
       new Predicate[InternalRow] {
         override def test(row: InternalRow): Boolean = {
           val commitTime = row.getString(commitTimeMetadataFieldIdx)
-          includedTimestamps.contains(commitTime)
+          includedInstantTimeSet.contains(commitTime)
         }
       }
     } else if (includeStartTime) {
