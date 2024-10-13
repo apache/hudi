@@ -716,10 +716,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, true).collect(Collectors.toList());
   }
 
-  public List<HoodieRecord> generateInsertsContainsAllPartitions(Long instantTime, Integer n) {
-    return generateInsertsContainsAllPartitions(String.valueOf(instantTime), n);
-  }
-
   public List<HoodieRecord> generateInsertsForPartition(String instantTime, Integer n, String partition) {
     return generateInsertsStream(instantTime,  n, false, TRIP_EXAMPLE_SCHEMA, false, () -> partition, () -> genPseudoRandomUUID(rand).toString()).collect(Collectors.toList());
   }
@@ -789,10 +785,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       copy.add(record);
     }
     return copy;
-  }
-
-  public List<HoodieRecord> generateSameKeyInserts(Long instantTime, List<HoodieRecord> origin) throws IOException {
-    return generateSameKeyInserts(String.valueOf(instantTime), origin);
   }
 
   public List<HoodieRecord> generateInsertsWithHoodieAvroPayload(String instantTime, int limit) {
@@ -938,10 +930,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
    */
   public List<HoodieRecord> generateUniqueUpdates(String instantTime, Integer n) {
     return generateUniqueUpdatesStream(instantTime, n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
-  }
-
-  public List<HoodieRecord> generateUniqueUpdates(Long instantTime, Integer n) {
-    return generateUniqueUpdatesStream(String.valueOf(instantTime), n, TRIP_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }
 
   public List<HoodieRecord> generateUniqueUpdatesNestedExample(String instantTime, Integer n) {

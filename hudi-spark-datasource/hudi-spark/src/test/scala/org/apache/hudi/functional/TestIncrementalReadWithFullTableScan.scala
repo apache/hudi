@@ -73,7 +73,7 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
 
     // Create 10 commits
     for (i <- 1 to 10) {
-      val records = recordsToStrings(dataGen.generateInserts(System.currentTimeMillis(), perBatchSize)).asScala.toList
+      val records = recordsToStrings(dataGen.generateInserts("%05d".format(i), perBatchSize)).asScala.toList
       val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
       inputDF.write.format("org.apache.hudi")
         .options(commonOpts)

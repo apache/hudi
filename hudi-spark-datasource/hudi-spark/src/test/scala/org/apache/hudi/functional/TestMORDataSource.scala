@@ -105,7 +105,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts(System.currentTimeMillis(), 100)).asScala.toSeq
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -127,7 +127,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Second Operation:
     // Upsert the update to the default partitions with duplicate records. Produced a log file for each parquet.
     // SNAPSHOT view should read the log files only with the latest commit time.
-    val records2 = recordsToStrings(dataGen.generateUniqueUpdates(System.currentTimeMillis(), 100)).asScala.toSeq
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("002", 100)).asScala.toSeq
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -210,7 +210,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Third Operation:
     // Upsert another update to the default partitions with 50 duplicate records. Produced the second log file for each parquet.
     // SNAPSHOT view should read the latest log files.
-    val records3 = recordsToStrings(dataGen.generateUniqueUpdates(System.currentTimeMillis(), 50)).asScala.toSeq
+    val records3 = recordsToStrings(dataGen.generateUniqueUpdates("003", 50)).asScala.toSeq
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -253,7 +253,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val partitionPaths = new Array[String](1)
     partitionPaths.update(0, "2020/01/10")
     val newDataGen = new HoodieTestDataGenerator(partitionPaths)
-    val records4 = recordsToStrings(newDataGen.generateInserts(System.currentTimeMillis(), 100)).asScala.toSeq
+    val records4 = recordsToStrings(newDataGen.generateInserts("004", 100)).asScala.toSeq
     val inputDF4: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records4, 2))
     inputDF4.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -280,7 +280,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Upsert records to the new partition. Produced a newer version of parquet file.
     // SNAPSHOT view should read the latest log files from the default partition
     // and the latest parquet from the new partition.
-    val records5 = recordsToStrings(newDataGen.generateUniqueUpdates(System.currentTimeMillis(), 50)).asScala.toSeq
+    val records5 = recordsToStrings(newDataGen.generateUniqueUpdates("005", 50)).asScala.toSeq
     val inputDF5: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records5, 2))
     inputDF5.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -361,7 +361,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // First Operation:
     // Producing parquet files to three default partitions.
     // SNAPSHOT view on MOR table with parquet files only.
-    val records1 = recordsToStrings(dataGen.generateInserts(System.currentTimeMillis(), 100)).asScala.toSeq
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 100)).asScala.toSeq
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -381,7 +381,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Second Operation:
     // Upsert 50 delete records
     // Snopshot view should only read 50 records
-    val records2 = recordsToStrings(dataGen.generateUniqueDeleteRecords(System.currentTimeMillis(), 50)).asScala.toSeq
+    val records2 = recordsToStrings(dataGen.generateUniqueDeleteRecords("002", 50)).asScala.toSeq
     val inputDF2: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records2, 2))
     inputDF2.write.format("org.apache.hudi")
       .options(writeOpts)
@@ -418,7 +418,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // Third Operation:
     // Upsert 50 delete records to delete the reset
     // Snopshot view should read 0 record
-    val records3 = recordsToStrings(dataGen.generateUniqueDeleteRecords(System.currentTimeMillis(), 50)).asScala.toSeq
+    val records3 = recordsToStrings(dataGen.generateUniqueDeleteRecords("003", 50)).asScala.toSeq
     val inputDF3: Dataset[Row] = spark.read.json(spark.sparkContext.parallelize(records3, 2))
     inputDF3.write.format("org.apache.hudi")
       .options(writeOpts)
