@@ -586,7 +586,8 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |  hoodie.datasource.write.recordkey.field = 'id',
                |  hoodie.metadata.record.index.enable = 'true',
                |  hoodie.metadata.index.column.stats.enable = 'true',
-               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |  hoodie.metadata.index.column.stats.column.list = 'price',
+               |  hoodie.metadata.index.partition.stats.enable = 'true'
                |)
                |location '${tmp.getCanonicalPath}/$tableName'
                |""".stripMargin
@@ -628,7 +629,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
           val result7DF = spark.sql(
             s"select type, key, ColumnStatsMetadata from hudi_metadata('$identifier') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType}"
           )
-          assert(result7DF.count() == 0)
+          assert(result7DF.count() == 3)
         }
       }
     }
