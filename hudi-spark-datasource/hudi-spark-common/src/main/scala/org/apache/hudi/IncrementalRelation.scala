@@ -89,7 +89,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsToReturn = List.concat(
     queryContext.getArchivedInstants.asScala,
-    queryContext.getActiveInstants.asScala).sortBy(_.getCompletionTime)
+    queryContext.getActiveInstants.asScala)
+  // TODO: investigate failure: TestHoodieIncrSource#testHoodieIncrSourceInflightCommitBeforeCompletedCommit
+  //    .sortBy(_.getCompletionTime)  // why would sorting by completion time fail this test?
 
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean

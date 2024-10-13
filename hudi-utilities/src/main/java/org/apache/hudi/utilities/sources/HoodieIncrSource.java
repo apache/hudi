@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -219,7 +218,7 @@ public class HoodieIncrSource extends RowSource {
         // update endTime/next checkpoint
         completionTimeToStopAt = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
       }
-      Set<String> validInstants = new HashSet<>(queryContext.getInstants());
+
       snapshot = queryContext.getPredicateFilter().map(snapshot::filter).orElse(snapshot);
       source = snapshot
           // add filtering so that only interested records are returned.
@@ -228,7 +227,8 @@ public class HoodieIncrSource extends RowSource {
               queryContext.getStartInstant().get()))
           .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               queryContext.getEndInstant().orElse(queryContext.getLastInstant())))
-          .filter((Row row) -> validInstants.contains(row.getAs(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
+          .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+              String.join("','", queryContext.getInstants())));
     } else {
       // normal incremental query
       source = reader
