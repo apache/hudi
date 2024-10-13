@@ -66,7 +66,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   )
   val sparkOpts = Map(
     HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName,
-    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet"
+    HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+    HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
   )
 
   val verificationCol: String = "driver"
@@ -1366,7 +1367,10 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     var (_, readOpts) = getWriterReaderOpts(readType)
     var (writeOpts, _) = getWriterReaderOpts(writeType)
     readOpts = readOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet")
-    writeOpts = writeOpts ++ Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet")
+    writeOpts = writeOpts ++ Map(
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+      // colstats cannot be updated for MAP type because MAP is not comparable.
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false")
     val records = dataGen.generateInserts("001", 10)
 
     // End with array

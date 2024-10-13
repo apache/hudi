@@ -1355,7 +1355,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
   @Test
   public void testArchiveTableWithMetadataTableCompaction() throws Exception {
-    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 7);
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 5, 6, 7);
 
     // min archival commits is 4 and max archival commits is 5. and so, after 6th commit, ideally archival should kick in. but max delta commits in metadata table is set to 7. and so
     // archival will kick in only by 7th commit in datatable(1 commit for bootstrap + 6 commits from data table).
@@ -1381,10 +1381,10 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     List<HoodieInstant> originalCommits = commitsList.getKey();
     List<HoodieInstant> commitsAfterArchival = commitsList.getValue();
     // before archival 1,2,3,4,5,6,7
-    // after archival 4,5,6,7
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 3);
-    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 3)),
-        getActiveCommitInstants(instants.subList(3, 7)), commitsAfterArchival, false);
+    // after archival 3,4,5,6,7
+    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 2);
+    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 2)),
+        getActiveCommitInstants(instants.subList(2, 7)), commitsAfterArchival, false);
 
     // 3 more commits, 4 to 6 will be archived. but will not move after 6 since compaction has to kick in metadata table.
     for (int i = 0; i < 3; i++) {
@@ -1397,7 +1397,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
     assertEquals(originalCommits.size() - commitsAfterArchival.size(), 3);
-    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 6)), getActiveCommitInstants(instants.subList(6, 10)), commitsAfterArchival, false);
+    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 5)), getActiveCommitInstants(instants.subList(5, 10)), commitsAfterArchival, false);
 
     // No archival should kick in since compaction has not kicked in metadata table
     for (int i = 0; i < 2; i++) {
@@ -1409,7 +1409,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
     assertEquals(originalCommits, commitsAfterArchival);
-    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 6)), getActiveCommitInstants(instants.subList(6, 12)), commitsAfterArchival, false);
+    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 5)), getActiveCommitInstants(instants.subList(5, 12)), commitsAfterArchival, false);
 
     String instant13 = metaClient.createNewInstantTime();
     instants.add(instant13);
@@ -1418,7 +1418,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     commitsList = archiveAndGetCommitsList(writeConfig);
     originalCommits = commitsList.getKey();
     commitsAfterArchival = commitsList.getValue();
-    assertEquals(originalCommits, commitsAfterArchival);
+    assertEquals(originalCommits.subList(3, originalCommits.size()), commitsAfterArchival);
 
     // one more commit will trigger compaction in metadata table and will let archival move forward.
     String instant14 = metaClient.createNewInstantTime();
@@ -1430,8 +1430,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     commitsAfterArchival = commitsList.getValue();
     // before archival 7,8,9,10,11,12,13,14
     // after archival 11,12,13,14
-    assertEquals(originalCommits.size() - commitsAfterArchival.size(), 4);
-    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 10)), getActiveCommitInstants(instants.subList(10, 14)), commitsAfterArchival, false);
+    assertEquals(originalCommits, commitsAfterArchival);
+    verifyArchival(getAllArchivedCommitInstants(instants.subList(0, 8)), getActiveCommitInstants(instants.subList(8, 14)), commitsAfterArchival, false);
   }
 
   @ParameterizedTest
@@ -1645,6 +1645,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withRemoteServerPort(timelineServicePort).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            //.withMetadataIndexColumnStats(false)
             .withMaxNumDeltaCommitsBeforeCompaction(8)
             .build())
         .forTable("test-trip-table").build();
@@ -1674,15 +1675,16 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
           .getCommitsTimeline().filterCompletedInstants().getInstants();
 
       final String mdtInitCommit = HoodieInstantTimeGenerator.instantTimePlusMillis(SOLO_COMMIT_TIMESTAMP, 0L);
+      Set<String> metadataPartitions = HoodieTableMetaClient.reload(metaClient).getTableConfig().getMetadataPartitions();
       if (i == 1) {
         // In the metadata table timeline, the first delta commit is "00000000000000000"
-        assertEquals(i + 1, metadataTableInstants.size());
+        assertEquals(i + metadataPartitions.size(), metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, mdtInitCommit)));
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(0))));
       } else if (i == 2) {
-        assertEquals(i - 1, metadataTableInstants.size());
+        assertEquals(i + (metadataPartitions.size() - 2), metadataTableInstants.size());
         assertTrue(metadataTableInstants.contains(
             new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, mdtInitCommit)));
         assertFalse(metadataTableInstants.contains(
@@ -1692,9 +1694,15 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // from metadata table init, delta commits 1 till 8 are added
         // later on without archival or compaction
         // rollback in DT will also trigger rollback in MDT
-        assertEquals(i - 1, metadataTableInstants.size());
-        assertTrue(metadataTableInstants.contains(
-            new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, mdtInitCommit)));
+        int expectedInstants;
+        if (i <= 8) {
+          expectedInstants = i + (metadataPartitions.size() - 2);
+          assertTrue(metadataTableInstants.contains(
+              new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, mdtInitCommit)));
+        } else {
+          expectedInstants = i + (metadataPartitions.size() - 3); // earliest instant archived
+        }
+        assertEquals(expectedInstants, metadataTableInstants.size());
         // rolled back commits may not be present in MDT timeline [1]
         IntStream.range(3, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
@@ -1705,45 +1713,46 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         // the earliest commit on the dataset active timeline,
         // the dataset active timeline has instants:
         //   [7.commit, 8.commit, 9.commit, 10.commit]
-        assertEquals(9, metadataTableInstants.size());
-        // mdt timeline 3,..., 10, a completed compaction commit
-        IntStream.range(3, i).forEach(j ->
+        int expectedInstants = i + (metadataPartitions.size() - 6); // earlier instants corresponding to the data commits should aso be archived
+        assertEquals(expectedInstants, metadataTableInstants.size());
+        // mdt timeline 7,..., 10, a completed compaction commit
+        IntStream.range(7, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
-      } else if (i <= 13) {
+      } else if (i <= 12) {
         // In the metadata table timeline, the first delta commit is 7
         // because it equals with the earliest commit on the dataset timeline, after archival,
         // delta commits 11 till 12 are added later on without archival or compaction
         // mdt timeline [7, 8, 9, 10, a completed compaction commit] for i = 10
-        assertEquals(i - 5, metadataTableInstants.size());
+        assertEquals(i + (metadataPartitions.size() - 6), metadataTableInstants.size());
         assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(7, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
-      } else if (i <= 17) {
+      } else if (i <= 16) {
         // In the metadata table timeline, the second commit is a compaction commit
         // from metadata table compaction, after archival, delta commits 14
         // till 17 are added later on without archival or compaction
         // mdt timeline: [10, a completed compaction commit, 11, ... 14, 15, ... 17]
-        assertEquals(i - 8, metadataTableInstants.size());
+        assertEquals(i + (metadataPartitions.size() - 9), metadataTableInstants.size());
         assertEquals(1, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(10, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
-      } else if (i == 18) {
-        // i == 18
-        // commits in MDT [10, a completed compaction commit, 11, ... 17, 18, a completed compaction commit]
-        // another compaction is triggered by this commit so everything upto 18 is compacted.
+      } else if (i == 17) {
+        // i == 17
+        // commits in MDT [10, a completed compaction commit, 11, ... 17, a completed compaction commit]
+        // another compaction is triggered by this commit so everything upto 17 is compacted.
         assertEquals(11, metadataTableInstants.size());
         assertEquals(2, metadataTableMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants());
         IntStream.range(10, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
                 new HoodieInstant(State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, instants.get(j - 1)))));
       } else {
-        // i == 19
+        // i == 18, 19
         // compaction happened in last commit, and archival is triggered with latest compaction retained plus maxInstantToKeep = 6
         // commits in MDT [14, .... 17, a completed compaction commit, 18]
-        assertEquals(6, metadataTableInstants.size());
+        assertEquals(i + (metadataPartitions.size() - 14), metadataTableInstants.size());
         assertTrue(metadata(writeConfig, context).getLatestCompactionTime().isPresent());
         IntStream.range(15, i).forEach(j ->
             assertTrue(metadataTableInstants.contains(
