@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
@@ -986,6 +987,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         val fs = HadoopFSUtils.getFs(targetBasePath, spark.sessionState.newHadoopConf())
         val firstCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
         val firstCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, targetBasePath)
+        val beforeFirstCompletionTime = HoodieInstantTimeGenerator.instantTimeMinusMillis(firstCompletionTime, 1)
 
         // Second merge
         spark.sql(s"update $sourceTable set price = 12, _ts = 1001 where id = 1")
@@ -1002,7 +1004,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeFirstCompletionTime)
           .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")

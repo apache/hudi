@@ -23,7 +23,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
@@ -32,6 +32,7 @@ import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
@@ -146,6 +147,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
       val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, destPath)
+      val beforeCommitCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(commitCompletionTime1, 1)
       // Read RO View
       val hoodieROViewDF1 = spark.read.format("org.apache.hudi")
         .load(destPath + "/*/*/*/*")
@@ -174,7 +176,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val firstCommit = HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").get(0)
       val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCommitCompletionTime1)
         .option(DataSourceReadOptions.END_INSTANTTIME.key, commitCompletionTime1)
         .load(destPath)
       assertEquals(100, hoodieIncViewDF1.count())

@@ -21,6 +21,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -86,6 +87,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
     val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val beforeCommitCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(commitCompletionTime1, 1)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
@@ -139,7 +141,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
     val firstCommit = HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").get(0)
     val hoodieIncViewDf1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCommitCompletionTime1)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, commitCompletionTime1)
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
       .load(basePath)

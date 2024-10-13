@@ -24,7 +24,7 @@ import org.apache.hudi.client.validator.{SqlQueryEqualityPreCommitValidator, Sql
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.model.WriteOperationType
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodiePreCommitValidatorConfig, HoodieWriteConfig}
@@ -104,6 +104,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val completionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val beforeCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(completionTime1, 1)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
     // Snapshot query
@@ -187,7 +188,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
     spark.sparkContext.hadoopConfiguration.set("mapreduce.input.pathFilter.class", "org.apache.hudi.hadoop.HoodieROTablePathFilter")
     val hoodieIncViewDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCompletionTime1)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, completionTime1)
       .load(basePath)
     assertEquals(100, hoodieIncViewDF1.count()) // 100 initial inserts must be pulled
@@ -234,7 +235,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
 
     val timeTravelDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCompletionTime1)
       .option(DataSourceReadOptions.END_INSTANTTIME.key, completionTime1)
       .load(basePath)
     assertEquals(100, timeTravelDF.count()) // 100 initial inserts must be pulled

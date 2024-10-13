@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, 
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.common.util.Option
@@ -36,8 +37,8 @@ import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, SparkDatasetMixin}
+
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.QuickstartUtils.convertToStringList
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -114,7 +115,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
-    val df1CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commit1CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val beforeCommit1CompletionTime = HoodieInstantTimeGenerator.instantTimeMinusMillis(commit1CompletionTime, 1)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -131,7 +133,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .mode(SaveMode.Append)
       .save(basePath)
-    val df2CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commit2CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
@@ -148,8 +150,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF1 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, df1CompletionTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCommit1CompletionTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit1CompletionTime)
       .load(basePath)
     assertEquals(100, hudiIncDF1.count())
     assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
@@ -159,8 +161,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF2 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, df1CompletionTime)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, df2CompletionTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit1CompletionTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(100, hudiIncDF2.count())
     assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
@@ -171,8 +173,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF3 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, df2CompletionTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCommit1CompletionTime)
+      .option(DataSourceReadOptions.END_INSTANTTIME.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(100, hudiIncDF3.count())
     // log file being load
@@ -231,7 +233,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF4 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, df2CompletionTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(50, hudiIncDF4.count())
 
@@ -240,7 +242,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF4SkipMerge = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeCommit1CompletionTime)
       .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
       .load(basePath)
     assertEquals(250, hudiIncDF4SkipMerge.count())
@@ -270,7 +272,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     val hudiIncDF5 = spark.read.format("org.apache.hudi")
       .options(readOpts)
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, df2CompletionTime)
+      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, commit2CompletionTime)
       .load(basePath)
     assertEquals(150, hudiIncDF5.count())
 
