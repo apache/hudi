@@ -133,6 +133,7 @@ public class TestHoodiePositionBasedFileGroupRecordBuffer extends TestHoodieFile
     buffer = new HoodiePositionBasedFileGroupRecordBuffer<>(
         ctx,
         metaClient,
+        mergeMode,
         partitionNameOpt,
         partitionFields,
         props);

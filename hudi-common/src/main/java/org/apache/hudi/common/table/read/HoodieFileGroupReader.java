@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.BaseFile;
@@ -112,22 +113,22 @@ public final class HoodieFileGroupReader<T> implements Closeable {
         ? new HoodiePositionBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig)
         : new HoodieFileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, tableConfig));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
-    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
+    this.recordBuffer = getRecordBuffer(readerContext, hoodieTableMetaClient, tableConfig.getRecordMergeMode(), props, this.logFiles.isEmpty(), isSkipMerge, shouldUseRecordPosition);
   }
 
   /**
    * Initialize correct record buffer
    */
-  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
-                                                             boolean hasNoLogFiles, boolean isSkipMerge, boolean shouldUseRecordPosition) {
+  private static HoodieFileGroupRecordBuffer getRecordBuffer(HoodieReaderContext readerContext, HoodieTableMetaClient hoodieTableMetaClient, RecordMergeMode recordMergeMode,
+                                                             TypedProperties props, boolean hasNoLogFiles, boolean isSkipMerge, boolean shouldUseRecordPosition) {
     if (hasNoLogFiles) {
       return null;
     } else if (isSkipMerge) {
-      return new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props);
+      return new HoodieUnmergedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props);
     } else if (shouldUseRecordPosition) {
-      return new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props);
+      return new HoodiePositionBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props);
     } else {
-      return new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, Option.empty(), Option.empty(), props);
+      return new HoodieKeyBasedFileGroupRecordBuffer<>(readerContext, hoodieTableMetaClient, recordMergeMode, Option.empty(), Option.empty(), props);
     }
   }
 
