@@ -197,7 +197,6 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
       val endCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, tablePath)
 
-
       val copyTableName = generateTableName
       // Check required fields
       checkExceptionContain(s"call copy_to_table(table=>'$tableName',new_table=>'$copyTableName',query_type=>'incremental')")("begin_instance_time and end_instance_time can not be null")
