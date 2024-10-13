@@ -1062,10 +1062,6 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateUniqueDeleteRecordStream(instantTime, n).collect(Collectors.toList());
   }
 
-  public List<HoodieRecord> generateUniqueDeleteRecords(Long instantTime, Integer n) {
-    return generateUniqueDeleteRecordStream(String.valueOf(instantTime), n).collect(Collectors.toList());
-  }
-
   public boolean deleteExistingKeyIfPresent(HoodieKey key) {
     Map<Integer, KeyPartition> existingKeys = existingKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
     Integer numExistingKeys = numKeysBySchema.get(TRIP_EXAMPLE_SCHEMA);
