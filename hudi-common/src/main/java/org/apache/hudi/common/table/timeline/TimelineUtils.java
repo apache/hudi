@@ -309,37 +309,6 @@ public class TimelineUtils {
     return timelineSinceLastSync;
   }
 
-  public static HoodieTimeline getCommitsTimeLineAfterByCompletionTimeRange(
-      HoodieTableMetaClient metaClient,
-      String exclusiveStartCompletionTime,
-      String inclusiveEndCompletionTime) {
-    HoodieDefaultTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
-
-    HoodieDefaultTimeline timeline;
-    if (writeTimeline.isBeforeTimelineStartsByCompletionTime(exclusiveStartCompletionTime)) {
-      // need to load archived timeline as well
-      try (CompletionTimeQueryView view = new CompletionTimeQueryView(metaClient)) {
-        List<String> instants = view.getStartTimes(
-            exclusiveStartCompletionTime,
-            inclusiveEndCompletionTime,
-            RangeType.OPEN_CLOSED);
-        if (instants.isEmpty()) {
-          LOG.warn("Did not find any instant when getting timeline, using write timeline for incremental read");
-          timeline = writeTimeline;
-        } else {
-          timeline = metaClient.getArchivedTimeline(instants.get(0))
-              .mergeTimeline(writeTimeline);
-        }
-      }
-    } else {
-      timeline = writeTimeline;
-    }
-
-    return timeline.findInstantsInRangeByCompletionTime(
-            exclusiveStartCompletionTime,
-            inclusiveEndCompletionTime);
-  }
-
   /**
    * Returns the commit metadata of the given instant.
    *
