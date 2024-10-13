@@ -71,7 +71,6 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
       HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.key -> "1"
     )
 
-
     // Create 10 commits
     for (i <- 1 to 10) {
       val records = recordsToStrings(dataGen.generateInserts(System.currentTimeMillis(), perBatchSize)).asScala.toList
