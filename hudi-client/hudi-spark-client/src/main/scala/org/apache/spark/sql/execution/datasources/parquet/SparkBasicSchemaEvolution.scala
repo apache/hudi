@@ -30,7 +30,8 @@ import org.apache.spark.sql.types.StructType
  * Intended to be used just with HoodieSparkParquetReader to avoid any java/scala issues
  */
 class SparkBasicSchemaEvolution(fileSchema: StructType,
-                                requiredSchema: StructType) {
+                                requiredSchema: StructType,
+                                sessionLocalTimeZone: String) {
 
   val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
 
@@ -44,7 +45,7 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
 
   def generateUnsafeProjection(): UnsafeProjection = {
     val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
-    HoodieParquetFileFormatHelper.generateUnsafeProjection(schemaUtils.toAttributes(requiredSchema), Option.empty,
+    HoodieParquetFileFormatHelper.generateUnsafeProjection(schemaUtils.toAttributes(requiredSchema), Some(sessionLocalTimeZone),
       implicitTypeChangeInfo, requiredSchema, new StructType(), schemaUtils)
   }
 }
