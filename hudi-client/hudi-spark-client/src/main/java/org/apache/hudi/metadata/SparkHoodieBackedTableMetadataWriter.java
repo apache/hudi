@@ -25,8 +25,8 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.metrics.Registry;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -54,6 +54,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -159,10 +160,11 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs,
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathPairs,
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
-                                                               Schema readerSchema, StorageConfiguration<?> storageConf) {
+                                                               Schema readerSchema, StorageConfiguration<?> storageConf,
+                                                               String instantTime) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -174,24 +176,22 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
-    // Group FileSlices by partition
-    Map<String, List<FileSlice>> partitionToFileSlicesMap = partitionFileSlicePairs.stream()
-        .collect(Collectors.groupingBy(Pair::getKey, Collectors.mapping(Pair::getValue, Collectors.toList())));
-    HoodieFunctionalIndex<Column, Column> functionalIndex =
-        new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-    List<HoodieRecord> allRecords = new ArrayList<>();
-    for (Map.Entry<String, List<FileSlice>> entry : partitionToFileSlicesMap.entrySet()) {
+    return sparkEngineContext.parallelize(partitionFilePathPairs, parallelism).flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<HoodieRecord>>) entry -> {
+
+      HoodieFunctionalIndex<Column, Column> functionalIndex =
+          new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
       String partition = entry.getKey();
-      List<FileSlice> fileSlices = entry.getValue();
+      Pair<String, Long> filePathSizePair = entry.getValue();
       List<HoodieRecord> recordsForPartition = Collections.emptyList();
       if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext);
+        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, filePathSizePair.getKey(), filePathSizePair.getValue(), partition,
+            functionalIndex, columnToIndex, sqlContext);
       } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, fileSlices, partition, functionalIndex, columnToIndex, sqlContext, metadataWriteConfig);
+        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, filePathSizePair.getKey(), partition,
+            functionalIndex, columnToIndex, sqlContext, metadataWriteConfig, instantTime);
       }
-      allRecords.addAll(recordsForPartition);
-    }
-    return HoodieJavaRDD.of(allRecords, sparkEngineContext, parallelism);
+      return recordsForPartition.iterator();
+    });
   }
 
   @Override
