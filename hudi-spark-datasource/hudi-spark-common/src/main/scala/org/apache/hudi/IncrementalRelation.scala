@@ -89,7 +89,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsToReturn = List.concat(
     queryContext.getArchivedInstants.asScala,
-    queryContext.getActiveInstants.asScala).sorted(Ordering.by(_.getCompletionTime))
+    queryContext.getActiveInstants.asScala).sortBy(_.getCompletionTime)
 
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean

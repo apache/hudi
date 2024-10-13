@@ -187,10 +187,10 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
 
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
-    super.timeline.getInstantsAsStream
-      .filter(_.getCompletionTime != null)
+    super.timeline.getInstantsAsStream.iterator().asScala.toList
       .map(_.getCompletionTime)
-      .max(_))
+      .filter(_ != null)
+      .max(Ordering[String]))
 
   //.map(HoodieInstant::getCompletionTime).filter(Objects::nonNull).max(String::compareTo).get();
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
