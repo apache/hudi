@@ -27,7 +27,7 @@ import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
@@ -86,7 +86,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     val beforeCommitCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(commitCompletionTime1, 1)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
@@ -106,7 +106,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val commitCompletionTime2 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     val snapshotDf2 = spark.read.format("org.apache.hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabledOnRead)
@@ -125,7 +125,7 @@ class TestSparkDataSource extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val commitCompletionTime3 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime3 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query

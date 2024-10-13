@@ -21,6 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.testutils.DataSourceTestUtils
 import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -986,7 +987,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         )
         val fs = HadoopFSUtils.getFs(targetBasePath, spark.sessionState.newHadoopConf())
         val firstCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
-        val firstCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, targetBasePath)
+        val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         val beforeFirstCompletionTime = HoodieInstantTimeGenerator.instantTimeMinusMillis(firstCompletionTime, 1)
 
         // Second merge
@@ -1012,7 +1013,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 10, 1000)
         )
         val secondCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
-        val secondCompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, targetBasePath)
+        val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Third merge
         spark.sql(s"insert into $sourceTable values(2, 'a2', 10, 1001)")
         spark.sql(

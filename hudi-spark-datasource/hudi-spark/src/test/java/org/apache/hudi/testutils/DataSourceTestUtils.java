@@ -18,10 +18,14 @@
 
 package org.apache.hudi.testutils;
 
+import org.apache.hudi.HoodieDataSourceHelpers;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.Schema;
@@ -39,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.UUID;
 
@@ -157,5 +162,23 @@ public class DataSourceTestUtils {
       }
     }
     return true;
+  }
+
+  public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
+    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(fs, basePath);
+    return timeline.getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime)
+        .filter(Objects::nonNull)
+        .max(String::compareTo)
+        .orElse(null);
+  }
+
+  public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
+    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath);
+    return timeline.getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime)
+        .filter(Objects::nonNull)
+        .max(String::compareTo)
+        .orElse(null);
   }
 }

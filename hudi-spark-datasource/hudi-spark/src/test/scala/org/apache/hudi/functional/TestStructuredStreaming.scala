@@ -30,7 +30,7 @@ import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.TableNotFoundException
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
 import org.apache.spark.sql._
@@ -146,7 +146,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       val currNumCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 5)
       assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, destPath, "000"))
       val commitInstantTime1 = HoodieDataSourceHelpers.latestCommit(storage, destPath)
-      val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, destPath)
+      val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
       val beforeCommitCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(commitCompletionTime1, 1)
       // Read RO View
       val hoodieROViewDF1 = spark.read.format("org.apache.hudi")

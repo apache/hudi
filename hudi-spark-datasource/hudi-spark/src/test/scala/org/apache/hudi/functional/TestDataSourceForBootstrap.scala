@@ -27,9 +27,8 @@ import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieClusteringConfig, Ho
 import org.apache.hudi.functional.TestDataSourceForBootstrap.{dropMetaCols, sort}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, SimpleKeyGenerator}
-import org.apache.hudi.testutils.HoodieClientTestUtils
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, DefaultSparkRecordMerger}
-
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.functions.{col, lit}
@@ -42,7 +41,6 @@ import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.time.Instant
 import java.util.Collections
-
 import scala.collection.JavaConverters._
 
 class TestDataSourceForBootstrap {
@@ -128,7 +126,7 @@ class TestDataSourceForBootstrap {
       extraOpts = options ++ Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> bootstrapKeygenClass),
       bootstrapKeygenClass = bootstrapKeygenClass
     )
-    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
 
@@ -203,7 +201,7 @@ class TestDataSourceForBootstrap {
       readOpts ++ getRecordTypeOpts(recordType),
       classOf[SimpleKeyGenerator].getName)
 
-    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     // check marked directory clean up
     assert(!fs.exists(new Path(basePath, ".hoodie/.temp/00000000000001")))
@@ -279,7 +277,7 @@ class TestDataSourceForBootstrap {
       DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
       writeOpts,
       classOf[SimpleKeyGenerator].getName)
-    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     // Read bootstrapped table and verify count using glob path
     val hoodieROViewDF1 = spark.read.format("hudi").load(basePath + "/*")
@@ -581,7 +579,7 @@ class TestDataSourceForBootstrap {
       .save(basePath)
 
     val commitInstantTime1: String = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val commitInstantCompletionTime1: String = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val commitInstantCompletionTime1: String = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertEquals(HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS, commitInstantTime1)
 
     // Read bootstrapped table and verify count

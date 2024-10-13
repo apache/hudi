@@ -32,7 +32,7 @@ import org.apache.hudi.exception.{HoodieUpsertException, HoodieValidationExcepti
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.{NonpartitionedKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.testutils.{DataSourceTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.spark.SparkConf
@@ -103,7 +103,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
-    val completionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val completionTime1 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     val beforeCompletionTime1 = HoodieInstantTimeGenerator.instantTimeMinusMillis(completionTime1, 1)
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(fs, basePath, "000"))
 
@@ -135,7 +135,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Append)
       .save(basePath)
     val commitInstantTime2 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val completionTime2 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val completionTime2 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
 
     val snapshotDF2 = spark.read.format("hudi")
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
@@ -172,7 +172,7 @@ class TestCOWDataSourceStorage extends SparkClientFunctionalTestHarness {
       .save(basePath)
 
     val commitInstantTime3 = HoodieDataSourceHelpers.latestCommit(fs, basePath)
-    val completionTime3 = HoodieDataSourceHelpers.latestCommitCompletionTime(fs, basePath)
+    val completionTime3 = DataSourceTestUtils.latestCommitCompletionTime(fs, basePath)
     assertEquals(3, HoodieDataSourceHelpers.listCommitsSince(fs, basePath, "000").size())
 
     // Snapshot Query

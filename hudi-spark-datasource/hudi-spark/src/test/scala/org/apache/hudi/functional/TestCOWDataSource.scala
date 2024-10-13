@@ -45,7 +45,7 @@ import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDe
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
 import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, QuickstartUtils, ScalaAssertionSupport}
 
@@ -548,7 +548,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    val commit1CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commit1CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts(timeGen.currentTimeMillis(true), 30)).asScala.toList
@@ -557,7 +557,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2CompletionTime = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commit2CompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     // snapshot query
     val pathForReader = getPathForReader(basePath, !enableFileIndex, 3)
@@ -994,7 +994,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .load(basePath + "/*/*/*/*")
     assertEquals(insert1Cnt, hoodieROViewDF1.count())
 
-    val commitInstantTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commitInstantTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
     val inserts2 = new java.util.ArrayList[HoodieRecord[_]]
     inserts2.addAll(inserts2Dup)
     inserts2.addAll(inserts2New)
@@ -1326,7 +1326,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .option(HoodieMetadataConfig.ENABLE.key, isMetadataEnabled)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val commitCompletionTime1 = HoodieDataSourceHelpers.latestCommitCompletionTime(storage, basePath)
+    val commitCompletionTime1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
     val countIn20160315 = records1.asScala.count(record => record.getPartitionPath == "2016/03/15")
     val pathForReader = getPathForReader(basePath, !enableFileIndex, if (partitionEncode) 1 else 3)
