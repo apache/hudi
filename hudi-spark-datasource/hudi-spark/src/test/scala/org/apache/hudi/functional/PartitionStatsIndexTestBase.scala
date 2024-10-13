@@ -235,7 +235,7 @@ class PartitionStatsIndexTestBase extends HoodieSparkClientTestBase {
     }
   }
 
-  private def getInstantTime: String = {
+  protected def getInstantTime: String = {
     String.format("%03d", new Integer(instantTime.incrementAndGet()))
   }
 

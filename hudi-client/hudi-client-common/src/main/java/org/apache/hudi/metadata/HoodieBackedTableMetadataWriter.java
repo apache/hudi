@@ -26,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -66,6 +67,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.storage.HoodieStorage;
@@ -386,6 +388,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           return Pair.of(partitionName, p.getFileNameToSizeMap());
         })
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+
+    // validate that each index is eligible to be initialized
+    for (MetadataPartitionType partitionType : partitionsToInit) {
+      if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
+        throw new HoodieMetadataIndexException("Partition stats index cannot be enabled for a non-partitioned table. "
+            + "Please disable " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
+      }
+    }
 
     for (MetadataPartitionType partitionType : partitionsToInit) {
       // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.

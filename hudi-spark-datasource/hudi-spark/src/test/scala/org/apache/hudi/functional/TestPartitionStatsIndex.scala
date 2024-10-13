@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, INSERT_OPERATION_OPT_VAL, OPERATION, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
-import org.apache.hudi.exception.HoodieWriteConflictException
+import org.apache.hudi.exception.{HoodieException, HoodieMetadataException, HoodieWriteConflictException}
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.util.{JFunction, JavaConversions}
@@ -68,6 +68,23 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
+  }
+
+  @Test
+  def testIndexInitFailureForNonPartitionedTable(): Unit = {
+    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name()) - PARTITIONPATH_FIELD.key
+    val insertRecords = recordsToStrings(dataGen.generateInserts(getInstantTime, 20)).asScala
+    val insertDf = spark.read.json(spark.sparkContext.parallelize(insertRecords.toSeq, 2))
+    try {
+      insertDf.write.format("org.apache.hudi")
+        .options(hudiOpts)
+        .option(OPERATION.key, INSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Overwrite)
+        .save(basePath)
+    } catch {
+      case _: HoodieMetadataException => false
+      case _: HoodieException => false
+    }
   }
 
   /**
