@@ -22,7 +22,7 @@ package org.apache.hudi.client.utils;
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -74,47 +74,31 @@ public class SparkMetadataWriterUtils {
 
   public static List<HoodieRecord> getFunctionalIndexRecordsUsingColumnStats(HoodieTableMetaClient metaClient,
                                                                              Schema readerSchema,
-                                                                             List<FileSlice> fileSlices,
+                                                                             String filePath,
+                                                                             Long fileSize,
                                                                              String partition,
                                                                              HoodieFunctionalIndex<Column, Column> functionalIndex,
                                                                              String columnToIndex,
                                                                              SQLContext sqlContext) {
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>();
-    for (FileSlice fileSlice : fileSlices) {
-      if (fileSlice.getBaseFile().isPresent()) {
-        HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-        long fileSize = baseFile.getFileSize();
-        buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, baseFile.getStoragePath(), true);
-      }
-      // Handle log files
-      fileSlice.getLogFiles().forEach(logFile -> {
-        long fileSize = logFile.getFileSize();
-        buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, logFile.getPath(), false);
-      });
-    }
+    buildColumnRangeMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, columnRangeMetadataList, fileSize, new StoragePath(filePath),
+        FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
     return createColumnStatsRecords(partition, columnRangeMetadataList, false, functionalIndex.getIndexName(), COLUMN_STATS.getRecordType()).collect(Collectors.toList());
   }
 
   public static List<HoodieRecord> getFunctionalIndexRecordsUsingBloomFilter(HoodieTableMetaClient metaClient,
                                                                              Schema readerSchema,
-                                                                             List<FileSlice> fileSlices,
+                                                                             String filePath,
                                                                              String partition,
                                                                              HoodieFunctionalIndex<Column, Column> functionalIndex,
                                                                              String columnToIndex,
                                                                              SQLContext sqlContext,
-                                                                             HoodieWriteConfig metadataWriteConfig) {
+                                                                             HoodieWriteConfig metadataWriteConfig,
+                                                                             String instantTime) {
     List<HoodieRecord> bloomFilterMetadataList = new ArrayList<>();
-    for (FileSlice fileSlice : fileSlices) {
-      if (fileSlice.getBaseFile().isPresent()) {
-        HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
-        buildBloomFilterMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, bloomFilterMetadataList, baseFile.getStoragePath(), metadataWriteConfig, partition,
-            baseFile.getCommitTime(), true);
-      }
-      // Handle log files
-      fileSlice.getLogFiles().forEach(
-          logFile -> buildBloomFilterMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, bloomFilterMetadataList, logFile.getPath(), metadataWriteConfig, partition,
-              logFile.getDeltaCommitTime(), false));
-    }
+    // log file handling
+    buildBloomFilterMetadata(metaClient, readerSchema, functionalIndex, columnToIndex, sqlContext, bloomFilterMetadataList, new StoragePath(filePath), metadataWriteConfig, partition,
+        instantTime, FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1))));
     return bloomFilterMetadataList;
   }
 
