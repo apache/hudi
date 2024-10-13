@@ -157,27 +157,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
-
-    if (typeChangeInfos.isEmpty) {
-      GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-    } else {
-      // find type changed.
-      val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
-        } else f
-      })
-      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
-      val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          val srcType = typeChangeInfos.get(i).getRight
-          val dstType = typeChangeInfos.get(i).getLeft
-          val needTimeZone = Cast.needsTimeZone(srcType, dstType)
-          Cast(attr, dstType, if (needTimeZone) timeZoneId else None)
-        } else attr
-      }
-      GenerateUnsafeProjection.generate(castSchema, newFullSchema)
-    }
+    HoodieParquetFileFormatHelper.generateUnsafeProjection(fullSchema, timeZoneId, typeChangeInfos, requiredSchema, partitionSchema, schemaUtils)
   }
 
   def buildVectorizedReader(convertTz: ZoneId,

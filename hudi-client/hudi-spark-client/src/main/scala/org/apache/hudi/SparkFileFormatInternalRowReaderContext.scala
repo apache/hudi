@@ -25,9 +25,8 @@ import org.apache.hudi.common.engine.HoodieReaderContext
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.read.HoodiePositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
-import org.apache.hudi.common.table.read.HoodiePositionBasedSchemaHandler
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -88,15 +87,8 @@ class SparkFileFormatInternalRowReaderContext(parquetFileReader: SparkParquetRea
     }
     val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     if (FSUtils.isLogFile(filePath)) {
-      val dataSchemaWithMergeCol = if (hasRowIndexField) {
-        HoodiePositionBasedSchemaHandler.addPositionalMergeCol(dataSchema)
-      } else {
-        dataSchema
-      }
-      new CloseableMappingIterator[InternalRow, InternalRow](
-        new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-          .asInstanceOf[HoodieSparkParquetReader].getInternalRowIterator(dataSchema, dataSchemaWithMergeCol),
-        projectRecord(dataSchemaWithMergeCol, requiredSchema))
+      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(structType).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.

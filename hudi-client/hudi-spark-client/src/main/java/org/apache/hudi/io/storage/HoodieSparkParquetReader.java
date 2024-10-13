@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.util.FileFormatUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -46,6 +47,7 @@ import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupport;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaConverter;
+import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.StructType;
 
@@ -62,7 +64,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final StoragePath path;
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
-  private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
+  private List<ClosableIterator> readerIterators = new ArrayList<>();
+  private Option<StructType> structTypeOption = Option.empty();
+  private Option<Schema> schemaOption = Option.empty();
 
   public HoodieSparkParquetReader(HoodieStorage storage, StoragePath path) {
     this.path = path;
@@ -90,67 +94,72 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    ClosableIterator<InternalRow> iterator = getInternalRowIterator(readerSchema, requestedSchema);
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
+    return getRecordIterator(requestedSchema);
+  }
 
-    return new CloseableMappingIterator<>(iterator, data -> {
-      // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
-      //       it to [[UnsafeRow]] holding just raw bytes
-      UnsafeRow unsafeRow = projection.apply(data);
-      return unsafeCast(new HoodieSparkRecord(unsafeRow));
-    });
+  @Override
+  public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(Schema schema) throws IOException {
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
+    return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     Schema schema = HoodieAvroUtils.getRecordKeySchema();
-    ClosableIterator<InternalRow> iterator = getInternalRowIterator(schema, schema);
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    UnsafeProjection projection = HoodieInternalRowUtils.getCachedUnsafeProjection(structType, structType);
-
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
     return new CloseableMappingIterator<>(iterator, data -> {
-      // NOTE: We have to do [[UnsafeProjection]] of incoming [[InternalRow]] to convert
-      //       it to [[UnsafeRow]] holding just raw bytes
-      UnsafeRow unsafeRow = projection.apply(data);
-      HoodieSparkRecord record = unsafeCast(new HoodieSparkRecord(unsafeRow));
+      HoodieSparkRecord record = unsafeCast(new HoodieSparkRecord(data));
       return record.getRecordKey();
     });
   }
 
-  public ClosableIterator<InternalRow> getInternalRowIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    if (requestedSchema == null) {
-      requestedSchema = readerSchema;
-    }
-    StructType readerStructType = HoodieInternalRowUtils.getCachedSchema(readerSchema);
-    StructType requestedStructType = HoodieInternalRowUtils.getCachedSchema(requestedSchema);
-    storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readerStructType.json());
-    storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), requestedStructType.json());
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
+    return getUnsafeRowIterator(HoodieInternalRowUtils.getCachedSchema(requestedSchema));
+  }
+
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(StructType requestedSchema) throws IOException {
+    SparkBasicSchemaEvolution evolution = new SparkBasicSchemaEvolution(getStructSchema(), requestedSchema);
+    String readSchemaJson = evolution.getRequestSchema().json();
+    storage.getConf().set(ParquetReadSupport.PARQUET_READ_SCHEMA, readSchemaJson);
+    storage.getConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA(), readSchemaJson);
     storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
     ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder((ReadSupport) new ParquetReadSupport(), new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();
+    UnsafeProjection projection = evolution.generateUnsafeProjection();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
-    readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+    CloseableMappingIterator<InternalRow, UnsafeRow> projectedIterator = new CloseableMappingIterator<>(parquetReaderIterator, projection::apply);
+    readerIterators.add(projectedIterator);
+    return projectedIterator;
   }
 
   @Override
   public Schema getSchema() {
-    // Some types in avro are not compatible with parquet.
-    // Avro only supports representing Decimals as fixed byte array
-    // and therefore if we convert to Avro directly we'll lose logical type-info.
-    MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
-    StructType structType = new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
-    return SparkAdapterSupport$.MODULE$.sparkAdapter()
-        .getAvroSchemaConverters()
-        .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING);
+    if (schemaOption.isEmpty()) {
+      // Some types in avro are not compatible with parquet.
+      // Avro only supports representing Decimals as fixed byte array
+      // and therefore if we convert to Avro directly we'll lose logical type-info.
+      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      StructType structType = new ParquetToSparkSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(messageType);
+      structTypeOption = Option.of(structType);
+      schemaOption = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter()
+          .getAvroSchemaConverters()
+          .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
+    }
+    return schemaOption.get();
+  }
+
+  protected StructType getStructSchema() {
+    if (structTypeOption.isEmpty()) {
+      getSchema();
+    }
+    return structTypeOption.get();
   }
 
   @Override
   public void close() {
-    readerIterators.forEach(ParquetReaderIterator::close);
+    readerIterators.forEach(ClosableIterator::close);
   }
 
   @Override

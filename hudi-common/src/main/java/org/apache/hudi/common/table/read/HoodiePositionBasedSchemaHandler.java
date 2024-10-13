@@ -89,7 +89,7 @@ public class HoodiePositionBasedSchemaHandler<T> extends HoodieFileGroupReaderSc
     return dataAndMetaCols;
   }
 
-  public static Schema addPositionalMergeCol(Schema input) {
+  private static Schema addPositionalMergeCol(Schema input) {
     return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
   }
 
