@@ -18,6 +18,7 @@
 
 package org.apache.hudi;
 
+import java.util.Objects;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -99,12 +100,20 @@ public class HoodieDataSourceHelpers {
 
   public static String latestCommitCompletionTime(FileSystem fs, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
-    return timeline.lastInstant().get().getCompletionTime();
+    return timeline.getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime)
+        .filter(Objects::nonNull)
+        .max(String::compareTo)
+        .orElse(null);
   }
 
   public static String latestCommitCompletionTime(HoodieStorage storage, String basePath) {
     HoodieTimeline timeline = allCompletedCommitsCompactions(storage, basePath);
-    return timeline.lastInstant().get().getCompletionTime();
+    return timeline.getInstantsAsStream()
+        .map(HoodieInstant::getCompletionTime)
+        .filter(Objects::nonNull)
+        .max(String::compareTo)
+        .orElse(null);
   }
 
   /**

@@ -186,8 +186,13 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 
   protected def endTimestamp: String = optParams.getOrElse(
-    DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.lastInstant().get.getCompletionTime)
+    DataSourceReadOptions.END_INSTANTTIME.key,
+    super.timeline.getInstantsAsStream
+      .filter(_.getCompletionTime != null)
+      .map(_.getCompletionTime)
+      .max(_))
 
+  //.map(HoodieInstant::getCompletionTime).filter(Objects::nonNull).max(String::compareTo).get();
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 
   protected def endInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty && queryContext.getActiveInstants.isEmpty

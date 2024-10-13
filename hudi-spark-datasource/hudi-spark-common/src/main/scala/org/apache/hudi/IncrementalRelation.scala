@@ -37,7 +37,7 @@ import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
-import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
@@ -89,7 +89,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   private val commitsToReturn = List.concat(
     queryContext.getArchivedInstants.asScala,
-    queryContext.getActiveInstants.asScala)
+    queryContext.getActiveInstants.asScala).sorted(Ordering.by(_.getCompletionTime))
 
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
