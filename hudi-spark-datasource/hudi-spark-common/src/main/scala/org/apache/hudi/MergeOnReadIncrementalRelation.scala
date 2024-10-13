@@ -17,14 +17,12 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
@@ -34,6 +32,8 @@ import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.storage.StoragePathInfo
+
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -94,9 +94,6 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       tableState = tableState,
       mergeType = mergeType,
       fileSplits = fileSplits,
-      includeStartTime = false,
-      startTimestamp = startTs,
-      endTimestamp = endTs,
       includedInstantTimeSet = includedCommits.map(_.getTimestamp).toSet)
   }
 
@@ -192,10 +189,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       .filter(_ != null)
       .max(Ordering[String]))
 
-  //.map(HoodieInstant::getCompletionTime).filter(Objects::nonNull).max(String::compareTo).get();
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
-
-  protected def endInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty && queryContext.getActiveInstants.isEmpty
 
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
@@ -205,7 +199,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
       DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
-    fallbackToFullTableScan && (startInstantArchived || endInstantArchived
+    fallbackToFullTableScan && (startInstantArchived
       || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
   }
 
@@ -227,11 +221,6 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
   }
-
-  // use instants from queryContext
-  protected lazy val startTs: String = instantTimeMinusMillis(includedCommits.head.getTimestamp, 1)
-
-  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
