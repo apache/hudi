@@ -23,7 +23,7 @@ import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.spark.sql.execution.streaming.{Offset, SerializedOffset}
 
-case class HoodieSourceOffset(commitTime: String) extends Offset {
+case class HoodieSourceOffset(completionTime: String) extends Offset {
 
   override val json: String = {
     HoodieSourceOffset.toJson(this)
@@ -32,13 +32,13 @@ case class HoodieSourceOffset(commitTime: String) extends Offset {
   override def equals(obj: Any): Boolean = {
     obj match {
       case HoodieSourceOffset(otherCommitTime) =>
-        otherCommitTime == commitTime
+        otherCommitTime == completionTime
       case _=> false
     }
   }
 
   override def hashCode(): Int = {
-    commitTime.hashCode
+    completionTime.hashCode
   }
 }
 
