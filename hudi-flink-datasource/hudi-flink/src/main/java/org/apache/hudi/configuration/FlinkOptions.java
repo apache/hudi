@@ -497,6 +497,14 @@ public class FlinkOptions extends HoodieConfig {
           + "By default false (the names of partition folders are only partition values)");
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> POPULATE_META_FIELDS = ConfigOptions
+      .key(HoodieTableConfig.POPULATE_META_FIELDS.key())
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("When enabled, populates all meta fields. When disabled, no meta fields are populated "
+          + "and incremental queries will not be functional. In the disabled state, the number of record key fields must be equal to one.");
+
+  @AdvancedConfig
   public static final ConfigOption<String> KEYGEN_CLASS_NAME = ConfigOptions
       .key(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key())
       .stringType()

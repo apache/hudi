@@ -258,9 +258,16 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         }
 
         // Prepend meta-fields into the record
+        HoodieRecord populatedRecord;
         MetadataValues metadataValues = populateMetadataFields(finalRecord);
-        HoodieRecord populatedRecord =
-            finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+        if (!metadataValues.isEmpty()) {
+          populatedRecord = finalRecord.prependMetaFields(schema, writeSchemaWithMetaFields, metadataValues, recordProperties);
+          // Deflate record payload after recording success. This will help users access payload as a part of marking record successful
+          hoodieRecord.deflate();
+        } else {
+          // Avoid decoding when there are no meta fields to prevent performance overhead
+          populatedRecord = hoodieRecord;
+        }
 
         // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
         //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
@@ -282,10 +289,6 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       }
 
       writeStatus.markSuccess(hoodieRecord, recordMetadata);
-      // deflate record payload after recording success. This will help users access payload as a
-      // part of marking
-      // record successful.
-      hoodieRecord.deflate();
       return finalRecordOpt;
     } catch (Exception e) {
       LOG.error("Error writing record  " + hoodieRecord, e);
@@ -306,9 +309,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
         metadataValues.setCommitTime(instantTime);
         metadataValues.setCommitSeqno(seqId);
       }
-    }
-    if (config.allowOperationMetadataField()) {
-      metadataValues.setOperation(hoodieRecord.getOperation().getName());
+
+      // ALLOW_OPERATION_METADATA_FIELD can only be enabled when POPULATE_META_FIELDS is enabled
+      if (config.allowOperationMetadataField()) {
+        metadataValues.setOperation(hoodieRecord.getOperation().getName());
+      }
     }
 
     return metadataValues;
@@ -452,7 +457,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header, boolean appendDeleteBlocks) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writeSchemaWithMetaFields.toString());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, config.populateMetaFields() ? writeSchemaWithMetaFields.toString() : writeSchema.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         String keyField = config.populateMetaFields()

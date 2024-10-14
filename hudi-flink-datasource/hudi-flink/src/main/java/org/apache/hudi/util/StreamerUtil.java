@@ -255,11 +255,12 @@ public class StreamerUtil {
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.getInteger(FlinkOptions.WRITE_TABLE_VERSION))
           .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
-          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
+          .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD, null))
+          .setPopulateMetaFields(conf.getBoolean(FlinkOptions.POPULATE_META_FIELDS))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
           .setHiveStylePartitioningEnable(conf.getBoolean(FlinkOptions.HIVE_STYLE_PARTITIONING))
