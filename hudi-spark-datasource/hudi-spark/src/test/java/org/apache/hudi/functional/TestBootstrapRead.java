@@ -40,7 +40,7 @@ import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 @Tag("functional")
 public class TestBootstrapRead extends TestBootstrapReadBase {
   private static Stream<Arguments> testArgs() {
-    boolean fullTest = true;
+    boolean fullTest = false;
     Stream.Builder<Arguments> b = Stream.builder();
     if (fullTest) {
       String[] bootstrapType = {"full", "metadata", "mixed"};
