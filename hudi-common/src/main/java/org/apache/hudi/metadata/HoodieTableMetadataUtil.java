@@ -2196,6 +2196,8 @@ public class HoodieTableMetadataUtil {
                   .filter(stats -> fileNames.contains(stats.getFileName()))
                   .map(HoodieColumnRangeMetadata::fromColumnStats)
                   .collectAsList();
+          // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+          // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
           fileColumnMetadata.add(partitionColumnMetadata);
         }
 
