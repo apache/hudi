@@ -353,6 +353,17 @@
                             "doc": "Column range entry valid/deleted flag",
                             "name": "isDeleted",
                             "type": "boolean"
+                        },
+                        // NOTE: This is a new field added in 1.0.0.
+                        //       Typically, the min/max range for each column can become wider i.e. the minValue <= all
+                        //       valid values and the maxValue >= all valid values in the file with updates and deletes.
+                        //       For effective pruning, the min/max range can be updated to a tighter bound during
+                        //       compaction or clustering.
+                        {
+                            "doc": "Whether the min/max range of a column is tight bound or not",
+                            "name": "isTightBound",
+                            "type": "boolean",
+                            "default": false
                         }
                     ]
                 }

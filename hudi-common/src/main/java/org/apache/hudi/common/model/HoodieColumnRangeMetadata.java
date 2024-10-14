@@ -18,12 +18,15 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.Objects;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 
 /**
  * Hoodie metadata for the column range of data stored in columnar format (like Parquet)
@@ -144,6 +147,21 @@ public class HoodieColumnRangeMetadata<T extends Comparable> implements Serializ
                                                                               long totalSize,
                                                                               long totalUncompressedSize) {
     return new HoodieColumnRangeMetadata<>(filePath, columnName, minValue, maxValue, nullCount, valueCount, totalSize, totalUncompressedSize);
+  }
+
+  /**
+   * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
+   */
+  public static HoodieColumnRangeMetadata<Comparable> fromColumnStats(HoodieMetadataColumnStats columnStats) {
+    return HoodieColumnRangeMetadata.<Comparable>create(
+        columnStats.getFileName(),
+        columnStats.getColumnName(),
+        unwrapAvroValueWrapper(columnStats.getMinValue()),
+        unwrapAvroValueWrapper(columnStats.getMaxValue()),
+        columnStats.getNullCount(),
+        columnStats.getValueCount(),
+        columnStats.getTotalSize(),
+        columnStats.getTotalUncompressedSize());
   }
 
   @SuppressWarnings("rawtype")

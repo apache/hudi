@@ -1009,7 +1009,8 @@ public class HoodieMetadataTableValidator implements Serializable {
           .getSortedColumnStatsList(partitionPath, latestFileNames);
 
       TreeSet<HoodieColumnRangeMetadata<Comparable>> aggregatedColumnStats = aggregateColumnStats(partitionPath, colStats);
-      List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false)
+      // TODO: fix `isTightBound` flag when stats based on log files are available
+      List<HoodieRecord> partitionStatRecords = HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, new ArrayList<>(aggregatedColumnStats), false, false)
           .collect(Collectors.toList());
       return partitionStatRecords.stream()
           .map(record -> {
@@ -1719,7 +1720,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return allColumnNameList.stream()
             .flatMap(columnName ->
                 tableMetadata.getColumnStats(partitionFileNameList, columnName).values().stream()
-                    .map(HoodieTableMetadataUtil::convertColumnStatsRecordToColumnRangeMetadata)
+                    .map(HoodieColumnRangeMetadata::fromColumnStats)
                     .collect(Collectors.toList())
                     .stream())
             .sorted(new HoodieColumnRangeMetadataComparator())

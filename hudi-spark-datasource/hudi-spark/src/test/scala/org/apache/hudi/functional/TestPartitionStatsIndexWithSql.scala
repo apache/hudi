@@ -236,36 +236,6 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     }
   }
 
-  test(s"Test partition stats index on int type field with update and file pruning") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price int,
-             |  ts long
-             |) using hudi
-             |partitioned by (ts)
-             |tblproperties (
-             |  type = '$tableType',
-             |  primaryKey = 'id',
-             |  preCombineField = 'price',
-             |  hoodie.metadata.index.partition.stats.enable = 'true',
-             |  hoodie.metadata.index.column.stats.column.list = 'price'
-             |)
-             |location '$tablePath'
-             |""".stripMargin
-        )
-
-        writeAndValidatePartitionStats(tableName, tablePath)
-      }
-    }
-  }
-
   test(s"Test partition stats index without configuring columns to index") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
@@ -304,6 +274,55 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           Seq(getPartitionStatsIndexKey("ts=20", "name"), "a2", "a5"),
           Seq(getPartitionStatsIndexKey("ts=30", "name"), "a3", "a6")
         )
+      }
+    }
+  }
+
+  test(s"Test partition stats index on int type field with update and file pruning") {
+    Seq("cow", "mor").foreach { tableType =>
+      Seq(true, false).foreach { shouldCompact =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price int,
+               |  ts long
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'price',
+               |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '$tablePath'
+               |""".stripMargin
+          )
+
+          // trigger compaction after update and validate stats
+          if (tableType == "mor" && shouldCompact) {
+            spark.sql("set hoodie.compact.inline=true")
+            spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+          }
+          spark.sql("set hoodie.metadata.enable=true")
+          spark.sql("set hoodie.enable.data.skipping=true")
+          spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+          writeAndValidatePartitionStats(tableName, tablePath)
+          if (tableType == "mor" && shouldCompact) {
+            // check partition stats records with tightBound
+            checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+              Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, false),
+              Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, false),
+              Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4001, false)
+            )
+          }
+        }
       }
     }
   }
