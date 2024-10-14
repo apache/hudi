@@ -25,7 +25,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
@@ -54,9 +53,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.client.utils.SparkMetadataWriterUtils.getFunctionalIndexRecordsUsingBloomFilter;
@@ -175,23 +174,31 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     //       HUDI-6994 will address this.
     String columnToIndex = indexDefinition.getSourceFields().get(0);
     SQLContext sqlContext = sparkEngineContext.getSqlContext();
+    ForkJoinPool customThreadPool = new ForkJoinPool(parallelism);
+    List<HoodieRecord> allRecords = customThreadPool.submit(() ->
+        partitionFilePathPairs.parallelStream()
+            .flatMap(entry -> {
+              HoodieFunctionalIndex<Column, Column> functionalIndex =
+                  new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(),
+                      indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+              String partition = entry.getKey();
+              Pair<String, Long> filePathSizePair = entry.getValue();
+              List<HoodieRecord> recordsForPartition = Collections.emptyList();
 
-    return sparkEngineContext.parallelize(partitionFilePathPairs, parallelism).flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<HoodieRecord>>) entry -> {
-
-      HoodieFunctionalIndex<Column, Column> functionalIndex =
-          new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-      String partition = entry.getKey();
-      Pair<String, Long> filePathSizePair = entry.getValue();
-      List<HoodieRecord> recordsForPartition = Collections.emptyList();
-      if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, filePathSizePair.getKey(), filePathSizePair.getValue(), partition,
-            functionalIndex, columnToIndex, sqlContext);
-      } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, filePathSizePair.getKey(), partition,
-            functionalIndex, columnToIndex, sqlContext, metadataWriteConfig, instantTime);
-      }
-      return recordsForPartition.iterator();
-    });
+              if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+                recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, filePathSizePair.getKey(),
+                    filePathSizePair.getValue(), partition,
+                    functionalIndex, columnToIndex, sqlContext);
+              } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+                recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, filePathSizePair.getKey(),
+                    partition, functionalIndex, columnToIndex,
+                    sqlContext, metadataWriteConfig, instantTime);
+              }
+              return recordsForPartition.stream();
+            })
+            .collect(Collectors.toList())).join();
+    customThreadPool.shutdown();
+    return HoodieJavaRDD.of(allRecords, sparkEngineContext, parallelism);
   }
 
   @Override
