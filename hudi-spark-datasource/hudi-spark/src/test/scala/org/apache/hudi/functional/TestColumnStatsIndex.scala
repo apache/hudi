@@ -19,7 +19,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieTableType
@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, DoWriteAndValidateColumnStatsParams}
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 
 import org.apache.hadoop.conf.Configuration
@@ -66,13 +68,13 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    doWriteAndValidateColumnStats(new DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite))
 
-    doWriteAndValidateColumnStats(new DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -94,8 +96,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParams"))
-  def testMetadataColumnStatsIndexInitializationWithUpserts(testCase: ColumnStatsTestCase): Unit = {
+  @MethodSource(Array("testTableTypePartitionTypeParams"))
+  def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
     )
@@ -107,9 +110,12 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
-      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+      PARTITIONPATH_FIELD.key() -> partitionCol,
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5"
     ) ++ metadataOpts
 
+    // inserts
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = null,
@@ -119,6 +125,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions =  1,
       parquetMaxFileSize = 0))
 
+    // updates
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update2-input-table-json/",
       expectedColStatsSourcePath = null,
@@ -126,6 +133,16 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append,
       false,
         numPartitions =  1,
+      parquetMaxFileSize = 0))
+
+    // delete a subset of recs. this will add a delete log block for MOR table.
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/delete-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions =  1,
       parquetMaxFileSize = 0))
 
     val metadataOpts1 = Map(
@@ -145,8 +162,107 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient)
     val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
 
+    // updates a subset which are not deleted and enable col stats and validate bootstrap
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
-      dataSourcePath = "index/colstats/update-input-table-json",
+      dataSourcePath = "index/colstats/update3-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      latestCompletedCommit,
+      numPartitions =  1,
+      parquetMaxFileSize = 0))
+
+    // trigger one more upsert and compaction (w/ MOR table) and validate.
+    val expectedColStatsSourcePath1 = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-bootstrap2-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-bootstrap2-column-stats-index-table.json"
+    }
+
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update4-input-table-json",
+      expectedColStatsSourcePath = expectedColStatsSourcePath1,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      latestCompletedCommit,
+      numPartitions =  1,
+      parquetMaxFileSize = 0))
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
+  def testMetadataColumnStatsIndexInitializationWithRollbacks(testCase: ColumnStatsTestCase): Unit = {
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOpts
+
+    // inserts
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      false,
+      numPartitions =  1,
+      parquetMaxFileSize = 0))
+
+    // updates
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/update2-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions =  1,
+      parquetMaxFileSize = 0))
+
+    // simulate failure for latest commit.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val latestCompletedFileName = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getFileName
+    metaClient.getFs.delete(metaClient.getBasePathV2+"/.hoodie/"+latestCompletedFileName)
+
+    // delete a subset of recs. this will add a delete log block for MOR table.
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/delete-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions =  1,
+      parquetMaxFileSize = 0))
+
+    val metadataOpts1 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    // NOTE: MOR and COW have different fixtures since MOR is bearing delta-log files (holding
+    //       deferred updates), diverging from COW
+
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-bootstrap1-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-bootstrap1-column-stats-index-table.json"
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val latestCompletedCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+
+    // updates a subset which are not deleted and enable col stats and validate bootstrap
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update3-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append,
@@ -155,6 +271,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       numPartitions =  1,
       parquetMaxFileSize = 0))
   }
+
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])

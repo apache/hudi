@@ -20,7 +20,6 @@ package org.apache.hudi.functional
 
 
 import org.apache.avro.Schema
-import org.apache.hadoop.fs.Path
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -35,6 +34,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
+import org.apache.hudi.functional.ColumnStatIndexTestBase.DoWriteAndValidateColumnStatsParams
 import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql.functions.typedLit
@@ -86,19 +86,6 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     cleanupFileSystem()
     cleanupSparkContexts()
   }
-
-
-  case class DoWriteAndValidateColumnStatsParams(testCase: ColumnStatsTestCase,
-                                                 metadataOpts: Map[String, String],
-                                                 hudiOpts: Map[String, String],
-                                                 dataSourcePath: String,
-                                                 expectedColStatsSourcePath: String,
-                                                 operation: String,
-                                                 saveMode: SaveMode,
-                                                 shouldValidate: Boolean = true,
-                                                 latestCompletedCommit: String = null,
-                                                 numPartitions: Integer = 4,
-                                                 parquetMaxFileSize: Integer = 10 * 1024)
 
   protected def doWriteAndValidateColumnStats(params: DoWriteAndValidateColumnStatsParams): Unit = {
 
@@ -178,6 +165,28 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
           .collect()
       }).asJava,
       indexSchema
+    )
+
+    if (metaClient.getTableConfig.getTableType == HoodieTableType.COPY_ON_WRITE) {
+      baseFilesDf // COW table
+    } else {
+      val allLogFiles = filegroupList.stream().flatMap(fileGroup => fileGroup.getAllFileSlices)
+        .flatMap(fileSlice => fileSlice.getLogFiles)
+        .collect(Collectors.toList[HoodieLogFile])
+      if (allLogFiles.isEmpty) {
+        baseFilesDf // MOR table, but no log files.
+      } else {
+        val colsToGenerateStats = indexedCols // check for included cols
+        val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
+        val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+        baseFilesDf.union(getColStatsForLogFiles(allLogFiles, latestCompletedCommit,
+          scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
+          metaClient,
+          writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
+          HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),
+          indexSchema))
+      }
+    }
   }
 
   protected def getColStatsForLogFiles(logFiles: List[HoodieLogFile], latestCommit: String, columnsToIndex: util.List[String],
@@ -185,9 +194,14 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
                                        maxBufferSize: Integer,
                                        indexSchema: StructType): DataFrame = {
-    val colStatsEntries = logFiles.stream().map[Row](logFile => {
-      getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize)
-    }).collect(Collectors.toList[Row])
+    val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
+      try {
+        getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize)
+      } catch {
+        case e: Exception =>
+          throw e
+      }
+    }).filter(rowOpt => rowOpt.isPresent).map[Row](rowOpt => rowOpt.get()).collect(Collectors.toList[Row])
     spark.createDataFrame(colStatsEntries, indexSchema)
   }
 
@@ -197,7 +211,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                        datasetMetaClient: HoodieTableMetaClient,
                                        writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
                                        maxBufferSize: Integer
-                                      ): Row = {
+                                      ): org.apache.hudi.common.util.Option[Row] = {
     LogFileColStatsTestUtil.getLogFileColumnRangeMetadata(logFilePath, datasetMetaClient, latestCommit,
       columnsToIndex, writerSchemaOpt, maxBufferSize)
   }
@@ -327,4 +341,29 @@ object ColumnStatIndexTestBase {
       )
         : _*)
   }
+
+  def testTableTypePartitionTypeParams: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Seq(
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, "c8"),
+        // empty partition col represents non-partitioned table.
+        Arguments.arguments(HoodieTableType.COPY_ON_WRITE, ""),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "c8"),
+        Arguments.arguments(HoodieTableType.MERGE_ON_READ, "")
+      )
+        : _*)
+  }
+
+  case class DoWriteAndValidateColumnStatsParams(testCase: ColumnStatsTestCase,
+                                                 metadataOpts: Map[String, String],
+                                                 hudiOpts: Map[String, String],
+                                                 dataSourcePath: String,
+                                                 expectedColStatsSourcePath: String,
+                                                 operation: String,
+                                                 saveMode: SaveMode,
+                                                 shouldValidate: Boolean = true,
+                                                 latestCompletedCommit: String = null,
+                                                 numPartitions: Integer = 4,
+                                                 parquetMaxFileSize: Integer = 10 * 1024)
 }
+

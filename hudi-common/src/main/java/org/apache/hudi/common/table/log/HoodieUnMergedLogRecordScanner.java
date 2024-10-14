@@ -42,16 +42,18 @@ import java.util.stream.Collectors;
 public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReader {
 
   private final LogRecordScannerCallback callback;
+  private final boolean throwExceptionOnDeleteRecords;
 
   private HoodieUnMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, Option<InstantRange> instantRange, InternalSchema internalSchema,
                                          boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption, boolean throwExceptionOnDeleteRecords) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
         false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
          hoodieTableMetaClientOption);
     this.callback = callback;
+    this.throwExceptionOnDeleteRecords = throwExceptionOnDeleteRecords;
   }
 
   /**
@@ -83,7 +85,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
+    if (throwExceptionOnDeleteRecords) {
+      throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
+    }
   }
 
   /**
@@ -113,6 +117,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
     private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = HoodiePreCombineAvroRecordMerger.INSTANCE;
     private HoodieTableMetaClient hoodieTableMetaClient;
+    private boolean throwExceptionOnDeleteRecords = true;
 
     public Builder withStorage(HoodieStorage storage) {
       this.storage = storage;
@@ -185,6 +190,11 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
       return this;
     }
 
+    public Builder withThrowExceptionOnDeleteRecords(boolean throwExceptionOnDeleteRecords) {
+      this.throwExceptionOnDeleteRecords = throwExceptionOnDeleteRecords;
+      return this;
+    }
+
     @Override
     public HoodieUnMergedLogRecordScanner.Builder withTableMetaClient(
         HoodieTableMetaClient hoodieTableMetaClient) {
@@ -198,7 +208,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, reverseReader, bufferSize, callback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient), throwExceptionOnDeleteRecords);
     }
   }
 }

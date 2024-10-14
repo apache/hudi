@@ -1300,10 +1300,14 @@ public class HoodieTableMetadataUtil {
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
           .withLogRecordScannerCallback(records::add)
+          .withThrowExceptionOnDeleteRecords(false)
           .build();
       scanner.scan();
+      if (records.isEmpty()) {
+        return Collections.emptyList();
+      }
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());
+          collectColumnRangeMetadata(records, fieldsToIndex, filePath.substring(filePath.lastIndexOf("/") + 1), writerSchemaOpt.get());
       return new ArrayList<>(columnRangeMetadataMap.values());
     }
     return Collections.emptyList();

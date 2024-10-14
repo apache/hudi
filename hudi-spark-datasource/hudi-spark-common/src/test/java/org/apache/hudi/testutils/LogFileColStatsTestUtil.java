@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.GenericRow;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +48,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.collectColumnRang
  */
 public class LogFileColStatsTestUtil {
 
-  public static Row getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient, String latestCommitTime,
+  public static Option<Row> getLogFileColumnRangeMetadata(String filePath, HoodieTableMetaClient datasetMetaClient, String latestCommitTime,
                                                   List<String> columnsToIndex, Option<Schema> writerSchemaOpt,
                                                   int maxBufferSize) throws IOException {
     if (writerSchemaOpt.isPresent()) {
@@ -63,8 +64,12 @@ public class LogFileColStatsTestUtil {
           .withLatestInstantTime(latestCommitTime)
           .withReaderSchema(writerSchemaOpt.get())
           .withLogRecordScannerCallback(records::add)
+          .withThrowExceptionOnDeleteRecords(false)
           .build();
       scanner.scan();
+      if (records.isEmpty()) {
+        return Option.empty();
+      }
       List<IndexedRecord> indexedRecords = new LinkedList<>();
       for (HoodieRecord hoodieRecord : records) {
         indexedRecords.add(hoodieRecord.toIndexedRecord(writerSchemaOpt.get(), new Properties()).get().getData());
@@ -72,16 +77,18 @@ public class LogFileColStatsTestUtil {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
           collectColumnRangeMetadata(indexedRecords, fieldsToIndex, filePath);
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMetadataMap.values());
-      return getColStatsEntry(filePath, columnRangeMetadataList);
+      return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
       throw new HoodieException("Writer schema needs to be set");
     }
   }
 
   private static Row getColStatsEntry(String logFilePath, List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList) {
-    Object[] values = new Object[columnRangeMetadataList.size() + 1];
-    values[0] = logFilePath;
-    int counter = 1;
+    Collections.sort(columnRangeMetadataList, (o1, o2) -> o1.getColumnName().compareTo(o2.getColumnName()));
+    Object[] values = new Object[(columnRangeMetadataList.size() * 3) + 2];
+    values[0] = logFilePath.substring(logFilePath.lastIndexOf("/") + 1);
+    values[1] = columnRangeMetadataList.get(0).getValueCount();
+    int counter = 2;
     for (HoodieColumnRangeMetadata columnRangeMetadata: columnRangeMetadataList) {
       values[counter++] = columnRangeMetadata.getValueCount();
       values[counter++] = columnRangeMetadata.getMinValue();
