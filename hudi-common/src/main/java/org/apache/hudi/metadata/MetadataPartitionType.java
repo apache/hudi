@@ -434,6 +434,16 @@ public enum MetadataPartitionType {
     throw new IllegalArgumentException("No MetadataPartitionType for partition path: " + partitionPath);
   }
 
+  public static boolean isValidPartitionFilePath(String partitionFilePath) {
+    partitionFilePath = partitionFilePath.startsWith(".") ? partitionFilePath.substring(1) : partitionFilePath;
+    for (MetadataPartitionType partitionType : getValidValues()) {
+      if (partitionFilePath.startsWith(partitionType.fileIdPrefix)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public String toString() {
     return "Metadata partition {"
