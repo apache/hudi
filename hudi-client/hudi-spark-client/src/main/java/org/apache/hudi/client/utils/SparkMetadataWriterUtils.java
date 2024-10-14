@@ -47,6 +47,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.functions;
+import org.apache.spark.sql.types.StructType;
 
 import javax.annotation.Nullable;
 
@@ -57,6 +58,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import scala.Function1;
 
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
@@ -148,6 +151,14 @@ public class SparkMetadataWriterUtils {
     return dropMetaFields(toDataset(records, schema, sqlContext));
   }
 
+  public static List<Row> readRecordsAsRows(StoragePath[] paths, SQLContext sqlContext,
+                                            HoodieTableMetaClient metaClient, Schema schema,
+                                            boolean isBaseFile) {
+    List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
+        : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
+    return toRows(records, schema, sqlContext, paths[0].toString());
+  }
+
   private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
     List<HoodieRecord> records = new ArrayList<>();
     HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
@@ -187,6 +198,17 @@ public class SparkMetadataWriterUtils {
     JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
     JavaRDD<GenericRecord> javaRDD = jsc.parallelize(avroRecords);
     return AvroConversionUtils.createDataFrame(javaRDD.rdd(), schema.toString(), sqlContext.sparkSession());
+  }
+
+  private static List<Row> toRows(List<HoodieRecord> records, Schema schema, SQLContext sqlContext, String path) {
+    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    Function1<GenericRecord, Row> converterToRow = AvroConversionUtils.createConverterToRow(schema, structType);
+    List<Row> avroRecords = records.stream()
+        .map(r -> (GenericRecord) r.getData())
+        .map(converterToRow::apply)
+        // .map(row -> RowFactory.create(path, row))
+        .collect(Collectors.toList());
+    return avroRecords;
   }
 
   private static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> rowDataset,
