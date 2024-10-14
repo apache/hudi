@@ -19,6 +19,10 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.HoodieJsonPayload;
+import org.apache.hudi.common.config.HoodieMetaserverConfig;
+import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
+import org.apache.hudi.common.fs.ConsistencyGuardConfig;
+import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -26,6 +30,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
@@ -35,11 +40,16 @@ import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.storage.StoragePath;
 
 import com.esotericsoftware.kryo.Kryo;
 
 import java.util.Arrays;
+import java.util.HashMap;
 
 /**
  * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
@@ -85,7 +95,18 @@ public class HoodieCommonKryoRegistrar {
 
         HoodieRecordLocation.class,
         HoodieRecordGlobalLocation.class,
-        HoodieRecordDelegate.class
+        HoodieRecordDelegate.class,
+        HoodieInstant.class,
+        HoodieActiveTimeline.class,
+        HoodieTableConfig.class,
+        ConsistencyGuardConfig.class,
+        FileSystemRetryConfig.class,
+        HoodieMetaserverConfig.class,
+        HoodieTimeGeneratorConfig.class,
+        Option.class,
+        HoodieIndexMetadata.class,
+        HashMap.class,
+        StoragePath.class
     })
         .forEachOrdered(kryo::register);
   }

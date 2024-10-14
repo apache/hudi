@@ -87,7 +87,7 @@ public abstract class HoodieJavaTable<T>
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       final HoodieTableMetadataWriter metadataWriter = JavaHoodieBackedTableMetadataWriter.create(
-          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
+          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
           Option.of(triggeringInstantTimestamp));
       // even with metadata enabled, some index could have been disabled
       // delete metadata partitions corresponding to such indexes
