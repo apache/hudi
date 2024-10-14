@@ -261,7 +261,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
    * @param prop        The payload properties
    * @return true if the given record is newer
    */
-  private static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
+  protected static boolean isRecordNewer(Comparable orderingVal, IndexedRecord record, Properties prop) {
     String orderingField = ConfigUtils.getOrderingField(prop);
     if (!StringUtils.isNullOrEmpty(orderingField)) {
       boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(prop.getProperty(
