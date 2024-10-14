@@ -54,6 +54,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -154,8 +155,10 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     writeParquetFile(typeCode, filePath, rowKeys, schema, true, partitionPath);
 
     // Read and verify
-    List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
+    Iterator<Pair<HoodieKey, Long>> fetchedRowsIter = parquetUtils.fetchRecordKeysWithPositions(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath));
+    List<Pair<HoodieKey, Long>> fetchedRows = new ArrayList<>();
+    fetchedRowsIter.forEachRemaining(fetchedRows::add);
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {
@@ -180,9 +183,11 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
         false, "abc", "def");
 
     // Read and verify
-    List<Pair<HoodieKey, Long>> fetchedRows = parquetUtils.fetchRecordKeysWithPositions(
+    Iterator<Pair<HoodieKey, Long>> fetchedRowsIter = parquetUtils.fetchRecordKeysWithPositions(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath),
         Option.of(new TestBaseKeyGen("abc", "def")));
+    List<Pair<HoodieKey, Long>> fetchedRows = new ArrayList<>();
+    fetchedRowsIter.forEachRemaining(fetchedRows::add);
     assertEquals(rowKeys.size(), fetchedRows.size(), "Total count does not match");
 
     for (Pair<HoodieKey, Long> entry : fetchedRows) {

@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -54,10 +55,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
@@ -116,27 +119,20 @@ public class OrcUtils extends FileFormatUtils {
    * @return {@link List} of {@link HoodieKey}s fetched from the ORC file
    */
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
     try {
       if (!storage.exists(filePath)) {
-        return Collections.emptyList();
+        return Collections.emptyIterator();
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from ORC file:" + filePath, e);
     }
-    List<Pair<HoodieKey, Long>> hoodieKeysAndPositions = new ArrayList<>();
-    long position = 0;
-    try (ClosableIterator<HoodieKey> iterator = getHoodieKeyIterator(storage, filePath, Option.empty())) {
-      while (iterator.hasNext()) {
-        hoodieKeysAndPositions.add(Pair.of(iterator.next(), position));
-        position++;
-      }
-    }
-    return hoodieKeysAndPositions;
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, Option.empty()), key -> Pair.of(key, position.getAndIncrement()));
   }
 
   @Override
-  public List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Custom key generator is not supported yet");
   }
 
@@ -221,6 +217,10 @@ public class OrcUtils extends FileFormatUtils {
             String rowKey = rowKeys.toString(i);
             if (filter.isEmpty() || filter.contains(rowKey)) {
               filteredRowKeys.add(Pair.of(rowKey, rowPosition));
+              if (!filter.isEmpty() && filter.size() == filteredRowKeys.size()) {
+                // if we've found all the keys we're looking for, exit early
+                break;
+              }
             }
             rowPosition++;
           }

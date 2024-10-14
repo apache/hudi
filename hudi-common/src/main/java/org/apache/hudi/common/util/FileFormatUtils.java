@@ -40,6 +40,7 @@ import javax.annotation.Nonnull;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -184,9 +185,9 @@ public abstract class FileFormatUtils {
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
-   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
+   * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
+  public abstract Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -215,11 +216,11 @@ public abstract class FileFormatUtils {
    * @param storage         {@link HoodieStorage} instance.
    * @param filePath        the data file path.
    * @param keyGeneratorOpt instance of KeyGenerator.
-   * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
+   * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract List<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
-                                                                           StoragePath filePath,
-                                                                           Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract Iterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                               StoragePath filePath,
+                                                                               Option<BaseKeyGenerator> keyGeneratorOpt);
 
   /**
    * Read the Avro schema of the data file.

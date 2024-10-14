@@ -105,9 +105,9 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
     BaseKeyGenerator keyGenerator = (BaseKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(getPropertiesForKeyGen()));
 
     for (Tuple2<String, HoodieBaseFile> entry : partitionPathFileIdPairs) {
-      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(config, hoodieTable, Pair.of(entry._1, entry._2),
+      HoodieKeyLocationFetchHandle fetcherHandle = new HoodieKeyLocationFetchHandle(hoodieTable.getStorageConf(), Pair.of(entry._1, entry._2),
           populateMetaFields ? Option.empty() : Option.of(keyGenerator));
-      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations().iterator();
+      Iterator<Pair<HoodieKey, HoodieRecordLocation>> result = fetcherHandle.locations();
       List<Tuple2<HoodieKey, HoodieRecordLocation>> actualList = new ArrayList<>();
       result.forEachRemaining(x -> actualList.add(new Tuple2<>(x.getLeft(), x.getRight())));
       assertEquals(expectedList.get(new Tuple2<>(entry._1, entry._2.getFileId())), actualList);

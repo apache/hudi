@@ -19,31 +19,31 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.IOException;
+
+import static org.apache.hudi.io.HoodieReadHandle.createNewFileReader;
 
 /**
  * Extract range information for a given file slice.
  */
-public class HoodieRangeInfoHandle<T, I, K, O> extends HoodieReadHandle<T, I, K, O> {
+public class HoodieRangeInfoHandle {
+  private final StorageConfiguration<?> storageConfig;
+  private final HoodieWriteConfig writeConfig;
 
-  public HoodieRangeInfoHandle(HoodieWriteConfig config, HoodieTable<T, I, K, O> hoodieTable,
-      Pair<String, String> partitionPathFilePair) {
-    super(config, hoodieTable, partitionPathFilePair);
-  }
-
-  public String[] getMinMaxKeys() throws IOException {
-    try (HoodieFileReader reader = createNewFileReader()) {
-      return reader.readMinMaxRecordKeys();
-    }
+  public HoodieRangeInfoHandle(HoodieWriteConfig config, StorageConfiguration<?> storageConfig) {
+    this.writeConfig = config;
+    this.storageConfig = storageConfig;
   }
 
   public String[] getMinMaxKeys(HoodieBaseFile baseFile) throws IOException {
-    try (HoodieFileReader reader = createNewFileReader(baseFile)) {
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(baseFile.getStoragePath(), storageConfig);
+    try (HoodieFileReader reader = createNewFileReader(hoodieStorage, writeConfig, baseFile)) {
       return reader.readMinMaxRecordKeys();
     }
   }
