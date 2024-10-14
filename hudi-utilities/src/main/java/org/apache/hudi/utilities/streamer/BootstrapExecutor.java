@@ -207,6 +207,7 @@ public class BootstrapExecutor implements Serializable {
 
     HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .fromProperties(props)
+        .setBootstrapIndexEnable(true)
         .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
