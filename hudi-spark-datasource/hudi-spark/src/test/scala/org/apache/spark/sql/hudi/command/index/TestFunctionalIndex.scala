@@ -649,4 +649,53 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
     assertResult(Some(expectedDatabaseName))(catalogTable.identifier.database)
     assertResult(expectedTableName)(catalogTable.identifier.table)
   }
+
+  /**
+   * Write records to the table with the given operation type and do updates or deletes, and then validate functional index.
+   */
+  private def writeRecordsAndValidateFunctionalIndex(tableName: String,
+                                                     basePath: String,
+                                                     operationType: String,
+                                                     isDelete: Boolean,
+                                                     shouldCompact: Boolean,
+                                                     shouldCluster: Boolean,
+                                                     shouldRollback: Boolean): Unit = {
+    spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+    spark.sql(s"insert into $tableName values(2, 'a2', 10, 1001)")
+    spark.sql(s"insert into $tableName values(3, 'a3', 10, 1002)")
+
+    // create functional index
+    spark.sql(s"create index idx_datestr on $tableName using column_stats(ts) options(func='from_unixtime', format='yyyy-MM-dd')")
+    val metaClient = createMetaClient(spark, basePath)
+    assertTrue(metaClient.getIndexMetadata.isPresent)
+    val functionalIndexMetadata = metaClient.getIndexMetadata.get()
+    assertEquals(1, functionalIndexMetadata.getIndexDefinitions.size())
+    assertEquals("func_index_idx_datestr", functionalIndexMetadata.getIndexDefinitions.get("func_index_idx_datestr").getIndexName)
+
+    // do the operation
+    if (isDelete) {
+      spark.sql(s"delete from $tableName where id=1")
+    } else {
+      spark.sql(s"insert into $tableName values(4, 'a4', 10, 1003)")
+    }
+
+    // validate the functional index
+    val metadataSql = s"select ColumnStatsMetadata.minValue.member6.value, ColumnStatsMetadata.maxValue.member6.value from hudi_metadata('$tableName') where type=3"
+    if (shouldRollback) {
+      // rollback the operation
+      spark.sql(s"rollback $operationType on $tableName")
+      // validate the functional index
+      checkAnswer(metadataSql)(
+        Seq("2020-09-26", "2021-09-26"), // for file in name=a1
+        Seq("2022-09-26", "2022-09-26") // for file in name=a2
+      )
+    } else {
+      // validate the functional index
+      checkAnswer(metadataSql)(
+        Seq("2020-09-26", "2021-09-26"), // for file in name=a1
+        Seq("2022-09-26", "2022-09-26"), // for file in name=a2
+        Seq("2023-09-26", "2023-09-26") // for file in name=a3
+      )
+    }
+  }
 }
