@@ -212,7 +212,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                 || (Boolean) fullBoundExpr.eval(
                 extractPartitionValues(partitionFields, relativePartitionPath,
                     urlEncodePartitioningEnabled)))
-            .collect(Collectors.toList()));
+            .collect(Collectors.toSet()));
 
         Expression partialBoundExpr;
         // If partitionPaths is nonEmpty, we're already at the last path level, and all paths
