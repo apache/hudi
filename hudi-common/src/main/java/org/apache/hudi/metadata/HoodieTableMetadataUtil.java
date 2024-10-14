@@ -2180,7 +2180,7 @@ public class HoodieTableMetadataUtil {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
           // Collect Column Metadata for Each File part of active file system view of latest snapshot
           // Get all file names, including log files, in a set from the file slices
-          Set<String> fileNames = getPartitionLatestFileSlices(dataMetaClient, Option.empty(), partitionName).stream()
+          Set<String> fileNames = getPartitionFileSlices(dataMetaClient, Option.empty(), partitionName, true).stream()
               .flatMap(fileSlice -> Stream.concat(
                   Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
                   fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))

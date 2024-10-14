@@ -236,43 +236,6 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
     }
   }
 
-  test(s"Test partition stats index on int type field with update and file pruning") {
-    Seq("cow", "mor").foreach { tableType =>
-      Seq(true, false).foreach { shouldCompact =>
-        withTempDir { tmp =>
-          val tableName = generateTableName
-          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-          spark.sql(
-            s"""
-               |create table $tableName (
-               |  id int,
-               |  name string,
-               |  price int,
-               |  ts long
-               |) using hudi
-               |partitioned by (ts)
-               |tblproperties (
-               |  type = '$tableType',
-               |  primaryKey = 'id',
-               |  preCombineField = 'price',
-               |  hoodie.metadata.index.partition.stats.enable = 'true',
-               |  hoodie.metadata.index.column.stats.column.list = 'price'
-               |)
-               |location '$tablePath'
-               |""".stripMargin
-          )
-
-          // trigger compaction after update and validate stats
-          if (tableType == "mor" && shouldCompact) {
-            spark.sql("set hoodie.compact.inline=true")
-            spark.sql("set hoodie.compact.inline.max.delta.commits=2")
-          }
-          writeAndValidatePartitionStats(tableName, tablePath)
-        }
-      }
-    }
-  }
-
   test(s"Test partition stats index without configuring columns to index") {
     Seq("cow", "mor").foreach { tableType =>
       withTempDir { tmp =>
@@ -311,6 +274,46 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           Seq(getPartitionStatsIndexKey("ts=20", "name"), "a2", "a5"),
           Seq(getPartitionStatsIndexKey("ts=30", "name"), "a3", "a6")
         )
+      }
+    }
+  }
+
+  test(s"Test partition stats index on int type field with update and file pruning") {
+    Seq("cow", "mor").foreach { tableType =>
+      Seq(true, false).foreach { shouldCompact =>
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price int,
+               |  ts long
+               |) using hudi
+               |partitioned by (ts)
+               |tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'price',
+               |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.column.list = 'price'
+               |)
+               |location '$tablePath'
+               |""".stripMargin
+          )
+
+          // trigger compaction after update and validate stats
+          if (tableType == "mor" && shouldCompact) {
+            spark.sql("set hoodie.compact.inline=true")
+            spark.sql("set hoodie.compact.inline.max.delta.commits=2")
+          }
+          spark.sql("set hoodie.metadata.enable=true")
+          spark.sql("set hoodie.enable.data.skipping=true")
+          spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
+          writeAndValidatePartitionStats(tableName, tablePath)
+        }
       }
     }
   }
