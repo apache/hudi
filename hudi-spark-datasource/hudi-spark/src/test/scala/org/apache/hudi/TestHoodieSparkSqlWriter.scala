@@ -621,8 +621,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, noReconciliationOpts, df1)
 
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF1.count())
 
     assertEquals(df1.except(dropMetaFields(snapshotDF1)).count(), 0)
@@ -632,8 +631,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df2 = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df2)
 
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF2.count())
 
     // Ensure 2nd batch of updates matches.
@@ -649,8 +647,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     // write to Hudi with new column
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, noReconciliationOpts, df3)
 
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(15, snapshotDF3.count())
 
     // Ensure 3d batch matches
@@ -669,8 +666,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df4 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, reconciliationOpts, df4)
 
-    val snapshotDF4 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF4 = spark.read.format("org.apache.hudi").load(tempBasePath)
 
     assertEquals(25, snapshotDF4.count())
 
@@ -710,7 +706,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     )
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, allowOpts, df5)
 
-    val snapshotDF5 = spark.read.format("org.apache.hudi").load(tempBasePath + "/*/*/*/*")
+    val snapshotDF5 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(35, snapshotDF5.count())
     assertEquals(df5.intersect(dropMetaFields(snapshotDF5)).except(df5).count, 0)
 
@@ -795,8 +791,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val df1 = spark.createDataFrame(sc.parallelize(recordsSeq), structType)
     // write to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, fooTableModifier, df1)
-    val snapshotDF1 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF1 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF1.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf1 = dropMetaFields(snapshotDF1)
@@ -806,8 +801,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val updatesDf = spark.createDataFrame(sc.parallelize(updatesSeq), structType)
     // write updates to Hudi
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, updatesDf)
-    val snapshotDF2 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF2 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(10, snapshotDF2.count())
     // remove metadata columns so that expected and actual DFs can be compared as is
     val trimmedDf2 = dropMetaFields(snapshotDF2)
@@ -839,8 +833,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
 
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
       !partitionPath.equals(HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH)
@@ -861,8 +854,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     fooTableModifier = fooTableModifier.updated(DataSourceWriteOptions.OPERATION.key(), WriteOperationType.DELETE_PARTITION.name())
     val recordsToDelete = spark.emptyDataFrame
     HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, fooTableModifier, recordsToDelete)
-    val snapshotDF3 = spark.read.format("org.apache.hudi")
-      .load(tempBasePath + "/*/*/*/*")
+    val snapshotDF3 = spark.read.format("org.apache.hudi").load(tempBasePath)
     snapshotDF3.show()
     assertEquals(0, snapshotDF3.filter(entry => {
       val partitionPath = entry.getString(3)
