@@ -435,8 +435,8 @@ public class HoodieStreamer implements Serializable {
     public String ignoreCheckpoint = null;
 
     @Parameter(names = {"--spark-app-name"},
-            description = "spark app name to use while creating spark context, " +
-                    "if not defined then defaults to streamer-{cfg.targetTableName}.")
+            description = "spark app name to use while creating spark context." +
+                    " If not defined then defaults to streamer-{cfg.targetTableName}.")
     public String sparkAppName = "";
 
     public boolean isAsyncCompactionEnabled() {
@@ -601,8 +601,7 @@ public class HoodieStreamer implements Serializable {
     String sparkAppName;
     if (!StringUtils.isNullOrEmpty(cfg.sparkAppName)) {
       sparkAppName = cfg.sparkAppName;
-    }
-    else {
+    } else {
       sparkAppName = "streamer-" + cfg.targetTableName;
     }
     if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
