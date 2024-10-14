@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -29,7 +30,9 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -372,5 +375,19 @@ public class HoodieTestUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instant file status", e);
     }
+  }
+
+  /**
+   * Gets the pair of partition and cleaned file from the clean metadata.
+   */
+  public static List<Pair<String, String>> getCleanedFiles(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant) throws IOException {
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, cleanInstant);
+    List<Pair<String, String>> deleteFileList = new ArrayList<>();
+    cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+      // Files deleted from a partition
+      List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
+    });
+    return deleteFileList;
   }
 }

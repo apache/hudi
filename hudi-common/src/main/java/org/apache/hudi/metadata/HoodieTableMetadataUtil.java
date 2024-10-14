@@ -53,6 +53,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -571,8 +572,45 @@ public class HoodieTableMetadataUtil {
               dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
+    if (enabledPartitionTypes.contains(MetadataPartitionType.FUNCTIONAL_INDEX)) {
+      convertMetadataToFunctionalIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, bloomIndexParallelism, columnStatsIndexParallelism, partitionToRecordsMap);
+    }
 
     return partitionToRecordsMap;
+  }
+
+  private static void convertMetadataToFunctionalIndexRecords(HoodieEngineContext engineContext, HoodieCleanMetadata cleanMetadata,
+                                                              String instantTime, HoodieTableMetaClient dataMetaClient,
+                                                              int bloomIndexParallelism, int columnStatsIndexParallelism,
+                                                              Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap) {
+    Option<HoodieIndexMetadata> indexMetadata = dataMetaClient.getIndexMetadata();
+    if (indexMetadata.isPresent()) {
+      HoodieIndexMetadata metadata = indexMetadata.get();
+      Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
+      if (indexDefinitions.isEmpty()) {
+        throw new HoodieMetadataException("Functional index metadata not found");
+      }
+      // iterate over each index definition and check:
+      // if it is a functional index using column_stats, then follow the same approach as column_stats
+      // if it is a functional index using bloom_filters, then follow the same approach as bloom_filters
+      // else throw an exception
+      for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
+        String indexName = entry.getKey();
+        HoodieIndexDefinition indexDefinition = entry.getValue();
+        if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(MetadataPartitionType.fromPartitionPath(indexDefinition.getIndexName()))) {
+          if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+            partitionToRecordsMap.put(indexName, convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism));
+          } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+            partitionToRecordsMap.put(indexName,
+                convertMetadataToColumnStatsRecords(cleanMetadata, engineContext, dataMetaClient, true, columnStatsIndexParallelism, indexDefinition.getSourceFields()));
+          } else {
+            throw new HoodieMetadataException("Unsupported functional index type");
+          }
+        }
+      }
+    } else {
+      throw new HoodieMetadataException("Functional index metadata not found");
+    }
   }
 
   /**
@@ -1192,7 +1230,7 @@ public class HoodieTableMetadataUtil {
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
-    String fileName = FSUtils.getFileName(filePath, partitionPath);
+    String fileName = filePartitionPath.substring(filePartitionPath.lastIndexOf("/") + 1);
 
     if (isDeleted) {
       // TODO we should delete records instead of stubbing them

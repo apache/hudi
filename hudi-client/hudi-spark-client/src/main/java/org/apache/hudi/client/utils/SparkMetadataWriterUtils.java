@@ -200,10 +200,9 @@ public class SparkMetadataWriterUtils {
     if (avroRecords.isEmpty()) {
       return sqlContext.emptyDataFrame().toDF();
     }
-    try (JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext())) {
-      JavaRDD<GenericRecord> javaRDD = jsc.parallelize(avroRecords);
-      return AvroConversionUtils.createDataFrame(javaRDD.rdd(), schema.toString(), sqlContext.sparkSession());
-    }
+    JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
+    JavaRDD<GenericRecord> javaRDD = jsc.parallelize(avroRecords);
+    return AvroConversionUtils.createDataFrame(javaRDD.rdd(), schema.toString(), sqlContext.sparkSession());
   }
 
   private static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> rowDataset,
