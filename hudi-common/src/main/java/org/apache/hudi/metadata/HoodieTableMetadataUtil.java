@@ -2174,21 +2174,14 @@ public class HoodieTableMetadataUtil {
       return newColumnStats;
     }
 
-    Comparable minValue =
-        (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMinValue()))
-            .filter(Objects::nonNull)
-            .min(Comparator.naturalOrder())
-            .orElse(null);
-
-    Comparable maxValue =
-        (Comparable) Stream.of(
-                (Comparable) unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
-                (Comparable) unwrapAvroValueWrapper(newColumnStats.getMaxValue()))
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElse(null);
+    Comparable minValue = castAndCompare(
+        unwrapAvroValueWrapper(newColumnStats.getMinValue()),
+        unwrapAvroValueWrapper(prevColumnStats.getMinValue()),
+        true);
+    Comparable maxValue = castAndCompare(
+        unwrapAvroValueWrapper(prevColumnStats.getMaxValue()),
+        unwrapAvroValueWrapper(newColumnStats.getMaxValue()),
+        false);
 
     return HoodieMetadataColumnStats.newBuilder(HoodieMetadataPayload.METADATA_COLUMN_STATS_BUILDER_STUB.get())
         .setFileName(newColumnStats.getFileName())
@@ -2201,6 +2194,33 @@ public class HoodieTableMetadataUtil {
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
         .build();
+  }
+
+  public static Comparable castAndCompare(Comparable newVal, Comparable<?> prevVal, boolean isMin) {
+    if (newVal == null) {
+      return prevVal;
+    } else if (prevVal == null) {
+      return newVal;
+    }
+
+    Comparable picked;
+    // Same type.
+    if (newVal.getClass() == prevVal.getClass()) {
+      picked = newVal.compareTo(prevVal) < 0 ? newVal : prevVal;
+    }
+
+    // Different types.
+    if (newVal instanceof Number && prevVal instanceof Number) {
+      picked = Double.compare(((Number) newVal).doubleValue(), ((Number) prevVal).doubleValue()) < 0 ? newVal : prevVal;
+    } else {
+      picked = newVal.toString().compareTo(prevVal.toString()) < 0 ? newVal : prevVal;
+    }
+
+    if (isMin) {
+      return picked;
+    } else {
+      return picked == newVal ? prevVal : newVal;
+    }
   }
 
   public static Map<String, HoodieMetadataFileInfo> combineFileSystemMetadata(HoodieMetadataPayload older, HoodieMetadataPayload newer) {
