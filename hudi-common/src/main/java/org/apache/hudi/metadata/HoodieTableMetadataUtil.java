@@ -2244,7 +2244,10 @@ public class HoodieTableMetadataUtil {
   public static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
                                                                   HoodieMetadataColumnStats newColumnStats) {
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
-
+    // If new column stats is tight bound, then discard the previous column stats
+    if (newColumnStats.getIsTightBound()) {
+      return newColumnStats;
+    }
     // We're handling 2 cases in here
     //  - New record is a tombstone: in this case it simply overwrites previous state
     //  - Previous record is a tombstone: in that case new proper record would also

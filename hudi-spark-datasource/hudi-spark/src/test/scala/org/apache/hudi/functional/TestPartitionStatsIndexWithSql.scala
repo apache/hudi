@@ -298,6 +298,7 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
                |  primaryKey = 'id',
                |  preCombineField = 'price',
                |  hoodie.metadata.index.partition.stats.enable = 'true',
+               |  hoodie.metadata.index.column.stats.enable = 'true',
                |  hoodie.metadata.index.column.stats.column.list = 'price'
                |)
                |location '$tablePath'
@@ -313,6 +314,14 @@ class TestPartitionStatsIndexWithSql extends HoodieSparkSqlTestBase {
           spark.sql("set hoodie.enable.data.skipping=true")
           spark.sql("set hoodie.fileIndex.dataSkippingFailureMode=strict")
           writeAndValidatePartitionStats(tableName, tablePath)
+          if (tableType == "mor" && shouldCompact) {
+            // check partition stats records with tightBound
+            checkAnswer(s"select key, ColumnStatsMetadata.minValue.member1.value, ColumnStatsMetadata.maxValue.member1.value, ColumnStatsMetadata.isTightBound from hudi_metadata('$tableName') where type=${MetadataPartitionType.PARTITION_STATS.getRecordType} and ColumnStatsMetadata.columnName='price'")(
+              Seq(getPartitionStatsIndexKey("ts=10", "price"), 1000, 2000, false),
+              Seq(getPartitionStatsIndexKey("ts=20", "price"), 2000, 3000, false),
+              Seq(getPartitionStatsIndexKey("ts=30", "price"), 3000, 4001, false)
+            )
+          }
         }
       }
     }
