@@ -112,7 +112,7 @@ public abstract class AbstractRealtimeRecordReader {
 
   private boolean usesCustomPayload(HoodieTableMetaClient metaClient) {
     return metaClient.getTableConfig().getRecordMergeMode().equals(RecordMergeMode.CUSTOM)
-        && metaClient.getTableConfig().getRecordMergerStrategy().get().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+        && metaClient.getTableConfig().getRecordMergerStrategy().get().equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID);
   }
 
   private void prepareHiveAvroSerializer() {

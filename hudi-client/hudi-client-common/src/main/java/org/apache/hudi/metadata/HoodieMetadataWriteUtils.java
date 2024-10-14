@@ -162,7 +162,7 @@ public class HoodieMetadataWriteUtils {
         .withWriteStatusClass(FailOnFirstErrorWriteStatus.class)
         .withReleaseResourceEnabled(writeConfig.areReleaseResourceEnabled())
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
-        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
+        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .withPayloadClass(HoodieMetadataPayload.class.getCanonicalName()).build())
         .withRecordMergerImpls(HoodieAvroRecordMerger.class.getCanonicalName());

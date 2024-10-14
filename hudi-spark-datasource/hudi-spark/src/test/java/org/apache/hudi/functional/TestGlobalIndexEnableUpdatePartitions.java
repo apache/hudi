@@ -389,7 +389,7 @@ public class TestGlobalIndexEnableUpdatePartitions extends SparkClientFunctional
             .withMaxNumDeltaCommitsBeforeCompaction(4).build())
         .withSchema(SCHEMA_STR)
         .withRecordMergeMode(RecordMergeMode.CUSTOM)
-        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)
+        .withRecordMergerStrategy(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)
         .withPayloadConfig(HoodiePayloadConfig.newBuilder()
             .fromProperties(getPayloadProps(payloadClass)).build())
         .build();

@@ -20,7 +20,6 @@
 package org.apache.hudi;
 
 import org.apache.hudi.common.config.RecordMergeMode;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -28,13 +27,8 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
-import org.apache.hudi.common.model.OverwriteWithLatestMerger;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -68,7 +62,7 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.isPresent() && mergerStrategy.get().equals(HoodieAvroRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)) {
+        if (mergerStrategy.isPresent() && mergerStrategy.get().equals(HoodieAvroRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
         throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy.get());

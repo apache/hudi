@@ -58,7 +58,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
@@ -203,7 +203,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty("hoodie.payload.ordering.field", "timestamp");
     props.setProperty(RECORD_MERGE_MODE.key(), recordMergeMode.name());
     if (recordMergeMode.equals(RecordMergeMode.CUSTOM)) {
-      props.setProperty(RECORD_MERGER_STRATEGY.key(), PAYLOAD_BASED_MERGER_STRATEGY_UUDID);
+      props.setProperty(RECORD_MERGER_STRATEGY.key(), PAYLOAD_BASED_MERGER_STRATEGY_UUID);
       props.setProperty(PAYLOAD_CLASS_NAME.key(), getCustomPayload());
     }
     props.setProperty(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.defaultValue()));

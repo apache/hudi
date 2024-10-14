@@ -91,7 +91,7 @@ import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAM
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.apache.hudi.common.model.HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecordMerger.OVERWRITE_MERGER_STRATEGY_UUID;
-import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID;
 import static org.apache.hudi.common.util.ConfigUtils.fetchConfigs;
 import static org.apache.hudi.common.util.ConfigUtils.recoverIfNeeded;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -384,7 +384,7 @@ public class HoodieTableConfig extends HoodieConfig {
       if (!isNullOrEmpty(recordMergerStrategyId) && (!contains(RECORD_MERGER_STRATEGY) || !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId))) {
         setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
-        if (recordMergerStrategyId != PAYLOAD_BASED_MERGER_STRATEGY_UUDID) {
+        if (recordMergerStrategyId != PAYLOAD_BASED_MERGER_STRATEGY_UUID) {
           checkArgument(isNullOrEmpty(payloadClassName),
               "Merging configs have not been inferred with HoodieTableConfig.inferCorrectMergingBehavior. This must be done to maintain table integrity!");
           if (contains(PAYLOAD_CLASS_NAME)) {
@@ -745,14 +745,14 @@ public class HoodieTableConfig extends HoodieConfig {
           inferPayloadClassName = null;
           inferRecordMergerStrategy = null;
         } else {
-          checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUDID), "Payload based strategy should only be used if you have a custom payload");
+          checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Payload based strategy should only be used if you have a custom payload");
           inferRecordMergeMode = CUSTOM;
           inferPayloadClassName = null;
           inferRecordMergerStrategy = recordMergerStrategy;
         }
       }
     } else {
-      checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUDID), "Record merge strategy cannot be set if a merge payload is used");
+      checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
       if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
         inferRecordMergeMode = EVENT_TIME_ORDERING;
         inferPayloadClassName = null;
@@ -765,7 +765,7 @@ public class HoodieTableConfig extends HoodieConfig {
         checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;
         inferPayloadClassName = payloadClassName;
-        inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
+        inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUID;
       }
     }
     return Triple.of(inferRecordMergeMode, inferPayloadClassName, inferRecordMergerStrategy);

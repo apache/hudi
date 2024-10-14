@@ -48,7 +48,7 @@ public interface HoodieRecordMerger extends Serializable {
 
   String OVERWRITE_MERGER_STRATEGY_UUID = "ce9acb64-bde0-424c-9b91-f6ebba25356d";
 
-  String PAYLOAD_BASED_MERGER_STRATEGY_UUDID = "00000000-0000-0000-0000-000000000000";
+  String PAYLOAD_BASED_MERGER_STRATEGY_UUID = "00000000-0000-0000-0000-000000000000";
 
   /**
    * This method converges combineAndGetUpdateValue and precombine from HoodiePayload.
@@ -176,7 +176,7 @@ public interface HoodieRecordMerger extends Serializable {
       case EVENT_TIME_ORDERING:
         return DEFAULT_MERGER_STRATEGY_UUID;
       case CUSTOM:
-        return PAYLOAD_BASED_MERGER_STRATEGY_UUDID;
+        return PAYLOAD_BASED_MERGER_STRATEGY_UUID;
       default:
         throw new IllegalStateException("afdsafdsafds");
     }

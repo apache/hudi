@@ -178,7 +178,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
         return Option.of(new OverwriteWithLatestHiveRecordMerger());
       case CUSTOM:
       default:
-        if (mergerStrategy.isPresent() && mergerStrategy.get().equals(HoodieAvroRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUDID)) {
+        if (mergerStrategy.isPresent() && mergerStrategy.get().equals(HoodieAvroRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
           return Option.of(HoodieAvroRecordMerger.INSTANCE);
         }
         throw new HoodieException("This merger strategy UUID is not supported: " + mergerStrategy.get());
