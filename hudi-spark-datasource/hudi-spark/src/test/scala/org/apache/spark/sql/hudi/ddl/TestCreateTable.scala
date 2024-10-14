@@ -1181,14 +1181,13 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     spark.sql("use default")
   }
 
-  test("Test Infer KegGenClazz") {
-    def checkKeyGenerator(targetGenerator: String, tableName: String) = {
-      val tablePath = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location.getPath
-      val metaClient = createMetaClient(spark, tablePath)
-      val realKeyGenerator = metaClient.getTableConfig.getKeyGeneratorClassName
-      assertResult(targetGenerator)(realKeyGenerator)
-    }
+  private def getKeyGenerator(tableName: String): String = {
+    val tablePath = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location.getPath
+    val metaClient = createMetaClient(spark, tablePath)
+      metaClient.getTableConfig.getKeyGeneratorClassName
+  }
 
+  test("Test Infer KegGenClazz") {
     val tableName = generateTableName
 
     // Test Nonpartitioned table
@@ -1206,7 +1205,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   preCombineField = 'ts'
          | )
        """.stripMargin)
-    checkKeyGenerator("org.apache.hudi.keygen.NonpartitionedKeyGenerator", tableName)
+    assertResult("org.apache.hudi.keygen.NonpartitionedKeyGenerator")(getKeyGenerator(tableName))
     spark.sql(s"drop table $tableName")
 
     // Test single partitioned table
@@ -1225,7 +1224,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   preCombineField = 'ts'
          | )
        """.stripMargin)
-    checkKeyGenerator("org.apache.hudi.keygen.SimpleKeyGenerator", tableName)
+    assertResult("org.apache.hudi.keygen.SimpleKeyGenerator")(getKeyGenerator(tableName))
     spark.sql(s"drop table $tableName")
 
     // Test single partitioned dual record keys table
@@ -1244,8 +1243,56 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
          |   preCombineField = 'ts'
          | )
        """.stripMargin)
-    checkKeyGenerator("org.apache.hudi.keygen.ComplexKeyGenerator", tableName)
+    assertResult("org.apache.hudi.keygen.ComplexKeyGenerator")(getKeyGenerator(tableName))
     spark.sql(s"drop table $tableName")
+  }
+
+  test("Test hoodie.datasource.write.keygenerator.class") {
+    val tableName = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert',
+         |   hoodie.datasource.write.keygenerator.class = 'org.apache.hudi.keygen.ComplexKeyGenerator'
+         |
+         | )
+     """.stripMargin)
+    assertResult("org.apache.hudi.keygen.ComplexKeyGenerator")(getKeyGenerator(tableName))
+
+    val tableName2 = generateTableName
+    spark.sql(
+      s"""
+         | create table $tableName2 (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long,
+         |  dt string
+         | ) using hudi
+         | partitioned by (dt)
+         | options (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert',
+         |   keygen = 'org.apache.hudi.keygen.ComplexKeyGenerator'
+         |
+         | )
+     """.stripMargin)
+    assertResult("org.apache.hudi.keygen.ComplexKeyGenerator")(getKeyGenerator(tableName2))
   }
 
   test("Test CTAS not de-duplicating (by default)") {
