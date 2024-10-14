@@ -518,7 +518,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
                                                                         HoodieTableMetaClient metaClient,
                                                                         int parallelism, Schema readerSchema,
                                                                         StorageConfiguration<?> storageConf,
-                                                                        String instantTime);
+                                                                        String instantTime,
+                                                                        boolean isDeleted);
 
   protected abstract EngineType getEngineType();
 
@@ -547,7 +548,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     int fileGroupCount = dataWriteConfig.getMetadataConfig().getFunctionalIndexFileGroupCount();
     int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime));
+    return Pair.of(fileGroupCount, getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime,
+        false));
   }
 
   private Set<String> getFunctionalIndexPartitionsToInit() {
@@ -1108,7 +1110,47 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     });
     int parallelism = Math.min(partitionFilePathPairs.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
     Schema readerSchema = getProjectedSchemaForFunctionalIndex(indexDefinition, dataMetaClient);
-    return getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime);
+    return getFunctionalIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, readerSchema, storageConf, instantTime, false);
+  }
+
+  /**
+   * Update functional index from {@link HoodieCleanMetadata}.
+   */
+  private void updateFunctionalIndexIfPresent(HoodieCleanMetadata cleanMetadata, String instantTime, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap) {
+    if (!MetadataPartitionType.FUNCTIONAL_INDEX.isMetadataPartitionAvailable(dataMetaClient)) {
+      return;
+    }
+    dataMetaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_FUNCTIONAL_INDEX_PREFIX))
+        .forEach(partition -> {
+          HoodieData<HoodieRecord> functionalIndexRecords;
+          try {
+            functionalIndexRecords = getFunctionalIndexUpdatesForClean(cleanMetadata, partition, instantTime);
+          } catch (Exception e) {
+            throw new HoodieMetadataException(String.format("Failed to get functional index updates for partition %s", partition), e);
+          }
+          partitionToRecordMap.put(partition, functionalIndexRecords);
+        });
+  }
+
+  /**
+   * Generates functional index records for a clean action.
+   *
+   * @param cleanMetadata {@code HoodieCleanMetadata}
+   * @param indexPartition partition name of the functional index
+   * @param instantTime    timestamp at of the current update commit
+   */
+  private HoodieData<HoodieRecord> getFunctionalIndexUpdatesForClean(HoodieCleanMetadata cleanMetadata, String indexPartition, String instantTime) throws Exception {
+    HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
+    List<Pair<String, Pair<String, Long>>> deleteFileList = new ArrayList<>();
+    cleanMetadata.getPartitionMetadata().forEach((dataPartition, cleanPartitionMetadata) -> {
+      // Files deleted from a partition
+      List<String> deletedFiles = cleanPartitionMetadata.getDeletePathPatterns();
+      deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(dataPartition, Pair.of(entry, -1L))));
+    });
+    int parallelism = Math.min(deleteFileList.size(), dataWriteConfig.getMetadataConfig().getFunctionalIndexParallelism());
+    return getFunctionalIndexRecords(deleteFileList, indexDefinition, dataMetaClient, parallelism, null, storageConf, instantTime, true);
   }
 
   private void updateSecondaryIndexIfPresent(HoodieCommitMetadata commitMetadata, Map<String, HoodieData<HoodieRecord>> partitionToRecordMap, HoodieData<WriteStatus> writeStatus) {
@@ -1198,10 +1240,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    */
   @Override
   public void update(HoodieCleanMetadata cleanMetadata, String instantTime) {
-    processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
-        cleanMetadata, instantTime, dataMetaClient, enabledPartitionTypes,
-        dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
-        dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex()));
+    processAndCommit(instantTime, () ->  {
+      Map<String, HoodieData<HoodieRecord>> partitionToRecordMap = HoodieTableMetadataUtil.convertMetadataToRecords(engineContext,
+          cleanMetadata, instantTime, dataMetaClient, enabledPartitionTypes,
+          dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.isMetadataColumnStatsIndexEnabled(),
+          dataWriteConfig.getColumnStatsIndexParallelism(), dataWriteConfig.getColumnsEnabledForColumnStatsIndex());
+      updateFunctionalIndexIfPresent(cleanMetadata, instantTime, partitionToRecordMap);
+      return partitionToRecordMap;
+    });
     closeInternal();
   }
 

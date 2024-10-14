@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -164,7 +165,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
                                                                HoodieIndexDefinition indexDefinition,
                                                                HoodieTableMetaClient metaClient, int parallelism,
                                                                Schema readerSchema, StorageConfiguration<?> storageConf,
-                                                               String instantTime) {
+                                                               String instantTime,
+                                                               boolean isDeleted) {
     HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
     if (indexDefinition.getSourceFields().isEmpty()) {
       // In case there are no columns to index, bail
@@ -174,24 +176,33 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // NOTE: We are assuming that the index expression is operating on a single column
     //       HUDI-6994 will address this.
     String columnToIndex = indexDefinition.getSourceFields().get(0);
-    SQLContext sqlContext = sparkEngineContext.getSqlContext();
 
-    return sparkEngineContext.parallelize(partitionFilePathPairs, parallelism).flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<HoodieRecord>>) entry -> {
+    if (isDeleted) {
+      return sparkEngineContext.parallelize(partitionFilePathPairs, parallelism)
+          .flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<HoodieRecord>>) entry -> {
+            String filePath = entry.getValue().getKey();
+            HoodieColumnRangeMetadata columnRangeMetadata = HoodieColumnRangeMetadata.stub(filePath.substring(filePath.lastIndexOf("/") + 1), columnToIndex);
+            return HoodieMetadataPayload.createColumnStatsRecords(entry.getKey(), Collections.singletonList(columnRangeMetadata), true).iterator();
+          });
+    } else {
+      SQLContext sqlContext = sparkEngineContext.getSqlContext();
+      return sparkEngineContext.parallelize(partitionFilePathPairs, parallelism).flatMap((SerializableFunction<Pair<String, Pair<String, Long>>, Iterator<HoodieRecord>>) entry -> {
 
-      HoodieFunctionalIndex<Column, Column> functionalIndex =
-          new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
-      String partition = entry.getKey();
-      Pair<String, Long> filePathSizePair = entry.getValue();
-      List<HoodieRecord> recordsForPartition = Collections.emptyList();
-      if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, filePathSizePair.getKey(), filePathSizePair.getValue(), partition,
-            functionalIndex, columnToIndex, sqlContext);
-      } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
-        recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, filePathSizePair.getKey(), partition,
-            functionalIndex, columnToIndex, sqlContext, metadataWriteConfig, instantTime);
-      }
-      return recordsForPartition.iterator();
-    });
+        HoodieFunctionalIndex<Column, Column> functionalIndex =
+            new HoodieSparkFunctionalIndex(indexDefinition.getIndexName(), indexDefinition.getIndexFunction(), indexDefinition.getSourceFields(), indexDefinition.getIndexOptions());
+        String partition = entry.getKey();
+        Pair<String, Long> filePathSizePair = entry.getValue();
+        List<HoodieRecord> recordsForPartition = Collections.emptyList();
+        if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+          recordsForPartition = getFunctionalIndexRecordsUsingColumnStats(metaClient, readerSchema, filePathSizePair.getKey(), filePathSizePair.getValue(), partition,
+              functionalIndex, columnToIndex, sqlContext);
+        } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+          recordsForPartition = getFunctionalIndexRecordsUsingBloomFilter(metaClient, readerSchema, filePathSizePair.getKey(), partition,
+              functionalIndex, columnToIndex, sqlContext, metadataWriteConfig, instantTime);
+        }
+        return recordsForPartition.iterator();
+      });
+    }
   }
 
   @Override
