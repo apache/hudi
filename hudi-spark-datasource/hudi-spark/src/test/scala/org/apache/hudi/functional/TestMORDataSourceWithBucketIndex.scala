@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieLayoutConfig, HoodieWriteConfig}
@@ -25,11 +26,10 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner
 import org.apache.hudi.table.storage.HoodieStorageLayout
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 
 import org.apache.spark.sql._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import scala.collection.JavaConverters._
 
@@ -90,7 +90,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
       .save(basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(200, hudiSnapshotDF1.count())
   }
 
@@ -110,7 +110,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
     assertTrue(HoodieDataSourceHelpers.hasNewCommits(storage, basePath, "000"))
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
 
     // Second Operation:
@@ -124,7 +124,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
         .save(basePath)
     val hudiSnapshotDF2 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(100, hudiSnapshotDF2.count()) // still 100, since we only updated
     val commit1Time = hudiSnapshotDF1.select("_hoodie_commit_time").head().get(0).toString
     val commit2Time = hudiSnapshotDF2.select("_hoodie_commit_time").head().get(0).toString
@@ -143,7 +143,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
         .save(basePath)
     val hudiSnapshotDF4 = spark.read.format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-        .load(basePath + "/*/*/*/*")
+      .load(basePath)
     // 200, because we insert 100 records to a new partition
     assertEquals(200, hudiSnapshotDF4.count())
     assertEquals(100,
@@ -175,7 +175,7 @@ class TestMORDataSourceWithBucketIndex extends HoodieSparkClientTestBase {
       .save(basePath)
     val hudiSnapshotDF1 = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      .load(basePath + "/*/*/*/*")
+      .load(basePath)
     assertEquals(20, hudiSnapshotDF1.count())
   }
 }
