@@ -2196,7 +2196,7 @@ public class HoodieTableMetadataUtil {
         .build();
   }
 
-  public static Comparable castAndCompare(Comparable newVal, Comparable<?> prevVal, boolean isMin) {
+  public static Comparable castAndCompare(Comparable newVal, Comparable prevVal, boolean isMin) {
     if (newVal == null) {
       return prevVal;
     } else if (prevVal == null) {
@@ -2207,10 +2207,7 @@ public class HoodieTableMetadataUtil {
     // Same type.
     if (newVal.getClass() == prevVal.getClass()) {
       picked = newVal.compareTo(prevVal) < 0 ? newVal : prevVal;
-    }
-
-    // Different types.
-    if (newVal instanceof Number && prevVal instanceof Number) {
+    } else if (newVal instanceof Number && prevVal instanceof Number) {
       picked = Double.compare(((Number) newVal).doubleValue(), ((Number) prevVal).doubleValue()) < 0 ? newVal : prevVal;
     } else {
       picked = newVal.toString().compareTo(prevVal.toString()) < 0 ? newVal : prevVal;
