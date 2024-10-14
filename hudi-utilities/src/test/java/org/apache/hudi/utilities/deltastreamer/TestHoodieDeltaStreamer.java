@@ -65,6 +65,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -163,6 +164,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1686,15 +1688,30 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
-  @Test
-  public void testDistributedTestDataSource() {
+  private void runDeltaSync(
+      HoodieDeltaStreamer.Config cfg, boolean filterDupes, int numberOfRecords, WriteOperationType operationType) throws Exception {
+    cfg.filterDupes = filterDupes;
+    cfg.sourceLimit = numberOfRecords;
+    cfg.operation = operationType;
+    new HoodieDeltaStreamer(cfg, jsc).sync();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDistributedTestDataSource(boolean persistSourceRdd) {
     TypedProperties props = new TypedProperties();
     props.setProperty(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), "1000");
     props.setProperty(SourceTestConfig.NUM_SOURCE_PARTITIONS_PROP.key(), "1");
     props.setProperty(SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS.key(), "true");
+    props.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
     DistributedTestDataSource distributedTestDataSource = new DistributedTestDataSource(props, jsc, sparkSession, null);
     InputBatch<JavaRDD<GenericRecord>> batch = distributedTestDataSource.fetchNext(Option.empty(), 10000000);
-    batch.getBatch().get().cache();
+    if (persistSourceRdd) {
+      Exception actualException = assertThrows(UnsupportedOperationException.class, () -> batch.getBatch().get().cache());
+      assertTrue(actualException.getMessage().contains("Cannot change storage level of an RDD after it was already assigned a level"));
+    } else {
+      batch.getBatch().get().cache();
+    }
     long c = batch.getBatch().get().count();
     assertEquals(1000, c);
   }
@@ -2954,6 +2971,52 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     }
   }
 
+  @ParameterizedTest
+  @MethodSource("generateErrorTablePersistSourceRddArgs")
+  void testErrorTableSourcePersist(WriteOperationType writeOperationType, boolean persistSourceRdd) throws Exception {
+    String tableBasePath = basePath + "/test_table_error_table" + persistSourceRdd + writeOperationType;
+    TypedProperties tableProps =
+        new DFSPropertiesConfiguration(fs.getConf(), new StoragePath(basePath + "/" + PROPS_FILENAME_TEST_SOURCE)).getProps();
+    tableProps.setProperty(ERROR_TABLE_PERSIST_SOURCE_RDD.key(), String.valueOf(persistSourceRdd));
+    switch (writeOperationType) {
+      case BULK_INSERT:
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "");
+        tableProps.setProperty("hoodie.datasource.write.keygenerator.class", NonpartitionedKeyGenerator.class.getName());
+        tableProps.setProperty("hoodie.bulkinsert.sort.mode", BulkInsertSortMode.GLOBAL_SORT.name());
+        break;
+      case UPSERT:
+        tableProps.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+        break;
+      case INSERT:
+        tableProps.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+        break;
+      default:
+        throw new UnsupportedOperationException("Invalid write operationType " + writeOperationType);
+    }
+    String tablePropsFileName = "table_specific.properties";
+    UtilitiesTestBase.Helpers.savePropsToDFS(tableProps, storage, basePath + "/" + tablePropsFileName);
+    // Initialize table config.
+    HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tableBasePath, writeOperationType,
+        Collections.singletonList(TestHoodieDeltaStreamer.TripsWithDistanceTransformer.class.getName()), tablePropsFileName, false);
+    HoodieStreamer deltaStreamer = new HoodieStreamer(cfg, jsc);
+    HoodieStreamer.StreamSyncService streamSyncService = (HoodieStreamer.StreamSyncService) deltaStreamer.getIngestionService();
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
+    InputBatch inputBatch = streamSyncService.getStreamSync().readFromSource("00000", metaClient);
+    // Read from source and validate persistRdd call.
+    JavaRDD<GenericRecord> sourceRdd = (JavaRDD<GenericRecord>) inputBatch.getBatch().get();
+    assertEquals(1000, sourceRdd.count());
+    if (persistSourceRdd) {
+      assertTrue(sourceRdd.toDebugString().contains("CachedPartitions"));
+    } else {
+      assertFalse(sourceRdd.toDebugString().contains("CachedPartitions"));
+    }
+    streamSyncService.close();
+    // Ingest data.
+    streamSyncService.ingestOnce();
+    assertRecordCount(950, tableBasePath, sqlContext);
+  }
+
   private Set<String> getAllFileIDsInTable(String tableBasePath, Option<String> partition) {
     HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
     final HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
@@ -3102,5 +3165,16 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     public Schema getSourceSchema() {
       return null;
     }
+  }
+
+  private static Stream<Arguments> generateErrorTablePersistSourceRddArgs() {
+    return Stream.of(
+        Arguments.of(WriteOperationType.BULK_INSERT, false),
+        Arguments.of(WriteOperationType.BULK_INSERT, true),
+        Arguments.of(WriteOperationType.INSERT, false),
+        Arguments.of(WriteOperationType.INSERT, true),
+        Arguments.of(WriteOperationType.UPSERT, false),
+        Arguments.of(WriteOperationType.UPSERT, true)
+    );
   }
 }
