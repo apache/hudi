@@ -70,12 +70,13 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        // Recreate MDT for insert_overwrite_table operation.
         if (WriteOperationType.INSERT_OVERWRITE_TABLE == operationType) {
           HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), table.getContext(), false);
           new RunIndexActionExecutor<>(context, config, table, instantTime).execute();
-        } else {
-          metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
         }
+        // Update metadata.
+        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
