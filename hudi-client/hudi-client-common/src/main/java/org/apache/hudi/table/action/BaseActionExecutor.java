@@ -25,12 +25,15 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.index.RunIndexActionExecutor;
 
 import java.io.Serializable;
 
@@ -61,11 +64,18 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    *
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata,
+                                          HoodieData<WriteStatus> writeStatus,
+                                          WriteOperationType operationType) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
+        if (WriteOperationType.INSERT_OVERWRITE_TABLE == operationType) {
+          HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), table.getContext(), false);
+          new RunIndexActionExecutor<>(context, config, table, instantTime).execute();
+        } else {
+          metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
+        }
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
