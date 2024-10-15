@@ -2293,7 +2293,7 @@ public class HoodieTableMetadataUtil {
     }
 
     // If new column stats is tight bound, then discard the previous column stats
-    if (newColumnStats.getIsTightBound() && !prevColumnStats.getIsTightBound()) {
+    if (newColumnStats.getIsTightBound()) {
       return newColumnStats;
     }
 
