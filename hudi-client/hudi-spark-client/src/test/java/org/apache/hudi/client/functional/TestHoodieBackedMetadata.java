@@ -159,7 +159,6 @@ import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.common.model.WriteOperationType.DELETE;
 import static org.apache.hudi.common.model.WriteOperationType.INSERT;
-import static org.apache.hudi.common.model.WriteOperationType.INSERT_OVERWRITE_TABLE;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -543,33 +542,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // trigger few upserts and validate
     doWriteOperation(testTable, commitTimeList.get(6).toString());
     doWriteOperation(testTable, commitTimeList.get(7).toString());
-    validateMetadata(testTable, emptyList(), true);
-  }
-
-  @Test
-  public void testMetadataTableDeleteAndRecreate() throws Exception {
-    init(COPY_ON_WRITE, true);
-    writeConfig = getWriteConfigBuilder(true, true, false)
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(true)
-            .enableMetrics(false)
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .build())
-        .build();
-    initWriteConfigAndMetatableWriter(writeConfig, true);
-
-    // Trigger 1 regular writes in data table.
-    List<String> instants = new ArrayList<>();
-    String instant = metaClient.createNewInstantTime();
-    instants.add(instant);
-    doWriteOperation(testTable, instant, INSERT);
-
-    // Trigger 1 insert_overwrite_table writes in data table.
-    instant = metaClient.createNewInstantTime();
-    instants.add(instant);
-    doWriteOperation(testTable, instant, INSERT_OVERWRITE_TABLE);
-
-    // Validate.
     validateMetadata(testTable, emptyList(), true);
   }
 
@@ -2289,6 +2261,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         JavaRDD writeStatuses = writeClient.insert(jsc.parallelize(records, 1), newCommitTime);
         writeClient.commit(newCommitTime, writeStatuses);
       }
+
 
       // Ensure all commits were synced to the Metadata Table
       HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);

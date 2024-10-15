@@ -33,7 +33,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.index.RunIndexActionExecutor;
 
 import java.io.Serializable;
 
