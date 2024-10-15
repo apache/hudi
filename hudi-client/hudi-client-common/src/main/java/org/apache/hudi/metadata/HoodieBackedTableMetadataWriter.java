@@ -868,7 +868,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     List<DirectoryInfo> dirinfoList = new ArrayList<>(partitionFileMap.size());
     for (Map.Entry<String, List<StoragePathInfo>> entry : partitionFileMap.entrySet()) {
       String relativeDirPath = FSUtils.getRelativePartitionPath(basePath, new StoragePath(entry.getKey()));
-      dirinfoList.add(new DirectoryInfo(relativeDirPath, entry.getValue(), initializationTime, pendingDataInstants));
+      dirinfoList.add(new DirectoryInfo(relativeDirPath, entry.getValue(), initializationTime, pendingDataInstants, false));
     }
     return dirinfoList;
   }

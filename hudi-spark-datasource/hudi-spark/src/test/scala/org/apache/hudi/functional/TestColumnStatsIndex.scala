@@ -246,36 +246,36 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
       } else {
-        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/9/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
       }
-      val logFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(".log")).head
+      val logFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(".log")).findFirst().get()
       logFileName = logFileFileStatus.getPath.getName
     } else {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
       } else {
-        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/9/"))
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
       }
-      val baseFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).head
+      val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).findFirst().get()
       baseFileName = baseFileFileStatus.getPath.getName
     }
     val latestCompletedFileName = lastCompletedCommit.getFileName
-    metaClient.getFs.delete(new Path(metaClient.getBasePathV2.toString + "/.hoodie/" + latestCompletedFileName))
+    metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
 
     // re-create marker for the deleted file.
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + logFileName + ".marker.APPEND"))
       } else {
-        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + logFileName + ".marker.APPEND"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + logFileName + ".marker.APPEND"))
       }
     } else {
       if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + baseFileName + ".marker.MERGE"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + baseFileName + ".marker.MERGE"))
       } else {
-        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + baseFileName + ".marker.MERGE"))
+        metaClient.getStorage.create(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + baseFileName + ".marker.MERGE"))
       }
     }
 
