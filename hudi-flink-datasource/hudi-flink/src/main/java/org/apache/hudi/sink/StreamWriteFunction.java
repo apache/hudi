@@ -33,6 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.WriteResultEvent;
 import org.apache.hudi.table.action.commit.FlinkWriteHelper;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -405,7 +406,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .endInput(false)
         .build();
 
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, currentInstant));
     writeStatuses.addAll(writeStatus);
     return true;
   }
@@ -445,7 +446,7 @@ public class StreamWriteFunction<I> extends AbstractStreamWriteFunction<I> {
         .endInput(endInput)
         .build();
 
-    this.eventGateway.sendEventToCoordinator(event);
+    this.eventGateway.sendEventToCoordinator(new WriteResultEvent(event, currentInstant));
     this.buckets.clear();
     this.tracer.reset();
     this.writeClient.cleanHandles();
