@@ -24,24 +24,17 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
-import java.util.List;
-
-import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
-import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
@@ -70,15 +63,11 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    *
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String operationType) {
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        if (operationType.equals("restore")) {
-          dropIndexInfo();
-        } else {
-          metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
-        }
+        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
@@ -135,6 +124,7 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
+        dropIndexOnRestore();
         metadataWriter.update(metadata, instantTime);
       } catch (Exception e) {
         if (e instanceof HoodieException) {
@@ -147,19 +137,13 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
   }
 
   /**
-   * Drop indexes information, for e.g., restore operation.
+   * Drop metadata partition, for restore operation for certain metadata partitions.
    */
-  protected final void dropIndexInfo() {
-    StoragePath metadataTableBasePath =
-        HoodieTableMetadata.getMetadataTableBasePath(table.getMetaClient().getBasePath());
-    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getStorage(), metadataTableBasePath, false);
-    for (String partitionPath : partitionPaths) {
-      if (FUNCTIONAL_INDEX != MetadataPartitionType.fromPartitionPath(partitionPath)
-          && SECONDARY_INDEX != MetadataPartitionType.fromPartitionPath(partitionPath)) {
-        HoodieTableMetadataUtil.deleteMetadataTablePartition(
-            table.getMetaClient(), context, partitionPath, true);
-      } else {
-        // Delete records in functional and secondary indexes, but keep the definitions.
+  protected final void dropIndexOnRestore() {
+    for (String partitionPath : table.getMetaClient().getTableConfig().getMetadataPartitions()) {
+      if (MetadataPartitionType.shouldDeletePartitionOnRestore(partitionPath)) {
+        // setting backup to true as this delete is part of restore operation
+        HoodieTableMetadataUtil.deleteMetadataTablePartition(table.getMetaClient(), context, partitionPath, true);
       }
     }
   }
