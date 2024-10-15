@@ -60,7 +60,6 @@ public class LogFileColStatsTestUtil {
           .withLatestInstantTime(latestCommitTime)
           .withReaderSchema(writerSchemaOpt.get())
           .withLogRecordScannerCallback(records::add)
-          .withThrowExceptionOnDeleteRecords(false)
           .build();
       scanner.scan();
       if (records.isEmpty()) {

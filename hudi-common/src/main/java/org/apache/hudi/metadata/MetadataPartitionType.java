@@ -435,7 +435,7 @@ public enum MetadataPartitionType {
   /**
    * Returns the list of metadata partition types enabled and initialized based on the metadata config and table config.
    */
-  public static List<MetadataPartitionType> getInitializedPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
+  public static List<MetadataPartitionType> getEnabledAndInitializedPartitions(TypedProperties writeConfig, HoodieTableMetaClient metaClient) {
     if (!getBooleanWithAltKeys(writeConfig, ENABLE)) {
       return Collections.emptyList();
     }

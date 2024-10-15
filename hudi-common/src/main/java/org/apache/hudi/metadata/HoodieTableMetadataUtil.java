@@ -1299,7 +1299,6 @@ public class HoodieTableMetadataUtil {
           .withReaderSchema(writerSchemaOpt.get())
           .withTableMetaClient(datasetMetaClient)
           .withLogRecordScannerCallback(records::add)
-          .withThrowExceptionOnDeleteRecords(false)
           .build();
       scanner.scan();
       if (records.isEmpty()) {
