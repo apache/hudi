@@ -57,7 +57,7 @@ public class LogFileColStatsTestUtil {
           .collect(Collectors.toList());
       List<HoodieRecord> records = new ArrayList<>();
       HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
-          .withFileSystem(datasetMetaClient.getFs())
+          .withStorage(datasetMetaClient.getStorage())
           .withBasePath(datasetMetaClient.getBasePath())
           .withLogFilePaths(Collections.singletonList(filePath))
           .withBufferSize(maxBufferSize)
@@ -70,12 +70,8 @@ public class LogFileColStatsTestUtil {
       if (records.isEmpty()) {
         return Option.empty();
       }
-      List<IndexedRecord> indexedRecords = new LinkedList<>();
-      for (HoodieRecord hoodieRecord : records) {
-        indexedRecords.add(hoodieRecord.toIndexedRecord(writerSchemaOpt.get(), new Properties()).get().getData());
-      }
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
-          collectColumnRangeMetadata(indexedRecords, fieldsToIndex, filePath);
+          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());
       List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataList = new ArrayList<>(columnRangeMetadataMap.values());
       return Option.of(getColStatsEntry(filePath, columnRangeMetadataList));
     } else {
