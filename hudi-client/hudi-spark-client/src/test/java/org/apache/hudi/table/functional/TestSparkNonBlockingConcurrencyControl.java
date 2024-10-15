@@ -27,6 +27,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -59,10 +60,12 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -78,11 +81,14 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.index.bucket.BucketIdentifier.CONSTANT_FILE_ID_SUFFIX;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("functional")
 public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctionalTestHarness {
@@ -155,6 +161,119 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // result is [(id1,Danny,23,2,par1)]
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,2,par1]");
     checkWrittenData(result, 1);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"BULK_INSERT", "INSERT", "UPSERT"})
+  public void testFileIdWithNonBlockingConcurrencyControl(WriteOperationType operationType) throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    List<String> dataset = Collections.singletonList("id0,Danny,0,0,par1");
+    String insertTime0 = client.createNewInstantTime();
+    List<WriteStatus> writeStatuses = writeData(client, insertTime0, dataset, true, operationType);
+    for (WriteStatus status : writeStatuses) {
+      String fileID = status.getFileId();
+      assertTrue(fileID.endsWith(CONSTANT_FILE_ID_SUFFIX + "-0"));
+
+    }
+    client.close();
+  }
+
+  //Prove that multiple writers will only produce base files for bulk insert
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testMultiBaseFile(boolean bulkInsertFirst) throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+    //there should only be a single filegroup, so we will verify that it is consistent
+    String fileID = null;
+
+    // if there is not a bulk insert first, then we will write to log files for a filegroup
+    // without a base file. Having a base file adds the possibility of small file handling
+    // which we want to ensure doesn't happen.
+    if (bulkInsertFirst) {
+      SparkRDDWriteClient client0 = getHoodieWriteClient(config);
+      List<String> dataset0 = Collections.singletonList("id0,Danny,0,0,par1");
+      String insertTime0 = client0.createNewInstantTime();
+      List<WriteStatus> writeStatuses0 = writeData(client0, insertTime0, dataset0, false, WriteOperationType.BULK_INSERT);
+      client0.commitStats(
+          insertTime0,
+          context().parallelize(writeStatuses0, 1),
+          writeStatuses0.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+          Option.empty(),
+          metaClient.getCommitActionType());
+      for (WriteStatus status : writeStatuses0) {
+        if (fileID == null) {
+          fileID = status.getFileId();
+        } else {
+          assertEquals(fileID, status.getFileId());
+        }
+        assertFalse(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+      }
+      client0.close();
+    }
+
+    SparkRDDWriteClient client1 = getHoodieWriteClient(config);
+    List<String> dataset1 = Collections.singletonList("id1,Danny,22,1,par1");
+    String insertTime1 = client1.createNewInstantTime();
+    List<WriteStatus> writeStatuses1 = writeData(client1, insertTime1, dataset1, false, WriteOperationType.INSERT);
+    for (WriteStatus status : writeStatuses1) {
+      if (fileID == null) {
+        fileID = status.getFileId();
+      } else {
+        assertEquals(fileID, status.getFileId());
+      }
+      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+    }
+
+    SparkRDDWriteClient client2 = getHoodieWriteClient(config);
+    List<String> dataset2 = Collections.singletonList("id1,Danny,23,2,par1");
+    String insertTime2 = client2.createNewInstantTime();
+    List<WriteStatus> writeStatuses2 = writeData(client2, insertTime2, dataset2, false, WriteOperationType.UPSERT);
+    for (WriteStatus status : writeStatuses2) {
+      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+    }
+
+    // step to commit the 1st txn
+    client1.commitStats(
+        insertTime1,
+        context().parallelize(writeStatuses1, 1),
+        writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // step to commit the 2nd txn
+    client2.commitStats(
+        insertTime2,
+        context().parallelize(writeStatuses2, 1),
+        writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+
+    // second bulk insert will be a log file because there is only 1 bucket
+    SparkRDDWriteClient client3 = getHoodieWriteClient(config);
+    List<String> dataset3 = Collections.singletonList("id2,Danny,0,0,par1");
+    String insertTime3 = client3.createNewInstantTime();
+    List<WriteStatus> writeStatuses3 = writeData(client3, insertTime3, dataset3, false, WriteOperationType.BULK_INSERT);
+    client3.commitStats(
+        insertTime3,
+        context().parallelize(writeStatuses3, 1),
+        writeStatuses3.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(),
+        metaClient.getCommitActionType());
+    for (WriteStatus status : writeStatuses3) {
+      if (fileID == null) {
+        fileID = status.getFileId();
+      } else {
+        assertEquals(fileID, status.getFileId());
+      }
+      assertTrue(status.getStat().getPath().contains(HoodieFileFormat.HOODIE_LOG.getFileExtension()));
+    }
+    client1.close();
+    client2.close();
+    client3.close();
   }
 
   @Test
@@ -429,7 +548,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     if (doCommit) {
       List<HoodieWriteStat> writeStats = writeStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       boolean committed = client.commitStats(instant, context().parallelize(writeStatuses, 1), writeStats, Option.empty(), metaClient.getCommitActionType());
-      Assertions.assertTrue(committed);
+      assertTrue(committed);
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return writeStatuses;
