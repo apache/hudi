@@ -51,7 +51,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> INCREMENTAL_TIMELINE_SYNC_ENABLE = ConfigProperty
       .key("hoodie.filesystem.view.incr.timeline.sync.enable")
-      .defaultValue("false")
+      .defaultValue("true")
       .markAdvanced()
       .withDocumentation("Controls whether or not, the file system view is incrementally updated as "
           + "new actions are performed on the timeline.");
