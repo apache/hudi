@@ -67,7 +67,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.HoodieMergedReadHandle;
 import org.apache.hudi.storage.HoodieStorage;
@@ -88,6 +87,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -390,10 +390,14 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
     // validate that each index is eligible to be initialized
-    for (MetadataPartitionType partitionType : partitionsToInit) {
+    Iterator<MetadataPartitionType> iterator = partitionsToInit.iterator();
+    while (iterator.hasNext()) {
+      MetadataPartitionType partitionType = iterator.next();
       if (partitionType == PARTITION_STATS && !dataMetaClient.getTableConfig().isTablePartitioned()) {
-        throw new HoodieMetadataIndexException("Partition stats index cannot be enabled for a non-partitioned table. "
-            + "Please disable " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
+        LOG.warn("Partition stats index cannot be enabled for a non-partitioned table. Removing from initialization list. Please disable {}",
+            HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key());
+        iterator.remove();
+        this.enabledPartitionTypes.remove(partitionType);
       }
     }
 

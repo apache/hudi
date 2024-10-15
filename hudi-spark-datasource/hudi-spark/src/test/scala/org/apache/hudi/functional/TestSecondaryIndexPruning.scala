@@ -345,6 +345,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       val sqlTableType = if (tableType.equals(HoodieTableType.COPY_ON_WRITE.name())) "cow" else "mor"
       tableName += "test_secondary_index_with_partition_stats_index" + (if (isPartitioned) "_partitioned" else "") + sqlTableType
       val partitionedByClause = if (isPartitioned) "partitioned by(partition_key_col)" else ""
+      val partitionStatsEnable = if (isPartitioned) "'hoodie.metadata.index.partition.stats.enable' = 'true'," else ""
+      val columnsToIndex = if (isPartitioned) "'hoodie.metadata.index.column.stats.column.list' = 'name'," else ""
 
       spark.sql(
         s"""
@@ -361,8 +363,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |  hoodie.metadata.enable = 'true',
            |  hoodie.metadata.record.index.enable = 'true',
            |  hoodie.datasource.write.recordkey.field = 'record_key_col',
-           |  'hoodie.metadata.index.partition.stats.enable' = 'true',
-           |  'hoodie.metadata.index.column.stats.column.list' = 'name',
+           |  $partitionStatsEnable
+           |  $columnsToIndex
            |  hoodie.enable.data.skipping = 'true'
            | )
            | $partitionedByClause
