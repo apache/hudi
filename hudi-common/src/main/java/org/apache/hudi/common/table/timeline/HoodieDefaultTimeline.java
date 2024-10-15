@@ -659,10 +659,14 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private static Option<HoodieInstant> findFirstNonSavepointCommit(
       List<HoodieInstant> instants,
       Function<HoodieInstant, String> getTimeFunc) {
+    Set<String> savepointTimestamps = instants.stream()
+        .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
+        .map(HoodieInstant::getTimestamp)
+        .collect(Collectors.toSet());
     // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
     // So, the first non-savepoint commit is considered as beginning of the active timeline.
     return Option.fromJavaOptional(instants.stream()
-        .filter(entry -> !HoodieTimeline.SAVEPOINT_ACTION.equals(entry.getAction()))
+        .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
         .min(Comparator.comparing(getTimeFunc)));
   }
 
