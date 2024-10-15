@@ -131,6 +131,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String COLUMN_STATS_FIELD_COLUMN_NAME = "columnName";
   public static final String COLUMN_STATS_FIELD_TOTAL_UNCOMPRESSED_SIZE = "totalUncompressedSize";
   public static final String COLUMN_STATS_FIELD_IS_DELETED = FIELD_IS_DELETED;
+  public static final String COLUMN_STATS_FIELD_IS_TIGHT_BOUND = "isTightBound";
 
   /**
    * HoodieMetadata record index payload field ids
