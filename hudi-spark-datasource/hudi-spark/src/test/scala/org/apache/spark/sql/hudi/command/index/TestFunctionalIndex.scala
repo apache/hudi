@@ -536,11 +536,6 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
           Seq(3, "a2"),
           Seq(4, "a2")
         )
-        // verify there are no new updates to functional index
-        checkAnswer(metadataSql)(
-          Seq("2020-09-26", "2021-09-26"),
-          Seq("2022-09-26", "2022-09-26")
-        )
 
         // enable functional index
         spark.sql(s"set ${HoodieMetadataConfig.FUNCTIONAL_INDEX_ENABLE_PROP.key}=true")
@@ -557,6 +552,7 @@ class TestFunctionalIndex extends HoodieSparkSqlTestBase {
         checkAnswer(metadataSql)(
           Seq("2020-09-26", "2021-09-26"),
           Seq("2022-09-26", "2022-09-26"),
+          Seq("2022-09-26", "2022-09-26"), // for file in name=a2
           Seq("2024-09-26", "2024-09-26") // for file in name=a3
         )
       }

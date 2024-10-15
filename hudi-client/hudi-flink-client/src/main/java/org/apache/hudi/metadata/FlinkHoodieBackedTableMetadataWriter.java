@@ -24,7 +24,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -189,8 +188,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   }
 
   @Override
-  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, FileSlice>> partitionFileSlicePairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
-                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf) {
+  protected HoodieData<HoodieRecord> getFunctionalIndexRecords(List<Pair<String, Pair<String, Long>>> partitionFilePathPairs, HoodieIndexDefinition indexDefinition, HoodieTableMetaClient metaClient,
+                                                               int parallelism, Schema readerSchema, StorageConfiguration<?> storageConf, String instantTime) {
     throw new HoodieNotSupportedException("Flink metadata table does not support functional index yet.");
   }
 
