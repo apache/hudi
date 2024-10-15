@@ -34,7 +34,7 @@ public class BucketIdentifier implements Serializable {
   private static final Pattern BUCKET_NAME = Pattern.compile(".*_(\\d+)(?:\\..*)?$");
 
   // Ensure the same records keys from different writers are desired to be distributed into the same bucket
-  private static final String CONSTANT_FILE_ID_SUFFIX = "-0000-0000-0000-000000000000";
+  public static final String CONSTANT_FILE_ID_SUFFIX = "-0000-0000-0000-000000000000";
 
   public static int getBucketId(HoodieRecord record, String indexKeyFields, int numBuckets) {
     return getBucketId(record.getKey(), indexKeyFields, numBuckets);
@@ -110,7 +110,7 @@ public class BucketIdentifier implements Serializable {
     return FSUtils.createNewFileIdPfx().replaceFirst(".{8}", bucketId);
   }
 
-  private static String newBucketFileIdFixedSuffix(String bucketId) {
+  public static String newBucketFileIdFixedSuffix(String bucketId) {
     return bucketId + CONSTANT_FILE_ID_SUFFIX;
   }
 

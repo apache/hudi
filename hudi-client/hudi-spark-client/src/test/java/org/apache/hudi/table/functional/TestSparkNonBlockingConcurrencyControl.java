@@ -67,6 +67,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -83,6 +84,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.TYPE;
+import static org.apache.hudi.index.bucket.BucketIdentifier.CONSTANT_FILE_ID_SUFFIX;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -211,6 +213,23 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     // the data files belongs 3rd commit is not included in the last compaction.
     Map<String, String> result = Collections.singletonMap("par1", "[id1,par1,id1,Danny,null,1,par1]");
     checkWrittenData(result, 1);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"BULK_INSERT", "INSERT", "UPSERT"})
+  public void testFileIdWithNonBlockingConcurrencyControl(WriteOperationType operationType) throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfig();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+
+    SparkRDDWriteClient client = getHoodieWriteClient(config);
+    List<String> dataset = Collections.singletonList("id0,Danny,0,0,par1");
+    String insertTime0 = client.createNewInstantTime();
+    List<WriteStatus> writeStatuses = writeData(client, insertTime0, dataset, true, operationType);
+    for (WriteStatus status : writeStatuses) {
+      String fileID = status.getFileId();
+      assertTrue(fileID.endsWith(CONSTANT_FILE_ID_SUFFIX + "-0"));
+    }
+    client.close();
   }
 
   // Validate that multiple writers will only produce base files for bulk insert
