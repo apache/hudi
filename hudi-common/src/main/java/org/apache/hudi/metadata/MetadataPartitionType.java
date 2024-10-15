@@ -375,6 +375,13 @@ public enum MetadataPartitionType {
   }
 
   /**
+   * Check if the partition path should be deleted on restore.
+   */
+  public static boolean shouldDeletePartitionOnRestore(String partitionPath) {
+    return fromPartitionPath(partitionPath) != FILES && fromPartitionPath(partitionPath) != RECORD_INDEX;
+  }
+
+  /**
    * Get the metadata partition type for the given record type.
    */
   public static MetadataPartitionType get(int type) {

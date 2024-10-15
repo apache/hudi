@@ -20,6 +20,8 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
@@ -32,11 +34,11 @@ import org.apache.hudi.exception.HoodieWriteConflictException
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataFileSystemView, MetadataPartitionType}
 import org.apache.hudi.util.{JFunction, JavaConversions}
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, PartitionStatsIndexSupport}
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, Literal}
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
@@ -320,6 +322,52 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     validateDataAndPartitionStats()
     createTempTable(hudiOpts)
     verifyQueryPredicate(hudiOpts)
+  }
+
+  /**
+   * 1. Enable column_stats, partition_stats and record_index (files already enabled by default).
+   * 2. Do an insert and validate the partition stats index initialization.
+   * 3. Do an update and validate the partition stats index.
+   * 4. Do a savepoint and restore, and validate partition_stats and column_stats are deleted.
+   * 5. Do an update and validate the partition stats index.
+   */
+  @Test
+  def testPartitionStatsWithRestore(): Unit = {
+    val hudiOpts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name(),
+      HoodieMetadataConfig.ENABLE.key() -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "true",
+      HoodieMetadataConfig.RECORD_INDEX_ENABLE_PROP.key() -> "true")
+
+    doWriteAndValidateDataAndPartitionStats(
+      hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite)
+    val firstCompletedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant()
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append)
+    // validate files and record_index are present
+    assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.FILES.getPartitionPath))
+    assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
+    // Do a savepoint
+    val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
+    writeClient.savepoint(firstCompletedInstant.get().getTimestamp, "testUser", "savepoint to first commit")
+    val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+    assertEquals(firstCompletedInstant.get().getTimestamp, savepointTimestamp)
+    // Restore to savepoint
+    writeClient.restoreToSavepoint(savepointTimestamp)
+    // verify restore completed
+    assertTrue(metaClient.reloadActiveTimeline().getRestoreTimeline.lastInstant().isPresent)
+    // verify partition stats and column stats are deleted
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
+    assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.COLUMN_STATS.getPartitionPath))
+    // do another upsert and validate the partition stats
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, false)
+    val latestDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
+    val partitionStatsIndex = new PartitionStatsIndexSupport(spark, latestDf.schema, HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexPartitionStats(true).build(), metaClient)
+    val partitionStats = partitionStatsIndex.loadColumnStatsIndexRecords(targetColumnsToIndex, shouldReadInMemory = true).collectAsList()
+    assertTrue(partitionStats.size() > 0)
   }
 
   /**
