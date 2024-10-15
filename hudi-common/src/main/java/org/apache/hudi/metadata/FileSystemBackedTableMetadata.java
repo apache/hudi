@@ -196,8 +196,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                     } else if (!path.getName().equals(HoodieTableMetaClient.METAFOLDER_NAME)) {
                       return Pair.of(Option.empty(), Option.of(path));
                     }
-                  } else if (path.getName()
-                      .startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)) {
+                  } else if (path.getName().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX)
+                      || MetadataPartitionType.isValidPartitionFilePath(path.getName())) {
                     String partitionName =
                         FSUtils.getRelativePartitionPath(dataBasePath,
                             path.getParent());
@@ -212,7 +212,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                 || (Boolean) fullBoundExpr.eval(
                 extractPartitionValues(partitionFields, relativePartitionPath,
                     urlEncodePartitioningEnabled)))
-            .collect(Collectors.toList()));
+            .collect(Collectors.toSet()));
 
         Expression partialBoundExpr;
         // If partitionPaths is nonEmpty, we're already at the last path level, and all paths

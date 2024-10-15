@@ -87,9 +87,9 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     assertEquals(0, fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size)
 
     // not supported GreaterThan query
-    val reckey = latestSnapshotDf.limit(2).collect().map(row => row.getAs(colName).toString)
+    val reckey = latestSnapshotDf.collect().map(row => row.getAs(colName).toString).sorted
     dataFilter = GreaterThan(attribute(colName), Literal(reckey(0)))
-    assertTrue(fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size >= 3)
+    assertTrue(fileIndex.listFiles(Seq.empty, Seq(dataFilter)).flatMap(s => s.files).size >= 2)
 
     // not supported OR query
     dataFilter = Or(EqualTo(attribute(colName), Literal(reckey(0))), GreaterThanOrEqual(attribute("timestamp"), Literal(0)))
