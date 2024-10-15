@@ -220,7 +220,7 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
       HoodieActiveTimeline activeTimeline = table.getActiveTimeline();
       HoodieCommitMetadata metadata = result.getCommitMetadata().get();
 
-      writeTableMetadata(metadata, writeStatuses, operationType);
+      writeTableMetadata(metadata, writeStatuses, actionType);
       // cannot serialize maps with null values
       metadata.getExtraMetadata().entrySet().removeIf(entry -> entry.getValue() == null);
       activeTimeline.saveAsComplete(false,

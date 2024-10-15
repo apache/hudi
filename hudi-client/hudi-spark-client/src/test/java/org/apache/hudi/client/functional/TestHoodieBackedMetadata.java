@@ -2262,7 +2262,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         writeClient.commit(newCommitTime, writeStatuses);
       }
 
-
       // Ensure all commits were synced to the Metadata Table
       HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
       LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
