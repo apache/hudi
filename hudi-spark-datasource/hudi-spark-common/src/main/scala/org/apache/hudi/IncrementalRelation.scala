@@ -291,11 +291,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .format("hudi_v1")
       .schema(usedSchema)
       .load(basePath.toString)
-      // using closed_closed range here since we are using start instant from QueryContext
-      .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        startInstantTime))
-      .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        endInstantTime))
       .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*))
 
     // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order

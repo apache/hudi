@@ -222,11 +222,6 @@ public class HoodieIncrSource extends RowSource {
       snapshot = queryContext.getPredicateFilter().map(snapshot::filter).orElse(snapshot);
       source = snapshot
           // add filtering so that only interested records are returned.
-          // completion time comparison uses ( , ], but when comparing start time we need to use [, ]
-          .filter(String.format("%s >= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryContext.getStartInstant().get()))
-          .filter(String.format("%s <= '%s'", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              queryContext.getEndInstant().orElse(queryContext.getLastInstant())))
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", queryContext.getInstants())));
     } else {
@@ -255,7 +250,7 @@ public class HoodieIncrSource extends RowSource {
     String[] colsToDrop = shouldDropMetaFields ? HoodieRecord.HOODIE_META_COLUMNS.stream().toArray(String[]::new) :
         HoodieRecord.HOODIE_META_COLUMNS.stream().filter(x -> !x.equals(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).toArray(String[]::new);
     Dataset<Row> sourceWithMetaColumnsDropped = source.drop(colsToDrop);
-    final Dataset<Row> src = getLatestSourceProfile().map(sourceProfile -> {
+    Dataset<Row> src = getLatestSourceProfile().map(sourceProfile -> {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(sourceProfile.getMaxSourceBytes()));
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
