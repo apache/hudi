@@ -18,6 +18,8 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -35,6 +37,11 @@ import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
+import org.apache.hudi.functional.ColumnStatIndexTestBase.DoWriteAndValidateColumnStatsParams
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, config}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -45,6 +52,7 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, MethodSource, ValueSource}
 
+import java.util.stream.Collectors
 import scala.collection.JavaConverters._
 
 @Tag("functional")
@@ -100,7 +108,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String): Unit = {
     val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE.key -> "true"
     )
 
     val commonOpts = Map(
@@ -192,10 +200,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testMetadataColumnStatsIndexParamsForMOR"))
-  def testMetadataColumnStatsIndexInitializationWithRollbacks(testCase: ColumnStatsTestCase): Unit = {
+  @MethodSource(Array("testTableTypePartitionTypeParams"))
+  def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String): Unit = {
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
     val metadataOpts = Map(
-      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE.key -> "true"
     )
 
     val commonOpts = Map(
@@ -205,6 +214,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> partitionCol,
+      "hoodie.write.markers.type" -> "DIRECT",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
@@ -230,18 +241,43 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     // simulate failure for latest commit.
     metaClient = HoodieTableMetaClient.reload(metaClient)
-    val latestCompletedFileName = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getFileName
-    metaClient.getFs.delete(metaClient.getBasePathV2+"/.hoodie/"+latestCompletedFileName)
+    var baseFileName : String = null
+    var logFileName : String = null
+    val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
+        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/"))
+      } else {
+        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/9/"))
+      }
+      val logFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(".log")).head
+      logFileName = logFileFileStatus.getPath.getName
+    } else {
+      val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
+        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/"))
+      } else {
+        metaClient.getFs.listStatus(new Path(metaClient.getBasePathV2.toString + "/9/"))
+      }
+      val baseFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).head
+      baseFileName = baseFileFileStatus.getPath.getName
+    }
+    val latestCompletedFileName = lastCompletedCommit.getFileName
+    metaClient.getFs.delete(new Path(metaClient.getBasePathV2.toString + "/.hoodie/" + latestCompletedFileName))
 
-    // delete a subset of recs. this will add a delete log block for MOR table.
-    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/delete-input-table-json/",
-      expectedColStatsSourcePath = null,
-      operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append,
-      false,
-      numPartitions =  1,
-      parquetMaxFileSize = 0))
+    // re-create marker for the deleted file.
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      if (StringUtils.isNullOrEmpty(partitionCol)) {
+        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + logFileName + ".marker.APPEND"))
+      } else {
+        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + logFileName + ".marker.APPEND"))
+      }
+    } else {
+      if (StringUtils.isNullOrEmpty(partitionCol)) {
+        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/" + baseFileName + ".marker.MERGE"))
+      } else {
+        metaClient.getFs.create(new Path(metaClient.getBasePathV2.toString + "/.hoodie/.temp/" + lastCompletedCommit.getTimestamp + "/9/" + baseFileName + ".marker.MERGE"))
+      }
+    }
 
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
@@ -252,9 +288,9 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     //       deferred updates), diverging from COW
 
     val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-      "index/colstats/cow-bootstrap1-column-stats-index-table.json"
+      "index/colstats/cow-bootstrap-rollback1-column-stats-index-table.json"
     } else {
-      "index/colstats/mor-bootstrap1-column-stats-index-table.json"
+      "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
     }
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -270,8 +306,10 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       latestCompletedCommit,
       numPartitions =  1,
       parquetMaxFileSize = 0))
-  }
 
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
+  }
 
   @ParameterizedTest
   @EnumSource(classOf[HoodieTableType])
