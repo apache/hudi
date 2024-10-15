@@ -19,7 +19,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
+import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy
@@ -87,20 +87,16 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   /**
-   * Test case to do a write with updates for non-partitioned table and validate the partition stats index.
+   * Test case to write with updates for non-partitioned table and validate the partition stats index is not created.
    */
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testIndexWithUpsertNonPartitioned(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndPartitionStats(
-      hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-    doWriteAndValidateDataAndPartitionStats(
-      hudiOpts,
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append)
+  @Test
+  def testIndexWithUpsertNonPartitioned(): Unit = {
+    val hudiOpts = commonOpts - PARTITIONPATH_FIELD.key + (DataSourceWriteOptions.TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Overwrite, false)
+    doWriteAndValidateDataAndPartitionStats(hudiOpts, operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL, saveMode = SaveMode.Append, false)
+    // there should not be any partition stats
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertFalse(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.PARTITION_STATS.getPartitionPath))
   }
 
   /**
