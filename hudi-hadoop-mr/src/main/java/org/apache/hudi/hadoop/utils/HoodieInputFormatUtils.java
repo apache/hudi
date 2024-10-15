@@ -571,9 +571,9 @@ public class HoodieInputFormatUtils {
   /**
    * `schema.on.read` and skip merge not implemented
    */
-  public static boolean shouldUseFilegroupReader(final JobConf jobConf , final InputSplit split) {
+  public static boolean shouldUseFilegroupReader(final JobConf jobConf, final InputSplit split) {
     return jobConf.getBoolean(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), HoodieReaderConfig.FILE_GROUP_READER_ENABLED.defaultValue())
-        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue()) &&
-        !(split instanceof BootstrapBaseFileSplit);
+        && !jobConf.getBoolean(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key(), HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue())
+        && !(split instanceof BootstrapBaseFileSplit);
   }
 }
