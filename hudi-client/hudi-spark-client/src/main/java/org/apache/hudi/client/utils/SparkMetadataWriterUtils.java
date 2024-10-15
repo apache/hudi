@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -161,7 +162,7 @@ public class SparkMetadataWriterUtils {
                                                boolean isBaseFile) {
     List<HoodieRecord> records = isBaseFile ? getBaseFileRecords(new HoodieBaseFile(paths[0].toString()), metaClient, schema)
         : getUnmergedLogFileRecords(Arrays.stream(paths).map(StoragePath::toString).collect(Collectors.toList()), metaClient, schema);
-    return dropMetaFields(toDataset(records, schema, sqlContext));
+    return dropMetaFields(toDataset(records, schema, sqlContext, isBaseFile));
   }
 
   private static List<HoodieRecord> getUnmergedLogFileRecords(List<String> logFilePaths, HoodieTableMetaClient metaClient, Schema readerSchema) {
@@ -193,17 +194,26 @@ public class SparkMetadataWriterUtils {
     }
   }
 
-  private static Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema, SQLContext sqlContext) {
+  private static Dataset<Row> toDataset(List<HoodieRecord> records, Schema schema, SQLContext sqlContext, boolean isBaseFile) {
     List<GenericRecord> avroRecords = records.stream()
-        .map(r -> (GenericRecord) r.getData())
+        .map(r -> {
+          if (isBaseFile) {
+            return (GenericRecord) r.getData();
+          }
+          HoodieRecordPayload payload = (HoodieRecordPayload) r.getData();
+          try {
+            return (GenericRecord) payload.getInsertValue(schema).get();
+          } catch (IOException e) {
+            throw new HoodieIOException("Failed to extract Avro payload", e);
+          }
+        })
         .collect(Collectors.toList());
     if (avroRecords.isEmpty()) {
       return sqlContext.emptyDataFrame().toDF();
     }
-    try (JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext())) {
-      JavaRDD<GenericRecord> javaRDD = jsc.parallelize(avroRecords);
-      return AvroConversionUtils.createDataFrame(javaRDD.rdd(), schema.toString(), sqlContext.sparkSession());
-    }
+    JavaSparkContext jsc = new JavaSparkContext(sqlContext.sparkContext());
+    JavaRDD<GenericRecord> javaRDD = jsc.parallelize(avroRecords);
+    return AvroConversionUtils.createDataFrame(javaRDD.rdd(), schema.toString(), sqlContext.sparkSession());
   }
 
   private static <T extends Comparable<T>> HoodieColumnRangeMetadata<Comparable> computeColumnRangeMetadata(Dataset<Row> rowDataset,
