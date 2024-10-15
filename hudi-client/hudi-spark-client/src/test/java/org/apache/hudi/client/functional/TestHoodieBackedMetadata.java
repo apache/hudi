@@ -881,7 +881,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    */
   @Test
   public void testMetadataTableCompactionWithPendingInstants() throws Exception {
-    init(COPY_ON_WRITE, false);
+    init(COPY_ON_WRITE, true);
     writeConfig = getWriteConfigBuilder(true, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
@@ -902,7 +902,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, metaClient.createNewInstantTime());
     HoodieTableMetadata tableMetadata = metadata(writeConfig, context);
     // verify that compaction of metadata table does not kick in.
-    assertFalse(tableMetadata.getLatestCompactionTime().isPresent());
+    assertTrue(tableMetadata.getLatestCompactionTime().isPresent());
 
     // write some commits to trigger the MDT compaction
     doWriteOperation(testTable, metaClient.createNewInstantTime(), INSERT);
@@ -1112,7 +1112,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   @Test
   public void testMetadataRollbackDuringInit() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;
-    init(tableType, false);
+    init(tableType, true);
     writeConfig = getWriteConfigBuilder(false, true, false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
@@ -1163,9 +1163,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     HoodieActiveTimeline mdtTimeline = mdtMetaClient.getActiveTimeline();
     assertEquals(1, timeline.countInstants());
     assertEquals(1, timeline.getCommitsTimeline().filterCompletedInstants().countInstants());
-    assertEquals(3, mdtTimeline.countInstants());
-    assertEquals(3, mdtTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
-    String mdtInitCommit2 = mdtTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().get(1).getTimestamp();
+    assertEquals(4, mdtTimeline.countInstants());
+    assertEquals(4, mdtTimeline.getCommitsTimeline().filterCompletedInstants().countInstants());
+    String mdtInitCommit2 = mdtTimeline.getCommitsTimeline().filterCompletedInstants().getInstants().get(2).getTimestamp();
     Pair<HoodieInstant, HoodieCommitMetadata> lastCommitMetadataWithValidData =
         mdtTimeline.getLastCommitMetadataWithValidData().get();
     String commit = lastCommitMetadataWithValidData.getLeft().getTimestamp();
@@ -2215,7 +2215,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Ensure all commits were synced to the Metadata Table
     HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
-    assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 5);
+    assertEquals(6, metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants());
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000002")));
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000003")));
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(new HoodieInstant(false, HoodieTimeline.DELTA_COMMIT_ACTION, "0000004")));
@@ -2267,8 +2267,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
       LOG.warn("total commits in metadata table " + metadataMetaClient.getActiveTimeline().getCommitsTimeline().countInstants());
 
-      // 6 commits and 2 cleaner commits.
-      assertEquals(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants(), 8);
+      // 7 commits and 2 cleaner commits.
+      assertEquals(9, metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().countInstants());
       assertTrue(metadataMetaClient.getActiveTimeline().getCommitAndReplaceTimeline().filterCompletedInstants().countInstants() <= 1);
       // Validation
       validateMetadata(writeClient);
