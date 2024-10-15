@@ -24,15 +24,24 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
+import java.util.List;
+
+import static org.apache.hudi.metadata.MetadataPartitionType.FUNCTIONAL_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 
 public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable {
 
@@ -61,11 +70,15 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    *
    * @param metadata commit metadata of interest.
    */
-  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
+  protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String operationType) {
     Option<HoodieTableMetadataWriter> metadataWriterOpt = table.getMetadataWriter(instantTime);
     if (metadataWriterOpt.isPresent()) {
       try (HoodieTableMetadataWriter metadataWriter = metadataWriterOpt.get()) {
-        metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
+        if (operationType.equals("restore")) {
+          dropIndexInfo();
+        } else {
+          metadataWriter.updateFromWriteStatuses(metadata, writeStatus, instantTime);
+        }
       } catch (Exception e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
@@ -129,6 +142,24 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
         } else {
           throw new HoodieException("Failed to apply restore to metadata", e);
         }
+      }
+    }
+  }
+
+  /**
+   * Drop indexes information, for e.g., restore operation.
+   */
+  protected final void dropIndexInfo() {
+    StoragePath metadataTableBasePath =
+        HoodieTableMetadata.getMetadataTableBasePath(table.getMetaClient().getBasePath());
+    List<String> partitionPaths = FSUtils.getAllPartitionPaths(context, table.getStorage(), metadataTableBasePath, false);
+    for (String partitionPath : partitionPaths) {
+      if (FUNCTIONAL_INDEX != MetadataPartitionType.fromPartitionPath(partitionPath)
+          && SECONDARY_INDEX != MetadataPartitionType.fromPartitionPath(partitionPath)) {
+        HoodieTableMetadataUtil.deleteMetadataTablePartition(
+            table.getMetaClient(), context, partitionPath, true);
+      } else {
+        // Delete records in functional and secondary indexes, but keep the definitions.
       }
     }
   }
