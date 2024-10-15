@@ -434,6 +434,11 @@ public class HoodieStreamer implements Serializable {
         + " committed checkpoint, and rely on other configs to pick the starting offsets).")
     public String ignoreCheckpoint = null;
 
+    @Parameter(names = {"--spark-app-name"},
+            description = "spark app name to use while creating spark context."
+                    + " If not defined then defaults to streamer-{cfg.targetTableName}.")
+    public String sparkAppName = "";
+
     public boolean isAsyncCompactionEnabled() {
       return continuousMode && !forceDisableCompaction
           && HoodieTableType.MERGE_ON_READ.equals(HoodieTableType.valueOf(tableType));
@@ -593,10 +598,16 @@ public class HoodieStreamer implements Serializable {
     final Config cfg = getConfig(args);
     Map<String, String> additionalSparkConfigs = SchedulerConfGenerator.getSparkSchedulingConfigs(cfg);
     JavaSparkContext jssc = null;
-    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
-      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, additionalSparkConfigs);
+    String sparkAppName;
+    if (!StringUtils.isNullOrEmpty(cfg.sparkAppName)) {
+      sparkAppName = cfg.sparkAppName;
     } else {
-      jssc = UtilHelpers.buildSparkContext("streamer-" + cfg.targetTableName, cfg.sparkMaster, additionalSparkConfigs);
+      sparkAppName = "streamer-" + cfg.targetTableName;
+    }
+    if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, additionalSparkConfigs);
+    } else {
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.sparkMaster, additionalSparkConfigs);
     }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
