@@ -279,8 +279,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       }
 
       // if FILES partition is available, we should proceed regardless if any new partition were successfully able to initiailize or not. for eg,
-      // if data table has any pending instant, we may not initiailize a new partition. but we should still proceed with other partitions which are
-      // ready to take in writes. So, lets initialize the metadata reader and
+      // if data table has any pending instant, we may not initialize a new partition. but we should still proceed with other partitions which are
+      // ready to take in writes. So, lets initialize the metadata reader.
       if (!initializedAllPendingPartitions) {
         initMetadataReader();
       }
