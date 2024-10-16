@@ -60,6 +60,7 @@ import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -187,15 +188,17 @@ public class HoodieIncrSource extends RowSource {
         sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
-    String beginCompletionTime = analyzer.getBeginCompletionTime().get();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
     String endCompletionTime;
+    // analyzer.getBeginCompletionTime() is empty only when reading the latest instant
+    // in the first batch
     if (queryContext.isEmpty()
-        || (endCompletionTime = queryContext.getMaxCompletionTime()).equals(beginCompletionTime)) {
+        || (endCompletionTime = queryContext.getMaxCompletionTime())
+        .equals(analyzer.getBeginCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), beginCompletionTime);
+      return Pair.of(Option.empty(), analyzer.getBeginCompletionTime().get());
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -206,9 +209,11 @@ public class HoodieIncrSource extends RowSource {
           .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
       reader = reader.options(optionsMap);
     }
+
     boolean shouldFullScan =
-        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(beginCompletionTime)
-        && missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
+        missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT
+            && queryContext.getActiveTimeline()
+            .isBeforeTimelineStartsByCompletionTime(analyzer.getBeginCompletionTime().get());
     Dataset<Row> source;
     if (instantRange.isEmpty() || shouldFullScan) {
       // snapshot query
@@ -241,7 +246,12 @@ public class HoodieIncrSource extends RowSource {
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
     } else {
+      // queryContext.getInstants().get(0).getCompletionTime();
       // normal incremental query
+      String completionTime = endCompletionTime;
+      String beginCompletionTime = analyzer.getBeginCompletionTime().orElseGet(
+          () -> instantTimeMinusMillis(completionTime, 1));
+
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
