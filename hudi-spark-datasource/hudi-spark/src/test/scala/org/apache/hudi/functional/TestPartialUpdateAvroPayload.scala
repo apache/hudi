@@ -69,6 +69,9 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
 
   @ParameterizedTest
   @CsvSource(Array(
+    "COPY_ON_WRITE,false",
+    "MERGE_ON_READ,false",
+    "COPY_ON_WRITE,true",
     "MERGE_ON_READ,true"
   ))
   def testPartialUpdatesAvroPayloadPrecombine(tableType: String, useFileGroupReader: Boolean): Unit = {

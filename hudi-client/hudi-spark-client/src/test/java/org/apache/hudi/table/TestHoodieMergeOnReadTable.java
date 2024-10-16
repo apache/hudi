@@ -66,7 +66,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -318,7 +317,6 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
     }
   }
 
-  @Disabled
   @ParameterizedTest
   @CsvSource({"true,avro", "true,parquet", "false,avro", "false,parquet"})
   public void testLogBlocksCountsAfterLogCompaction(boolean populateMetaFields, String logFileFormat) throws Exception {

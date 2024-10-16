@@ -2905,9 +2905,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergerStrategy(String recordMergerStrategy) {
-      if (recordMergerStrategy != null) {
-        writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
-      }
+      writeConfig.setValue(RECORD_MERGER_STRATEGY, recordMergerStrategy);
       return this;
     }
 
@@ -3099,9 +3097,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
 
     public Builder withRecordMergeMode(RecordMergeMode recordMergeMode) {
-      if (recordMergeMode != null) {
-        writeConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-      }
+      writeConfig.setValue(RECORD_MERGE_MODE, recordMergeMode.name());
       return this;
     }
 
