@@ -87,7 +87,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
       .build()
       .analyze()
 
-  private val commitsToReturn = queryContext.getInstants.asScala
+  private val commitsToReturn = queryContext.getInstants.asScala.toList
   // TODO: investigate failure: TestHoodieIncrSource#testHoodieIncrSourceInflightCommitBeforeCompletedCommit
   //    .sortBy(_.getCompletionTime)  // why would sorting by completion time fail this test?
 
