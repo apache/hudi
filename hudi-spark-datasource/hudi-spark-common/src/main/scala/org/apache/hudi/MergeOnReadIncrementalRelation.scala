@@ -202,8 +202,8 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
-      .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
-      .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
+      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
+      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
       .build()
       .analyze()

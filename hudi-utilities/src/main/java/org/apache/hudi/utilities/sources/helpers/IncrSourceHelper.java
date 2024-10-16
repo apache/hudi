@@ -198,11 +198,8 @@ public class IncrSourceHelper {
           numInstantsFromConfig = -1;
           break;
         case READ_LATEST:
-          beginCompletionTime = metaClient
-              .getCommitsAndCompactionTimeline()
-              .filterCompletedInstants()
-              .getLatestCompletionTime()
-              .orElse(DEFAULT_BEGIN_TIMESTAMP);
+          // rely on IncrementalQueryAnalyzer to use the latest completed instant
+          beginCompletionTime = null;
           rangeType = RangeType.CLOSED_CLOSED;
           break;
         default:
@@ -224,8 +221,8 @@ public class IncrSourceHelper {
 
     return IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startTime(beginCompletionTime)
-        .endTime(null)
+        .beginCompletionTime(beginCompletionTime)
+        .endCompletionTime(null)
         .rangeType(rangeType)
         .limit(numInstantsPerFetch)
         .build();
@@ -341,7 +338,7 @@ public class IncrSourceHelper {
       QueryContext oldContext,
       SnapshotLoadQuerySplitter.CheckpointWithPredicates checkpointWithPredicates) {
     return QueryContext.create(
-        oldContext.getStartInstant().get(),
+        oldContext.getBeginInstant().get(),
         checkpointWithPredicates.getEndInstant(),
         oldContext.getInstants(),
         oldContext.getArchivedInstants(),

@@ -36,11 +36,11 @@ import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.avro.Schema
 import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -81,8 +81,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
-      .startTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
-      .endTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
+      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
+      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
       .rangeType(InstantRange.RangeType.OPEN_CLOSED)
       .build()
       .analyze()
@@ -208,7 +208,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
       val sOpts = optParams.filter(p => !p._1.equalsIgnoreCase("path"))
 
-      val startInstantTime = queryContext.getStartInstant.get()
+      val startInstantTime = queryContext.getBeginInstant.get()
       val startInstantArchived = !queryContext.getArchivedInstants.isEmpty
       val endInstantTime = queryContext.getEndInstant.get()
 

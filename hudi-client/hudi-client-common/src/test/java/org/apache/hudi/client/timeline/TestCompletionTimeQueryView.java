@@ -115,7 +115,8 @@ public class TestCompletionTimeQueryView {
   }
 
   private String getInstantTimeSetFormattedString(CompletionTimeQueryView view, int completionTime1, int completionTime2) {
-    return view.getStartTimes(String.format("%08d", completionTime1), String.format("%08d", completionTime2), s -> String.format("%08d", Integer.parseInt(s) - 1000))
+    return view.getInstantTimes(String.format("%08d", completionTime1), String.format("%08d", completionTime2),
+            s -> String.format("%08d", Integer.parseInt(s) - 1000))
         .stream().sorted().collect(Collectors.joining(","));
   }
 

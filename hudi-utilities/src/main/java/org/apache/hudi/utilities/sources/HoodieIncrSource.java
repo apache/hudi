@@ -184,7 +184,7 @@ public class HoodieIncrSource extends RowSource {
         sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
-    String completionTimeToResumeFrom = analyzer.getStartTime().get();
+    String completionTimeToResumeFrom = analyzer.getBeginCompletionTime().get();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 

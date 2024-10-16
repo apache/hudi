@@ -37,7 +37,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.START_COMMIT_EARLIEST;
+import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.BEGIN_COMMIT_EARLIEST;
 import static org.apache.hudi.common.table.timeline.HoodieArchivedTimeline.COMPLETION_TIME_ARCHIVED_META_FIELD;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN_OR_EQUALS;
@@ -60,10 +60,10 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   private final HoodieTableMetaClient metaClient;
 
   /**
-   * Mapping from instant start time -> completion time.
+   * Mapping from instant time -> completion time.
    * Should be thread-safe data structure.
    */
-  private final ConcurrentMap<String, String> beginToCompletionInstantTimeMap;
+  private final ConcurrentMap<String, String> instantTimeToCompletionTimeMap;
 
   /**
    * The cursor instant time to eagerly load from, by default load last N days of completed instants.
@@ -95,7 +95,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    */
   public CompletionTimeQueryView(HoodieTableMetaClient metaClient, String eagerLoadInstant) {
     this.metaClient = metaClient;
-    this.beginToCompletionInstantTimeMap = new ConcurrentHashMap<>();
+    this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
     this.cursorInstant = HoodieTimeline.minInstant(eagerLoadInstant, metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::getTimestamp).orElse(""));
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
     this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::getTimestamp).orElse("");
@@ -107,7 +107,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    */
   public boolean isCompleted(String beginInstantTime) {
     // archival does not proceed beyond the first savepoint, so any instant before that is completed.
-    return this.beginToCompletionInstantTimeMap.containsKey(beginInstantTime) || isArchived(beginInstantTime);
+    return this.instantTimeToCompletionTimeMap.containsKey(beginInstantTime) || isArchived(beginInstantTime);
   }
 
   /**
@@ -167,27 +167,27 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   }
 
   /**
-   * Queries the instant completion time with given start time.
+   * Queries the completion time with given instant time.
    *
-   * @param beginTime The start time.
+   * @param instantTime The instant time.
    *
    * @return The completion time if the instant finished or empty if it is still pending.
    */
-  public Option<String> getCompletionTime(String beginTime) {
-    String completionTime = this.beginToCompletionInstantTimeMap.get(beginTime);
+  public Option<String> getCompletionTime(String instantTime) {
+    String completionTime = this.instantTimeToCompletionTimeMap.get(instantTime);
     if (completionTime != null) {
       return Option.of(completionTime);
     }
-    if (HoodieTimeline.compareTimestamps(beginTime, GREATER_THAN_OR_EQUALS, this.cursorInstant)) {
+    if (HoodieTimeline.compareTimestamps(instantTime, GREATER_THAN_OR_EQUALS, this.cursorInstant)) {
       // the instant is still pending
       return Option.empty();
     }
-    loadCompletionTimeIncrementally(beginTime);
-    return Option.ofNullable(this.beginToCompletionInstantTimeMap.get(beginTime));
+    loadCompletionTimeIncrementally(instantTime);
+    return Option.ofNullable(this.instantTimeToCompletionTimeMap.get(instantTime));
   }
 
   /**
-   * Queries the instant start time with given completion time range.
+   * Queries the instant times with given completion time range.
    *
    * <p>By default, assumes there is at most 1 day time of duration for an instant to accelerate the queries.
    *
@@ -198,13 +198,13 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
    *
    * @return The sorted instant time list.
    */
-  public List<String> getStartTimes(
+  public List<String> getInstantTimes(
       HoodieTimeline timeline,
       Option<String> beginCompletionTime,
       Option<String> endCompletionTime,
       InstantRange.RangeType rangeType) {
     // assumes any instant/transaction lasts at most 1 day to optimize the query efficiency.
-    return getStartTimes(
+    return getInstantTimes(
         timeline,
         beginCompletionTime,
         endCompletionTime,
@@ -213,21 +213,21 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   }
 
   /**
-   * Queries the instant start time with given completion time range.
+   * Queries the instant times with given completion time range.
    *
    * @param beginCompletionTime      The beginning completion time of the query range.
    * @param endCompletionTime        The ending completion time of the query range.
-   * @param earliestInstantTimeFunc  The function to generate the earliest start time boundary
+   * @param earliestInstantTimeFunc  The function to generate the earliest instant time boundary
    *                                 with the minimum completion time.
    *
    * @return The sorted instant time list.
    */
   @VisibleForTesting
-  public List<String> getStartTimes(
+  public List<String> getInstantTimes(
       String beginCompletionTime,
       String endCompletionTime,
       Function<String, String> earliestInstantTimeFunc) {
-    return getStartTimes(
+    return getInstantTimes(
         metaClient.getCommitsTimeline().filterCompletedInstants(),
         Option.ofNullable(beginCompletionTime),
         Option.ofNullable(endCompletionTime),
@@ -236,24 +236,24 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   }
 
   /**
-   * Queries the instant start time with given completion time range.
+   * Queries the instant times with given completion time range.
    *
    * @param timeline                 The timeline.
    * @param beginCompletionTime      The beginning completion time of the query range.
    * @param endCompletionTime        The ending completion time of the query range.
    * @param rangeType                The range type.
-   * @param earliestInstantTimeFunc  The function to generate the earliest start time boundary
+   * @param earliestInstantTimeFunc  The function to generate the earliest instant time boundary
    *                                 with the minimum completion time.
    *
    * @return The sorted instant time list.
    */
-  public List<String> getStartTimes(
+  public List<String> getInstantTimes(
       HoodieTimeline timeline,
       Option<String> beginCompletionTime,
       Option<String> endCompletionTime,
       InstantRange.RangeType rangeType,
       Function<String, String> earliestInstantTimeFunc) {
-    boolean startFromEarliest = START_COMMIT_EARLIEST.equalsIgnoreCase(beginCompletionTime.orElse(null));
+    boolean startFromEarliest = BEGIN_COMMIT_EARLIEST.equalsIgnoreCase(beginCompletionTime.orElse(null));
     String earliestInstantToLoad = null;
     if (beginCompletionTime.isPresent() && !startFromEarliest) {
       earliestInstantToLoad = earliestInstantTimeFunc.apply(beginCompletionTime.get());
@@ -276,7 +276,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         return Collections.singletonList(maxInstantTime);
       }
       // fallback to archived timeline
-      return this.beginToCompletionInstantTimeMap.entrySet().stream()
+      return this.instantTimeToCompletionTimeMap.entrySet().stream()
           .filter(entry -> HoodieTimeline.compareTimestamps(entry.getValue(), LESSER_THAN_OR_EQUALS, endCompletionTime.get()))
           .map(Map.Entry::getKey).collect(Collectors.toList());
     }
@@ -297,7 +297,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
         .endInstant(endCompletionTime.orElse(null))
         .nullableBoundary(true)
         .build();
-    return this.beginToCompletionInstantTimeMap.entrySet().stream()
+    return this.instantTimeToCompletionTimeMap.entrySet().stream()
         .filter(entry -> instantRange.isInRange(entry.getValue()))
         .map(Map.Entry::getKey).sorted().collect(Collectors.toList());
   }
@@ -306,25 +306,25 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void loadCompletionTimeIncrementally(String startTime) {
-    // the 'startTime' should be out of the eager loading range, switch to a lazy loading.
+  private void loadCompletionTimeIncrementally(String beginCompletionTime) {
+    // the 'beginCompletionTime' should be out of the eager loading range, switch to a lazy loading.
     // This operation is resource costly.
     synchronized (this) {
-      if (HoodieTimeline.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
+      if (HoodieTimeline.compareTimestamps(beginCompletionTime, LESSER_THAN, this.cursorInstant)) {
         HoodieArchivedTimeline.loadInstants(metaClient,
-            new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
+            new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(beginCompletionTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
             r -> true,
             this::readCompletionTime);
       }
       // refresh the start instant
-      this.cursorInstant = startTime;
+      this.cursorInstant = beginCompletionTime;
     }
   }
 
   /**
    * This is method to read instant completion time.
-   * This would also update 'startToCompletionInstantTimeMap' map with start time/completion time pairs.
+   * This would also update 'instantTimeToCompletionTimeMap' map with instant time/completion time pairs.
    * Only instants starts from 'startInstant' (inclusive) are considered.
    */
   private void load() {
@@ -350,7 +350,7 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
       // the meta-server instant does not have completion time
       completionTime = beginInstantTime;
     }
-    this.beginToCompletionInstantTimeMap.putIfAbsent(beginInstantTime, completionTime);
+    this.instantTimeToCompletionTimeMap.putIfAbsent(beginInstantTime, completionTime);
   }
 
   public String getCursorInstant() {
@@ -358,11 +358,11 @@ public class CompletionTimeQueryView implements AutoCloseable, Serializable {
   }
 
   public boolean isEmptyTable() {
-    return this.beginToCompletionInstantTimeMap.isEmpty();
+    return this.instantTimeToCompletionTimeMap.isEmpty();
   }
 
   @Override
   public void close() {
-    this.beginToCompletionInstantTimeMap.clear();
+    this.instantTimeToCompletionTimeMap.clear();
   }
 }
