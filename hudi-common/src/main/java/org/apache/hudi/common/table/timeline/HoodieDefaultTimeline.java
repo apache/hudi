@@ -567,8 +567,11 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     if (this.firstNonSavepointCommitByCompletionTime == null) {
       synchronized (this) {
         if (this.firstNonSavepointCommitByCompletionTime == null) {
+          // only consider completed instants that have completion time.
           this.firstNonSavepointCommitByCompletionTime =
-              findFirstNonSavepointCommit(this.instants, COMPLETION_TIME_COMPARATOR);
+              findFirstNonSavepointCommit(
+                  this.instants.stream().filter(HoodieInstant::isCompleted).collect(Collectors.toList()),
+                  COMPLETION_TIME_COMPARATOR);
         }
       }
     }
