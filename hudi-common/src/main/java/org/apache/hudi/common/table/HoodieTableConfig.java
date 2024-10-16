@@ -360,39 +360,21 @@ public class HoodieTableConfig extends HoodieConfig {
     try {
       this.props = fetchConfigs(storage, metaPath, HOODIE_PROPERTIES_FILE, HOODIE_PROPERTIES_FILE_BACKUP, MAX_READ_RETRIES, READ_RETRY_DELAY_MSEC);
       boolean needStore = false;
-
-      if (recordMergeMode != null && (!contains(RECORD_MERGE_MODE) || !getString(RECORD_MERGE_MODE).equalsIgnoreCase(recordMergeMode.name()))) {
-        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
-        needStore = true;
-        if (recordMergeMode != CUSTOM) {
-          checkArgument(isNullOrEmpty(payloadClassName) && isNullOrEmpty(recordMergerStrategyId),
-              "Merging configs have not been inferred with HoodieTableConfig.inferCorrectMergingBehavior. This must be done to maintain table integrity!");
-          if (contains(PAYLOAD_CLASS_NAME)) {
-            clearValue(PAYLOAD_CLASS_NAME);
-          }
-          if (contains(RECORD_MERGER_STRATEGY)) {
-            clearValue(RECORD_MERGER_STRATEGY);
-          }
-        }
-      }
-
-      if (!isNullOrEmpty(payloadClassName) && (!contains(PAYLOAD_CLASS_NAME) || !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName))) {
+      if (contains(PAYLOAD_CLASS_NAME) && payloadClassName != null
+          && !getString(PAYLOAD_CLASS_NAME).equals(payloadClassName)) {
         setValue(PAYLOAD_CLASS_NAME, payloadClassName);
         needStore = true;
       }
-
-      if (!isNullOrEmpty(recordMergerStrategyId) && (!contains(RECORD_MERGER_STRATEGY) || !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId))) {
+      if (contains(RECORD_MERGE_MODE) && recordMergeMode != null
+          && !recordMergeMode.equals(RecordMergeMode.getValue(getString(RECORD_MERGE_MODE)))) {
+        setValue(RECORD_MERGE_MODE, recordMergeMode.name());
+        needStore = true;
+      }
+      if (contains(RECORD_MERGER_STRATEGY) && recordMergerStrategyId != null
+          && !getString(RECORD_MERGER_STRATEGY).equals(recordMergerStrategyId)) {
         setValue(RECORD_MERGER_STRATEGY, recordMergerStrategyId);
         needStore = true;
-        if (recordMergerStrategyId != PAYLOAD_BASED_MERGER_STRATEGY_UUID) {
-          checkArgument(isNullOrEmpty(payloadClassName),
-              "Merging configs have not been inferred with HoodieTableConfig.inferCorrectMergingBehavior. This must be done to maintain table integrity!");
-          if (contains(PAYLOAD_CLASS_NAME)) {
-            clearValue(PAYLOAD_CLASS_NAME);
-          }
-        }
       }
-
       if (needStore) {
         try (OutputStream outputStream = storage.create(propertyPath)) {
           storeProperties(props, outputStream);
@@ -696,27 +678,15 @@ public class HoodieTableConfig extends HoodieConfig {
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public Option<String> getPayloadClass() {
+  public String getPayloadClass() {
     return RecordPayloadType.getPayloadClassName(this);
-  }
-
-  public String getAvroPayloadClass() {
-    return getPayloadClass().orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
-  }
-
-  public String getAvroPayloadClassNonThrow() {
-    return getPayloadClass().orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeModeNonThrow(getRecordMergeMode()));
   }
 
   /**
    * Read the payload class for HoodieRecords from the table properties.
    */
-  public Option<String> getRecordMergerStrategy() {
-    return getStringOpt(RECORD_MERGER_STRATEGY);
-  }
-
-  public String getAvroRecordMergerStrategy() {
-    return getRecordMergerStrategy().orElseGet(() -> HoodieRecordMerger.getAvroMergerStrategyFromMergeMode(getRecordMergeMode()));
+  public String getRecordMergerStrategy() {
+    return getString(RECORD_MERGER_STRATEGY);
   }
 
   public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy) {
@@ -733,38 +703,31 @@ public class HoodieTableConfig extends HoodieConfig {
         } else {
           inferRecordMergeMode = recordMergeMode;
         }
-        inferPayloadClassName = null;
-        inferRecordMergerStrategy = null;
+        inferRecordMergerStrategy = HoodieRecordMerger.getAvroMergerStrategyFromMergeMode(inferRecordMergeMode);
       } else {
+        inferRecordMergerStrategy = recordMergerStrategy;
         if (recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
           inferRecordMergeMode = EVENT_TIME_ORDERING;
-          inferPayloadClassName = null;
-          inferRecordMergerStrategy = null;
         } else if (recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
           inferRecordMergeMode = OVERWRITE_WITH_LATEST;
-          inferPayloadClassName = null;
-          inferRecordMergerStrategy = null;
         } else {
           checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Payload based strategy should only be used if you have a custom payload");
           inferRecordMergeMode = CUSTOM;
-          inferPayloadClassName = null;
-          inferRecordMergerStrategy = recordMergerStrategy;
         }
       }
+      inferPayloadClassName = HoodieRecordPayload.getAvroPayloadForMergeMode(inferRecordMergeMode);
     } else {
       checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
+      inferPayloadClassName = payloadClassName;
       if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
         inferRecordMergeMode = EVENT_TIME_ORDERING;
-        inferPayloadClassName = null;
-        inferRecordMergerStrategy = null;
+        inferRecordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
         inferRecordMergeMode = OVERWRITE_WITH_LATEST;
-        inferPayloadClassName = null;
-        inferRecordMergerStrategy = null;
+        inferRecordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
       } else {
         checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;
-        inferPayloadClassName = payloadClassName;
         inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUID;
       }
     }

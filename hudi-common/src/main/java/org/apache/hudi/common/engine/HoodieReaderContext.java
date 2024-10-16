@@ -192,7 +192,7 @@ public abstract class HoodieReaderContext<T> {
    * @param mergerStrategy Merger strategy UUID.
    * @return {@link HoodieRecordMerger} to use.
    */
-  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, Option<String> mergerStrategy);
+  public abstract Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergerStrategy, String mergerImpls);
 
   /**
    * Gets the field value.

@@ -1588,7 +1588,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     //now assert that hoodie.properties file now has updated payload class name
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
-    assertEquals(metaClient.getTableConfig().getAvroPayloadClass(), DummyAvroPayload.class.getName());
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), DummyAvroPayload.class.getName());
   }
 
   @Test
@@ -1602,7 +1602,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     //now assert that hoodie.properties file now has updated payload class name
     HoodieTableMetaClient metaClient = UtilHelpers.createMetaClient(jsc, dataSetBasePath, false);
-    assertEquals(metaClient.getTableConfig().getAvroPayloadClass(), PartialUpdateAvroPayload.class.getName());
+    assertEquals(metaClient.getTableConfig().getPayloadClass(), PartialUpdateAvroPayload.class.getName());
   }
 
   @Test

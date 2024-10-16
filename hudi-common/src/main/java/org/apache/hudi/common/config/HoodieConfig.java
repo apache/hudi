@@ -67,10 +67,6 @@ public class HoodieConfig implements Serializable {
     props.setProperty(cfg.key(), val);
   }
 
-  public <T> void clearValue(ConfigProperty<T> cfg) {
-    props.remove(cfg.key());
-  }
-
   public <T> void setValue(String key, String val) {
     props.setProperty(key, val);
   }
@@ -151,11 +147,6 @@ public class HoodieConfig implements Serializable {
   public <T> String getString(ConfigProperty<T> configProperty) {
     Option<Object> rawValue = getRawValue(configProperty);
     return rawValue.map(Object::toString).orElse(null);
-  }
-
-  public <T> Option<String> getStringOpt(ConfigProperty<T> configProperty) {
-    Option<Object> rawValue = getRawValue(configProperty);
-    return rawValue.map(Object::toString);
   }
 
   public <T> List<String> getSplitStrings(ConfigProperty<T> configProperty) {

@@ -21,10 +21,8 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.PropertiesConfig;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieIOException;
@@ -51,7 +49,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_CHECKSUM;
 
 public class ConfigUtils {
@@ -92,21 +89,15 @@ public class ConfigUtils {
     return orderField;
   }
 
-  public static RecordMergeMode getRecordMergeMode(Properties properties) {
-    return RecordMergeMode.getValue(getStringWithAltKeys(properties, RECORD_MERGE_MODE, RECORD_MERGE_MODE.defaultValue().name()));
-  }
-
   /**
    * Get payload class.
    */
-  public static String getAvroPayloadClass(Properties properties) {
-    HoodieConfig hoodieConfig = new HoodieConfig(properties);
-    return RecordPayloadType.getPayloadClassName(hoodieConfig).orElseGet(() ->
-        HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode(properties)));
+  public static String getPayloadClass(Properties properties) {
+    return RecordPayloadType.getPayloadClassName(new HoodieConfig(properties));
   }
 
   public static List<String> split2List(String param) {
-    return Arrays.stream(param.split(","))
+    return StringUtils.split(param, ",").stream()
         .map(String::trim).distinct().collect(Collectors.toList());
   }
 

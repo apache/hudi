@@ -26,7 +26,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.DFSPropertiesConfiguration;
 import org.apache.hudi.common.config.HoodieCommonConfig;
-import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
@@ -36,7 +35,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -133,12 +132,9 @@ public class UtilHelpers {
   private static final Logger LOG = LoggerFactory.getLogger(UtilHelpers.class);
 
   public static HoodieRecordMerger createRecordMerger(Properties props) {
-    List<String> recordMergerImplClasses = ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), ""));
-    HoodieRecordMerger recordMerger = HoodieWriteConfig.getRecordMerger(null,
-        RecordMergeMode.getValue(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_MODE, true)),
-        EngineType.SPARK, recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
-
-    return recordMerger;
+    return HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK,
+        props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key()),
+        props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()));
   }
 
   public static Source createSource(String sourceClass, TypedProperties cfg, JavaSparkContext jssc,

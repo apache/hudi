@@ -107,7 +107,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.recordMergeMode = recordMergeMode;
     this.recordMerger = readerContext.getRecordMerger();
     if (recordMerger.isPresent() && recordMerger.get().getMergingStrategy().equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
-      this.payloadClass = Option.of(ConfigUtils.getAvroPayloadClass(props));
+      this.payloadClass = Option.of(hoodieTableMetaClient.getTableConfig().getPayloadClass());
     } else {
       this.payloadClass = Option.empty();
     }

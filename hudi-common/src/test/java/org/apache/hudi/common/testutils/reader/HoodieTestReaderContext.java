@@ -91,7 +91,7 @@ public class HoodieTestReaderContext extends HoodieReaderContext<IndexedRecord> 
   }
 
   @Override
-  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, Option<String> mergerStrategy) {
+  public Option<HoodieRecordMerger> getRecordMerger(RecordMergeMode mergeMode, String mergerStrategy, String mergerImpls) {
     if (mergeMode == RecordMergeMode.CUSTOM) {
       return customMerger;
     }

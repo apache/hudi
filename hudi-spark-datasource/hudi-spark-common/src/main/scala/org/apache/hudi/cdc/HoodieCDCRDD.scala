@@ -150,7 +150,7 @@ class HoodieCDCRDD(
         recordKeyField,
         preCombineFieldOpt,
         usesVirtualKeys = !populateMetaFields,
-        metaClient.getTableConfig.getAvroPayloadClass,
+        metaClient.getTableConfig.getPayloadClass,
         metadataConfig,
         // TODO support CDC with spark record
         recordMergerImpls = List(classOf[HoodieAvroRecordMerger].getName),

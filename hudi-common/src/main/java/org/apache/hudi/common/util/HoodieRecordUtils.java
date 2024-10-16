@@ -71,18 +71,23 @@ public class HoodieRecordUtils {
     }
   }
 
+  public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
+                                                      String mergerImpls, String recordMergerStrategy) {
+    return createRecordMerger(basePath, engineType, ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+  }
+
   /**
    * Instantiate a given class with a record merge.
    */
   public static HoodieRecordMerger createRecordMerger(String basePath, EngineType engineType,
-                                                      List<String> mergerClassList, Option<String> recordMergerStrategy) {
-    if (mergerClassList.isEmpty() || recordMergerStrategy.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
+                                                      List<String> mergerClassList, String recordMergerStrategy) {
+    if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
       return mergerClassList.stream()
           .map(clazz -> loadRecordMerger(clazz))
           .filter(Objects::nonNull)
-          .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy.get()))
+          .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
           .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
           .findFirst()
           .orElse(HoodieAvroRecordMerger.INSTANCE);

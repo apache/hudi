@@ -965,34 +965,13 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setRecordMergeMode(Option<RecordMergeMode> recordMergeMode) {
-      if (recordMergeMode.isPresent()) {
-        this.recordMergeMode = recordMergeMode.get();
-      }
-      return this;
-    }
-
     public TableBuilder setPayloadClassName(String payloadClassName) {
       this.payloadClassName = payloadClassName;
       return this;
     }
 
-    public TableBuilder setPayloadClassName(Option<String> payloadClassName) {
-      if (payloadClassName.isPresent()) {
-        return this.setPayloadClassName(payloadClassName.get());
-      }
-      return this;
-    }
-
     public TableBuilder setRecordMergerStrategy(String recordMergerStrategy) {
       this.recordMergerStrategy = recordMergerStrategy;
-      return this;
-    }
-
-    public TableBuilder setRecordMergerStrategy(Option<String> recordMergerStrategy) {
-      if (recordMergerStrategy.isPresent()) {
-        return this.setRecordMergerStrategy(recordMergerStrategy.get());
-      }
       return this;
     }
 
@@ -1171,7 +1150,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.RECORD_MERGER_STRATEGY)) {
         setRecordMergerStrategy(
-            hoodieConfig.getStringOpt(HoodieTableConfig.RECORD_MERGER_STRATEGY));
+            hoodieConfig.getString(HoodieTableConfig.RECORD_MERGER_STRATEGY));
       }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_LAYOUT_VERSION)) {
         setTimelineLayoutVersion(hoodieConfig.getInt(HoodieTableConfig.TIMELINE_LAYOUT_VERSION));
@@ -1277,16 +1256,9 @@ public class HoodieTableMetaClient implements Serializable {
 
       Triple<RecordMergeMode, String, String> mergeConfigs =
           HoodieTableConfig.inferCorrectMergingBehavior(recordMergeMode, payloadClassName, recordMergerStrategy);
-
       tableConfig.setValue(RECORD_MERGE_MODE, mergeConfigs.getLeft().name());
-
-      if (mergeConfigs.getMiddle() != null) {
-        tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
-      }
-
-      if (mergeConfigs.getRight() != null) {
-        tableConfig.setValue(RECORD_MERGER_STRATEGY, mergeConfigs.getRight());
-      }
+      tableConfig.setValue(PAYLOAD_CLASS_NAME.key(), mergeConfigs.getMiddle());
+      tableConfig.setValue(RECORD_MERGER_STRATEGY, mergeConfigs.getRight());
 
       if (null != tableCreateSchema) {
         tableConfig.setValue(HoodieTableConfig.CREATE_SCHEMA, tableCreateSchema);

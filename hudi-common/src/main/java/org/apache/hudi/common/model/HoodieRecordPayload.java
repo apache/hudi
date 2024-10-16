@@ -142,26 +142,14 @@ public interface HoodieRecordPayload<T extends HoodieRecordPayload> extends Seri
     return 0;
   }
 
-  static String getAvroPayloadForMergeModeInternal(RecordMergeMode mergeMode, boolean shouldThrow) {
+  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
     switch (mergeMode) {
+      //TODO: After we have merge mode working for writing, we should have a dummy payload that will throw exception when used
+      default:
       case EVENT_TIME_ORDERING:
         return DefaultHoodieRecordPayload.class.getName();
       case OVERWRITE_WITH_LATEST:
         return OverwriteWithLatestAvroPayload.class.getName();
-      default:
-        if (shouldThrow) {
-          throw new IllegalArgumentException("Merge mode does not have associated payload");
-        } else {
-          return "";
-        }
     }
-  }
-
-  static String getAvroPayloadForMergeMode(RecordMergeMode mergeMode) {
-    return getAvroPayloadForMergeModeInternal(mergeMode, true);
-  }
-
-  static String getAvroPayloadForMergeModeNonThrow(RecordMergeMode mergeMode) {
-    return getAvroPayloadForMergeModeInternal(mergeMode, false);
   }
 }

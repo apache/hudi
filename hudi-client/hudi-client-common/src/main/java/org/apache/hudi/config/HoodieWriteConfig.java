@@ -44,7 +44,6 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -1245,39 +1244,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public HoodieRecordMerger getRecordMerger() {
-    List<String> mergers = StringUtils.split(getString(RECORD_MERGER_IMPLS), ",").stream()
-        .map(String::trim)
-        .distinct()
-        .collect(Collectors.toList());
-    return getRecordMerger(getString(BASE_PATH), getRecordMergeMode(),
-        engineType, mergers, getStringOpt(RECORD_MERGER_STRATEGY));
-  }
-
-  public static HoodieRecordMerger getRecordMerger(String basePath,
-                                                   RecordMergeMode mergeMode,
-                                                   EngineType engineType,
-                                                   List<String> mergers,
-                                                   Option<String> strategy) {
-    //TODO: [HUDI-8202] make this custom mergers only
-    switch (mergeMode) {
-      case EVENT_TIME_ORDERING:
-        switch (engineType) {
-          case SPARK:
-            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.DefaultSparkRecordMerger");
-          default:
-            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-        }
-      case OVERWRITE_WITH_LATEST:
-        switch (engineType) {
-          case SPARK:
-            return HoodieRecordUtils.loadRecordMerger("org.apache.hudi.OverwriteWithLatestSparkRecordMerger");
-          default:
-            return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-        }
-      case CUSTOM:
-      default:
-        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-    }
+    return HoodieRecordUtils.createRecordMerger(getString(BASE_PATH), engineType, getString(RECORD_MERGER_IMPLS), getString(RECORD_MERGER_STRATEGY));
   }
 
   public String getSchema() {
@@ -1773,10 +1740,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getAsyncClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.ASYNC_CLUSTERING_MAX_COMMITS);
-  }
-
-  public String getAvroPayloadClass() {
-    return getStringOpt(HoodiePayloadConfig.PAYLOAD_CLASS_NAME).orElseGet(() -> HoodieRecordPayload.getAvroPayloadForMergeMode(getRecordMergeMode()));
   }
 
   public String getPayloadClass() {

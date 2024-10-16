@@ -195,7 +195,7 @@ public class FormatUtils {
           .distinct()
           .collect(Collectors.toList());
       HoodieRecordMerger merger = HoodieRecordUtils.createRecordMerger(
-          split.getTablePath(), EngineType.FLINK, mergers, Option.ofNullable(flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY, null)));
+          split.getTablePath(), EngineType.FLINK, mergers, flinkConf.getString(FlinkOptions.RECORD_MERGER_STRATEGY));
       HoodieUnMergedLogRecordScanner.Builder scannerBuilder =
           HoodieUnMergedLogRecordScanner.newBuilder()
               .withStorage(HoodieStorageUtils.getStorage(
