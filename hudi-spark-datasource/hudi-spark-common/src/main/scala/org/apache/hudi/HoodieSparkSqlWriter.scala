@@ -66,7 +66,6 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.sync.common.util.SyncUtilHelpers
 import org.apache.hudi.sync.common.util.SyncUtilHelpers.getHoodieMetaSyncException
 import org.apache.hudi.util.SparkKeyGenUtils
-import org.apache.hudi.util.JavaScalaUtils.{JavaOptional, ScalaOptional}
 
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.HoodieDataTypeUtils.tryOverrideParquetWriteLegacyFormatProperty
