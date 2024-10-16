@@ -188,17 +188,16 @@ public class IncrSourceHelper {
       beginCompletionTime = lastCkptStr.get();
       rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
+      rangeType = RangeType.CLOSED_CLOSED;
       switch (missingCheckpointStrategy) {
         case READ_UPTO_LATEST_COMMIT:
           beginCompletionTime = DEFAULT_BEGIN_TIMESTAMP;
-          rangeType = RangeType.CLOSED_CLOSED;
           // disrespect numInstantsFromConfig when reading up to latest
           numInstantsFromConfig = -1;
           break;
         case READ_LATEST:
           // rely on IncrementalQueryAnalyzer to use the latest completed instant
           beginCompletionTime = null;
-          rangeType = RangeType.CLOSED_CLOSED;
           break;
         default:
           throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
