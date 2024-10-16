@@ -26,6 +26,8 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
+import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
+import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -61,8 +63,13 @@ import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SO
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_PARTITION_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_TIMESTAMP_COLUMN;
 import static org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor.KAFKA_SOURCE_KEY_COLUMN;
+import static org.apache.hudi.utilities.sources.AvroKafkaSource.GROUP_ID_MAX_BYTES_LENGTH;
+import static org.apache.hudi.utilities.sources.KafkaSource.NATIVE_KAFKA_CONSUMER_GROUP_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
@@ -227,5 +234,29 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
     Dataset<Row> nullKafkaKeyDataset = kafkaSourceWithNullKafkaKey.fetchNewDataInRowFormat(Option.empty(),Long.MAX_VALUE)
             .getBatch().get();
     assertEquals(numMessages, nullKafkaKeyDataset.toDF().filter("_hoodie_kafka_source_key is null").count());
+  }
+
+  @Test
+  void testConfigureSchemaDeserializer() throws IOException {
+    final String topic = TEST_TOPIC_PREFIX + "testAvroSchemaDeserializer";
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+
+    props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", KafkaAvroSchemaDeserializer.class.getName());
+    assertThrows(HoodieReadFromSourceException.class, () -> new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics));
+
+    String schemaFilePath = TestAvroKafkaSource.class.getClassLoader().getResource("schema/simple-test-with-default-value.avsc").getPath();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    SchemaProvider schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
+        UtilHelpers.createSchemaProvider(FilebasedSchemaProvider.class.getName(), props, jsc()), props, jsc(), new ArrayList<>());
+    AvroKafkaSource avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    assertTrue(avroKafkaSource.props.containsKey(NATIVE_KAFKA_CONSUMER_GROUP_ID));
+    String groupId = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
+    assertTrue(groupId.length() <= GROUP_ID_MAX_BYTES_LENGTH);
+
+    schemaFilePath = TestAvroKafkaSource.class.getClassLoader().getResource("schema/evolved-test-with-default-value.avsc").getPath();
+    props.put("hoodie.deltastreamer.schemaprovider.source.schema.file", schemaFilePath);
+    avroKafkaSource = new AvroKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    String newGroupId = avroKafkaSource.props.getString(NATIVE_KAFKA_CONSUMER_GROUP_ID, "");
+    assertNotEquals(groupId, newGroupId);
   }
 }
