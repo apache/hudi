@@ -69,23 +69,4 @@ object JavaScalaConverters {
   def convertJavaPropertiesToScalaMap(javaProperties: java.util.Properties): Map[String, String] = {
     javaProperties.asScala.toMap
   }
-
-  implicit class JavaOptional[T](optional: org.apache.hudi.common.util.Option[T]) {
-    def toScala: Option[T] = {
-      if (optional.isPresent) {
-        Some(optional.get())
-      } else {
-        None
-      }
-    }
-  }
-
-  implicit class ScalaOptional[T](optional: Option[T]) {
-    def toHoodieOpt: org.apache.hudi.common.util.Option[T] = {
-      optional match {
-        case Some(x) => org.apache.hudi.common.util.Option.of(x)
-        case None => org.apache.hudi.common.util.Option.empty()
-      }
-    }
-  }
 }
