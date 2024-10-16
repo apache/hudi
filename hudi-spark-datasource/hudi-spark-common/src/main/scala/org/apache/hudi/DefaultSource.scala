@@ -250,7 +250,12 @@ object DefaultSource {
     val isCdcQuery = queryType == QUERY_TYPE_INCREMENTAL_OPT_VAL &&
       parameters.get(INCREMENTAL_FORMAT.key).contains(INCREMENTAL_FORMAT_CDC_VAL)
 
-    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType")
+    val isReadOptimizedForMor = parameters.get(ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.key()) match {
+      case Some(value) => value.toBoolean
+      case None => ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE.defaultValue()
+    }
+
+    log.info(s"Is bootstrapped table => $isBootstrappedTable, tableType is: $tableType, queryType is: $queryType, isCdcQuery is: $isCdcQuery, isReadOptimizedForMor is: $isReadOptimizedForMor")
 
     // NOTE: In cases when Hive Metastore is used as catalog and the table is partitioned, schema in the HMS might contain
     //       Hive-specific partitioning columns created specifically for HMS to handle partitioning appropriately. In that
@@ -288,7 +293,11 @@ object DefaultSource {
 
         case (MERGE_ON_READ, QUERY_TYPE_SNAPSHOT_OPT_VAL, false) =>
           if (newHudiFileFormatUtils.isEmpty) {
-            new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+            if (isReadOptimizedForMor) {
+              resolveRelationForMorSnapshotQuery(sqlContext, globPaths, userSchema, metaClient, parameters)
+            } else {
+              new MergeOnReadSnapshotRelation(sqlContext, parameters, metaClient, globPaths, userSchema)
+            }
           } else {
             newHudiFileFormatUtils.get.getHadoopFsRelation(isMOR = true, isBootstrap = false)
           }
@@ -352,6 +361,29 @@ object DefaultSource {
     } else {
       baseRelation.toHadoopFsRelation
     }
+  }
+
+  private def resolveRelationForMorSnapshotQuery(sqlContext: SQLContext,
+                                          globPaths: Seq[StoragePath],
+                                          userSchema: Option[StructType],
+                                          metaClient: HoodieTableMetaClient,
+                                          optParams: Map[String, String]): BaseRelation = {
+    val snapshotRelation = new MergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, globPaths, userSchema)
+    // check whether all the file-slices only contain base files
+    val relation = snapshotRelation.considerConvertToBaseFileOnlyRelation
+
+    // NOTE: We fallback to [[HadoopFsRelation]] in all of the cases except ones requiring usage of
+    //       [[BaseFileOnlyRelation]] to function correctly. This is necessary to maintain performance parity w/
+    //       vanilla Spark, since some of the Spark optimizations are predicated on the using of [[HadoopFsRelation]].
+    //
+    //       You can check out HUDI-3896 for more details
+    val result = if (relation.isInstanceOf[BaseFileOnlyRelation] && !relation.asInstanceOf[BaseFileOnlyRelation].hasSchemaOnRead) {
+      relation.asInstanceOf[BaseFileOnlyRelation].toHadoopFsRelation
+    } else {
+      relation
+    }
+    log.info("Resolved MergeOnReadSnapshotRelation for MOR snapshot query, relation is: " + result)
+    result
   }
 
   private def resolveSchema(metaClient: HoodieTableMetaClient,
