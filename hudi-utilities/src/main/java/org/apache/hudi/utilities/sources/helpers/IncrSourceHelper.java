@@ -183,24 +183,27 @@ public class IncrSourceHelper {
         .setLoadActiveTimelineOnLoad(true)
         .build();
 
-    String startTime;
+    String beginCompletionTime;
+    RangeType rangeType;
+
     if (lastCkptStr.isPresent() && !lastCkptStr.get().isEmpty()) {
-      startTime = lastCkptStr.get();
+      beginCompletionTime = lastCkptStr.get();
+      rangeType = RangeType.OPEN_CLOSED;
     } else if (missingCheckpointStrategy != null) {
       switch (missingCheckpointStrategy) {
         case READ_UPTO_LATEST_COMMIT:
-          startTime = DEFAULT_BEGIN_TIMESTAMP;
+          beginCompletionTime = DEFAULT_BEGIN_TIMESTAMP;
+          rangeType = RangeType.CLOSED_CLOSED;
           // disrespect numInstantsFromConfig when reading up to latest
           numInstantsFromConfig = -1;
           break;
         case READ_LATEST:
-          Option<HoodieInstant> lastInstant = metaClient
+          beginCompletionTime = metaClient
               .getCommitsAndCompactionTimeline()
               .filterCompletedInstants()
-              .lastInstant();
-          startTime = lastInstant
-              .map(hoodieInstant -> instantTimeMinusMillis(hoodieInstant.getCompletionTime(), 1))
+              .getLatestCompletionTime()
               .orElse(DEFAULT_BEGIN_TIMESTAMP);
+          rangeType = RangeType.CLOSED_CLOSED;
           break;
         default:
           throw new IllegalArgumentException("Unknown missing checkpoint strategy: " + missingCheckpointStrategy);
@@ -221,9 +224,9 @@ public class IncrSourceHelper {
 
     return IncrementalQueryAnalyzer.builder()
         .metaClient(metaClient)
-        .startTime(startTime)
+        .startTime(beginCompletionTime)
         .endTime(null)
-        .rangeType(RangeType.OPEN_CLOSED)
+        .rangeType(rangeType)
         .limit(numInstantsPerFetch)
         .build();
   }
