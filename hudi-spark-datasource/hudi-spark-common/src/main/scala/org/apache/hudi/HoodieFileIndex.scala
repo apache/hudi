@@ -148,6 +148,9 @@ case class HoodieFileIndex(spark: SparkSession,
       }).toSeq
   }
 
+
+  def isBaseFileOnly: Boolean = !includeLogFiles || isAllInputFileSlicesBaseFileOnly
+
   /**
    * Invoked by Spark to fetch list of latest base files per partition.
    *

@@ -220,6 +220,14 @@ object DataSourceReadOptions {
 
   val INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT: ConfigProperty[String] = HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 
+  val ENABLE_OPTIMIZED_READ_FOR_MOR_WITH_ALL_BASE_FILE_ONLY_SLICE: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.optimized.mor.with.all.base.file.only.slice.enable")
+    .defaultValue(true)
+    .markAdvanced()
+    .sinceVersion("0.14.0")
+    .withDocumentation("Enables optimized read for MOR table whose file-slices only contains base-file. When set to true, " +
+      "it will regard query as read_optimized query for table which match above conditions.")
+
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
   val QUERY_TYPE_OPT_KEY = QUERY_TYPE.key()

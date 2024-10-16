@@ -230,6 +230,16 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   /**
+   * Returns true if all file-slices only contain base file (no log files)
+   */
+  protected boolean isAllInputFileSlicesBaseFileOnly() {
+    Map<PartitionPath, List<FileSlice>> allInputFileSlices = getAllInputFileSlices();
+    return !allInputFileSlices.isEmpty() && allInputFileSlices.values().stream()
+        .flatMap(Collection::stream)
+        .allMatch(FileSlice::isBaseFileOnly);
+  }
+
+  /**
    * Get input file slice for the given partition. Will use cache directly if it is computed before.
    */
   protected Map<PartitionPath, List<FileSlice>> getInputFileSlices(PartitionPath... partitions) {

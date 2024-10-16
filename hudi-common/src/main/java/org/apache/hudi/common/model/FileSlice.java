@@ -131,6 +131,13 @@ public class FileSlice implements Serializable {
     return (baseFile == null) && (logFiles.isEmpty());
   }
 
+  /**
+   * Returns true if there is a base file and no log files.
+   */
+  public boolean isBaseFileOnly() {
+    return (baseFile != null) && (logFiles.isEmpty());
+  }
+
   @Override
   public String toString() {
     final StringBuilder sb = new StringBuilder("FileSlice {");

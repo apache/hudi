@@ -25,14 +25,14 @@ import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isPro
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.storage.StoragePath
-
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -99,6 +99,15 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
+
+  def considerConvertToBaseFileOnlyRelation: BaseRelation = {
+    if (fileIndex.isBaseFileOnly) {
+      // TODO: move FileIndex's reference to BaseFileOnlyRelation to avoid FileIndex re-initialization
+      BaseFileOnlyRelation(sqlContext, metaClient, optParams, userSchema, globPaths)
+    } else {
+      this
+    }
+  }
 
   /**
    * Determines whether relation's schema could be pruned by Spark's Optimizer
