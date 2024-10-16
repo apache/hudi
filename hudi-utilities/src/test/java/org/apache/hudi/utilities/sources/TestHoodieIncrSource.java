@@ -361,8 +361,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          // SnapshotLoadQuerySplitter would return start time as the next checkpoint instead of completion time
-          dataBatches.get(0).getInstantTime(),
+          dataBatches.get(0).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), new TypedProperties());
 
       // The pending tables services should not block the incremental pulls
@@ -423,8 +422,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          // SnapshotLoadQuerySplitter would return start time as the next checkpoint instead of completion time
-          inserts.getInstantTime(),
+          inserts.getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()), extraProps);
     }
   }
@@ -464,7 +462,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           100,
-          inserts.get(0).getInstantTime(),
+          inserts.get(0).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(1));
@@ -473,7 +471,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           200,
-          inserts.get(1).getInstantTime(),
+          inserts.get(1).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(3));
@@ -482,7 +480,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
           300,
-          inserts.get(2).getInstantTime(),
+          inserts.get(2).getCompletionTime(),
           Option.of(TestSnapshotQuerySplitterImpl.class.getName()),
           extraProps,
           Option.ofNullable(3));

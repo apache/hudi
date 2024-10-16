@@ -231,9 +231,9 @@ public class HoodieIncrSource extends RowSource {
           endCompletionTime = newCheckpointAndPredicate.get().endInstant;
           predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
           instantTimeList = queryContext.getInstants().stream()
-              .map(HoodieInstant::getCompletionTime)
-              .filter(completionTime -> HoodieTimeline.compareTimestamps(
-                  completionTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endInstant))
+              .filter(instant -> HoodieTimeline.compareTimestamps(
+                  instant.getCompletionTime(), HoodieTimeline.LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endInstant))
+              .map(HoodieInstant::getTimestamp)
               .collect(Collectors.toList());
         } else {
           endCompletionTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
