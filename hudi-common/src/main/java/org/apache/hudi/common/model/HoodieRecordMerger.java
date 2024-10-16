@@ -181,7 +181,7 @@ public interface HoodieRecordMerger extends Serializable {
       case CUSTOM:
         return PAYLOAD_BASED_MERGER_STRATEGY_UUID;
       default:
-        throw new IllegalStateException("afdsafdsafds");
+        throw new IllegalStateException("Merge Mode: '" + mergeMode + "' has not been fully implemented." );
     }
   }
 }
