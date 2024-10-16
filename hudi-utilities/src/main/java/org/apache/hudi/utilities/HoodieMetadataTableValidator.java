@@ -797,11 +797,11 @@ public class HoodieMetadataTableValidator implements Serializable {
   /**
    * Compare the file listing and index data between metadata table and fileSystem.
    * For now, validate five kinds of apis:
-   * 1. HoodieMetadataFileSystemView::getLatestFileSlices
-   * 2. HoodieMetadataFileSystemView::getLatestBaseFiles
-   * 3. HoodieMetadataFileSystemView::getAllFileGroups and HoodieMetadataFileSystemView::getAllFileSlices
-   * 4. HoodieBackedTableMetadata::getColumnStats
-   * 5. HoodieBackedTableMetadata::getBloomFilters
+   * 1. HoodieTableFileSystemView::getLatestFileSlices
+   * 2. HoodieTableFileSystemView::getLatestBaseFiles
+   * 3. HoodieTableFileSystemView::getAllFileGroups and HoodieTableFileSystemView::getAllFileSlices
+   * 4. HoodieTableFileSystemView::getColumnStats
+   * 5. HoodieTableFileSystemView::getBloomFilters
    *
    * @param metadataTableBasedContext Validation context containing information based on metadata table
    * @param fsBasedContext            Validation context containing information based on the file system

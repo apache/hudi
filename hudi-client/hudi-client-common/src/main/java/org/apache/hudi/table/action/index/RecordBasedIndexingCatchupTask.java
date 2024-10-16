@@ -29,8 +29,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -68,7 +68,7 @@ public class RecordBasedIndexingCatchupTask extends AbstractIndexingCatchupTask 
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieTableMetadata metadata = HoodieTableMetadata.create(
         engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), false);
-    HoodieMetadataFileSystemView fsView = new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline().filter(i -> i.equals(instant)), metadata);
+    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline().filter(i -> i.equals(instant)));
     // Collect the list of latest file slices present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     fsView.loadAllPartitions();

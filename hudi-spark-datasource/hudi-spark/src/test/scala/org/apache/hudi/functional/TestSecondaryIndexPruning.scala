@@ -27,11 +27,12 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.{HoodieMetadataIndexException, HoodieWriteConflictException}
 import org.apache.hudi.functional.TestSecondaryIndexPruning.SecondaryIndexTestCase
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, HoodieMetadataFileSystemView, SparkHoodieBackedTableMetadataWriter}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieBackedTableMetadataWriter, SparkHoodieBackedTableMetadataWriter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
@@ -732,7 +733,7 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    val fsView: HoodieMetadataFileSystemView = getTableFileSystemView(opts)
+    val fsView: HoodieTableFileSystemView = getTableFileSystemView(opts)
     try {
       fsView.getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
         .values()
@@ -746,8 +747,8 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    new HoodieTableFileSystemView(metadataWriter(getWriteConfig(opts)).getTableMetadata, metaClient, metaClient.getActiveTimeline)
   }
 
   private def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {

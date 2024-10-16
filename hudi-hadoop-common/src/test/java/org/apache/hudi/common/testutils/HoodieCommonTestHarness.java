@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +31,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.io.TempDir;
@@ -59,6 +62,7 @@ public class HoodieCommonTestHarness {
   protected URI baseUri;
   protected HoodieTestDataGenerator dataGen;
   protected HoodieTableMetaClient metaClient;
+  private HoodieEngineContext engineContext;
   @TempDir
   public java.nio.file.Path tempDir;
 
@@ -140,7 +144,7 @@ public class HoodieCommonTestHarness {
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTimeline timeline, boolean enableIncrementalTimelineSync) {
-    return new HoodieTableFileSystemView(metaClient, timeline, enableIncrementalTimelineSync);
+    return HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, timeline, enableIncrementalTimelineSync);
   }
 
   protected SyncableFileSystemView getFileSystemView(HoodieTableMetaClient metaClient) throws IOException {
@@ -241,5 +245,12 @@ public class HoodieCommonTestHarness {
         .filter(t -> !completedInstants.contains(t))
         .collect(Collectors.toList());
     return !pendingInstants.isEmpty();
+  }
+
+  protected HoodieEngineContext getEngineContext() {
+    if (engineContext == null) {
+      this.engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
+    }
+    return this.engineContext;
   }
 }

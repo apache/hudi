@@ -150,7 +150,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected final List<MetadataPartitionType> enabledPartitionTypes;
   // Is the MDT bootstrapped and ready to be read from
   private boolean initialized = false;
-  private HoodieMetadataFileSystemView metadataView;
+  private HoodieTableFileSystemView metadataView;
 
   /**
    * Hudi backed table metadata writer.
@@ -201,11 +201,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
-  private HoodieMetadataFileSystemView getMetadataView() {
+  private HoodieTableFileSystemView getMetadataView() {
     if (metadataView == null) {
       ValidationUtils.checkState(metadata != null, "Metadata table not initialized");
       ValidationUtils.checkState(dataMetaClient != null, "Data table meta client not initialized");
-      metadataView = new HoodieMetadataFileSystemView(dataMetaClient, dataMetaClient.getActiveTimeline(), metadata);
+      metadataView = new HoodieTableFileSystemView(metadata, dataMetaClient, dataMetaClient.getActiveTimeline());
     }
     return metadataView;
   }
@@ -590,7 +590,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private List<Pair<String, FileSlice>> getPartitionFileSlicePairs() throws IOException {
-    HoodieMetadataFileSystemView fsView = getMetadataView();
+    HoodieTableFileSystemView fsView = getMetadataView();
     // Collect the list of latest file slices present in each partition
     List<String> partitions = metadata.getAllPartitionPaths();
     fsView.loadAllPartitions();
@@ -600,7 +600,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition() throws IOException {
-    final HoodieMetadataFileSystemView fsView = getMetadataView();
+    final HoodieTableFileSystemView fsView = getMetadataView();
     final HoodieTable hoodieTable = getTable(dataWriteConfig, dataMetaClient);
 
     // Collect the list of latest base files present in each partition
@@ -1089,11 +1089,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   private HoodieData<HoodieRecord> getFunctionalIndexUpdates(HoodieCommitMetadata commitMetadata, String indexPartition, String instantTime) throws Exception {
     HoodieIndexDefinition indexDefinition = getFunctionalIndexDefinition(indexPartition);
     List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-    HoodieTableFileSystemView fsv = HoodieTableMetadataUtil.getFileSystemView(dataMetaClient);
+    HoodieTableFileSystemView fsv = HoodieTableMetadataUtil.getFileSystemView(engineContext, dataMetaClient);
     commitMetadata.getPartitionToWriteStats().forEach((dataPartition, writeStats) -> {
       // collect list of FileIDs touched as part of this commit.
       Set<String> fileIds = writeStats.stream().map(writeStat -> writeStat.getFileId()).collect(Collectors.toSet());
-      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.of(fsv), dataPartition)
+      List<FileSlice> fileSlices = getPartitionLatestFileSlicesIncludingInflight(fsv, dataPartition)
           .stream().filter(fileSlice -> fileIds.contains(fileSlice.getFileId())).collect(Collectors.toList());
       // process only the fileSlices touched in this commit meta
       // data.
@@ -1435,16 +1435,16 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   protected HoodieData<HoodieRecord> prepRecords(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
-    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(metadataMetaClient)) {
+    try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemView(engineContext, metadataMetaClient)) {
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
         final String partitionName = entry.getKey();
         HoodieData<HoodieRecord> records = entry.getValue();
         List<FileSlice> fileSlices =
-            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+            HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, fsView, partitionName);
         if (fileSlices.isEmpty()) {
           // scheduling of INDEX only initializes the file group and not add commit
           // so if there are no committed file slices, look for inflight slices
-          fileSlices = getPartitionLatestFileSlicesIncludingInflight(metadataMetaClient, Option.ofNullable(fsView), partitionName);
+          fileSlices = getPartitionLatestFileSlicesIncludingInflight(fsView, partitionName);
         }
         final int fileGroupCount = fileSlices.size();
         ValidationUtils.checkArgument(fileGroupCount > 0, String.format("FileGroup count for MDT partition %s should be > 0", partitionName));
@@ -1694,7 +1694,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private HoodieData<HoodieRecord> getRecordIndexReplacedRecords(HoodieReplaceCommitMetadata replaceCommitMetadata) {
-    try (HoodieMetadataFileSystemView fsView = getMetadataView()) {
+    try (HoodieTableFileSystemView fsView = getMetadataView()) {
       List<Pair<String, HoodieBaseFile>> partitionBaseFilePairs = replaceCommitMetadata
           .getPartitionToReplaceFileIds()
           .keySet().stream()
