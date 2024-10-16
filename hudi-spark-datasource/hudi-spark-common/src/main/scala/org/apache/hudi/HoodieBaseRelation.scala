@@ -48,7 +48,6 @@ import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
-import org.apache.hudi.util.JavaScalaUtils.JavaOptional
 
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
