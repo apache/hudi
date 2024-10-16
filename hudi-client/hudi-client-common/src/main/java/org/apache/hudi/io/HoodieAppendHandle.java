@@ -459,7 +459,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             ? HoodieRecord.RECORD_KEY_METADATA_FIELD
             : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
 
-        blocks.add(getBlock(config, recordList, shouldWriteRecordPositions,
+        blocks.add(getBlock(config, pickLogDataBlockFormat(), recordList, shouldWriteRecordPositions,
             getUpdatedHeader(header, config), keyField));
       }
 
@@ -621,6 +621,25 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
     }
   }
 
+  private HoodieLogBlock.HoodieLogBlockType pickLogDataBlockFormat() {
+    Option<HoodieLogBlock.HoodieLogBlockType> logBlockTypeOpt = config.getLogDataBlockFormat();
+    if (logBlockTypeOpt.isPresent()) {
+      return logBlockTypeOpt.get();
+    }
+
+    // Fallback to deduce data-block type based on the base file format
+    switch (hoodieTable.getBaseFileFormat()) {
+      case PARQUET:
+      case ORC:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new HoodieException("Base file format " + hoodieTable.getBaseFileFormat()
+            + " does not have associated log block type");
+    }
+  }
+
   private static Map<HeaderMetadataType, String> getUpdatedHeader(Map<HeaderMetadataType, String> header,
                                                                   HoodieWriteConfig config) {
     Map<HeaderMetadataType, String> updatedHeader = new HashMap<>(header);
@@ -635,11 +654,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private static HoodieLogBlock getBlock(HoodieWriteConfig writeConfig,
+                                         HoodieLogBlock.HoodieLogBlockType logDataBlockFormat,
                                          List<HoodieRecord> records,
                                          boolean shouldWriteRecordPositions,
                                          Map<HeaderMetadataType, String> header,
                                          String keyField) {
-    switch (writeConfig.getLogDataBlockFormat()) {
+    switch (logDataBlockFormat) {
       case AVRO_DATA_BLOCK:
         return new HoodieAvroDataBlock(records, shouldWriteRecordPositions, header, keyField);
       case HFILE_DATA_BLOCK:
@@ -656,7 +676,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled());
       default:
-        throw new HoodieException("Data block format " + writeConfig.getLogDataBlockFormat() + " not implemented");
+        throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }
   }
 }
