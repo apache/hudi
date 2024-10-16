@@ -35,6 +35,8 @@ import java.util.Map;
 
 import static org.apache.hudi.common.util.CollectionUtils.createImmutableMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link HoodieMetadataPayload}.
@@ -211,6 +213,8 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
         deletedColumnStatsRecord.getData().preCombine(columnStatsRecord.getData());
 
     assertEquals(deletedColumnStatsRecord.getData(), deletedCombinedMetadataPayload);
+    assertFalse(deletedCombinedMetadataPayload.getInsertValue(null).isPresent());
+    assertTrue(deletedCombinedMetadataPayload.isDeleted());
 
     // NOTE: In this case, proper incoming record will be overwriting previously deleted
     //       record

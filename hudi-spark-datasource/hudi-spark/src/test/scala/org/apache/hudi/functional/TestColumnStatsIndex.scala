@@ -28,13 +28,10 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ParquetUtils
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, DoWriteAndValidateColumnStatsParams}
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
@@ -318,6 +315,151 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("", "c8"))
+  def testColStatsWithCleanCOW(partitionCol: String): Unit = {
+    val tableType: HoodieTableType = HoodieTableType.COPY_ON_WRITE
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> partitionCol,
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1"
+    ) ++ metadataOpts
+
+    // inserts
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    // lets keep track of the first parquet file created. It will be deleted by the cleaner eventually.
+    val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
+      metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/"))
+    } else {
+      metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString + "/9/"))
+    }
+    val baseFileFileStatus = dataFiles.stream().findFirst().get()
+    val baseFileName = baseFileFileStatus.getPath.getName
+
+    val metadataOpts1 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    // updates 1
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update2-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-clean1-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-bootstrap-rollback1-column-stats-index-table.json"
+    }
+
+    // updates 2
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update3-input-table-json/",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("", "c8"))
+  def testColStatsWithCleanMOR(partitionCol: String): Unit = {
+    val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> partitionCol,
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key() -> "1",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "2"
+    ) ++ metadataOpts
+
+    // inserts
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    val metadataOpts1 = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    // updates 1
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update2-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    val expectedColStatsSourcePath = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+      "index/colstats/cow-clean1-column-stats-index-table.json"
+    } else {
+      "index/colstats/mor-clean1-column-stats-index-table.json"
+    }
+
+    // updates 2
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts1, commonOpts,
+      dataSourcePath = "index/colstats/update3-input-table-json/",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0)
   }
 
   @ParameterizedTest

@@ -75,7 +75,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
@@ -750,12 +749,8 @@ public class HoodieTableMetadataUtil {
     return engineContext.parallelize(deleteFileList, parallelism)
         .flatMap(deleteFileInfoPair -> {
           String partitionPath = deleteFileInfoPair.getLeft();
-          String filePath = deleteFileInfoPair.getRight();
-
-          if (ExternalFilePathUtil.isExternallyCreatedFile(filePath)) {
-            return getColumnStatsRecords(partitionPath, filePath, dataMetaClient, columnsToIndex, true).iterator();
-          }
-          return Collections.emptyListIterator();
+          String filePath = partitionPath.equals(EMPTY_PARTITION_NAME) ? deleteFileInfoPair.getRight() : partitionPath + "/" + deleteFileInfoPair.getRight();
+          return getColumnStatsRecords(partitionPath, filePath, dataMetaClient, columnsToIndex, true).iterator();
         });
   }
 
@@ -1223,11 +1218,11 @@ public class HoodieTableMetadataUtil {
   }
 
   private static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
-                                                            String filePath,
+                                                            String filePathWithPartition,
                                                             HoodieTableMetaClient datasetMetaClient,
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
-    return getColumnStatsRecords(partitionPath, filePath, datasetMetaClient, columnsToIndex, isDeleted, false, Option.empty(), -1);
+    return getColumnStatsRecords(partitionPath, filePathWithPartition, datasetMetaClient, columnsToIndex, isDeleted, false, Option.empty(), -1);
   }
 
   private static Stream<HoodieRecord> getColumnStatsRecords(String partitionPath,
