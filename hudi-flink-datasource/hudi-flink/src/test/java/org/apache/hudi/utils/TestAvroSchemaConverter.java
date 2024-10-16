@@ -48,7 +48,8 @@ public class TestAvroSchemaConverter {
         + "`nullCount` BIGINT, "
         + "`totalSize` BIGINT, "
         + "`totalUncompressedSize` BIGINT, "
-        + "`isDeleted` BOOLEAN NOT NULL>";
+        + "`isDeleted` BOOLEAN NOT NULL, "
+        + "`isTightBound` BOOLEAN NOT NULL>";
     assertThat(dataType.getChildren().get(pos).toString(), is(expected));
   }
 
