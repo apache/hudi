@@ -2200,9 +2200,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED);
   }
 
-  public Option<HoodieLogBlock.HoodieLogBlockType> getLogDataBlockFormat() {
-    return Option.ofNullable(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT))
-        .map(HoodieLogBlock.HoodieLogBlockType::fromId);
+  public HoodieLogBlock.HoodieLogBlockType getLogDataBlockFormat() {
+    return HoodieLogBlock.inferLogBlockWriteFormat(getString(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT), getBaseFileFormat());
   }
 
   public long getLogFileMaxSize() {
