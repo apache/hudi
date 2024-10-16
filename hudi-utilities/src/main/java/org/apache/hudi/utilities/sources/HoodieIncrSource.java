@@ -25,6 +25,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -48,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -215,12 +218,18 @@ public class HoodieIncrSource extends RowSource {
           .load(srcPath);
 
       Option<String> predicate = Option.empty();
+      List<String> instantTimeList = queryContext.getInstantTimeList();
       if (snapshotLoadQuerySplitter.isPresent()) {
         Option<SnapshotLoadQuerySplitter.CheckpointWithPredicates> newCheckpointAndPredicate =
             snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
         if (newCheckpointAndPredicate.isPresent()) {
           endCompletionTime = newCheckpointAndPredicate.get().endInstant;
           predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
+          instantTimeList = queryContext.getInstants().stream()
+              .map(HoodieInstant::getCompletionTime)
+              .filter(completionTime -> HoodieTimeline.compareTimestamps(
+                  completionTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, newCheckpointAndPredicate.get().endInstant))
+              .collect(Collectors.toList());
         } else {
           endCompletionTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
         }
@@ -230,7 +239,7 @@ public class HoodieIncrSource extends RowSource {
       source = snapshot
           // add filtering so that only interested records are returned.
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              String.join("','", queryContext.getInstantTimeList())));
+              String.join("','", instantTimeList)));
     } else {
       // normal incremental query
       source = reader
