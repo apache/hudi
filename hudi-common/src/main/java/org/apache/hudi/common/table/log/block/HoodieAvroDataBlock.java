@@ -30,7 +30,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.apache.avro.Schema;
@@ -60,7 +59,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -68,6 +66,7 @@ import java.util.zip.InflaterInputStream;
 import static org.apache.hudi.avro.HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion;
 import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -106,8 +105,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     Schema schema = new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
     GenericDatumWriter<IndexedRecord> writer = new GenericDatumWriter<>(schema);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    Function<HoodieRecord<?>, IndexedRecord> recordConverter = HoodieIOFactory.getIOFactory(storage)
-        .toIndexedRecord(schema, new Properties(), records.get(0).getRecordType());
     try (DataOutputStream output = new DataOutputStream(baos)) {
       // 1. Write out the log block version
       output.writeInt(HoodieLogBlock.version);
@@ -123,7 +120,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         try {
           // Encode the record into bytes
           // Spark Record not support write avro log
-          IndexedRecord data = recordConverter.apply(s);
+          IndexedRecord data = s.toIndexedRecord(schema, new Properties()).get().getData();
           writer.write(data, encoder);
           encoder.flush();
 
@@ -146,9 +143,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Override
   protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(byte[] content, HoodieRecordType type) throws IOException {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
+    checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
+    // TODO AvroSparkReader need
     RecordIterator iterator = RecordIterator.getInstance(this, content);
-    Function<IndexedRecord, HoodieRecord<?>> recordConverter = HoodieIOFactory.getIOFactory(getBlockContentLocation().get().getStorage()).fromIndexedRecord(type);
-    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) recordConverter.apply(data));
+    return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
   @Override

@@ -39,8 +39,10 @@ import org.apache.hudi.commit.{DatasetBulkInsertCommitActionExecutor, DatasetBul
 import org.apache.hudi.common.config._
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.model._
+import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils.getAllConfigKeys
@@ -492,6 +494,9 @@ class HoodieSparkSqlWriterInternal {
             // scalastyle:on
 
             val writeConfig = client.getConfig
+            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
+              throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
+            }
             instantTime = client.createNewInstantTime()
             // Convert to RDD[HoodieRecord]
             val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
