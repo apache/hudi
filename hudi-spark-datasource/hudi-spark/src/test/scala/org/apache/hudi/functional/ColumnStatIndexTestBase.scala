@@ -23,7 +23,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieLogFile, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -103,7 +103,8 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       .format("hudi")
       .options(writeOptions)
       .option(DataSourceWriteOptions.OPERATION.key, params.operation)
-      .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), String.valueOf(params.parquetMaxFileSize))
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key(), String.valueOf(params.parquetMaxFileSize))
+      .option(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key(), String.valueOf(params.smallFileLimit))
       .mode(params.saveMode)
       .save(basePath)
     dfList = dfList :+ inputDF
@@ -364,6 +365,7 @@ object ColumnStatIndexTestBase {
                                                  shouldValidate: Boolean = true,
                                                  latestCompletedCommit: String = null,
                                                  numPartitions: Integer = 4,
-                                                 parquetMaxFileSize: Integer = 10 * 1024)
+                                                 parquetMaxFileSize: Integer = 10 * 1024,
+                                                 smallFileLimit: Integer = 100 * 1024 * 1024)
 }
 

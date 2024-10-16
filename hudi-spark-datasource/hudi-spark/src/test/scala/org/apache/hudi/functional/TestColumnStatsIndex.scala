@@ -131,7 +131,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Overwrite,
       false,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     // updates
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
@@ -141,7 +142,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append,
       false,
         numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     // delete a subset of recs. this will add a delete log block for MOR table.
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
@@ -151,7 +153,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append,
       false,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     val metadataOpts1 = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
@@ -179,7 +182,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       true,
       latestCompletedCommit,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     // trigger one more upsert and compaction (w/ MOR table) and validate.
     val expectedColStatsSourcePath1 = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
@@ -196,7 +200,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       true,
       latestCompletedCommit,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
   }
 
   @ParameterizedTest
@@ -227,7 +232,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Overwrite,
       false,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     // updates
     doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
@@ -237,7 +243,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Append,
       false,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     // simulate failure for latest commit.
     metaClient = HoodieTableMetaClient.reload(metaClient)
@@ -261,6 +268,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       val baseFileFileStatus = dataFiles.stream().filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).findFirst().get()
       baseFileName = baseFileFileStatus.getPath.getName
     }
+
     val latestCompletedFileName = lastCompletedCommit.getFileName
     metaClient.getStorage.deleteFile(new StoragePath(metaClient.getBasePath.toString + "/.hoodie/" + latestCompletedFileName))
 
@@ -305,7 +313,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       true,
       latestCompletedCommit,
       numPartitions =  1,
-      parquetMaxFileSize = 0))
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
 
     metaClient = HoodieTableMetaClient.reload(metaClient)
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
