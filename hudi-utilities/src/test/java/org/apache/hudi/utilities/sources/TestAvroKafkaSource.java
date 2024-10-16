@@ -256,7 +256,7 @@ public class TestAvroKafkaSource extends SparkClientFunctionalTestHarness {
 
   @Test
   void testConfigureSchemaDeserializer() throws IOException {
-    final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
+    final String topic = TEST_TOPIC_PREFIX + "testAvroSchemaDeserializer";
     TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
 
     props.put("hoodie.deltastreamer.source.kafka.value.deserializer.class", KafkaAvroSchemaDeserializer.class.getName());
