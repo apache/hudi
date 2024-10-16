@@ -2156,7 +2156,8 @@ public class HoodieTableMetadataUtil {
       final String partitionPath = partitionInfo.getRelativePath();
       // Step 1: Collect Column Metadata for Each File
       List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
-          .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false, true, writerSchemaOpt))
+          .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false, true, writerSchemaOpt,
+              metadataConfig.getMaxReaderBufferSize()))
           .collect(Collectors.toList());
 
       return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath, true).iterator();
@@ -2169,7 +2170,8 @@ public class HoodieTableMetadataUtil {
                                                                                        List<String> columnsToIndex,
                                                                                        boolean isDeleted,
                                                                                        boolean shouldReadColumnMetadataForLogFiles,
-                                                                                       Option<Schema> writerSchemaOpt) {
+                                                                                       Option<Schema> writerSchemaOpt,
+                                                                                       int maxBufferSize) {
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
     String fileName = FSUtils.getFileName(filePath, partitionPath);
     if (isDeleted) {
@@ -2177,7 +2179,7 @@ public class HoodieTableMetadataUtil {
           .map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
           .collect(Collectors.toList());
     }
-    return readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex, false, Option.empty(), -1);
+    return readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex, shouldReadColumnMetadataForLogFiles, writerSchemaOpt, maxBufferSize);
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodieCommitMetadata commitMetadata,
@@ -2284,7 +2286,8 @@ public class HoodieTableMetadataUtil {
       return columnRangeMap.values().stream().collect(Collectors.toList());
     }
 
-    return getFileStatsRangeMetadata(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false, false, writerSchemaOpt);
+    return getFileStatsRangeMetadata(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false, false, writerSchemaOpt,
+        -1);
   }
 
   public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
