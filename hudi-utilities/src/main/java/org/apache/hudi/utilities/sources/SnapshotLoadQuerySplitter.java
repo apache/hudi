@@ -25,7 +25,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
@@ -121,12 +120,11 @@ public abstract class SnapshotLoadQuerySplitter {
         .orElse(queryInfo);
   }
 
-  public QueryContext getNextCheckpoint(Dataset<Row> df, QueryContext queryContext, Option<SourceProfileSupplier> sourceProfileSupplier) {
+  public Option<CheckpointWithPredicates> getNextCheckpoint(Dataset<Row> df, QueryContext queryContext,
+                                                            Option<SourceProfileSupplier> sourceProfileSupplier) {
     // the start instant would be included into the final query result. So we need to get
     // a strictly lower timestamp to have query splitter include the start instant
-    return getNextCheckpointWithPredicates(df, instantTimeMinusMillis(queryContext.getBeginInstant().get(), 1))
-        .map(checkpoint -> IncrSourceHelper.withUpdatedCheckpointAndPredicate(queryContext, checkpoint))
-        .orElse(queryContext);
+    return getNextCheckpointWithPredicates(df, instantTimeMinusMillis(queryContext.getBeginInstant().get(), 1));
   }
 
   public static Option<SnapshotLoadQuerySplitter> getInstance(TypedProperties props) {

@@ -184,15 +184,15 @@ public class HoodieIncrSource extends RowSource {
         sparkContext, srcPath, lastCkptStr, missingCheckpointStrategy,
         getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH),
         getLatestSourceProfile());
-    String completionTimeToResumeFrom = analyzer.getBeginCompletionTime().get();
+    String beginCompletionTime = analyzer.getBeginCompletionTime().get();
     QueryContext queryContext = analyzer.analyze();
     Option<InstantRange> instantRange = queryContext.getInstantRange();
 
-    String completionTimeToStopAt;
+    String endCompletionTime;
     if (queryContext.isEmpty()
-        || (completionTimeToStopAt = queryContext.getMaxCompletionTime()).equals(completionTimeToResumeFrom)) {
+        || (endCompletionTime = queryContext.getMaxCompletionTime()).equals(beginCompletionTime)) {
       LOG.info("Already caught up. No new data to process");
-      return Pair.of(Option.empty(), completionTimeToResumeFrom);
+      return Pair.of(Option.empty(), beginCompletionTime);
     }
 
     DataFrameReader reader = sparkSession.read().format("hudi");
@@ -204,7 +204,7 @@ public class HoodieIncrSource extends RowSource {
       reader = reader.options(optionsMap);
     }
     boolean shouldFullScan =
-        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(completionTimeToResumeFrom)
+        queryContext.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(beginCompletionTime)
         && missingCheckpointStrategy == MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
     Dataset<Row> source;
     if (instantRange.isEmpty() || shouldFullScan) {
@@ -213,13 +213,20 @@ public class HoodieIncrSource extends RowSource {
           .options(readOpts)
           .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL())
           .load(srcPath);
+
+      Option<String> predicate = Option.empty();
       if (snapshotLoadQuerySplitter.isPresent()) {
-        queryContext = snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
-        // update endTime/next checkpoint
-        completionTimeToStopAt = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
+        Option<SnapshotLoadQuerySplitter.CheckpointWithPredicates> newCheckpointAndPredicate =
+            snapshotLoadQuerySplitter.get().getNextCheckpoint(snapshot, queryContext, sourceProfileSupplier);
+        if (newCheckpointAndPredicate.isPresent()) {
+          endCompletionTime = newCheckpointAndPredicate.get().endInstant;
+          predicate = Option.of(newCheckpointAndPredicate.get().predicateFilter);
+        } else {
+          endCompletionTime = queryContext.getEndInstant().orElse(queryContext.getLastInstant());
+        }
       }
 
-      snapshot = queryContext.getPredicateFilter().map(snapshot::filter).orElse(snapshot);
+      snapshot = predicate.map(snapshot::filter).orElse(snapshot);
       source = snapshot
           // add filtering so that only interested records are returned.
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
@@ -229,8 +236,8 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_INSTANTTIME().key(), completionTimeToResumeFrom)
-          .option(END_INSTANTTIME().key(), completionTimeToStopAt)
+          .option(BEGIN_INSTANTTIME().key(), beginCompletionTime)
+          .option(END_INSTANTTIME().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))
@@ -255,7 +262,7 @@ public class HoodieIncrSource extends RowSource {
       metricsOption.ifPresent(metrics -> metrics.updateStreamerSourceParallelism(sourceProfile.getSourcePartitions()));
       return coalesceOrRepartition(sourceWithMetaColumnsDropped, sourceProfile.getSourcePartitions());
     }).orElse(sourceWithMetaColumnsDropped);
-    return Pair.of(Option.of(src), completionTimeToStopAt);
+    return Pair.of(Option.of(src), endCompletionTime);
   }
 
   // Try to fetch the latestSourceProfile, this ensures the profile is refreshed if it's no longer valid.

@@ -354,7 +354,8 @@ public class IncrementalQueryAnalyzer {
    * Represents the analyzed query context.
    */
   public static class QueryContext {
-    public static final QueryContext EMPTY = new QueryContext(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, null);
+    public static final QueryContext EMPTY =
+        new QueryContext(null, null, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null);
 
     /**
      * An empty option indicates consumption from the earliest instant.
@@ -375,7 +376,6 @@ public class IncrementalQueryAnalyzer {
      */
     private final HoodieTimeline archivedTimeline;
     private final List<String> instants;
-    private final Option<String> predicateFilter;
 
     private QueryContext(
         @Nullable String beginInstant,
@@ -384,8 +384,7 @@ public class IncrementalQueryAnalyzer {
         List<HoodieInstant> archivedInstants,
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
-        @Nullable HoodieTimeline archivedTimeline,
-        @Nullable String predicateFilter) {
+        @Nullable HoodieTimeline archivedTimeline) {
       this.beginInstant = Option.ofNullable(beginInstant);
       this.endInstant = Option.ofNullable(endInstant);
       this.archivedInstants = archivedInstants;
@@ -393,7 +392,6 @@ public class IncrementalQueryAnalyzer {
       this.activeTimeline = activeTimeline;
       this.archivedTimeline = archivedTimeline;
       this.instants = instants;
-      this.predicateFilter = Option.ofNullable(predicateFilter);
     }
 
     public static QueryContext create(
@@ -404,19 +402,7 @@ public class IncrementalQueryAnalyzer {
         List<HoodieInstant> activeInstants,
         HoodieTimeline activeTimeline,
         @Nullable HoodieTimeline archivedTimeline) {
-      return new QueryContext(beginInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline, null);
-    }
-
-    public static QueryContext create(
-        @Nullable String beginInstant,
-        @Nullable String endInstant,
-        List<String> instants,
-        List<HoodieInstant> archivedInstants,
-        List<HoodieInstant> activeInstants,
-        HoodieTimeline activeTimeline,
-        @Nullable HoodieTimeline archivedTimeline,
-        @Nullable String predicateFilter) {
-      return new QueryContext(beginInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline, predicateFilter);
+      return new QueryContext(beginInstant, endInstant, instants, archivedInstants, activeInstants, activeTimeline, archivedTimeline);
     }
 
     public boolean isEmpty() {
@@ -497,10 +483,6 @@ public class IncrementalQueryAnalyzer {
 
     public @Nullable HoodieTimeline getArchivedTimeline() {
       return archivedTimeline;
-    }
-
-    public Option<String> getPredicateFilter() {
-      return predicateFilter;
     }
   }
 }
