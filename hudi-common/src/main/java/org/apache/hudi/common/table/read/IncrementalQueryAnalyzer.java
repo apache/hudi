@@ -409,7 +409,7 @@ public class IncrementalQueryAnalyzer {
       return this.instants.isEmpty();
     }
 
-    public List<String> getInstants() {
+    public List<String> getInstantTimeList() {
       return this.instants;
     }
 
@@ -427,6 +427,10 @@ public class IncrementalQueryAnalyzer {
     public String getLastInstant() {
       ValidationUtils.checkArgument(!this.instants.isEmpty());
       return this.instants.get(this.instants.size() - 1);
+    }
+
+    public List<HoodieInstant> getInstants() {
+      return Stream.concat(archivedInstants.stream(), activeInstants.stream()).collect(Collectors.toList());
     }
 
     public List<HoodieInstant> getArchivedInstants() {

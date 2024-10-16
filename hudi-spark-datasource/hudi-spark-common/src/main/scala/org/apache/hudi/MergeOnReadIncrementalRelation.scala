@@ -208,9 +208,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       .build()
       .analyze()
 
-  protected lazy val includedCommits: immutable.Seq[HoodieInstant] = List.concat(
-    queryContext.getArchivedInstants.asScala,
-    queryContext.getActiveInstants.asScala)
+  protected lazy val includedCommits: immutable.Seq[HoodieInstant] = queryContext.getInstants.asScala.toList
 
   protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
 

@@ -230,7 +230,7 @@ public class HoodieIncrSource extends RowSource {
       source = snapshot
           // add filtering so that only interested records are returned.
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-              String.join("','", queryContext.getInstants())));
+              String.join("','", queryContext.getInstantTimeList())));
     } else {
       // normal incremental query
       source = reader
