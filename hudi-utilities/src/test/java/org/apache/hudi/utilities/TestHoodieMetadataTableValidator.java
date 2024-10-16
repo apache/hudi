@@ -451,7 +451,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     assertFalse(validator.hasValidationFailure());
 
     // let's delete one of the log files from 1st commit and so FS based listing and MDT based listing diverges.
-    HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
+    HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(context, metaClient, metaClient.getActiveTimeline().filterCompletedAndCompactionInstants(), false);
     HoodieFileGroup fileGroup = fsView.getAllFileGroups(StringUtils.EMPTY_STRING).collect(Collectors.toList()).get(0);
     List<FileSlice> allFileSlices = fileGroup.getAllFileSlices().collect(Collectors.toList());
     FileSlice earliestFileSlice = allFileSlices.get(allFileSlices.size() - 1);

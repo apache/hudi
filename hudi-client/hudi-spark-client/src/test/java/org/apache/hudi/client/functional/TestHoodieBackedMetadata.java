@@ -781,7 +781,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
         final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
         metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
-        HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+        HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
         metadataTablePartitions.forEach(partition -> {
           List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
