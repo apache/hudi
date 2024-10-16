@@ -42,6 +42,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstant.COMPLETION_TIME_COMPARATOR;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.INSTANT_TIME_COMPARATOR;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -518,13 +520,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
-    return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
+    return getInstantsAsStream().sorted(INSTANT_TIME_COMPARATOR.reversed());
+  }
+
+  @Override
+  public Option<String> getLatestCompletionTime() {
+    return Option.fromJavaOptional(getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
+        .max(HoodieInstant.COMPLETION_TIME_COMPARATOR)
+        .map(HoodieInstant::getCompletionTime));
   }
 
   @Override
   public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
     return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
+        .sorted(HoodieInstant.COMPLETION_TIME_COMPARATOR);
   }
 
   @Override
@@ -547,7 +556,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
       synchronized (this) {
         if (this.firstNonSavepointCommit == null) {
           this.firstNonSavepointCommit =
-              findFirstNonSavepointCommit(this.instants, HoodieInstant::getTimestamp);
+              findFirstNonSavepointCommit(this.instants, INSTANT_TIME_COMPARATOR);
         }
       }
     }
@@ -559,7 +568,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
       synchronized (this) {
         if (this.firstNonSavepointCommitByCompletionTime == null) {
           this.firstNonSavepointCommitByCompletionTime =
-              findFirstNonSavepointCommit(this.instants, HoodieInstant::getCompletionTime);
+              findFirstNonSavepointCommit(this.instants, COMPLETION_TIME_COMPARATOR);
         }
       }
     }
@@ -652,13 +661,13 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   /**
    * Returns the first non savepoint commit on the timeline.
    *
-   * @param instants     list of instants to consider
-   * @param getTimeFunc  the function to get the timestamp from the instant for time-based ordering
+   * @param instants           list of instants to consider
+   * @param instantComparator  the comparator to order instants
    * @return the first non savepoint commit on the timeline
    */
   private static Option<HoodieInstant> findFirstNonSavepointCommit(
       List<HoodieInstant> instants,
-      Function<HoodieInstant, String> getTimeFunc) {
+      Comparator<HoodieInstant> instantComparator) {
     Set<String> savepointTimestamps = instants.stream()
         .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
         .map(HoodieInstant::getTimestamp)
@@ -667,7 +676,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     // So, the first non-savepoint commit is considered as beginning of the active timeline.
     return Option.fromJavaOptional(instants.stream()
         .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
-        .min(Comparator.comparing(getTimeFunc)));
+        .min(instantComparator));
   }
 
   private void clearState() {

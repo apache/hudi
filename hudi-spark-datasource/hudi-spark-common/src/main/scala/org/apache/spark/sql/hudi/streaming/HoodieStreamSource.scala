@@ -99,17 +99,11 @@ class HoodieStreamSource(
 
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
-    val filteredTimeline = metaClient.getActiveTimeline.filterCompletedInstants()
-    filteredTimeline match {
-      case activeInstants if !activeInstants.empty() =>
-        val timestamp = activeInstants.getInstantsOrderedByCompletionTime
-          .skip(activeInstants.countInstants() - 1)
-          .findFirst()
-          .get()
-          .getCompletionTime
-        Some(HoodieSourceOffset(timestamp))
-      case _ =>
-        None
+    val latestCompletionTime = metaClient.getActiveTimeline.filterCompletedInstants.getLatestCompletionTime
+    if (latestCompletionTime.isPresent) {
+      Some(HoodieSourceOffset(latestCompletionTime.get))
+    } else {
+      None
     }
   }
 

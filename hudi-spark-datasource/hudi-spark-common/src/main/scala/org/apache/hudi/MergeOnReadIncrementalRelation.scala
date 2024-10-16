@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.TimelineUtils.{HollowCommitHandling, concatTimeline, getCommitMetadata}
+import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
@@ -183,11 +183,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def startTimestamp: String = optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key)
 
   protected def endTimestamp: String = optParams.getOrElse(
-    DataSourceReadOptions.END_INSTANTTIME.key,
-    super.timeline.getInstantsAsStream.iterator().asScala.toList
-      .map(_.getCompletionTime)
-      .filter(_ != null)
-      .max(Ordering[String]))
+    DataSourceReadOptions.END_INSTANTTIME.key, super.timeline.getLatestCompletionTime.get)
 
   protected def startInstantArchived: Boolean = !queryContext.getArchivedInstants.isEmpty
 

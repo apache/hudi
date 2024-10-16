@@ -401,6 +401,11 @@ public interface HoodieTimeline extends Serializable {
   Stream<HoodieInstant> getReverseOrderedInstants();
 
   /**
+   * @return the latest completion time of the instants
+   */
+  Option<String> getLatestCompletionTime();
+
+  /**
    * Get the stream of instants in order by state transition timestamp of actions.
    */
   Stream<HoodieInstant> getInstantsOrderedByCompletionTime();
