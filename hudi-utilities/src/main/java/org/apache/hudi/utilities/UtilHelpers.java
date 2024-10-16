@@ -138,10 +138,8 @@ public class UtilHelpers {
   public static HoodieRecordMerger createRecordMerger(Properties props) {
     List<String> recordMergerImplClasses = ConfigUtils.split2List(props.getProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), ""));
     HoodieRecordMerger recordMerger = HoodieWriteConfig.getRecordMerger(null,
-        RecordMergeMode.getValue(props.getProperty(HoodieWriteConfig.RECORD_MERGE_MODE.key(), HoodieWriteConfig.RECORD_MERGE_MODE.defaultValue())),
-        EngineType.SPARK, HoodieLogBlock.inferLogBlockWriteFormat(props.getProperty(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), null),
-            HoodieFileFormat.valueOf(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.BASE_FILE_FORMAT, HoodieWriteConfig.BASE_FILE_FORMAT.defaultValue().name()))),
-        recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
+        RecordMergeMode.getValue(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.RECORD_MERGE_MODE, true)),
+        EngineType.SPARK, recordMergerImplClasses, Option.ofNullable(props.getProperty(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key())));
 
     return recordMerger;
   }

@@ -1251,32 +1251,14 @@ public class HoodieWriteConfig extends HoodieConfig {
         .distinct()
         .collect(Collectors.toList());
     return getRecordMerger(getString(BASE_PATH), getRecordMergeMode(),
-        engineType, getLogDataBlockFormat(), mergers, getStringOpt(RECORD_MERGER_STRATEGY));
+        engineType, mergers, getStringOpt(RECORD_MERGER_STRATEGY));
   }
 
   public static HoodieRecordMerger getRecordMerger(String basePath,
                                                    RecordMergeMode mergeMode,
                                                    EngineType engineType,
-                                                   HoodieLogBlock.HoodieLogBlockType logBlockType,
                                                    List<String> mergers,
                                                    Option<String> strategy) {
-    switch (logBlockType) {
-      case HFILE_DATA_BLOCK:
-        return HoodieAvroRecordMerger.INSTANCE;
-      case AVRO_DATA_BLOCK:
-      case PARQUET_DATA_BLOCK:
-        //TODO: [HUDI-8317] return getMergerByMode(basePath, mergeMode, engineType, mergers, strategy);
-        return HoodieRecordUtils.createRecordMerger(basePath, engineType, mergers, strategy);
-      default:
-        throw new IllegalStateException("This log block type is not implemented");
-    }
-  }
-
-  private static HoodieRecordMerger getMergerByMode(String basePath,
-                                                    RecordMergeMode mergeMode,
-                                                    EngineType engineType,
-                                                    List<String> mergers,
-                                                    Option<String> strategy) {
     //TODO: [HUDI-8202] make this custom mergers only
     switch (mergeMode) {
       case EVENT_TIME_ORDERING:
