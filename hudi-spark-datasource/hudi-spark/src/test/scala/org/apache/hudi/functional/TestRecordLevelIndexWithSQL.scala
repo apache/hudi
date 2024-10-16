@@ -17,10 +17,12 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.util.JFunction
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.spark.sql.{DataFrame, SaveMode}
@@ -162,8 +164,11 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     }.get
   }
 
-  private def getTableFileSystenView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  private def getTableFileSystenView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    val writeConfig = getWriteConfig(opts)
+    val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), metaClient.getStorage,
+      writeConfig.getMetadataConfig, writeConfig.getBasePath)
+    new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
   }
 
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {

@@ -435,7 +435,9 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       // Metadata table should automatically compact and clean
       // versions are +1 as autoClean / compaction happens end of commits
       int numFileVersions = metadataWriteConfig.getCleanerFileVersionsRetained() + 1;
-      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metadataMetaClient, metadataMetaClient.getActiveTimeline());
+      HoodieTableMetadata fileBasedTableMetadata = new FileSystemBackedTableMetadata(engineContext, metadataMetaClient.getTableConfig(), metadataMetaClient.getStorage(),
+          metadataMetaClient.getBasePath().toString());
+      HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(fileBasedTableMetadata, metadataMetaClient, metadataMetaClient.getActiveTimeline());
       metadataTablePartitions.forEach(partition -> {
         MetadataPartitionType partitionType = partitionTypeMap.get(partition);
 

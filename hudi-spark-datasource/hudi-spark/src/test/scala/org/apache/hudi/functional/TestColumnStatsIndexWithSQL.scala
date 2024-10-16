@@ -26,13 +26,13 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.util.JavaConversions
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Expression, GreaterThan, Literal}
 import org.apache.spark.sql.types.StringType
@@ -293,8 +293,11 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     totalLatestDataFiles
   }
 
-  private def getTableFileSystemView(opts: Map[String, String]): HoodieMetadataFileSystemView = {
-    new HoodieMetadataFileSystemView(metaClient, metaClient.getActiveTimeline, metadataWriter(getWriteConfig(opts)).getTableMetadata)
+  private def getTableFileSystemView(opts: Map[String, String]): HoodieTableFileSystemView = {
+    val writeConfig = getWriteConfig(opts)
+    val metadataTable = new HoodieBackedTableMetadata(new HoodieSparkEngineContext(jsc), metaClient.getStorage,
+      writeConfig.getMetadataConfig, writeConfig.getBasePath)
+    new HoodieTableFileSystemView(metadataTable, metaClient, metaClient.getActiveTimeline)
   }
 
   protected def getWriteConfig(hudiOpts: Map[String, String]): HoodieWriteConfig = {

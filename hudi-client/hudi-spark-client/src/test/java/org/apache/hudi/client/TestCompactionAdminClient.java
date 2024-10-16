@@ -190,8 +190,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     // Log files belonging to file-slices created because of compaction request should not be renamed
     // because the file slicing is based on completion time.
 
-    final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getCommitsAndCompactionTimeline());
 
     Map<String, Long> fileIdToCountsBeforeRenaming =
         fsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant)
@@ -204,8 +203,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     client.unscheduleCompactionPlan(compactionInstant, false, 1, false);
 
     metaClient.reloadActiveTimeline();
-    final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+    final HoodieTableFileSystemView newFsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getCommitsAndCompactionTimeline());
     Set<String> commitsWithDataFile = CollectionUtils.createSet("000", "004");
     // Expect each file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
@@ -245,7 +243,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
     // Log files belonging to file-slices created because of compaction request must be renamed
 
     final HoodieTableFileSystemView fsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+        HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getCommitsAndCompactionTimeline());
 
     Map<String, Long> fileIdToCountsBeforeRenaming =
         fsView.getLatestMergedFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant)
@@ -259,7 +257,7 @@ public class TestCompactionAdminClient extends HoodieClientTestBase {
 
     metaClient = HoodieTestUtils.createMetaClient(metaClient.getStorageConf(), basePath);
     final HoodieTableFileSystemView newFsView =
-        new HoodieTableFileSystemView(metaClient, metaClient.getCommitsAndCompactionTimeline());
+        HoodieTableFileSystemView.fileListingBasedFileSystemView(getEngineContext(), metaClient, metaClient.getCommitsAndCompactionTimeline());
     // Expect all file-slice whose base-commit is same as compaction commit to contain no new Log files
     newFsView.getLatestFileSlicesBeforeOrOn(HoodieTestUtils.DEFAULT_PARTITION_PATHS[0], compactionInstant, true)
         .filter(fs -> fs.getBaseInstantTime().equals(compactionInstant))

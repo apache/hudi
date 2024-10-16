@@ -56,6 +56,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.HoodieSeekingFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.Transient;
 
 import org.apache.avro.Schema;
@@ -75,6 +76,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FULL_SCAN_LOG_FILES;
@@ -139,16 +141,16 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .setStorage(storage)
             .setBasePath(metadataBasePath)
             .build();
-        this.metadataFileSystemView = getFileSystemView(metadataMetaClient);
+        this.metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
         this.metadataTableConfig = metadataMetaClient.getTableConfig();
       } catch (TableNotFoundException e) {
-        LOG.warn("Metadata table was not found at path " + metadataBasePath);
+        LOG.warn("Metadata table was not found at path {}", metadataBasePath);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
         this.metadataTableConfig = null;
       } catch (Exception e) {
-        LOG.error("Failed to initialize metadata table at path " + metadataBasePath, e);
+        LOG.error("Failed to initialize metadata table at path {}", metadataBasePath, e);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
@@ -240,8 +242,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
                 Map<String, HoodieRecord<HoodieMetadataPayload>> mergedRecords =
                     readFromBaseAndMergeWithLogRecords(baseFileReader, sortedKeyPrefixes, fullKeys, logRecords, timings, partitionName);
 
-                LOG.debug(String.format("Metadata read for %s keys took [baseFileRead, logMerge] %s ms",
-                    sortedKeyPrefixes.size(), timings));
+                LOG.debug("Metadata read for {} keys took [baseFileRead, logMerge] {} ms",
+                    sortedKeyPrefixes.size(), timings);
 
                 return mergedRecords.values().iterator();
               } catch (IOException ioe) {
@@ -621,8 +623,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
           .getReaderFactory(HoodieRecordType.AVRO)
           .getFileReader(readerConfig, baseFilePath);
       baseFileOpenMs = timer.endTimer();
-      LOG.info(String.format("Opened metadata base file from %s at instant %s in %d ms", baseFilePath,
-          baseFile.get().getCommitTime(), baseFileOpenMs));
+      LOG.info("Opened metadata base file from {} at instant {} in {} ms", baseFilePath,
+          baseFile.get().getCommitTime(), baseFileOpenMs);
     } else {
       baseFileReader = null;
       baseFileOpenMs = 0L;
@@ -676,8 +678,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         .build();
 
     Long logScannerOpenMs = timer.endTimer();
-    LOG.info(String.format("Opened %d metadata log files (dataset instant=%s, metadata instant=%s) in %d ms",
-        sortedLogFilePaths.size(), getLatestDataInstantTime(), latestMetadataInstantTime, logScannerOpenMs));
+    LOG.info("Opened {} metadata log files (dataset instant={}, metadata instant={}) in {} ms",
+        sortedLogFilePaths.size(), getLatestDataInstantTime(), latestMetadataInstantTime, logScannerOpenMs);
     return Pair.of(logRecordScanner, logScannerOpenMs);
   }
 
@@ -788,7 +790,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (metadataMetaClient != null) {
       metadataMetaClient.reloadActiveTimeline();
       metadataFileSystemView.close();
-      metadataFileSystemView = getFileSystemView(metadataMetaClient);
+      metadataFileSystemView = getFileSystemView(engineContext, metadataMetaClient);
     }
     // the cached reader has max instant time restriction, they should be cleared
     // because the metadata timeline may have changed.
@@ -802,6 +804,21 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
         k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient,
             metadataFileSystemView, partition.getPartitionPath()));
     return partitionFileSliceMap.get(partition.getPartitionPath()).size();
+  }
+
+  @Override
+  public Map<Pair<String, StoragePath>, List<StoragePathInfo>> listPartitions(List<Pair<String, StoragePath>> partitionPathList) throws IOException {
+    Map<String, Pair<String, StoragePath>> absoluteToPairMap = partitionPathList.stream()
+        .collect(Collectors.toMap(
+            pair -> pair.getRight().toString(),
+            Function.identity()
+        ));
+    return getAllFilesInPartitions(
+        partitionPathList.stream().map(pair -> pair.getRight().toString()).collect(Collectors.toList()))
+        .entrySet().stream().collect(Collectors.toMap(
+            entry -> absoluteToPairMap.get(entry.getKey()),
+            Map.Entry::getValue
+        ));
   }
 
   @Override
