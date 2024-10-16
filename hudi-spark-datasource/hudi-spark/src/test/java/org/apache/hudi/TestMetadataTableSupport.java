@@ -25,7 +25,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -40,6 +39,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestMetadataTableSupport extends HoodieSparkClientTestBase {
   @BeforeEach
@@ -55,9 +55,8 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
   @Test
   void testRecreateMDTForInsertOverwriteTableOperation() {
     HoodieWriteConfig config = getConfigBuilder()
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
             .withEnableRecordIndex(true).build())
         .build();
 
@@ -70,6 +69,26 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       writeClient.startCommitWithTime(timestamp0);
       writeClient.insert(dataset0, timestamp0).collect();
 
+      // Confirm MDT enabled.
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertTrue(metaClient.getTableConfig().isMetadataTableAvailable());
+
+      // Confirm the instant for the first insert exists.
+      StoragePath mdtBasePath =
+          HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf.newInstance())
+          .setBasePath(mdtBasePath).build();
+      HoodieActiveTimeline timeline = mdtMetaClient.getActiveTimeline();
+      List<HoodieInstant> instants = timeline.getInstants();
+      assertEquals(3, instants.size());
+      // For MDT bootstrap instant.
+      assertEquals("00000000000000000", instants.get(0).getTimestamp());
+      // For RLI bootstrap instant.
+      assertEquals("00000000000000001", instants.get(1).getTimestamp());
+      // For the insert instant.
+      assertEquals(timestamp0, instants.get(2).getTimestamp());
+
       // Insert second batch.
       String timestamp1 = "20241015000000001";
       List<HoodieRecord> records1 = dataGen.generateInserts(timestamp1, 50);
@@ -79,14 +98,9 @@ class TestMetadataTableSupport extends HoodieSparkClientTestBase {
       writeClient.insertOverwriteTable(dataset1, timestamp1);
 
       // Validate.
-      StoragePath mdtBasePath =
-          HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath());
-      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-          .setConf(storageConf.newInstance())
-          .setBasePath(mdtBasePath).build();
-
-      HoodieActiveTimeline timeline = mdtMetaClient.getActiveTimeline();
-      List<HoodieInstant> instants = timeline.getInstants();
+      mdtMetaClient = HoodieTableMetaClient.reload(mdtMetaClient);
+      timeline = mdtMetaClient.getActiveTimeline();
+      instants = timeline.getInstants();
       assertEquals(3, timeline.getInstants().size());
       // For MDT bootstrap instant.
       assertEquals("00000000000000000", instants.get(0).getTimestamp());

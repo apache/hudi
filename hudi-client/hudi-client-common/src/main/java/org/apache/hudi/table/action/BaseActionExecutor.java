@@ -65,7 +65,8 @@ public abstract class BaseActionExecutor<T, I, K, O, R> implements Serializable 
    */
   protected final void writeTableMetadata(HoodieCommitMetadata metadata, HoodieData<WriteStatus> writeStatus, String actionType) {
     // Recreate MDT for insert_overwrite_table operation.
-    if (WriteOperationType.INSERT_OVERWRITE_TABLE == metadata.getOperationType()) {
+    if (table.getConfig().isMetadataTableEnabled()
+        && WriteOperationType.INSERT_OVERWRITE_TABLE == metadata.getOperationType()) {
       HoodieTableMetadataUtil.deleteMetadataTable(table.getMetaClient(), table.getContext(), false);
     }
 
