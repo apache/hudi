@@ -27,6 +27,7 @@ import org.apache.hudi.avro.model.FloatWrapper;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
@@ -52,6 +53,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -59,11 +61,13 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.log.HoodieFileSliceReader;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
+import org.apache.hudi.common.table.log.HoodieUnMergedLogRecordScanner;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieDefaultTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -77,6 +81,7 @@ import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Tuple3;
@@ -129,7 +134,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
@@ -138,6 +142,7 @@ import static org.apache.hudi.avro.HoodieAvroUtils.unwrapAvroValueWrapper;
 import static org.apache.hudi.avro.HoodieAvroUtils.wrapValueIntoAvro;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
+import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_DFS_STREAM_BUFFER_SIZE;
 import static org.apache.hudi.common.config.HoodieCommonConfig.MAX_MEMORY_FOR_COMPACTION;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
@@ -269,21 +274,6 @@ public class HoodieTableMetadataUtil {
         });
     return hoodieColumnRangeMetadataStream.collect(
         Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
-  }
-
-  /**
-   * Converts instance of {@link HoodieMetadataColumnStats} to {@link HoodieColumnRangeMetadata}
-   */
-  public static HoodieColumnRangeMetadata<Comparable> convertColumnStatsRecordToColumnRangeMetadata(HoodieMetadataColumnStats columnStats) {
-    return HoodieColumnRangeMetadata.<Comparable>create(
-        columnStats.getFileName(),
-        columnStats.getColumnName(),
-        unwrapAvroValueWrapper(columnStats.getMinValue()),
-        unwrapAvroValueWrapper(columnStats.getMaxValue()),
-        columnStats.getNullCount(),
-        columnStats.getValueCount(),
-        columnStats.getTotalSize(),
-        columnStats.getTotalUncompressedSize());
   }
 
   public static Option<String> getColumnStatsValueAsString(Object statsValue) {
@@ -582,8 +572,45 @@ public class HoodieTableMetadataUtil {
               dataMetaClient, isColumnStatsIndexEnabled, columnStatsIndexParallelism, targetColumnsForColumnStatsIndex);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
+    if (enabledPartitionTypes.contains(MetadataPartitionType.FUNCTIONAL_INDEX)) {
+      convertMetadataToFunctionalIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, bloomIndexParallelism, columnStatsIndexParallelism, partitionToRecordsMap);
+    }
 
     return partitionToRecordsMap;
+  }
+
+  private static void convertMetadataToFunctionalIndexRecords(HoodieEngineContext engineContext, HoodieCleanMetadata cleanMetadata,
+                                                              String instantTime, HoodieTableMetaClient dataMetaClient,
+                                                              int bloomIndexParallelism, int columnStatsIndexParallelism,
+                                                              Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap) {
+    Option<HoodieIndexMetadata> indexMetadata = dataMetaClient.getIndexMetadata();
+    if (indexMetadata.isPresent()) {
+      HoodieIndexMetadata metadata = indexMetadata.get();
+      Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
+      if (indexDefinitions.isEmpty()) {
+        throw new HoodieMetadataException("Functional index metadata not found");
+      }
+      // iterate over each index definition and check:
+      // if it is a functional index using column_stats, then follow the same approach as column_stats
+      // if it is a functional index using bloom_filters, then follow the same approach as bloom_filters
+      // else throw an exception
+      for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
+        String indexName = entry.getKey();
+        HoodieIndexDefinition indexDefinition = entry.getValue();
+        if (MetadataPartitionType.FUNCTIONAL_INDEX.equals(MetadataPartitionType.fromPartitionPath(indexDefinition.getIndexName()))) {
+          if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+            partitionToRecordsMap.put(indexName, convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism));
+          } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+            partitionToRecordsMap.put(indexName,
+                convertMetadataToColumnStatsRecords(cleanMetadata, engineContext, dataMetaClient, true, columnStatsIndexParallelism, indexDefinition.getSourceFields()));
+          } else {
+            throw new HoodieMetadataException("Unsupported functional index type");
+          }
+        }
+      }
+    } else {
+      throw new HoodieMetadataException("Functional index metadata not found");
+    }
   }
 
   /**
@@ -1203,7 +1230,7 @@ public class HoodieTableMetadataUtil {
                                                             List<String> columnsToIndex,
                                                             boolean isDeleted) {
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
-    String fileName = FSUtils.getFileName(filePath, partitionPath);
+    String fileName = filePartitionPath.substring(filePartitionPath.lastIndexOf("/") + 1);
 
     if (isDeleted) {
       // TODO we should delete records instead of stubbing them
@@ -1215,20 +1242,25 @@ public class HoodieTableMetadataUtil {
     }
 
     List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadata =
-        readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex);
+        readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex, false, Option.empty());
 
     return HoodieMetadataPayload.createColumnStatsRecords(partitionPath, columnRangeMetadata, false);
   }
 
   private static List<HoodieColumnRangeMetadata<Comparable>> readColumnRangeMetadataFrom(String filePath,
                                                                                          HoodieTableMetaClient datasetMetaClient,
-                                                                                         List<String> columnsToIndex) {
+                                                                                         List<String> columnsToIndex,
+                                                                                         boolean shouldReadColumnStatsForLogFiles,
+                                                                                         Option<Schema> writerSchemaOpt) {
     try {
+      StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), filePath);
       if (filePath.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
-        StoragePath fullFilePath = new StoragePath(datasetMetaClient.getBasePath(), filePath);
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex);
+      } else if (FSUtils.isLogFile(fullFilePath) && shouldReadColumnStatsForLogFiles) {
+        LOG.warn("Reading log file: {}, to build column range metadata.", fullFilePath);
+        return getLogFileColumnRangeMetadata(fullFilePath.toString(), datasetMetaClient, columnsToIndex, writerSchemaOpt);
       }
 
       LOG.warn("Column range index not supported for: {}", filePath);
@@ -1242,8 +1274,40 @@ public class HoodieTableMetadataUtil {
   }
 
   /**
+   * Read column range metadata from log file.
+   */
+  @VisibleForTesting
+  protected static List<HoodieColumnRangeMetadata<Comparable>> getLogFileColumnRangeMetadata(String filePath,
+                                                                                             HoodieTableMetaClient datasetMetaClient,
+                                                                                             List<String> columnsToIndex,
+                                                                                             Option<Schema> writerSchemaOpt) {
+    if (writerSchemaOpt.isPresent()) {
+      List<Schema.Field> fieldsToIndex = writerSchemaOpt.get().getFields().stream()
+          .filter(field -> columnsToIndex.contains(field.name()))
+          .collect(Collectors.toList());
+      // read log file records without merging
+      List<HoodieRecord> records = new ArrayList<>();
+      HoodieUnMergedLogRecordScanner scanner = HoodieUnMergedLogRecordScanner.newBuilder()
+          .withStorage(datasetMetaClient.getStorage())
+          .withBasePath(datasetMetaClient.getBasePath())
+          .withLogFilePaths(Collections.singletonList(filePath))
+          .withBufferSize(MAX_DFS_STREAM_BUFFER_SIZE.defaultValue())
+          .withLatestInstantTime(datasetMetaClient.getActiveTimeline().getCommitsTimeline().lastInstant().get().getTimestamp())
+          .withReaderSchema(writerSchemaOpt.get())
+          .withTableMetaClient(datasetMetaClient)
+          .withLogRecordScannerCallback(records::add)
+          .build();
+      scanner.scan(false);
+      Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataMap =
+          collectColumnRangeMetadata(records, fieldsToIndex, filePath, writerSchemaOpt.get());
+      return new ArrayList<>(columnRangeMetadataMap.values());
+    }
+    return Collections.emptyList();
+  }
+
+  /**
    * Does an upcast for {@link BigDecimal} instance to align it with scale/precision expected by
-   * the {@link org.apache.avro.LogicalTypes.Decimal} Avro logical type
+   * the {@link LogicalTypes.Decimal} Avro logical type
    */
   public static BigDecimal tryUpcastDecimal(BigDecimal value, final LogicalTypes.Decimal decimal) {
     final int scale = decimal.getScale();
@@ -1810,7 +1874,7 @@ public class HoodieTableMetadataUtil {
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
       if (!fileSlice.getBaseFile().isPresent()) {
         List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
-            .map(l -> l.getPath().toString()).collect(toList());
+            .map(l -> l.getPath().toString()).collect(Collectors.toList());
         HoodieMergedLogRecordScanner mergedLogRecordScanner = HoodieMergedLogRecordScanner.newBuilder()
             .withStorage(metaClient.getStorage())
             .withBasePath(basePath)
@@ -1921,7 +1985,7 @@ public class HoodieTableMetadataUtil {
     return engineContext.parallelize(partitionFileSlicePairs, parallelism).flatMap(partitionAndBaseFile -> {
       final String partition = partitionAndBaseFile.getKey();
       final FileSlice fileSlice = partitionAndBaseFile.getValue();
-      List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(toList());
+      List<String> logFilePaths = fileSlice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator()).map(l -> l.getPath().toString()).collect(Collectors.toList());
       Option<StoragePath> dataFilePath = Option.ofNullable(fileSlice.getBaseFile().map(baseFile -> filePath(basePath, partition, baseFile.getFileName())).orElseGet(null));
       Schema readerSchema;
       if (dataFilePath.isPresent()) {
@@ -2042,7 +2106,7 @@ public class HoodieTableMetadataUtil {
 
   private static Stream<HoodieRecord> collectAndProcessColumnMetadata(
           List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata,
-          String partitionPath) {
+          String partitionPath, boolean isTightBound) {
 
     // Step 1: Flatten and Group by Column Name
     Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnMetadataMap = fileColumnMetadata.stream()
@@ -2054,17 +2118,19 @@ public class HoodieTableMetadataUtil {
             .map(entry -> FileFormatUtils.getColumnRangeInPartition(partitionPath, entry.getValue()));
 
     // Create Partition Stats Records
-    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false);
+    return HoodieMetadataPayload.createPartitionStatsRecords(partitionPath, partitionStatsRangeMetadata.collect(Collectors.toList()), false, isTightBound);
   }
 
   public static HoodieData<HoodieRecord> convertFilesToPartitionStatsRecords(HoodieEngineContext engineContext,
                                                                              List<DirectoryInfo> partitionInfoList,
                                                                              HoodieMetadataConfig metadataConfig,
-                                                                             HoodieTableMetaClient dataTableMetaClient) {
+                                                                             HoodieTableMetaClient dataTableMetaClient,
+                                                                             Option<Schema> writerSchemaOpt) {
+    Lazy<Option<Schema>> lazyWriterSchemaOpt = writerSchemaOpt.isPresent() ? Lazy.eagerly(writerSchemaOpt) : Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient));
     final List<String> columnsToIndex = getColumnsToIndex(
         metadataConfig.isPartitionStatsIndexEnabled(),
         metadataConfig.getColumnsEnabledForColumnStatsIndex(),
-        Lazy.lazily(() -> tryResolveSchemaForTable(dataTableMetaClient)));
+        lazyWriterSchemaOpt);
     if (columnsToIndex.isEmpty()) {
       LOG.warn("No columns to index for partition stats index");
       return engineContext.emptyHoodieData();
@@ -2072,14 +2138,15 @@ public class HoodieTableMetadataUtil {
     LOG.debug("Indexing following columns for partition stats index: {}", columnsToIndex);
     // Create records for MDT
     int parallelism = Math.max(Math.min(partitionInfoList.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+    Option<Schema> writerSchema = lazyWriterSchemaOpt.get();
     return engineContext.parallelize(partitionInfoList, parallelism).flatMap(partitionInfo -> {
       final String partitionPath = partitionInfo.getRelativePath();
       // Step 1: Collect Column Metadata for Each File
       List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionInfo.getFileNameToSizeMap().keySet().stream()
-              .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false))
-              .collect(Collectors.toList());
+          .map(fileName -> getFileStatsRangeMetadata(partitionPath, partitionPath + "/" + fileName, dataTableMetaClient, columnsToIndex, false, true, writerSchemaOpt))
+          .collect(Collectors.toList());
 
-      return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath).iterator();
+      return collectAndProcessColumnMetadata(fileColumnMetadata, partitionPath, true).iterator();
     });
   }
 
@@ -2087,7 +2154,9 @@ public class HoodieTableMetadataUtil {
                                                                                        String filePath,
                                                                                        HoodieTableMetaClient datasetMetaClient,
                                                                                        List<String> columnsToIndex,
-                                                                                       boolean isDeleted) {
+                                                                                       boolean isDeleted,
+                                                                                       boolean shouldReadColumnMetadataForLogFiles,
+                                                                                       Option<Schema> writerSchemaOpt) {
     String filePartitionPath = filePath.startsWith("/") ? filePath.substring(1) : filePath;
     String fileName = FSUtils.getFileName(filePath, partitionPath);
     if (isDeleted) {
@@ -2095,7 +2164,7 @@ public class HoodieTableMetadataUtil {
           .map(entry -> HoodieColumnRangeMetadata.stub(fileName, entry))
           .collect(Collectors.toList());
     }
-    return readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex);
+    return readColumnRangeMetadataFrom(filePartitionPath, datasetMetaClient, columnsToIndex, shouldReadColumnMetadataForLogFiles, writerSchemaOpt);
   }
 
   public static HoodieData<HoodieRecord> convertMetadataToPartitionStatsRecords(HoodieCommitMetadata commitMetadata,
@@ -2117,7 +2186,8 @@ public class HoodieTableMetadataUtil {
                       : Option.of(new Schema.Parser().parse(writerSchemaStr)));
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
       Option<Schema> tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema);
-      List<String> columnsToIndex = getColumnsToIndex(metadataConfig.isPartitionStatsIndexEnabled(), metadataConfig.getColumnsEnabledForColumnStatsIndex(), Lazy.eagerly(tableSchema));
+      Lazy<Option<Schema>> writerSchemaOpt = Lazy.eagerly(tableSchema);
+      List<String> columnsToIndex = getColumnsToIndex(metadataConfig.isPartitionStatsIndexEnabled(), metadataConfig.getColumnsEnabledForColumnStatsIndex(), writerSchemaOpt);
       if (columnsToIndex.isEmpty()) {
         return engineContext.emptyHoodieData();
       }
@@ -2130,29 +2200,78 @@ public class HoodieTableMetadataUtil {
           .collect(Collectors.toList());
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
+      boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient)
+          && metadataConfig.isPartitionStatsIndexTightBoundEnabled() && WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType());
+      HoodieTableMetadata tableMetadata;
+      if (shouldScanColStatsForTightBound) {
+        tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
+      } else {
+        tableMetadata = null;
+      }
       return engineContext.parallelize(partitionedWriteStats, parallelism).flatMap(partitionedWriteStat -> {
         final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-        // Step 1: Collect Column Metadata for Each File
+        // Step 1: Collect Column Metadata for Each File part of current commit metadata
         List<List<HoodieColumnRangeMetadata<Comparable>>> fileColumnMetadata = partitionedWriteStat.stream()
-                .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, columnsToIndex))
-                .collect(Collectors.toList());
+            .map(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, columnsToIndex, tableSchema))
+            .collect(Collectors.toList());
+        if (shouldScanColStatsForTightBound) {
+          checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
+          // Collect Column Metadata for Each File part of active file system view of latest snapshot
+          // Get all file names, including log files, in a set from the file slices
+          Set<String> fileNames = getPartitionFileSlices(dataMetaClient, Option.empty(), partitionName, true).stream()
+              .flatMap(fileSlice -> Stream.concat(
+                  Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
+                  fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
+              .filter(Objects::nonNull)
+              .collect(Collectors.toSet());
+          // Fetch metadata table COLUMN_STATS partition records for above files
+          List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata =
+              tableMetadata.getRecordsByKeyPrefixes(generateKeyPrefixes(columnsToIndex, partitionName), MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+                  // schema and properties are ignored in getInsertValue, so simply pass as null
+                  .map(record -> record.getData().getInsertValue(null, null))
+                  .filter(Option::isPresent)
+                  .map(data -> ((HoodieMetadataRecord) data.get()).getColumnStatsMetadata())
+                  .filter(stats -> fileNames.contains(stats.getFileName()))
+                  .map(HoodieColumnRangeMetadata::fromColumnStats)
+                  .collectAsList();
+          // incase of shouldScanColStatsForTightBound = true, we compute stats for the partition of interest for all files from getLatestFileSlice() excluding current commit here
+          // already fileColumnMetadata contains stats for files from the current infliht commit. so, we are adding both together and sending it to collectAndProcessColumnMetadata
+          fileColumnMetadata.add(partitionColumnMetadata);
+        }
 
-        return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName).iterator();
+        return collectAndProcessColumnMetadata(fileColumnMetadata, partitionName, shouldScanColStatsForTightBound).iterator();
       });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate column stats records for metadata table", e);
     }
   }
 
+  /**
+   * Generate key prefixes for each combination of column name in {@param columnsToIndex} and {@param partitionName}.
+   */
+  private static List<String> generateKeyPrefixes(List<String> columnsToIndex, String partitionName) {
+    List<String> keyPrefixes = new ArrayList<>();
+    PartitionIndexID partitionIndexId = new PartitionIndexID(getColumnStatsIndexPartitionIdentifier(partitionName));
+    for (String columnName : columnsToIndex) {
+      ColumnIndexID columnIndexID = new ColumnIndexID(columnName);
+      String keyPrefix = columnIndexID.asBase64EncodedString()
+          .concat(partitionIndexId.asBase64EncodedString());
+      keyPrefixes.add(keyPrefix);
+    }
+
+    return keyPrefixes;
+  }
+
   private static List<HoodieColumnRangeMetadata<Comparable>> translateWriteStatToFileStats(HoodieWriteStat writeStat,
                                                                                            HoodieTableMetaClient datasetMetaClient,
-                                                                                           List<String> columnsToIndex) {
+                                                                                           List<String> columnsToIndex,
+                                                                                           Option<Schema> writerSchemaOpt) {
     if (writeStat instanceof HoodieDeltaWriteStat && ((HoodieDeltaWriteStat) writeStat).getColumnStats().isPresent()) {
       Map<String, HoodieColumnRangeMetadata<Comparable>> columnRangeMap = ((HoodieDeltaWriteStat) writeStat).getColumnStats().get();
       return columnRangeMap.values().stream().collect(Collectors.toList());
     }
 
-    return getFileStatsRangeMetadata(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false);
+    return getFileStatsRangeMetadata(writeStat.getPartitionPath(), writeStat.getPath(), datasetMetaClient, columnsToIndex, false, false, writerSchemaOpt);
   }
 
   public static String getPartitionStatsIndexKey(String partitionPath, String columnName) {
@@ -2165,12 +2284,16 @@ public class HoodieTableMetadataUtil {
   public static HoodieMetadataColumnStats mergeColumnStatsRecords(HoodieMetadataColumnStats prevColumnStats,
                                                                   HoodieMetadataColumnStats newColumnStats) {
     checkArgument(Objects.equals(prevColumnStats.getColumnName(), newColumnStats.getColumnName()));
-
     // We're handling 2 cases in here
     //  - New record is a tombstone: in this case it simply overwrites previous state
     //  - Previous record is a tombstone: in that case new proper record would also
     //    be simply overwriting previous state
     if (newColumnStats.getIsDeleted() || prevColumnStats.getIsDeleted()) {
+      return newColumnStats;
+    }
+
+    // If new column stats is tight bound, then discard the previous column stats
+    if (newColumnStats.getIsTightBound()) {
       return newColumnStats;
     }
 
@@ -2200,6 +2323,7 @@ public class HoodieTableMetadataUtil {
         .setTotalSize(prevColumnStats.getTotalSize() + newColumnStats.getTotalSize())
         .setTotalUncompressedSize(prevColumnStats.getTotalUncompressedSize() + newColumnStats.getTotalUncompressedSize())
         .setIsDeleted(newColumnStats.getIsDeleted())
+        .setIsTightBound(newColumnStats.getIsTightBound())
         .build();
   }
 

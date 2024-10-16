@@ -126,8 +126,7 @@ public class ITTestHoodieDemo extends ITTestBase {
 
     // batch 2
     ingestSecondBatchAndHiveSync();
-    // TODO(HUDI-8275): fix MOR queries on Hive in integration tests
-    // testHiveAfterSecondBatch();
+    testHiveAfterSecondBatch();
     // testPrestoAfterSecondBatch();
     // testTrinoAfterSecondBatch();
     testSparkSQLAfterSecondBatch();
@@ -138,7 +137,7 @@ public class ITTestHoodieDemo extends ITTestBase {
     scheduleAndRunCompaction();
 
     testIncrementalSparkSQLQuery();
-    // testHiveAfterSecondBatchAfterCompaction();
+    testHiveAfterSecondBatchAfterCompaction();
     // testPrestoAfterSecondBatchAfterCompaction();
     // testTrinoAfterSecondBatchAfterCompaction();
     testIncrementalHiveQueryAfterCompaction();

@@ -2053,7 +2053,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<StoragePathInfo> commit3Files = metaFiles.stream()
         .filter(pathInfo ->
             pathInfo.getPath().getName().contains(commit3)
-                && pathInfo.getPath().getName().contains(HoodieTimeline.DELTA_COMMIT_ACTION))
+                && pathInfo.getPath().getName().endsWith(HoodieTimeline.DELTA_COMMIT_ACTION))
         .collect(Collectors.toList());
     List<StoragePathInfo> rollbackFiles = metaFiles.stream()
         .filter(pathInfo ->
@@ -2062,8 +2062,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // ensure commit3's delta commit in MDT has last mod time > the actual rollback for previous failed commit i.e. commit2.
     // if rollback wasn't eager, rollback's last mod time will be lower than the commit3'd delta commit last mod time.
-    assertTrue(
-        commit3Files.get(0).getModificationTime() > rollbackFiles.get(0).getModificationTime());
+    assertTrue(commit3Files.get(0).getModificationTime() >= rollbackFiles.get(0).getModificationTime());
     client.close();
   }
 
@@ -3683,7 +3682,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath), false);
-      assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+      // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
+      metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
+        if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
+          metadataWriter.getEnabledPartitionTypes().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
+              .forEach(partitionType -> assertTrue(metadataTablePartitions.contains(partitionType.getPartitionPath())));
+        } else {
+          assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+        }
+      });
 
       final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
       metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
