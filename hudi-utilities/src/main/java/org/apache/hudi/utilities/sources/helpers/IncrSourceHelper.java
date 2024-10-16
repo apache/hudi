@@ -334,7 +334,7 @@ public class IncrSourceHelper {
   /**
    * Copy IncrementalQueryAnalyzer.QueryContext with info from CheckpointWithPredicates updated
    * */
-  public static QueryContext withUpdatedCheckpoint(
+  public static QueryContext withUpdatedCheckpointAndPredicate(
       QueryContext oldContext,
       SnapshotLoadQuerySplitter.CheckpointWithPredicates checkpointWithPredicates) {
     return QueryContext.create(

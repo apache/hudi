@@ -125,7 +125,7 @@ public abstract class SnapshotLoadQuerySplitter {
     // the start instant would be included into the final query result. So we need to get
     // a strictly lower timestamp to have query splitter include the start instant
     return getNextCheckpointWithPredicates(df, instantTimeMinusMillis(queryContext.getStartInstant().get(), 1))
-        .map(checkpoint -> IncrSourceHelper.withUpdatedCheckpoint(queryContext, checkpoint))
+        .map(checkpoint -> IncrSourceHelper.withUpdatedCheckpointAndPredicate(queryContext, checkpoint))
         .orElse(queryContext);
   }
 
