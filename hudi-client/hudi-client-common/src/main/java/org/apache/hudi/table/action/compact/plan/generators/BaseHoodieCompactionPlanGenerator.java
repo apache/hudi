@@ -93,6 +93,7 @@ public abstract class BaseHoodieCompactionPlanGenerator<T extends HoodieRecordPa
         writeConfig.getCompactionStrategy().getClass().getSimpleName(), partitionPaths.size(), allPartitionSize);
     if (partitionPaths.isEmpty()) {
       // In case no partitions could be picked, return no compaction plan
+      LOG.info("No partitions to compact for " + metaClient.getBasePath());
       return null;
     }
     // avoid logging all partitions in table by default
