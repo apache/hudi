@@ -416,16 +416,16 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   private HoodieTableMetaClient initializeEmptyTable() throws IOException {
-    initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(),
+    return initializeEmptyTable(HoodieTableMetaClient.newTableBuilder(),
         SparkKeyGenUtils.getPartitionColumnsForKeyGenerator(props),
         HadoopFSUtils.getStorageConfWithCopy(hoodieSparkContext.hadoopConfiguration()));
   }
 
-  void initializeEmptyTable(HoodieTableMetaClient.TableBuilder tableBuilder, String partitionColumns,
+  HoodieTableMetaClient initializeEmptyTable(HoodieTableMetaClient.TableBuilder tableBuilder, String partitionColumns,
                             StorageConfiguration<?> storageConf) throws IOException {
     this.commitsTimelineOpt = Option.empty();
     this.allCommitsTimelineOpt = Option.empty();
-    tableBuilder.setTableType(cfg.tableType)
+    return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
         .setPayloadClassName(cfg.payloadClassName)
