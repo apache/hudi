@@ -184,7 +184,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Option<Map<String, String>> getMetadata() {
+  public Option<Map<String, Object>> getMetadata() {
     // TODO HUDI-5282 support metaData
     return Option.empty();
   }

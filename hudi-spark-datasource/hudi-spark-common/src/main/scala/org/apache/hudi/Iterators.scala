@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
 import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieMetadataConfig, TypedProperties}
-import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
+import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext, HoodieReaderContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
@@ -37,7 +37,6 @@ import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.util.CachingIterator
-
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
@@ -49,7 +48,6 @@ import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.types.StructType
 
 import java.io.Closeable
-
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -302,6 +300,22 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   private def merge(curRow: InternalRow, newRecord: HoodieRecord[_]): Option[InternalRow] = {
     // NOTE: We have to pass in Avro Schema used to read from Delta Log file since we invoke combining API
     //       on the record from the Delta Log
+
+    // Delete records are in-between; no merge is needed.
+    if (newRecord.getMetaDataInfo(HoodieReaderContext.INTERNAL_META_ORDERING_FIELD).isPresent) {
+      recordMerger.getRecordType match {
+        case HoodieRecordType.SPARK => {
+          val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)
+          val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+          return Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
+        }
+        case _ => {
+          val avroRecord = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps).get.getData.asInstanceOf[GenericRecord]
+          return Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+        }
+      }
+    }
+
     recordMerger.getRecordType match {
       case HoodieRecordType.SPARK =>
         val curRecord = new HoodieSparkRecord(curRow, readerSchema)

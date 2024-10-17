@@ -344,7 +344,7 @@ public abstract class HoodieReaderContext<T> {
 
   public abstract Comparable castValue(Comparable value, Schema.Type newType);
 
-  public Comparable maxValue(Schema.Type schemaType) {
+  public static Comparable maxValue(Schema.Type schemaType) {
     switch (schemaType) {
       case INT:
         return Integer.MAX_VALUE;

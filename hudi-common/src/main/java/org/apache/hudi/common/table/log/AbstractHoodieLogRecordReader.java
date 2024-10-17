@@ -106,7 +106,7 @@ public abstract class AbstractHoodieLogRecordReader {
   protected final String preCombineField;
   // Stateless component for merging records
   protected final HoodieRecordMerger recordMerger;
-  private final TypedProperties payloadProps;
+  protected final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)

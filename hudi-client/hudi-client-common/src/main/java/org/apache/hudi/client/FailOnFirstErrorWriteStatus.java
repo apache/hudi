@@ -39,7 +39,7 @@ public class FailOnFirstErrorWriteStatus extends WriteStatus {
   }
 
   @Override
-  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, Object>> optionalRecordMetadata) {
     LOG.error(String.format("Error writing record %s with data %s and optionalRecordMetadata %s", record, record.getData(),
         optionalRecordMetadata.orElse(Collections.emptyMap())), t);
     throw new HoodieException("Error writing record " + record, t);

@@ -95,7 +95,7 @@ public class WriteStatus implements Serializable {
    * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markSuccess(HoodieRecord record, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieRecord record, Option<Map<String, Object>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
       writtenRecordDelegates.add(HoodieRecordDelegate.fromHoodieRecord(record));
     }
@@ -108,18 +108,18 @@ public class WriteStatus implements Serializable {
    * @see WriteStatus#markSuccess(HoodieRecord, Option)
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markSuccess(HoodieRecordDelegate recordDelegate, Option<Map<String, Object>> optionalRecordMetadata) {
     if (trackSuccessRecords) {
       writtenRecordDelegates.add(Objects.requireNonNull(recordDelegate));
     }
     updateStatsForSuccess(optionalRecordMetadata);
   }
 
-  private void updateStatsForSuccess(Option<Map<String, String>> optionalRecordMetadata) {
+  private void updateStatsForSuccess(Option<Map<String, Object>> optionalRecordMetadata) {
     totalRecords++;
 
     // get the min and max event time for calculating latency and freshness
-    String eventTimeVal = optionalRecordMetadata.orElse(Collections.emptyMap())
+    String eventTimeVal = (String) optionalRecordMetadata.orElse(Collections.emptyMap())
         .getOrDefault(METADATA_EVENT_TIME_KEY, null);
     if (isNullOrEmpty(eventTimeVal)) {
       return;
@@ -151,7 +151,7 @@ public class WriteStatus implements Serializable {
    * @param record                 deflated {@code HoodieRecord} containing information that uniquely identifies it.
    * @param optionalRecordMetadata optional metadata related to data contained in {@link HoodieRecord} before deflation.
    */
-  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, String>> optionalRecordMetadata) {
+  public void markFailure(HoodieRecord record, Throwable t, Option<Map<String, Object>> optionalRecordMetadata) {
     if (failedRecords.isEmpty() || (random.nextDouble() <= failureFraction)) {
       // Guaranteed to have at-least one error
       failedRecords.add(Pair.of(HoodieRecordDelegate.fromHoodieRecord(record), t));

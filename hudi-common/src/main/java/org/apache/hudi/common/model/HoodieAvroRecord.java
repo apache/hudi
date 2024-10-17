@@ -202,7 +202,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
     throw new UnsupportedOperationException();
   }
 
-  public Option<Map<String, String>> getMetadata() {
+  public Option<Map<String, Object>> getMetadata() {
     return getData().getMetadata();
   }
 
