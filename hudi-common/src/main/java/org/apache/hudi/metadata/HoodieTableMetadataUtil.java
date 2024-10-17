@@ -2201,7 +2201,7 @@ public class HoodieTableMetadataUtil {
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       boolean shouldScanColStatsForTightBound = MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataMetaClient)
-          && metadataConfig.isPartitionStatsIndexTightBoundEnabled() && WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType());
+          && (metadataConfig.isPartitionStatsIndexTightBoundEnabledOnEveryCommit() || WriteOperationType.isPartitionStatsTightBoundRequired(commitMetadata.getOperationType()));
       HoodieTableMetadata tableMetadata;
       if (shouldScanColStatsForTightBound) {
         tableMetadata = HoodieTableMetadata.create(engineContext, dataMetaClient.getStorage(), metadataConfig, dataMetaClient.getBasePath().toString());
@@ -2218,7 +2218,7 @@ public class HoodieTableMetadataUtil {
           checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
           // Collect Column Metadata for Each File part of active file system view of latest snapshot
           // Get all file names, including log files, in a set from the file slices
-          Set<String> fileNames = getPartitionFileSlices(dataMetaClient, Option.empty(), partitionName, true).stream()
+          Set<String> fileNames = getPartitionLatestFileSlicesIncludingInflight(dataMetaClient, Option.empty(), partitionName).stream()
               .flatMap(fileSlice -> Stream.concat(
                   Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
                   fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))

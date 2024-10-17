@@ -358,12 +358,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating partition stats index.");
 
-  public static final ConfigProperty<Boolean> ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND = ConfigProperty
-      .key(METADATA_PREFIX + ".index.partition.stats.tightBound.enable")
-      .defaultValue(true)
+  public static final ConfigProperty<Boolean> PARTITION_STATS_INDEX_TIGHT_BOUND_EVERY_COMMIT = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.tightbound.every.commit")
+      .defaultValue(false)
       .sinceVersion("1.0.0")
-      .withDocumentation("Enable tight bound for the min/max value for each column at the storage partition level. "
-          + "Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
+      .withDocumentation("When enabled, tight bound is computed on every commit for the min/max value of every column "
+          + "at the storage partition level. Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
           + "in the file, and the maxValue >= all valid values in the file) with updates and deletes. If this config is enabled, "
           + "the min/max range will be updated to the tight bound of the valid values in the latest snapshot of the partition.");
 
@@ -534,8 +534,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getInt(PARTITION_STATS_INDEX_PARALLELISM);
   }
 
-  public boolean isPartitionStatsIndexTightBoundEnabled() {
-    return getBooleanOrDefault(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND);
+  public boolean isPartitionStatsIndexTightBoundEnabledOnEveryCommit() {
+    return getBooleanOrDefault(PARTITION_STATS_INDEX_TIGHT_BOUND_EVERY_COMMIT);
   }
 
   public boolean isSecondaryIndexEnabled() {
@@ -750,7 +750,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     }
 
     public Builder withPartitionStatsIndexTightBound(boolean enable) {
-      metadataConfig.setValue(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND, String.valueOf(enable));
+      metadataConfig.setValue(PARTITION_STATS_INDEX_TIGHT_BOUND_EVERY_COMMIT, String.valueOf(enable));
       return this;
     }
 
