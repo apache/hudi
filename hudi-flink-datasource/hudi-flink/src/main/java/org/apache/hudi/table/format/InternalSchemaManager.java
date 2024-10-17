@@ -21,7 +21,13 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
+import org.apache.hudi.common.table.timeline.InstantFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameFactory;
+import org.apache.hudi.common.table.timeline.InstantFileNameParser;
+import org.apache.hudi.common.table.timeline.versioning.v2.CommitMetadataSerDeV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2;
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameParserV2;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -58,12 +64,16 @@ public class InternalSchemaManager implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null);
+  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
+      new InstantFactoryV2(), new InstantFileNameParserV2(), new CommitMetadataSerDeV2());
 
   private final Configuration conf;
   private final InternalSchema querySchema;
   private final String validCommits;
   private final String tablePath;
+  private final InstantFactory instantFactory;
+  private final InstantFileNameParser fileNameParser;
+  private final CommitMetadataSerDe commitMetadataSerDe;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public static InternalSchemaManager get(Configuration conf, HoodieTableMetaClient metaClient) {
@@ -74,20 +84,28 @@ public class InternalSchemaManager implements Serializable {
     if (!internalSchema.isPresent() || internalSchema.get().isEmptySchema()) {
       return DISABLED;
     }
+    InstantFileNameParser parser = metaClient.getTimelineLayout().getInstantFileNameParser();
+    InstantFactory instantFactory = metaClient.getTimelineLayout().getInstantFactory();
+    InstantFileNameFactory factory = metaClient.getTimelineLayout().getInstantFileNameFactory();
+    CommitMetadataSerDe commitMetadataSerDe = metaClient.getTimelineLayout().getCommitMetadataSerDe();
     String validCommits = metaClient
         .getCommitsAndCompactionTimeline()
         .filterCompletedInstants()
         .getInstantsAsStream()
-        .map(HoodieInstant::getFileName)
+        .map(factory::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString());
+    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString(), instantFactory, parser, commitMetadataSerDe);
   }
 
-  public InternalSchemaManager(Configuration conf, InternalSchema querySchema, String validCommits, String tablePath) {
+  public InternalSchemaManager(Configuration conf, InternalSchema querySchema, String validCommits, String tablePath,
+                               InstantFactory instantFactory, InstantFileNameParser parser, CommitMetadataSerDe commitMetadataSerDe) {
     this.conf = conf;
     this.querySchema = querySchema;
     this.validCommits = validCommits;
     this.tablePath = tablePath;
+    this.instantFactory = instantFactory;
+    this.fileNameParser = parser;
+    this.commitMetadataSerDe = commitMetadataSerDe;
   }
 
   public InternalSchema getQuerySchema() {
@@ -113,7 +131,7 @@ public class InternalSchemaManager implements Serializable {
     InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
         commitInstantTime, tablePath,
         new HoodieHadoopStorage(tablePath, getHadoopConf()),
-        validCommits);
+        validCommits, instantFactory, fileNameParser, commitMetadataSerDe);
     if (querySchema.equals(fileSchema)) {
       return InternalSchema.getEmptyInternalSchema();
     }

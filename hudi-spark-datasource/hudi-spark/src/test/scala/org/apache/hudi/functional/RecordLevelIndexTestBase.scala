@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
@@ -107,7 +108,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
 
   protected def getLatestMetaClient(enforce: Boolean): HoodieTableMetaClient = {
     val lastInsant = HoodieInstantTimeGenerator.getLastInstantTime
-    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getTimestamp.compareTo(lastInsant) < 0) {
+    if (enforce || metaClient.getActiveTimeline.lastInstant().get().getRequestTime.compareTo(lastInsant) < 0) {
       println("Reloaded timeline")
       metaClient.reloadActiveTimeline()
       metaClient
@@ -126,7 +127,7 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     }
     val writeConfig = getWriteConfig(hudiOpts)
     new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)
-      .rollback(lastInstant.getTimestamp)
+      .rollback(lastInstant.getRequestTime)
 
     if (lastInstant.getAction != ActionType.clean.name()) {
       assertEquals(ActionType.rollback.name(), getLatestMetaClient(true).getActiveTimeline.lastInstant().get().getAction)
@@ -145,16 +146,16 @@ class RecordLevelIndexTestBase extends HoodieSparkClientTestBase {
     val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
     val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_FACTORY.getFileName(lastInstant))))
     assertTrue(storage.deleteFile(new StoragePath(
-      metadataTableMetaClient.getMetaPath, metadataTableLastInstant.getFileName)))
+      metadataTableMetaClient.getMetaPath, INSTANT_FILE_NAME_FACTORY.getFileName(metadataTableLastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 
   protected def deleteLastCompletedCommitFromTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, lastInstant.getFileName)))
+    assertTrue(storage.deleteFile(new StoragePath(metaClient.getMetaPath, INSTANT_FILE_NAME_FACTORY.getFileName(lastInstant))))
     mergedDfList = mergedDfList.take(mergedDfList.size - 1)
   }
 

@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -76,6 +75,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
 import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
@@ -150,7 +151,10 @@ public class HoodieSnapshotExporter {
     }
 
     FileSystem sourceFs = HadoopFSUtils.getFs(cfg.sourceBasePath, jsc.hadoopConfiguration());
-    final String latestCommitTimestamp = getLatestCommitTimestamp(sourceFs, cfg)
+    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(sourceFs.getConf()))
+        .setBasePath(cfg.sourceBasePath).build();
+    final String latestCommitTimestamp = getLatestCommitTimestamp(tableMetadata)
         .<HoodieSnapshotExporterException>orElseThrow(() -> {
           throw new HoodieSnapshotExporterException("No commits present. Nothing to snapshot.");
         });
@@ -165,20 +169,17 @@ public class HoodieSnapshotExporter {
     LOG.info(String.format("The job needs to export %d partitions.", partitions.size()));
 
     if (cfg.outputFormat.equals(OutputFormatValidator.HUDI)) {
-      exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp);
+      exportAsHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp, tableMetadata);
     } else {
       exportAsNonHudi(jsc, sourceFs, cfg, partitions, latestCommitTimestamp);
     }
     createSuccessTag(outputFs, cfg);
   }
 
-  private Option<String> getLatestCommitTimestamp(FileSystem fs, Config cfg) {
-    final HoodieTableMetaClient tableMetadata = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
-        .setBasePath(cfg.sourceBasePath).build();
+  private Option<String> getLatestCommitTimestamp(HoodieTableMetaClient tableMetadata) {
     Option<HoodieInstant> latestCommit = tableMetadata.getActiveTimeline().getWriteTimeline()
         .filterCompletedInstants().lastInstant();
-    return latestCommit.isPresent() ? Option.of(latestCommit.get().getTimestamp()) : Option.empty();
+    return latestCommit.isPresent() ? Option.of(latestCommit.get().getRequestTime()) : Option.empty();
   }
 
   private List<String> getPartitions(HoodieEngineContext engineContext, Config cfg,
@@ -236,7 +237,8 @@ public class HoodieSnapshotExporter {
   }
 
   private void exportAsHudi(JavaSparkContext jsc, FileSystem sourceFs,
-                            Config cfg, List<String> partitions, String latestCommitTimestamp) throws IOException {
+                            Config cfg, List<String> partitions, String latestCommitTimestamp,
+                            HoodieTableMetaClient metaClient) throws IOException {
     final int parallelism = cfg.parallelism == 0 ? jsc.defaultParallelism() : cfg.parallelism;
     final BaseFileOnlyView fsView = getBaseFileOnlyView(sourceFs, cfg);
     final HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
@@ -290,8 +292,8 @@ public class HoodieSnapshotExporter {
                 if (fileStatus.isDirectory()) {
                   return false;
                 }
-                String instantTime = FSUtils.getCommitFromCommitFile(path.getName());
-                return HoodieTimeline.compareTimestamps(instantTime, HoodieTimeline.LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
+                String instantTime = metaClient.getTimelineLayout().getInstantFileNameParser().extractTimestamp(path.getName());
+                return compareTimestamps(instantTime, LESSER_THAN_OR_EQUALS, latestCommitTimestamp);
               }
             }).toArray(FileStatus[]::new);
     context.foreach(Arrays.asList(commitFilesToCopy), commitFile -> {

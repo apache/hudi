@@ -25,9 +25,9 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils.parseDateFromInstantTime
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline.parseDateFromInstantTime
+import org.apache.hudi.common.table.timeline.{ActiveTimelineUtils, HoodieActiveTimeline, HoodieInstantTimeGenerator, HoodieTimeline}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.storage.{HoodieStorage, StoragePathInfo}
@@ -43,7 +43,6 @@ import org.apache.spark.sql.types._
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 import scala.collection.JavaConverters._
 import scala.util.Try
 
@@ -259,7 +258,7 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
       validateInstant(queryInstant)
       queryInstant
     } else if (instantLength == 10) { // for yyyy-MM-dd
-      HoodieActiveTimeline.formatDate(defaultDateFormat.get().parse(queryInstant))
+      ActiveTimelineUtils.formatDate(defaultDateFormat.get().parse(queryInstant))
     } else {
       throw new IllegalArgumentException(s"Unsupported query instant time format: $queryInstant,"
         + s"Supported time format are: 'yyyy-MM-dd: HH:mm:ss.SSS' or 'yyyy-MM-dd' or 'yyyyMMddHHmmssSSS'")

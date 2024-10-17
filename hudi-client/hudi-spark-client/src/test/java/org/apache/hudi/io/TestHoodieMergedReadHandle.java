@@ -197,7 +197,7 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
         .map(baseFile -> Pair.of(partition, baseFile.getFileId()))
         .collect(Collectors.toList());
     assertEquals(1, partitionPathAndFileIDPairs.size());
-    String latestCommitTime = table.getActiveTimeline().lastInstant().get().getTimestamp();
+    String latestCommitTime = table.getActiveTimeline().lastInstant().get().getRequestTime();
     HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0));
     List<HoodieRecord> mergedRecords = mergedReadHandle.getMergedRecords();
     assertEquals(totalRecords, mergedRecords.size());

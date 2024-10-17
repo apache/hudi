@@ -18,13 +18,12 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.HoodieCLIUtils
-import org.apache.hudi.common.table.timeline.HoodieTimeline
-
+import org.apache.hudi.common.table.timeline.InstantComparatorUtils
+import org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
-
 import scala.collection.JavaConverters._
 
 class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
@@ -54,15 +53,15 @@ class CommitsCompareProcedure() extends BaseProcedure with ProcedureBuilder {
     val sourceTimeline = source.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetTimeline = target.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
     val targetLatestCommit =
-      if (targetTimeline.getInstants.iterator().hasNext) targetTimeline.lastInstant.get.getTimestamp else "0"
+      if (targetTimeline.getInstants.iterator().hasNext) targetTimeline.lastInstant.get.getRequestTime else "0"
     val sourceLatestCommit =
-      if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant.get.getTimestamp else "0"
+      if (sourceTimeline.getInstants.iterator().hasNext) sourceTimeline.lastInstant.get.getRequestTime else "0"
 
-    if (sourceLatestCommit != null && HoodieTimeline.compareTimestamps(targetLatestCommit, HoodieTimeline.GREATER_THAN, sourceLatestCommit)) { // source is behind the target
-      val commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getTimestamp).toList.asJava
+    if (sourceLatestCommit != null && compareTimestamps(targetLatestCommit, InstantComparatorUtils.GREATER_THAN, sourceLatestCommit)) { // source is behind the target
+      val commitsToCatchup = targetTimeline.findInstantsAfter(sourceLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getRequestTime).toList.asJava
       Seq(Row("Source " + source.getTableConfig.getTableName + " is behind by " + commitsToCatchup.size + " commits. Commits to catch up - " + commitsToCatchup))
     } else {
-      val commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getTimestamp).toList.asJava
+      val commitsToCatchup = sourceTimeline.findInstantsAfter(targetLatestCommit, Integer.MAX_VALUE).getInstants.iterator().asScala.map(instant => instant.getRequestTime).toList.asJava
       Seq(Row("Source " + source.getTableConfig.getTableName + " is ahead by " + commitsToCatchup.size + " commits. Commits to catch up - " + commitsToCatchup))
     }
   }

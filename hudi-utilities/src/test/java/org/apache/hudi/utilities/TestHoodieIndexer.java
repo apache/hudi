@@ -207,7 +207,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
-    String mdtCommitTime = indexingInstant.getTimestamp();
+    String mdtCommitTime = indexingInstant.getRequestTime();
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtCommitTime));
 
     // Reverts both instants to inflight state, to simulate inflight indexing instants
@@ -215,7 +215,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient = reload(metaClient);
 
     HoodieInstant mdtIndexingCommit = metadataMetaClient.getActiveTimeline()
-        .filter(i -> i.getTimestamp().equals(mdtCommitTime))
+        .filter(i -> i.getRequestTime().equals(mdtCommitTime))
         .getInstants().get(0);
     metadataMetaClient.getActiveTimeline().revertToInflight(mdtIndexingCommit);
     metadataMetaClient = reload(metadataMetaClient);
@@ -231,7 +231,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should not be rolled back
-    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getRequestTime()));
     assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
 
     // Simulate heartbeat timeout
@@ -240,7 +240,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     metaClient = reload(metaClient);
     metadataMetaClient = reload(metadataMetaClient);
     // The delta commit from async indexer in metadata table should be rolled back now
-    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getTimestamp()));
+    assertFalse(metadataMetaClient.getActiveTimeline().containsInstant(mdtIndexingCommit.getRequestTime()));
     assertEquals(1, metadataMetaClient.getActiveTimeline().getRollbackTimeline().countInstants());
     HoodieInstant rollbackInstant = metadataMetaClient.getActiveTimeline()
         .getRollbackTimeline().firstInstant().get();
@@ -266,14 +266,14 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
 
     // Transition the last commit to inflight
     HoodieInstant commit = metaClient.getActiveTimeline().lastInstant().get();
-    String commitTime = commit.getTimestamp();
+    String commitTime = commit.getRequestTime();
     metaClient.getActiveTimeline().revertToInflight(commit);
 
     HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
         context(), metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString());
     HoodieTableMetaClient metadataMetaClient = metadata.getMetadataMetaClient();
     HoodieInstant mdtCommit = metadataMetaClient.getActiveTimeline()
-        .filter(i -> i.getTimestamp().equals(commitTime))
+        .filter(i -> i.getRequestTime().equals(commitTime))
         .getInstants().get(0);
     metadataMetaClient.getActiveTimeline().revertToInflight(mdtCommit);
 
@@ -305,10 +305,10 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metaClient.getActiveTimeline().containsInstant(commitTime));
     assertTrue(metadataMetaClient.getActiveTimeline().containsInstant(commitTime));
     assertTrue(metaClient.getActiveTimeline()
-        .filter(i -> i.getTimestamp().equals(commitTime))
+        .filter(i -> i.getRequestTime().equals(commitTime))
         .getInstants().get(0).isInflight());
     assertTrue(metadataMetaClient.getActiveTimeline()
-        .filter(i -> i.getTimestamp().equals(commitTime))
+        .filter(i -> i.getRequestTime().equals(commitTime))
         .getInstants().get(0).isInflight());
     assertTrue(metaClient.getActiveTimeline().getRollbackTimeline().empty());
     assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());

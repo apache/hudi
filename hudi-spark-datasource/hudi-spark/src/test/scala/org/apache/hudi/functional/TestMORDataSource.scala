@@ -1176,7 +1176,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
     metaClient = createMetaClient(spark, basePath)
-    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getTimestamp
+    val commit1Time = metaClient.getActiveTimeline.lastInstant().get().getRequestTime
 
     val dataGen2 = new HoodieTestDataGenerator(Array("2022-01-02"))
     val records2 = recordsToStrings(dataGen2.generateInserts("002", 60)).asScala.toSeq
@@ -1185,7 +1185,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit2Time = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
 
     val records3 = recordsToStrings(dataGen2.generateUniqueUpdates("003", 20)).asScala.toSeq
     val inputDF3 = spark.read.json(spark.sparkContext.parallelize(records3, 2))
@@ -1193,7 +1193,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(options)
       .mode(SaveMode.Append)
       .save(basePath)
-    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getTimestamp
+    val commit3Time = metaClient.reloadActiveTimeline.lastInstant().get().getRequestTime
 
     val pathForROQuery = getPathForROQuery(basePath, !enableFileIndex, 3)
     // snapshot query
@@ -1506,7 +1506,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     // do a time travel query with data skipping enabled
     val timeTravelDF = spark.read.format("hudi")
       .options(readOpts)
-      .option("as.of.instant", firstInstant.getTimestamp)
+      .option("as.of.instant", firstInstant.getRequestTime)
       .load(basePath)
     // there should still be 3 records in time travel view
     assertEquals(3, timeTravelDF.count())

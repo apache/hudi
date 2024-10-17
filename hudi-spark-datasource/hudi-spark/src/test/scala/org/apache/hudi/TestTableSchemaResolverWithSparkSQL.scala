@@ -72,7 +72,8 @@ class TestTableSchemaResolverWithSparkSQL extends HoodieSparkWriterTestBase {
     // Delete latest metadata table deltacommit
     // Get schema from metadata table hfile format base file.
     val latestInstant = metaClient.getActiveTimeline.getCommitsTimeline.getReverseOrderedInstants.findFirst()
-    val path = new Path(metadataTablePath + "/.hoodie", latestInstant.get().getFileName)
+    val instantFileNameFactory = metaClient.getTimelineLayout.getInstantFileNameFactory
+    val path = new Path(metadataTablePath + "/.hoodie", instantFileNameFactory.getFileName(latestInstant.get()))
     val fs = path.getFileSystem(new Configuration())
     fs.delete(path, false)
     schemaValuationBasedOnDataFile(metaClient, HoodieMetadataRecord.getClassSchema.toString())

@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 
@@ -187,7 +188,7 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
           metaClient.getTableConfig.getTableVersion.versionCode()
         }
         // Verify whether the naming format of instant files is consistent with 0.x
-        metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(f.getFileName).find())
+        metaClient.reloadActiveTimeline().getInstants.iterator().asScala.forall(f => NAME_FORMAT_0_X.matcher(INSTANT_FILE_NAME_FACTORY.getFileName(f)).find())
         checkAnswer(s"select id, name, price, ts from $tableName")(
           Seq(1, "a1", 10.0, 1000)
         )
