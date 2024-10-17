@@ -56,6 +56,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.DataSourceReadOptions.BEGIN_COMPLETION_TIME;
+import static org.apache.hudi.DataSourceReadOptions.END_COMPLETION_TIME;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;

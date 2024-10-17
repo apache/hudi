@@ -32,7 +32,7 @@ val beginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, "/
 println("Begin completion time for COW incremental query: " + beginCompletionTime)
 val hoodieIncQueryDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), beginCompletionTime).
+                      option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(), beginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_cow");
 println("stock_ticks_cow incremental count: " + hoodieIncQueryDF.count)
 hoodieIncQueryDF.registerTempTable("stock_ticks_cow_incr")
@@ -42,7 +42,7 @@ val bsBeginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs, 
 println("Begin completion time for bootstrap COW incremental query: " + bsBeginCompletionTime)
 val hoodieIncQueryBsDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), bsBeginCompletionTime).
+                      option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(), bsBeginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_cow_bs");
 println("stock_ticks_cow_bs incremental count: " + hoodieIncQueryBsDF.count)
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_cow_bs_incr")
@@ -52,7 +52,7 @@ val morBeginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(fs,
 println("Begin completion time for MOR incremental query: " + morBeginCompletionTime)
 val hoodieMorIncQueryDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), morBeginCompletionTime).
+                      option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(), morBeginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_mor");
 println("stock_ticks_mor incremental count: " + hoodieMorIncQueryDF.count)
 hoodieMorIncQueryDF.registerTempTable("stock_ticks_mor_incr")
@@ -62,7 +62,7 @@ val bsMorBeginCompletionTime = HoodieDataSourceHelpers.listCompletionTimeSince(f
 println("Begin completion time for bootstrap MOR incremental query: " + bsMorBeginCompletionTime)
 val hoodieMorIncQueryBsDF =  spark.read.format("hudi").
                       option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL).
-                      option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), bsMorBeginCompletionTime).
+                      option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(), bsMorBeginCompletionTime).
                       load("/user/hive/warehouse/stock_ticks_mor_bs");
 println("stock_ticks_mor_bs incremental count: " + hoodieMorIncQueryBsDF.count)
 hoodieIncQueryBsDF.registerTempTable("stock_ticks_mor_bs_incr")
