@@ -166,14 +166,18 @@ object HoodieWriterUtils {
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
       val diffConfigs = StringBuilder.newBuilder
+      val payloadIsExpressionPayload = params.getOrElse(PAYLOAD_CLASS_NAME.key(), "").equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload")
       params.foreach { case (key, value) =>
+        var ignoreConfig = false
         // Base file format can change between writes, so ignore it.
-        // Expression payload is a special case where it can differ from the table config
-        if (!HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
-          && !(RECORD_MERGE_MODE.key().equals(key)
-          && params.get(PAYLOAD_CLASS_NAME.key()).isDefined
-          && params.getOrElse(PAYLOAD_CLASS_NAME.key(), "")
-          .equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload"))) {
+        ignoreConfig = ignoreConfig || HoodieTableConfig.BASE_FILE_FORMAT.key.equals(key)
+
+        //expression payload will never be the table config so skip validation of merge configs
+        ignoreConfig = ignoreConfig || (payloadIsExpressionPayload && (key.equals(PAYLOAD_CLASS_NAME.key())
+          || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()) || key.equals(RECORD_MERGE_MODE.key())
+          || key.equals(RECORD_MERGER_STRATEGY.key())))
+
+        if (!ignoreConfig) {
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
           if (null != existingValue && !resolver(existingValue, value)) {
             diffConfigs.append(s"$key:\t$value\t${tableConfig.getString(key)}\n")

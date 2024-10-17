@@ -1122,6 +1122,18 @@ class HoodieSparkSqlWriterInternal {
       mergedParams.put(HoodieTableConfig.DROP_PARTITION_COLUMNS.key, "false")
     }
 
+    if (!mergedParams.contains(DataSourceWriteOptions.RECORD_MERGE_MODE.key())
+      || !mergedParams.contains(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key())
+      || !mergedParams.contains(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key())) {
+      val inferredMergeConfigs = HoodieTableConfig.inferCorrectMergingBehavior(RecordMergeMode.getValue(mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGE_MODE.key(),
+        DataSourceWriteOptions.RECORD_MERGE_MODE.defaultValue())),
+        mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
+        mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), ""))
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
+      mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
+      mergedParams.put(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), inferredMergeConfigs.getRight)
+    }
+
     val params = mergedParams.toMap
     (params, HoodieWriterUtils.convertMapToHoodieConfig(params))
   }

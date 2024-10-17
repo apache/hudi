@@ -690,7 +690,6 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public static Triple<RecordMergeMode, String, String> inferCorrectMergingBehavior(RecordMergeMode recordMergeMode, String payloadClassName, String recordMergerStrategy) {
-    checkArgument(payloadClassName == null || !payloadClassName.equals("org.apache.spark.sql.hudi.command.payload.ExpressionPayload"), "Expression payload is being deduced!!!!!!");
     RecordMergeMode inferRecordMergeMode;
     String inferPayloadClassName;
     String inferRecordMergerStrategy;
@@ -717,15 +716,17 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       inferPayloadClassName = HoodieRecordPayload.getAvroPayloadForMergeMode(inferRecordMergeMode);
     } else {
-      checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
       inferPayloadClassName = payloadClassName;
       if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
+        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
         inferRecordMergeMode = EVENT_TIME_ORDERING;
         inferRecordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
+        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
         inferRecordMergeMode = OVERWRITE_WITH_LATEST;
         inferRecordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
       } else {
+        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
         checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;
         inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUID;
