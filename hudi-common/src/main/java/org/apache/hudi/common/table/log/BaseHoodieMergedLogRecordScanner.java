@@ -19,12 +19,14 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -65,6 +67,10 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
   // Stores the total time taken to perform reading and merging of log blocks
   private long totalTimeTakenToReadAndMergeBlocks;
 
+  protected final String orderingFieldName;
+  protected final Schema.Type orderingFieldType;
+  protected final Comparable orderingFieldDefault;
+
   @SuppressWarnings("unchecked")
   protected BaseHoodieMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, Schema readerSchema,
                                              String latestInstantTime, Long maxMemorySizeInBytes,
@@ -87,6 +93,11 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
           new HoodieRecordSizeEstimator(readerSchema), diskMapType, isBitCaskDiskMapCompressionEnabled);
       this.scannedPrefixes = new HashSet<>();
+
+      // TODO: use reader context for both non fg reader.
+      this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(payloadProps)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
+      this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.INT);
+      this.orderingFieldDefault = TypeCaster.castValue(0, orderingFieldType);
     } catch (IOException e) {
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
@@ -217,9 +228,9 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
     // Put the DELETE record
     if (recordType == HoodieRecord.HoodieRecordType.AVRO) {
       records.put((K) key, SpillableMapUtils.generateEmptyPayload(key,
-          deleteRecord.getPartitionPath(), deleteRecord.getOrderingValue(), getPayloadClassFQN()));
+          deleteRecord.getPartitionPath(), orderingFieldDefault, getPayloadClassFQN()));
     } else {
-      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, deleteRecord.getOrderingValue(), recordType);
+      HoodieEmptyRecord record = new HoodieEmptyRecord<>(new HoodieKey(key, deleteRecord.getPartitionPath()), null, orderingFieldDefault, recordType);
       records.put((K) key, record);
     }
   }
