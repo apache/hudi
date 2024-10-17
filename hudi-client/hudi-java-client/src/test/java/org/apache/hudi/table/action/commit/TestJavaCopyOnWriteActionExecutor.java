@@ -298,7 +298,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
     actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator())
         .forEachRemaining(x -> writeStatuses.addAll((List<WriteStatus>)x));
 
-    Map<String, String> allWriteStatusMergedMetadataMap =
+    Map<String, Object> allWriteStatusMergedMetadataMap =
         MetadataMergeWriteStatus.mergeMetadataForWriteStatuses(writeStatuses);
     assertTrue(allWriteStatusMergedMetadataMap.containsKey("InputRecordCount_1506582000"));
     // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this
