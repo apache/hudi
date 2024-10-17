@@ -22,6 +22,7 @@ import org.apache.hudi.cdc.CDCRelation
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.TablePathUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
@@ -163,7 +164,7 @@ class HoodieStreamSource(
     startOffset match {
       case INIT_OFFSET => startOffset.completionTime
       case HoodieSourceOffset(completionTime) =>
-        completionTime
+        HoodieInstantTimeGenerator.instantTimePlusMillis(completionTime, 1)
       case _=> throw new IllegalStateException("UnKnow offset type.")
     }
   }

@@ -181,4 +181,14 @@ public class DataSourceTestUtils {
         .max(String::compareTo)
         .orElse(null);
   }
+
+  public static String latestDeltaCommitCompletionTime(HoodieStorage storage, String basePath) {
+    HoodieTimeline timeline = HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, basePath);
+    return timeline.getInstantsAsStream()
+        .filter(instant -> HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .map(HoodieInstant::getCompletionTime)
+        .filter(Objects::nonNull)
+        .max(String::compareTo)
+        .orElse(null);
+  }
 }

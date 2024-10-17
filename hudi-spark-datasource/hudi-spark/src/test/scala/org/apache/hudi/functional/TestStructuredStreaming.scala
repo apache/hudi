@@ -154,7 +154,6 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       assert(hoodieROViewDF1.count() == 100)
 
       inputDF2.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
-      val commitCompletionTime2 = DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
       // When the compaction configs are added, one more commit of the compaction is expected
       val numExpectedCommits = if (addCompactionConfigs) currNumCommits + 2 else currNumCommits + 1
       waitTillAtleastNCommits(storage, destPath, numExpectedCommits, 120, 5)
@@ -165,6 +164,11 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
         latestInstant(storage, destPath, HoodieTimeline.DELTA_COMMIT_ACTION)
       } else {
         HoodieDataSourceHelpers.latestCommit(storage, destPath)
+      }
+      val commitCompletionTime2 = if (tableType == HoodieTableType.MERGE_ON_READ) {
+        DataSourceTestUtils.latestDeltaCommitCompletionTime(storage, destPath)
+      } else {
+        DataSourceTestUtils.latestCommitCompletionTime(storage, destPath)
       }
       assertEquals(numExpectedCommits, HoodieDataSourceHelpers.listCommitsSince(storage, destPath, "000").size())
       // Read RO View
