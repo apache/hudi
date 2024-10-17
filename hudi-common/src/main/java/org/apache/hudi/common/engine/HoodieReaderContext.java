@@ -344,6 +344,25 @@ public abstract class HoodieReaderContext<T> {
 
   public abstract Comparable castValue(Comparable value, Schema.Type newType);
 
+  public Comparable maxValue(Schema.Type schemaType) {
+    switch (schemaType) {
+      case INT:
+        return Integer.MAX_VALUE;
+      case LONG:
+        return Long.MAX_VALUE;
+      case FLOAT:
+        return Float.MAX_VALUE;
+      case DOUBLE:
+        return Double.MAX_VALUE;
+      case BOOLEAN:
+        return true;
+      default:
+        throw new UnsupportedOperationException(
+            String.format("Max value for Schema type %s is not supported", schemaType)
+        );
+    }
+  }
+
   /**
    * Extracts the record position value from the record itself.
    *

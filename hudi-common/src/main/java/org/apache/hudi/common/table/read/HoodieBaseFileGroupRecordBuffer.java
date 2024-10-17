@@ -306,10 +306,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
-          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+          Comparable deleteOrderingVal = readerContext.getOrderingValue(
+              Option.empty(), Collections.emptyMap(), readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
           // Checks the ordering value does not equal to 0
           // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(0)
+          boolean chooseExisting = !deleteOrderingVal.equals(orderingFieldDefault)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
               && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
           if (chooseExisting) {
