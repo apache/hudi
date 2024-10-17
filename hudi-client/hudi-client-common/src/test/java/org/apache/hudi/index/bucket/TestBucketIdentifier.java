@@ -107,9 +107,10 @@ public class TestBucketIdentifier {
     assertEquals(1, keys.size());
     assertEquals("abc", keys.get(0));
 
+    // we don't extract key values if they contain only ':', because it could be a timestamp, for instance, '2014-10-21 12:23'
     keys = identifier.getHashKeys(new HoodieKey("f1:abc", "partition"), "f1");
     assertEquals(1, keys.size());
-    assertEquals("abc", keys.get(0));
+    assertEquals("f1:abc", keys.get(0));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd", "partition"), "f2");
     assertEquals(1, keys.size());
@@ -121,9 +122,8 @@ public class TestBucketIdentifier {
     assertEquals("bcd", keys.get(1));
 
     keys = identifier.getHashKeys(new HoodieKey("f1:abc,f2:bcd,efg", "partition"), "f1,f2");
-    assertEquals(3, keys.size());
+    assertEquals(2, keys.size());
     assertEquals("abc", keys.get(0));
-    assertEquals("bcd", keys.get(1));
-    assertEquals("efg", keys.get(2));
+    assertEquals("bcd,efg", keys.get(1));
   }
 }

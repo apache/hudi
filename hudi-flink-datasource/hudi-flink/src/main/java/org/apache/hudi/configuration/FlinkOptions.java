@@ -448,8 +448,9 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue("uuid")
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
-          + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
-          + "the dot notation eg: `a.b.c`");
+          + "Note that in the case of complex keys `:` character is not supported in key values. "
+          + "Actual value will be obtained by invoking .toString() on the field value. "
+          + "Nested fields can be specified using the dot notation eg: `a.b.c`");
 
   @AdvancedConfig
   public static final ConfigOption<String> INDEX_KEY_FIELD = ConfigOptions
@@ -457,8 +458,9 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .defaultValue("")
       .withDescription("Index key field. Value to be used as hashing to find the bucket ID. Should be a subset of or equal to the recordKey fields.\n"
-          + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
-          + "the dot notation eg: `a.b.c`");
+          + "Note that in the case of complex keys `:` character is not supported in key values. "
+          + "Actual value will be obtained by invoking .toString() on the field value. "
+          + "Nested fields can be specified using the dot notation eg: `a.b.c`");
 
   @AdvancedConfig
   public static final ConfigOption<String> BUCKET_INDEX_ENGINE_TYPE = ConfigOptions
