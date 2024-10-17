@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, SchemaTestUtil}
+import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
@@ -544,7 +545,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
   @throws[IOException]
   def createEmptyCleanRequestedFile(basePath: String, instantTime: String, configuration: Configuration): Unit = {
-    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + HoodieTimeline.makeRequestedCleanerFileName(instantTime))
+    val commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + INSTANT_FILE_NAME_FACTORY.makeRequestedCleanerFileName(instantTime))
     val fs = HadoopFSUtils.getFs(basePath, configuration)
     val os = fs.create(commitFilePath, true)
     os.close()

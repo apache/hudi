@@ -894,7 +894,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     HoodieTimeline activeTimeline = getActiveTimeline();
-    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getTimestamp);
+    Option<String> lastCommitSynced = activeTimeline.lastInstant().map(HoodieInstant::getRequestTime);
     Option<String> lastCommitCompletionSynced = activeTimeline
         .getInstantsOrderedByCompletionTime()
         .skip(activeTimeline.countInstants() - 1)

@@ -310,7 +310,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     doWriteAndValidateDataAndPartitionStats(hudiOpts,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Append)
-    assertTrue(getLatestClusteringInstant.get().getTimestamp.compareTo(lastClusteringInstant.get().getTimestamp) > 0)
+    assertTrue(getLatestClusteringInstant.get().getRequestTime.compareTo(lastClusteringInstant.get().getRequestTime) > 0)
     assertEquals(getLatestClusteringInstant, metaClient.getActiveTimeline.lastInstant())
     // We are validating rollback of a DT clustering instant here
     rollbackLastInstant(hudiOpts)
@@ -347,9 +347,9 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     assertTrue(metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
     // Do a savepoint
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(hudiOpts))
-    writeClient.savepoint(firstCompletedInstant.get().getTimestamp, "testUser", "savepoint to first commit")
-    val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-    assertEquals(firstCompletedInstant.get().getTimestamp, savepointTimestamp)
+    writeClient.savepoint(firstCompletedInstant.get().getRequestTime, "testUser", "savepoint to first commit")
+    val savepointTimestamp = metaClient.reloadActiveTimeline().getSavePointTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
+    assertEquals(firstCompletedInstant.get().getRequestTime, savepointTimestamp)
     // Restore to savepoint
     writeClient.restoreToSavepoint(savepointTimestamp)
     // verify restore completed
@@ -394,11 +394,11 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
       val compactionTimeline = metadataTableFSView.getVisibleCommitsAndCompactionTimeline.filterCompletedAndCompactionInstants()
       val lastCompactionInstant = compactionTimeline
         .filter(JavaConversions.getPredicate((instant: HoodieInstant) =>
-          HoodieCommitMetadata.fromBytes(compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
+          metaClient.getTimelineLayout.getCommitMetadataSerDe.deserialize(instant, compactionTimeline.getInstantDetails(instant).get, classOf[HoodieCommitMetadata])
             .getOperationType == WriteOperationType.COMPACT))
         .lastInstant()
       val compactionBaseFile = metadataTableFSView.getAllBaseFiles(MetadataPartitionType.PARTITION_STATS.getPartitionPath)
-        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getTimestamp)))
+        .filter(JavaConversions.getPredicate((f: HoodieBaseFile) => f.getCommitTime.equals(lastCompactionInstant.get().getRequestTime)))
         .findAny()
       assertTrue(compactionBaseFile.isPresent)
     } finally {
@@ -439,7 +439,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   private def getLatestDataFilesCount(opts: Map[String, String], includeLogFiles: Boolean = true) = {
     var totalLatestDataFiles = 0L
-    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getTimestamp)
+    getTableFileSystemView(opts).getAllLatestFileSlicesBeforeOrOn(metaClient.getActiveTimeline.lastInstant().get().getRequestTime)
       .values()
       .forEach(JFunction.toJavaConsumer[java.util.stream.Stream[FileSlice]]
         (slices => slices.forEach(JFunction.toJavaConsumer[FileSlice](

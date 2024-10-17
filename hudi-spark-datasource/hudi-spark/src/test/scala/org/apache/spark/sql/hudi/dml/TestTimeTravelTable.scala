@@ -49,7 +49,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
           val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
           val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
-            .lastInstant().get().getTimestamp
+            .lastInstant().get().getRequestTime
 
           // 2nd commit instant
           spark.sql(s"insert into $tableName1 values(1, 'a2', 20, 2000)")
@@ -95,7 +95,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           val metaClient1 = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName1")
 
           val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
-            .lastInstant().get().getTimestamp
+            .lastInstant().get().getRequestTime
 
 
           val tableName2 = generateTableName
@@ -206,10 +206,10 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
           val metaClient2 = createMetaClient(spark, path2)
 
           val instant1 = metaClient1.getActiveTimeline.getAllCommitsTimeline
-            .lastInstant().get().getTimestamp
+            .lastInstant().get().getRequestTime
 
           val instant2 = metaClient2.getActiveTimeline.getAllCommitsTimeline
-            .lastInstant().get().getTimestamp
+            .lastInstant().get().getRequestTime
 
           val sql =
             s"""
@@ -266,7 +266,7 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
           val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
           val instant1 = metaClient.getActiveTimeline.getAllCommitsTimeline
-            .lastInstant().get().getTimestamp
+            .lastInstant().get().getRequestTime
 
           // 2nd commit instant
           spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
@@ -309,13 +309,13 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
 
         val metaClient = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName")
         val instant1 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
-          .lastInstant().get().getTimestamp
+          .lastInstant().get().getRequestTime
 
         // add column
         spark.sql(s"alter table $tableName add columns (company string)")
         spark.sql(s"insert into $tableName values(2, 'a2', 11, 1100, 'hudi')")
         val instant2 = metaClient.reloadActiveTimeline().getAllCommitsTimeline
-          .lastInstant().get().getTimestamp
+          .lastInstant().get().getRequestTime
 
         // drop column
         spark.sql(s"alter table $tableName drop column price")

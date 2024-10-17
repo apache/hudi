@@ -677,6 +677,7 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public void setTableVersion(HoodieTableVersion tableVersion) {
     setValue(VERSION, Integer.toString(tableVersion.versionCode()));
+    setValue(TIMELINE_LAYOUT_VERSION, Integer.toString(tableVersion.getTimelineLayoutVersion().getVersion()));
   }
 
   public void setInitialVersion(HoodieTableVersion initialVersion) {

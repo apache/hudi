@@ -231,9 +231,9 @@ public class TestStreamReadMonitoringFunction {
     List<HoodieInstant> instants = metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
     assertThat(instants.size(), is(2));
 
-    String c2 = oriInstants.get(1).getTimestamp();
-    String c3 = oriInstants.get(2).getTimestamp();
-    String c4 = instants.get(1).getTimestamp();
+    String c2 = oriInstants.get(1).getRequestTime();
+    String c3 = oriInstants.get(2).getRequestTime();
+    String c4 = instants.get(1).getRequestTime();
 
     conf.setString(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
     StreamReadMonitoringFunction function = TestUtils.getMonitorFunc(conf);

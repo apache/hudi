@@ -287,7 +287,7 @@ public class HiveIncrementalPuller {
     Option<HoodieInstant> lastCommit =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
-      return lastCommit.get().getTimestamp();
+      return lastCommit.get().getRequestTime();
     }
     return "0";
   }
@@ -319,7 +319,7 @@ public class HiveIncrementalPuller {
         .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
         .setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getTimestamp)
+        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getRequestTime)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
       LOG.warn(

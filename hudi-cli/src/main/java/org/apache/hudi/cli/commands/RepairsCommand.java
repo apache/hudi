@@ -28,6 +28,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -117,7 +118,7 @@ public class RepairsCommand {
 
     HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
     String latestCommit =
-        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
+        client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getRequestTime();
     List<String> partitionPaths =
         FSUtils.getAllPartitionFoldersThreeLevelsDown(HoodieCLI.storage, HoodieCLI.basePath);
     StoragePath basePath = client.getBasePath();
@@ -199,13 +200,13 @@ public class RepairsCommand {
         CleanerUtils.getCleanerPlan(client, instant);
       } catch (AvroRuntimeException e) {
         LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-        HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-            instant);
+        ActiveTimelineUtils.deleteInstantFile(client.getStorage(), client.getMetaPath(),
+            instant, client.getTimelineLayout().getInstantFileNameFactory());
       } catch (IOException ioe) {
         if (ioe.getMessage().contains("Not an Avro data file")) {
           LOG.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          HoodieActiveTimeline.deleteInstantFile(client.getStorage(), client.getMetaPath(),
-              instant);
+          ActiveTimelineUtils.deleteInstantFile(client.getStorage(), client.getMetaPath(),
+              instant, client.getTimelineLayout().getInstantFileNameFactory());
         } else {
           throw new HoodieIOException(ioe.getMessage(), ioe);
         }
@@ -243,7 +244,7 @@ public class RepairsCommand {
       Option<StoragePath> baseFormatFile =
           HoodiePartitionMetadata.baseFormatMetaPathIfExists(HoodieCLI.storage, partition);
       String latestCommit =
-          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getTimestamp();
+          client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().get().getRequestTime();
 
       String[] row = new String[] {
           partitionPath,

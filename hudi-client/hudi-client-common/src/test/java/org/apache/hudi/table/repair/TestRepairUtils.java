@@ -47,6 +47,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.HoodieTestCommitGenerator.getBaseFilename;
 import static org.apache.hudi.HoodieTestCommitGenerator.getLogFilename;
 import static org.apache.hudi.HoodieTestCommitGenerator.initCommitInfoForRepairTests;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -120,15 +121,15 @@ public class TestRepairUtils {
   public void testGetBaseAndLogFilePathsFromTimeline() throws IOException {
     setupTimelineInFS();
     HoodieTimeline timeline = metaClient.getActiveTimeline();
-    HoodieInstant commitInstant = new HoodieInstant(
+    HoodieInstant commitInstant = INSTANT_FACTORY.createNewInstant(
         HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
-    HoodieInstant inflightInstant = new HoodieInstant(
+    HoodieInstant inflightInstant = INSTANT_FACTORY.createNewInstant(
         HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "005");
-    HoodieInstant compactionInstant = new HoodieInstant(
+    HoodieInstant compactionInstant = INSTANT_FACTORY.createNewInstant(
         HoodieInstant.State.COMPLETED, HoodieTimeline.COMPACTION_ACTION, "006");
 
     Map<String, List<Pair<String, String>>> partitionToFileIdAndNameMap =
-        instantInfoMap.get(commitInstant.getTimestamp());
+        instantInfoMap.get(commitInstant.getRequestTime());
     Set<String> expectedPaths = partitionToFileIdAndNameMap.entrySet().stream()
         .flatMap(entry ->
             entry.getValue().stream()
@@ -147,10 +148,10 @@ public class TestRepairUtils {
   @Test
   public void testFindInstantFilesToRemove() throws IOException {
     setupTimelineInFS();
-    HoodieInstant existingInstant = new HoodieInstant(
+    HoodieInstant existingInstant = INSTANT_FACTORY.createNewInstant(
         HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "001");
     Map<String, List<Pair<String, String>>> partitionToFileIdAndNameMap =
-        instantInfoMap.get(existingInstant.getTimestamp());
+        instantInfoMap.get(existingInstant.getRequestTime());
     List<String> fileListFromFs = partitionToFileIdAndNameMap.entrySet().stream()
         .flatMap(entry ->
             entry.getValue().stream()
@@ -159,12 +160,12 @@ public class TestRepairUtils {
                 .stream()
         ).collect(Collectors.toList());
     String danglingFilePath = new StoragePath("2022/01/02",
-        getBaseFilename(existingInstant.getTimestamp(), UUID.randomUUID().toString())).toString();
+        getBaseFilename(existingInstant.getRequestTime(), UUID.randomUUID().toString())).toString();
     fileListFromFs.add(danglingFilePath);
     // Existing instant
     assertEquals(CollectionUtils.createImmutableList(danglingFilePath),
         RepairUtils.findInstantFilesToRemove(
-            existingInstant.getTimestamp(), fileListFromFs,
+            existingInstant.getRequestTime(), fileListFromFs,
             metaClient.getActiveTimeline(), metaClient.getArchivedTimeline()));
     // Non-existing instant
     assertEquals(fileListFromFs,

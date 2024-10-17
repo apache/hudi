@@ -20,6 +20,7 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -40,12 +41,12 @@ public class CompactionCommitTestSink extends CompactionCommitSink {
   public void invoke(CompactionCommitEvent event, Context context) throws Exception {
     super.invoke(event, context);
     List<HoodieInstant> instants = writeClient.getHoodieTable().getMetaClient().getActiveTimeline().getInstants();
-    boolean compactCommitted = instants.stream().anyMatch(i -> i.getTimestamp().equals(event.getInstant()) && i.isCompleted());
+    boolean compactCommitted = instants.stream().anyMatch(i -> i.getRequestTime().equals(event.getInstant()) && i.isCompleted());
     if (compactCommitted && getRuntimeContext().getAttemptNumber() == 0) {
       // archive compact instant
       this.writeClient.getConfig().setValue(HoodieArchivalConfig.MAX_COMMITS_TO_KEEP, "1");
       this.writeClient.getConfig().setValue(HoodieArchivalConfig.MIN_COMMITS_TO_KEEP, "1");
-      HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(this.writeClient.getConfig(), this.writeClient.getHoodieTable());
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(this.writeClient.getConfig(), this.writeClient.getHoodieTable());
       this.writeClient.getHoodieTable().getMetaClient().reloadActiveTimeline();
       archiver.archiveIfRequired(HoodieFlinkEngineContext.DEFAULT);
       throw new HoodieException("Fail first attempt to simulate failover in test.");

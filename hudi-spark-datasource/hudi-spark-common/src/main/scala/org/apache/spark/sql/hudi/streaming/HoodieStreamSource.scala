@@ -125,7 +125,7 @@ class HoodieStreamSource(
             .get()
             .getCompletionTime
         } else {
-          activeInstants.lastInstant().get().getTimestamp
+          activeInstants.lastInstant().get().getRequestTime
         }
         Some(HoodieSourceOffset(timestamp))
       case _ =>

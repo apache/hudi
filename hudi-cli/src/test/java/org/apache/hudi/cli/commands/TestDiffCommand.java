@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,10 +104,10 @@ public class TestDiffCommand extends CLIFunctionalTestHarness {
       commits.add(timestamp);
       // Requested Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
       // Inflight Compaction
       HoodieTestCommitMetadataGenerator.createCompactionAuxiliaryMetadata(tablePath,
-          new HoodieInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
+          INSTANT_FACTORY.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMPACTION_ACTION, timestamp), conf);
 
       Map<String, String> extraCommitMetadata =
           Collections.singletonMap(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);

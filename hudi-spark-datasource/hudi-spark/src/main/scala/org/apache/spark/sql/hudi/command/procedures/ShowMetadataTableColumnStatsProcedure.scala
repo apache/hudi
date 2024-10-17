@@ -23,14 +23,13 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.TableSchemaResolver
-import org.apache.hudi.common.table.timeline.{HoodieDefaultTimeline, HoodieInstant}
+import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport}
-
 import org.apache.avro.generic.IndexedRecord
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
@@ -38,7 +37,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util
 import java.util.function.{Function, Supplier}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
@@ -139,7 +137,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
     val maxInstant = metaClient.createNewInstantTime()
-    val instants = timeline.getInstants.iterator().asScala.filter(_.getTimestamp < maxInstant)
+    val instants = timeline.getInstants.iterator().asScala.filter(_.getRequestTime < maxInstant)
 
     val details = new Function[HoodieInstant, org.apache.hudi.common.util.Option[Array[Byte]]]
       with java.io.Serializable {
@@ -148,7 +146,7 @@ class ShowMetadataTableColumnStatsProcedure extends BaseProcedure with Procedure
       }
     }
 
-    val filteredTimeline = new HoodieDefaultTimeline(
+    val filteredTimeline = metaClient.getTimelineLayout.getTimelineFactory.createDefaultTimeline(
       new java.util.ArrayList[HoodieInstant](instants.toList.asJava).stream(), details)
 
     new HoodieTableFileSystemView(metaClient, filteredTimeline, new java.util.ArrayList[StoragePathInfo])

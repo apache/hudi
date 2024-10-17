@@ -208,7 +208,7 @@ object CDCRelation {
   def getTimestampOfLatestInstant(metaClient: HoodieTableMetaClient): String = {
     val latestInstant = metaClient.getActiveTimeline.lastInstant()
     if (latestInstant.isPresent) {
-      latestInstant.get().getTimestamp
+      latestInstant.get().getRequestTime
     } else {
       throw new HoodieException("No valid instant in Active Timeline.")
     }

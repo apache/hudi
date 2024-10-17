@@ -92,7 +92,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
     // pending compaction
     if (table.getIndex().canIndexLogFiles()) {
       return table.getSliceView()
-              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
+              .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getRequestTime(), false)
               .filter(this::isSmallFile)
               .collect(Collectors.toList());
     }
@@ -104,7 +104,7 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
     // If we cannot index log files, then we choose the smallest parquet file in the partition and add inserts to
     // it. Doing this overtime for a partition, we ensure that we handle small file issues
     return table.getSliceView()
-          .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getTimestamp(), false)
+          .getLatestFileSlicesBeforeOrOn(partitionPath, latestCommitInstant.getRequestTime(), false)
           .filter(
               fileSlice ->
                   // NOTE: We can not pad slices with existing log-files w/o compacting these,

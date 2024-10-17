@@ -25,6 +25,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.{HoodieCommitMetadata, WriteConcurrencyMode}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
+import org.apache.hudi.common.table.timeline.versioning.v2.InstantFactoryV2
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
@@ -33,7 +34,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.HoodieWriteConfig.WRITE_CONCURRENCY_MODE
 import org.apache.hudi.exception.{HoodieCorruptedDataException, HoodieException, TableNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.streaming.OutputMode
@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory
 
 import java.lang
 import java.util.function.{BiConsumer, Function}
-
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -157,12 +156,23 @@ class HoodieStreamingSink(sqlContext: SQLContext,
               .setBasePath(client.getConfig.getBasePath)
               .build())
           }
+          val instantFactory = metaClient match {
+            case Some(meta) => meta.getTimelineLayout.getInstantFactory
+            case None => {
+              // Could be the first micro-batch. As the batch is already done when ctrl reaches here, create a metaclient
+              var meta = HoodieTableMetaClient.builder()
+                .setConf(HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration))
+                .setBasePath(tablePath.get)
+                .build()
+              meta.getTimelineLayout.getInstantFactory
+            }
+          }
           if (compactionInstantOps.isPresent) {
             asyncCompactorService.enqueuePendingAsyncServiceInstant(
-              new HoodieInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantOps.get()))
+              instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, compactionInstantOps.get()))
           }
           if (clusteringInstant.isPresent) {
-            asyncClusteringService.enqueuePendingAsyncServiceInstant(new HoodieInstant(
+            asyncClusteringService.enqueuePendingAsyncServiceInstant(instantFactory.createNewInstant(
               State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusteringInstant.get()
             ))
           }
