@@ -74,6 +74,16 @@ public class HoodieDataSourceHelpers {
         .map(HoodieInstant::getTimestamp).collect(Collectors.toList());
   }
 
+  // this is used in the integration test script: docker/demo/sparksql-incremental.commands
+  public static List<String> listCompletionTimeSince(FileSystem fs, String basePath,
+      String instantTimestamp) {
+    HoodieTimeline timeline = allCompletedCommitsCompactions(fs, basePath);
+    return timeline.findInstantsAfter(instantTimestamp, Integer.MAX_VALUE)
+        .getInstantsOrderedByCompletionTime()
+        .map(HoodieInstant::getCompletionTime)
+        .collect(Collectors.toList());
+  }
+
   /**
    * Returns the last successful write operation's instant time.
    */

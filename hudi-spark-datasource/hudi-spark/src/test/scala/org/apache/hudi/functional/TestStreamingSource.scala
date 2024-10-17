@@ -18,17 +18,15 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceReadOptions.START_OFFSET
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.HoodieTimeline
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.{BLOCK, USE_TRANSITION_TIME}
 import org.apache.hudi.config.HoodieCompactionConfig
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSERT_PARALLELISM_VALUE, TBL_NAME, UPSERT_PARALLELISM_VALUE}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 
 import org.apache.spark.sql.streaming.StreamTest
 import org.apache.spark.sql.{Row, SaveMode}
@@ -45,8 +43,6 @@ class TestStreamingSource extends StreamTest {
     DELETE_PARALLELISM_VALUE.key -> "4"
   )
   private val columns = Seq("id", "name", "price", "ts")
-
-  val handlingMode: HollowCommitHandling = BLOCK
 
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
 
@@ -71,7 +67,6 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
-        .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -124,7 +119,6 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("1", "a1", "10", "000")))
       val df = spark.readStream
         .format("org.apache.hudi")
-        .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -172,7 +166,6 @@ class TestStreamingSource extends StreamTest {
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), "latest")
-        .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
         .load(tablePath)
         .select("id", "name", "price", "ts")
 
@@ -205,17 +198,13 @@ class TestStreamingSource extends StreamTest {
       addData(tablePath, Seq(("2", "a1", "11", "001")))
       addData(tablePath, Seq(("3", "a1", "12", "002")))
 
-      val timestamp = if (handlingMode == USE_TRANSITION_TIME) {
+      val timestamp =
         metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
           .firstInstant().get().getCompletionTime
-      } else {
-        metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
-          .firstInstant().get().getTimestamp
-      }
+
       val df = spark.readStream
         .format("org.apache.hudi")
         .option(START_OFFSET.key(), timestamp)
-        .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode.name())
         .load(tablePath)
         .select("id", "name", "price", "ts")
 

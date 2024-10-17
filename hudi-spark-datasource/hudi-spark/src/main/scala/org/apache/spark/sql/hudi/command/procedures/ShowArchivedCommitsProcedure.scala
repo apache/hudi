@@ -27,8 +27,8 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.time.ZonedDateTime
 import java.util
-import java.util.function.Supplier
 import java.util.{Collections, Date}
+import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
 
@@ -141,7 +141,7 @@ class ShowArchivedCommitsProcedure(includeExtraMetadata: Boolean) extends BasePr
     val commits: util.List[HoodieInstant] = timeline.getCommitsTimeline.filterCompletedInstants
       .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
     val newCommits = new util.ArrayList[HoodieInstant](commits)
-    Collections.sort(newCommits, HoodieInstant.COMPARATOR.reversed)
+    Collections.sort(newCommits, HoodieInstant.INSTANT_TIME_COMPARATOR.reversed)
     (rows, newCommits)
   }
 

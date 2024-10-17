@@ -59,12 +59,12 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
   public static final Comparator<HoodieInstant> ACTION_COMPARATOR =
       Comparator.comparing(instant -> getComparableAction(instant.getAction()));
 
-  public static final Comparator<HoodieInstant> COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
+  public static final Comparator<HoodieInstant> INSTANT_TIME_COMPARATOR = Comparator.comparing(HoodieInstant::getTimestamp)
       .thenComparing(ACTION_COMPARATOR).thenComparing(HoodieInstant::getState);
 
-  public static final Comparator<HoodieInstant> STATE_TRANSITION_COMPARATOR =
+  public static final Comparator<HoodieInstant> COMPLETION_TIME_COMPARATOR =
       Comparator.comparing(HoodieInstant::getCompletionTime)
-          .thenComparing(COMPARATOR);
+          .thenComparing(INSTANT_TIME_COMPARATOR);
 
   private static final String EMPTY_FILE_EXTENSION = "";
 
@@ -354,7 +354,7 @@ public class HoodieInstant implements Serializable, Comparable<HoodieInstant> {
 
   @Override
   public int compareTo(HoodieInstant o) {
-    return COMPARATOR.compare(this, o);
+    return INSTANT_TIME_COMPARATOR.compare(this, o);
   }
 
   @Override

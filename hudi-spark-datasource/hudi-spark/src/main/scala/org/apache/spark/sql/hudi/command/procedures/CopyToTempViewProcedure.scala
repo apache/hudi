@@ -78,8 +78,8 @@ class CopyToTempViewProcedure extends BaseProcedure with ProcedureBuilder with L
         sparkSession.read
           .format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beginInstance)
-          .option(DataSourceReadOptions.END_INSTANTTIME.key, endInstance)
+          .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, beginInstance)
+          .option(DataSourceReadOptions.END_COMPLETION_TIME.key, endInstance)
           .load(tablePath)
       case DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL =>
         sparkSession.read

@@ -22,6 +22,8 @@ import org.apache.hudi.ApiMaturityLevel;
 import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.QueryContext;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
@@ -29,7 +31,10 @@ import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME;
 
 /**
@@ -37,6 +42,7 @@ import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class SnapshotLoadQuerySplitter {
+  private static final Logger LOG = LoggerFactory.getLogger(SnapshotLoadQuerySplitter.class);
 
   /**
    * Configuration properties for the splitter.
@@ -116,6 +122,32 @@ public abstract class SnapshotLoadQuerySplitter {
     return getNextCheckpointWithPredicates(df, queryInfo.getStartInstant())
         .map(queryInfo::withUpdatedCheckpoint)
         .orElse(queryInfo);
+  }
+
+  public Option<CheckpointWithPredicates> getNextCheckpoint(Dataset<Row> df, QueryContext queryContext,
+                                                            Option<SourceProfileSupplier> sourceProfileSupplier) {
+    // the start instant would be included into the final query result. So we need to get
+    // a strictly lower timestamp to have query splitter include the start instant
+    Option<CheckpointWithPredicates> nextCheckpointWithPredicates =
+        getNextCheckpointWithPredicates(df, instantTimeMinusMillis(queryContext.getBeginInstant().get(), 1));
+    if (nextCheckpointWithPredicates.isPresent()) {
+      // getNextCheckpointWithPredicates is based on instant times,
+      // so we need to translate the instant time to the completion time
+      String endInstantTime = nextCheckpointWithPredicates.get().getEndInstant();
+      Option<String> endCompletionTime = Option.fromJavaOptional(queryContext.getInstants().stream()
+          .filter(instant -> endInstantTime.equals(instant.getTimestamp()))
+          .map(HoodieInstant::getCompletionTime)
+          .findAny());
+      if (!endCompletionTime.isPresent()) {
+        LOG.warn("The end instant time returned by the custom SnapshotLoadQuerySplitter "
+            + "implementation is not found in this batch: {}", endInstantTime);
+        return Option.empty();
+      }
+      return Option.of(new CheckpointWithPredicates(
+          endCompletionTime.get(),
+          nextCheckpointWithPredicates.get().predicateFilter));
+    }
+    return Option.empty();
   }
 
   public static Option<SnapshotLoadQuerySplitter> getInstance(TypedProperties props) {

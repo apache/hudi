@@ -42,6 +42,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.HoodieInstant.COMPLETION_TIME_COMPARATOR;
+import static org.apache.hudi.common.table.timeline.HoodieInstant.INSTANT_TIME_COMPARATOR;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
@@ -67,6 +69,8 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   private transient volatile Set<String> pendingClusteringInstants;
   // for efficient #isBeforeTimelineStarts check.
   private transient volatile Option<HoodieInstant> firstNonSavepointCommit;
+  // for efficient #isBeforeTimelineStartsByCompletionTime
+  private transient volatile Option<HoodieInstant> firstNonSavepointCommitByCompletionTime;
   private String timelineHash;
 
   public HoodieDefaultTimeline(Stream<HoodieInstant> instants, Function<HoodieInstant, Option<byte[]>> details) {
@@ -256,7 +260,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
   @Override
   public HoodieDefaultTimeline findInstantsInRangeByCompletionTime(String startTs, String endTs) {
     return new HoodieDefaultTimeline(
-        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && HoodieTimeline.isInRange(s.getCompletionTime(), startTs, endTs)),
+        getInstantsAsStream().filter(s -> s.getCompletionTime() != null && HoodieTimeline.isInClosedRange(s.getCompletionTime(), startTs, endTs)),
         details);
   }
 
@@ -487,7 +491,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
     // Check for older timestamp which have sec granularity and an extension of DEFAULT_MILLIS_EXT may have been added via Timeline operations
     if (ts.length() == HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH && ts.endsWith(HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT)) {
-      final String actualOlderFormatTs = ts.substring(0, ts.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
+      String actualOlderFormatTs = ts.substring(0, ts.length() - HoodieInstantTimeGenerator.DEFAULT_MILLIS_EXT.length());
       return containsInstant(actualOlderFormatTs);
     }
 
@@ -516,13 +520,20 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   @Override
   public Stream<HoodieInstant> getReverseOrderedInstants() {
-    return getInstantsAsStream().sorted(HoodieInstant.COMPARATOR.reversed());
+    return getInstantsAsStream().sorted(INSTANT_TIME_COMPARATOR.reversed());
+  }
+
+  @Override
+  public Option<String> getLatestCompletionTime() {
+    return Option.fromJavaOptional(getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
+        .max(HoodieInstant.COMPLETION_TIME_COMPARATOR)
+        .map(HoodieInstant::getCompletionTime));
   }
 
   @Override
   public Stream<HoodieInstant> getInstantsOrderedByCompletionTime() {
     return getInstantsAsStream().filter(s -> s.getCompletionTime() != null)
-        .sorted(HoodieInstant.STATE_TRANSITION_COMPARATOR);
+        .sorted(HoodieInstant.COMPLETION_TIME_COMPARATOR);
   }
 
   @Override
@@ -532,15 +543,39 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
         && compareTimestamps(instant, LESSER_THAN, firstNonSavepointCommit.get().getTimestamp());
   }
 
+  @Override
+  public boolean isBeforeTimelineStartsByCompletionTime(String completionTime) {
+    Option<HoodieInstant> firstNonSavepointCommit = getFirstNonSavepointCommitByCompletionTime();
+    return firstNonSavepointCommit.isPresent()
+        && compareTimestamps(completionTime, LESSER_THAN, firstNonSavepointCommit.get().getCompletionTime());
+  }
+
+  @Override
   public Option<HoodieInstant> getFirstNonSavepointCommit() {
     if (this.firstNonSavepointCommit == null) {
       synchronized (this) {
         if (this.firstNonSavepointCommit == null) {
-          this.firstNonSavepointCommit = findFirstNonSavepointCommit(this.instants);
+          this.firstNonSavepointCommit =
+              findFirstNonSavepointCommit(this.instants, INSTANT_TIME_COMPARATOR);
         }
       }
     }
     return this.firstNonSavepointCommit;
+  }
+
+  public Option<HoodieInstant> getFirstNonSavepointCommitByCompletionTime() {
+    if (this.firstNonSavepointCommitByCompletionTime == null) {
+      synchronized (this) {
+        if (this.firstNonSavepointCommitByCompletionTime == null) {
+          // only consider completed instants that have completion time.
+          this.firstNonSavepointCommitByCompletionTime =
+              findFirstNonSavepointCommit(
+                  this.instants.stream().filter(HoodieInstant::isCompleted).collect(Collectors.toList()),
+                  COMPLETION_TIME_COMPARATOR);
+        }
+      }
+    }
+    return this.firstNonSavepointCommitByCompletionTime;
   }
 
   @Override
@@ -628,20 +663,23 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
 
   /**
    * Returns the first non savepoint commit on the timeline.
+   *
+   * @param instants           list of instants to consider
+   * @param instantComparator  the comparator to order instants
+   * @return the first non savepoint commit on the timeline
    */
-  private static Option<HoodieInstant> findFirstNonSavepointCommit(List<HoodieInstant> instants) {
+  private static Option<HoodieInstant> findFirstNonSavepointCommit(
+      List<HoodieInstant> instants,
+      Comparator<HoodieInstant> instantComparator) {
     Set<String> savepointTimestamps = instants.stream()
         .filter(entry -> entry.getAction().equals(HoodieTimeline.SAVEPOINT_ACTION))
         .map(HoodieInstant::getTimestamp)
         .collect(Collectors.toSet());
-    if (!savepointTimestamps.isEmpty()) {
-      // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
-      // So, the first non-savepoint commit is considered as beginning of the active timeline.
-      return Option.fromJavaOptional(instants.stream()
-          .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
-          .findFirst());
-    }
-    return Option.fromJavaOptional(instants.stream().findFirst());
+    // There are chances that there could be holes in the timeline due to archival and savepoint interplay.
+    // So, the first non-savepoint commit is considered as beginning of the active timeline.
+    return Option.fromJavaOptional(instants.stream()
+        .filter(entry -> !savepointTimestamps.contains(entry.getTimestamp()))
+        .min(instantComparator));
   }
 
   private void clearState() {
@@ -668,7 +706,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
    * Computes the timeline hash and returns.
    */
   private String computeTimelineHash(List<HoodieInstant> instants) {
-    final MessageDigest md;
+    MessageDigest md;
     try {
       md = MessageDigest.getInstance(HASHING_ALGORITHM);
       instants.forEach(i -> md
@@ -686,7 +724,7 @@ public class HoodieDefaultTimeline implements HoodieTimeline {
     ValidationUtils.checkArgument(!instants1.isEmpty() && !instants2.isEmpty(), "The instants to merge can not be empty");
     // some optimizations are based on the assumption all the instant lists are already sorted.
     // skip when one list contains all the instants of the other one.
-    final List<HoodieInstant> merged;
+    List<HoodieInstant> merged;
     if (HoodieTimeline.compareTimestamps(instants1.get(instants1.size() - 1).getTimestamp(), LESSER_THAN_OR_EQUALS, instants2.get(0).getTimestamp())) {
       merged = new ArrayList<>(instants1);
       merged.addAll(instants2);
