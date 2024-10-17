@@ -319,7 +319,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1", true),
         Seq("cde", "row2", false),
         Seq("def", "row3", false),
         Seq("xyz", "row1", false)
@@ -516,8 +515,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
            |FROM hudi_metadata('$basePath')
            |WHERE type=7
        """.stripMargin)(
-        Seq("abc", "row1", true),
-        Seq("cde", "row2", true),
         Seq("value1_1", "row1", false),
         Seq("value2_2", "row2", false)
       )
@@ -605,7 +602,6 @@ class TestSecondaryIndexPruning extends SparkClientFunctionalTestHarness {
       spark.sql(s"update $tableName set not_record_key_col = 'xyz' where record_key_col = 'row1'")
       // validate the secondary index records themselves
       checkAnswer(s"select key, SecondaryIndexMetadata.recordKey, SecondaryIndexMetadata.isDeleted from hudi_metadata('$basePath') where type=7")(
-        Seq("abc", "row1", true),
         Seq("cde", "row2", false),
         Seq("def", "row3", false),
         Seq("xyz", "row1", false)
