@@ -104,7 +104,7 @@ public class GlueTestUtil {
     if (fileSystem.exists(path)) {
       fileSystem.delete(path, true);
     }
-    metaClient = HoodieTableMetaClient.withPropertyBuilder()
+    metaClient = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName(TABLE_NAME)
         .setPayloadClass(HoodieAvroPayload.class)

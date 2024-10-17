@@ -111,7 +111,7 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue())));
+          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
     }
   }
 

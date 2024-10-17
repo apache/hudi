@@ -112,13 +112,11 @@ object HoodieCatalystExpressionUtils extends SparkAdapterSupport {
   def generateUnsafeProjection(from: StructType, to: StructType): UnsafeProjection = {
     val projection = generateUnsafeProjectionInternal(from, to)
     val identical = from == to
-    // NOTE: Have to use explicit [[Projection]] instantiation to stay compatible w/ Scala 2.11
-    new UnsafeProjection {
-      override def apply(row: InternalRow): UnsafeRow =
-        row match {
-          case ur: UnsafeRow if identical => ur
-          case _ => projection(row)
-        }
+
+    //pattern matching anonymous function
+    {
+      case ur: UnsafeRow if identical => ur
+      case row => projection(row)
     }
   }
 

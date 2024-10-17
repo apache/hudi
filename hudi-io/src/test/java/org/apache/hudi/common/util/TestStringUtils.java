@@ -27,12 +27,15 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -77,6 +80,15 @@ public class TestStringUtils {
   public void testStringJoin() {
     assertNotEquals(null, StringUtils.join(""));
     assertNotEquals(null, StringUtils.join(STRINGS));
+  }
+
+  @Test
+  public void testStringJoinWithMap() {
+    Map<String, Object> map = new HashMap<>();
+    map.put("a", 1);
+    map.put("b", true);
+    assertNotNull(StringUtils.join(map));
+    assertEquals("{a=1, b=true}", StringUtils.join(map));
   }
 
   @Test

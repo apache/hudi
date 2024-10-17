@@ -62,6 +62,7 @@ import java.util.stream.Collectors;
 import scala.Tuple2;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool with spark-submit to drop Hudi table partitions.
  *
  * <p>
@@ -323,6 +324,7 @@ public class HoodieDropPartitionsTool implements Serializable {
   public void dryRun() {
     try (SparkRDDWriteClient<HoodieRecordPayload> client =  UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.empty(), props)) {
       HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
+      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), client.getConfig());
       List<String> parts = Arrays.asList(cfg.partitions.split(","));
       Map<String, List<String>> partitionToReplaceFileIds = jsc.parallelize(parts, parts.size()).distinct()
           .mapToPair(partitionPath -> new Tuple2<>(partitionPath, table.getSliceView().getLatestFileSlices(partitionPath).map(fg -> fg.getFileId()).distinct().collect(Collectors.toList())))

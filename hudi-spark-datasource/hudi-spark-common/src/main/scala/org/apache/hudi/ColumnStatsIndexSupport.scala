@@ -242,7 +242,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
     // penalty of the [[Dataset]], since it's required to adhere to its schema at all times, while
     // RDDs are not;
     val transposedRows: HoodieData[Row] = colStatsRecords
-      // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       .filter(JFunction.toJavaSerializableFunction(r => sortedTargetColumnsSet.contains(r.getColumnName)))
       .mapToPair(JFunction.toJavaSerializablePairFunction(r => {
         if (r.getMinValue == null && r.getMaxValue == null) {
@@ -312,7 +312,7 @@ class ColumnStatsIndexSupport(spark: SparkSession,
   private def loadColumnStatsIndexForColumnsInternal(targetColumns: Seq[String], shouldReadInMemory: Boolean): DataFrame = {
     val colStatsDF = {
       val colStatsRecords: HoodieData[HoodieMetadataColumnStats] = loadColumnStatsIndexRecords(targetColumns, shouldReadInMemory)
-      // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       val catalystRows: HoodieData[InternalRow] = colStatsRecords.mapPartitions(JFunction.toJavaSerializableFunction(it => {
         val converter = AvroConversionUtils.createAvroToInternalRowConverter(HoodieMetadataColumnStats.SCHEMA$, columnStatsRecordStructType)
         it.asScala.map(r => converter(r).orNull).asJava
@@ -346,12 +346,12 @@ class ColumnStatsIndexSupport(spark: SparkSession,
       metadataTable.getRecordsByKeyPrefixes(encodedTargetColumnNames.asJava, HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS, shouldReadInMemory)
 
     val columnStatsRecords: HoodieData[HoodieMetadataColumnStats] =
-      // NOTE: Explicit conversion is required for Scala 2.11
+      //TODO: [HUDI-8303] Explicit conversion might not be required for Scala 2.12+
       metadataRecords.map(JFunction.toJavaSerializableFunction(record => {
-        toScalaOption(record.getData.getInsertValue(null, null))
-          .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
-          .orNull
-      }))
+          toScalaOption(record.getData.getInsertValue(null, null))
+            .map(metadataRecord => metadataRecord.asInstanceOf[HoodieMetadataRecord].getColumnStatsMetadata)
+            .orNull
+        }))
         .filter(JFunction.toJavaSerializableFunction(columnStatsRecord => columnStatsRecord != null))
 
     columnStatsRecords

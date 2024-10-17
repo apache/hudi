@@ -122,4 +122,8 @@ public enum HoodieOperation {
   public static boolean isDelete(HoodieOperation operation) {
     return operation == DELETE;
   }
+
+  public static boolean isDeleteRecord(String name) {
+    return isDelete(fromName(name));
+  }
 }

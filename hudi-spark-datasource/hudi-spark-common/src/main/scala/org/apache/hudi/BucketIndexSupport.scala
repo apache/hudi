@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
@@ -28,7 +28,6 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
-
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions
@@ -46,8 +45,11 @@ class BucketIndexSupport(spark: SparkSession,
 
   private val log = LoggerFactory.getLogger(getClass)
 
-  private val keyGenerator =
-    HoodieSparkKeyGeneratorFactory.createKeyGenerator(metadataConfig.getProps)
+  private val keyGenerator = {
+    val props = new TypedProperties(metadataConfig.getProps())
+    TypedProperties.putAll(props, metaClient.getTableConfig.getProps)
+    HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
+  }
 
   private lazy val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
 

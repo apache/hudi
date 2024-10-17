@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -28,18 +29,17 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
@@ -66,6 +66,9 @@ import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordM
 public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T> {
   protected final HoodieReaderContext<T> readerContext;
   protected final Schema readerSchema;
+  protected final String orderingFieldName;
+  protected final Schema.Type orderingFieldType;
+  protected final Comparable orderingFieldDefault;
   protected final Option<String> partitionNameOverrideOpt;
   protected final Option<String[]> partitionPathFieldOpt;
   protected final RecordMergeMode recordMergeMode;
@@ -91,6 +94,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
     this.partitionPathFieldOpt = partitionPathFieldOpt;
     this.recordMergeMode = getRecordMergeMode(props);
     this.recordMerger = recordMerger;
+    this.orderingFieldName = Option.ofNullable(ConfigUtils.getOrderingField(props)).orElseGet(() -> hoodieTableMetaClient.getTableConfig().getPreCombineField());
+    this.orderingFieldType = AvroSchemaUtils.findNestedFieldType(readerSchema, this.orderingFieldName).orElse(Schema.Type.INT);
+    this.orderingFieldDefault = readerContext.castValue(0, orderingFieldType);
     //Custom merge mode should produce the same results for any merger so we won't fail if there is a mismatch
     if (recordMerger.getRecordMergeMode() != this.recordMergeMode && this.recordMergeMode != RecordMergeMode.CUSTOM) {
       throw new IllegalStateException("Record merger is " + recordMerger.getClass().getName() + " but merge mode is " + this.recordMergeMode);
@@ -158,44 +164,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
   }
 
   /**
-   * Compares two {@link Comparable}s.  If both are numbers, converts them to {@link Long} for comparison.
-   * If one of the {@link Comparable}s is a String, assumes that both are String values for comparison.
-   *
-   * @param readerContext {@link HoodieReaderContext} instance.
-   * @param o1 {@link Comparable} object.
-   * @param o2 other {@link Comparable} object to compare to.
-   * @return comparison result.
-   */
-  @VisibleForTesting
-  static int compareTo(HoodieReaderContext readerContext, Comparable o1, Comparable o2) {
-    // TODO(HUDI-7848): fix the delete records to contain the correct ordering value type
-    //  so this util with the number comparison is not necessary.
-    try {
-      return o1.compareTo(o2);
-    } catch (ClassCastException e) {
-      boolean isO1LongOrInteger = (o1 instanceof Long || o1 instanceof Integer);
-      boolean isO2LongOrInteger = (o2 instanceof Long || o2 instanceof Integer);
-      boolean isO1DoubleOrFloat = (o1 instanceof Double || o1 instanceof Float);
-      boolean isO2DoubleOrFloat = (o2 instanceof Double || o2 instanceof Float);
-      if (isO1LongOrInteger && isO2LongOrInteger) {
-        Long o1LongValue = ((Number) o1).longValue();
-        Long o2LongValue = ((Number) o2).longValue();
-        return o1LongValue.compareTo(o2LongValue);
-      } else if ((isO1LongOrInteger && isO2DoubleOrFloat)
-          || (isO1DoubleOrFloat && isO2LongOrInteger)) {
-        Double o1DoubleValue = ((Number) o1).doubleValue();
-        Double o2DoubleValue = ((Number) o2).doubleValue();
-        return o1DoubleValue.compareTo(o2DoubleValue);
-      } else {
-        return readerContext.compareTo(o1, o2);
-      }
-    } catch (Throwable e) {
-      throw new HoodieException("Cannot compare values: "
-          + o1 + "(" + o1.getClass() + "), " + o2 + "(" + o2.getClass() + ")", e);
-    }
-  }
-
-  /**
    * Merge two log data records if needed.
    *
    * @param record
@@ -241,13 +209,14 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
             return Option.empty();
           case EVENT_TIME_ORDERING:
             Comparable existingOrderingValue = readerContext.getOrderingValue(
-                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema, props);
+                existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(),
+                readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
             if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingValue)) {
               return Option.empty();
             }
             Comparable incomingOrderingValue = readerContext.getOrderingValue(
-                Option.of(record), metadata, readerSchema, props);
-            if (compareTo(readerContext, incomingOrderingValue, existingOrderingValue) > 0) {
+                Option.of(record), metadata, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+            if (incomingOrderingValue.compareTo(existingOrderingValue) > 0) {
               return Option.of(Pair.of(record, metadata));
             }
             return Option.empty();
@@ -305,7 +274,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
         default:
           Comparable existingOrderingVal = readerContext.getOrderingValue(
               existingRecordMetadataPair.getLeft(), existingRecordMetadataPair.getRight(), readerSchema,
-              props);
+              orderingFieldName, orderingFieldType, orderingFieldDefault);
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
@@ -407,16 +376,16 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           return newer;
         case EVENT_TIME_ORDERING:
           Comparable oldOrderingValue = readerContext.getOrderingValue(
-              older, olderInfoMap, readerSchema, props);
+              older, olderInfoMap, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
           if (isDeleteRecordWithNaturalOrder(older, oldOrderingValue)) {
             return newer;
           }
           Comparable newOrderingValue = readerContext.getOrderingValue(
-              newer, newerInfoMap, readerSchema, props);
+              newer, newerInfoMap, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
-          if (compareTo(readerContext, oldOrderingValue, newOrderingValue) > 0) {
+          if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
           }
           return newer;
@@ -487,6 +456,6 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
 
   private boolean isDeleteRecordWithNaturalOrder(Option<T> rowOption,
                                                  Comparable orderingValue) {
-    return rowOption.isEmpty() && orderingValue.equals(0);
+    return rowOption.isEmpty() && orderingValue.equals(orderingFieldDefault);
   }
 }

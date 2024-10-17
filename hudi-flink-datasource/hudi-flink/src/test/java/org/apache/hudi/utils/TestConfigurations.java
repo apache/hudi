@@ -97,6 +97,16 @@ public class TestConfigurations {
               DataTypes.FIELD("change_type", DataTypes.INT()))),
           DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.INT())),
           DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.INT())),
+          DataTypes.FIELD("f_row_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
+          DataTypes.FIELD("f_row_array", DataTypes.ARRAY(DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
           DataTypes.FIELD("partition", DataTypes.VARCHAR(10)))
       .notNull();
 
@@ -118,6 +128,18 @@ public class TestConfigurations {
               DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0)))),
           DataTypes.FIELD("f_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.DOUBLE())),
           DataTypes.FIELD("f_array", DataTypes.ARRAY(DataTypes.DOUBLE())),
+          DataTypes.FIELD("f_row_map", DataTypes.MAP(DataTypes.STRING(), DataTypes.ROW(
+              DataTypes.FIELD("f2", DataTypes.INT()), // new field added in the middle of struct
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("renamed_change_type", DataTypes.BIGINT()),
+              DataTypes.FIELD("f3", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("f0", DataTypes.DECIMAL(20, 0))))),
+          DataTypes.FIELD("f_row_array", DataTypes.ARRAY(DataTypes.ROW(
+              DataTypes.FIELD("f0", DataTypes.INT()),
+              DataTypes.FIELD("f1", DataTypes.STRING()),
+              DataTypes.FIELD("drop_add", DataTypes.STRING()),
+              DataTypes.FIELD("change_type", DataTypes.INT())))),
           DataTypes.FIELD("new_row_col", DataTypes.ROW(
               DataTypes.FIELD("f0", DataTypes.BIGINT()),
               DataTypes.FIELD("f1", DataTypes.STRING()))),

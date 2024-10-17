@@ -94,7 +94,14 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     tableConfig.getPartitionFields.orElse(Array.empty).toSeq
   } else {
     //it's custom keygen
-    CustomAvroKeyGenerator.getTimestampFields(HoodieTableConfig.getPartitionFieldsForKeyGenerator(tableConfig).orElse(java.util.Collections.emptyList[String]())).asScala.toSeq
+    val timestampFieldsOpt = CustomAvroKeyGenerator.getTimestampFields(tableConfig)
+    if (timestampFieldsOpt.isPresent) {
+      timestampFieldsOpt.get().asScala.toSeq
+    } else {
+      // timestamp fields above are determined using partition type
+      // For older tables the partition type may not be available so falling back to partition fields in those cases
+      tableConfig.getPartitionFields.orElse(Array.empty).toSeq
+    }
   }
 
   protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
@@ -356,7 +363,7 @@ class HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(override val sqlContex
     preCombineFieldOpt.map(Seq(_)).getOrElse(Seq()) ++ partitionColumnsToRead
 
   override val fileIndex = new HoodieIncrementalFileIndex(
-    sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
+    sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, true)
 
   override def buildFileFormat(): FileFormat = {
     if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled && !isBootstrap) {
@@ -395,7 +402,7 @@ class HoodieCopyOnWriteCDCHadoopFsRelationFactory(override val sqlContext: SQLCo
                                                   isBootstrap: Boolean)
   extends HoodieCopyOnWriteIncrementalHadoopFsRelationFactory(sqlContext, metaClient, options, schemaSpec, isBootstrap) {
   override val fileIndex = new HoodieCDCFileIndex(
-    sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, isBootstrap)
+    sparkSession, metaClient, schemaSpec, options, FileStatusCache.getOrCreate(sparkSession), false, true)
 
   override def buildDataSchema(): StructType = fileIndex.cdcRelation.schema
 

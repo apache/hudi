@@ -60,6 +60,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
+ * TODO: [HUDI-8294]
  * A validator with spark-submit to ensure there are no dangling data files in the data table.
  * No data files found for commits prior to active timeline.
  * No extra data files found for completed commits more than whats present in commit metadata.

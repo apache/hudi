@@ -504,7 +504,7 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
             .withMaxNumDeltaCommitsBeforeCompaction(12) // cannot restore to before the oldest compaction on MDT as there are no base files before that time
             .build())
         .build();
-    // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11 (Spark >= 3.3)
+    // module com.fasterxml.jackson.datatype:jackson-datatype-jsr310 is needed for proper column stats processing for Jackson >= 2.11
     // Java 8 date/time type `java.time.LocalDate` is not supported by default
     JsonUtils.registerModules();
     init(tableType, writeConfig);
@@ -2803,7 +2803,15 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
       List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, storage, getMetadataTableBasePath(basePath), false);
-      assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+      // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
+      metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
+        if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
+          metadataWriter.getEnabledPartitionTypes().stream().filter(partitionType -> !MetadataPartitionType.shouldDeletePartitionOnRestore(partitionType.getPartitionPath()))
+              .forEach(partitionType -> assertTrue(metadataTablePartitions.contains(partitionType.getPartitionPath())));
+        } else {
+          assertEquals(metadataWriter.getEnabledPartitionTypes().size(), metadataTablePartitions.size());
+        }
+      });
 
       final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
       metadataWriter.getEnabledPartitionTypes().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));

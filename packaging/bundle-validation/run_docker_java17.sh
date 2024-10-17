@@ -23,17 +23,7 @@ CONTAINER_NAME=hudi_docker
 DOCKER_TEST_DIR=/opt/bundle-validation/docker-test
 
 # choose versions based on build profiles
-if [[ ${SPARK_RUNTIME} == 'spark2.4.8' ]]; then
-  HADOOP_VERSION=2.7.7
-  HIVE_VERSION=2.3.9
-  DERBY_VERSION=10.10.2.0
-  FLINK_VERSION=1.14.6
-  SPARK_VERSION=2.4.8
-  SPARK_HADOOP_VERSION=2.7
-  CONFLUENT_VERSION=5.5.12
-  KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  IMAGE_TAG=flink1146hive239spark248
-elif [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
+if [[ ${SPARK_RUNTIME} == 'spark3.3.1' ]]; then
   HADOOP_VERSION=2.7.7
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0

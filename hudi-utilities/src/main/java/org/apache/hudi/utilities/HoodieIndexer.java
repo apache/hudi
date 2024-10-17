@@ -63,6 +63,7 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
+ * TODO: [HUDI-8294]
  * A tool to run metadata indexing asynchronously.
  * <p>
  * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):
@@ -305,7 +306,8 @@ public class HoodieIndexer {
   }
 
   private int dropIndex(JavaSparkContext jsc) throws Exception {
-    List<MetadataPartitionType> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty());
+    List<String> partitionTypes = getRequestedPartitionTypes(cfg.indexTypes, Option.empty())
+        .stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
     String schemaStr = UtilHelpers.getSchemaFromLatestInstant(metaClient);
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       client.dropIndex(partitionTypes);

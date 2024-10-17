@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
@@ -321,6 +322,17 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
 
     public static void resetTargetSchema() {
       TestSchemaProvider.targetSchema = null;
+    }
+  }
+
+  public static class TestErrorTableV1 extends TestErrorTable {
+    public TestErrorTableV1(HoodieStreamer.Config cfg,
+                            SparkSession sparkSession,
+                            TypedProperties props,
+                            HoodieSparkEngineContext hoodieSparkContext,
+                            FileSystem fs,
+                            Option<HoodieIngestionMetrics> metrics) {
+      super(cfg, sparkSession, props, hoodieSparkContext, fs);
     }
   }
 

@@ -399,7 +399,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs);
-    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 10L);
+    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
     when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
@@ -431,6 +431,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 150L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip2.json", 150L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match1.json", 150L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 150L, "3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 150L, "3"));
 
@@ -438,7 +439,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     setMockQueryRunner(inputDs);
     when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
-    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 10L);
+    SourceProfile<Long> sourceProfile = new TestSourceProfile(50L, 0, 10L);
     if (useSourceProfile) {
       when(sourceProfileSupplier.getSourceProfile()).thenReturn(sourceProfile);
     } else {
@@ -447,6 +448,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
     typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "path/to/file[0-9]+");
 
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of("1#path/to/file3.json"), 50L, "3#path/to/file4.json", typedProperties);
 
@@ -470,32 +472,44 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     List<Triple<String, Long, String>> filePathSizeAndCommitTime = new ArrayList<>();
     // Add file paths and sizes to the list
     filePathSizeAndCommitTime.add(Triple.of("path/to/file1.json", 50L, "1"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match1.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file2.json", 50L, "1"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip1.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/skip2.json", 50L, "2"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match2.json", 50L, "2"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file5.json", 50L, "3"));
     filePathSizeAndCommitTime.add(Triple.of("path/to/file4.json", 50L, "3"));
+    filePathSizeAndCommitTime.add(Triple.of("path/to/file_no_match3.json", 50L, "3"));
 
     Dataset<Row> inputDs = generateDataset(filePathSizeAndCommitTime);
 
     setMockQueryRunner(inputDs, Option.of(snapshotCheckPoint));
     when(mockCloudObjectsSelectorCommon.loadAsDataset(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.eq(schemaProvider), Mockito.anyInt())).thenReturn(Option.empty());
     TypedProperties typedProperties = setProps(READ_UPTO_LATEST_COMMIT);
-    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to/skip");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "path/to/file[0-9]+");
+
     List<Long> bytesPerPartition = Arrays.asList(10L, 20L, -1L, 1000L * 1000L * 1000L);
 
+    // If the computed number of partitions based on bytes is less than this value, it should use this value for num partitions.
+    int sourcePartitions = 2;
     //1. snapshot query, read all records
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, bytesPerPartition.get(0)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50000L, sourcePartitions, bytesPerPartition.get(0)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50000L, exptected1, typedProperties);
     //2. incremental query, as commit is present in timeline
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, bytesPerPartition.get(1)));
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relpath.prefix", "path/to/");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relative.path.regex", "file[0-9]+");
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(10L, sourcePartitions, bytesPerPartition.get(1)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.of(exptected1), 10L, exptected2, typedProperties);
     //3. snapshot query with source limit less than first commit size
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(2)));
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.select.relpath.prefix", "path/to");
+    typedProperties.remove("hoodie.streamer.source.cloud.data.select.relative.path.regex");
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(2)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected3, typedProperties);
-    typedProperties.setProperty("hoodie.streamer.source.s3incr.ignore.key.prefix", "path/to");
+    typedProperties.setProperty("hoodie.streamer.source.cloud.data.ignore.relpath.prefix", "path/to");
+    typedProperties.remove("hoodie.streamer.source.cloud.data.select.relpath.prefix");
     //4. As snapshotQuery will return 1 -> same would be return as nextCheckpoint (dataset is empty due to ignore prefix).
-    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, bytesPerPartition.get(3)));
+    when(sourceProfileSupplier.getSourceProfile()).thenReturn(new TestSourceProfile(50L, sourcePartitions, bytesPerPartition.get(3)));
     readAndAssert(READ_UPTO_LATEST_COMMIT, Option.empty(), 50L, exptected4, typedProperties);
     // Verify the partitions being passed in getCloudObjectDataDF are correct.
     ArgumentCaptor<Integer> argumentCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -504,9 +518,9 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
     verify(metrics, atLeastOnce()).updateStreamerSourceParallelism(argumentCaptorForMetrics.capture());
     List<Integer> numPartitions;
     if (snapshotCheckPoint.equals("1") || snapshotCheckPoint.equals("2")) {
-      numPartitions = Arrays.asList(12, 3, 1);
+      numPartitions = Arrays.asList(12, 3, sourcePartitions);
     } else {
-      numPartitions = Arrays.asList(23, 1);
+      numPartitions = Arrays.asList(23, sourcePartitions);
     }
     Assertions.assertEquals(numPartitions, argumentCaptor.getAllValues());
     Assertions.assertEquals(numPartitions, argumentCaptorForMetrics.getAllValues());
@@ -566,12 +580,13 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
   }
 
   static class TestSourceProfile implements SourceProfile<Long> {
-
     private final long maxSourceBytes;
+    private final int sourcePartitions;
     private final long bytesPerPartition;
 
-    public TestSourceProfile(long maxSourceBytes, long bytesPerPartition) {
+    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, long bytesPerPartition) {
       this.maxSourceBytes = maxSourceBytes;
+      this.sourcePartitions = sourcePartitions;
       this.bytesPerPartition = bytesPerPartition;
     }
 
@@ -582,7 +597,7 @@ public class TestS3EventsHoodieIncrSource extends SparkClientFunctionalTestHarne
 
     @Override
     public int getSourcePartitions() {
-      throw new UnsupportedOperationException("getSourcePartitions is not required for S3 source profile");
+      return sourcePartitions;
     }
 
     @Override

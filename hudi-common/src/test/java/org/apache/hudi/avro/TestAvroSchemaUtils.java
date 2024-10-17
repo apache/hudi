@@ -19,6 +19,7 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -365,5 +366,31 @@ public class TestAvroSchemaUtils {
     Option<Schema.Field> missingField = AvroSchemaUtils.findNestedField(fullSchema, "nested_record.long");
     assertTrue(missingField.isPresent());
     assertEquals(fullSchema, AvroSchemaUtils.appendFieldsToSchemaDedupNested(missingFieldSchema, Collections.singletonList(missingField.get())));
+  }
+
+  @Test
+  public void testFindNestedFieldType() {
+    Schema sourceSchema = new Schema.Parser().parse(SOURCE_SCHEMA);
+    Option<Schema.Type> field = AvroSchemaUtils.findNestedFieldType(sourceSchema, "number");
+    assertTrue(field.isPresent());
+    assertEquals(Schema.Type.INT, field.get());
+
+    field = AvroSchemaUtils.findNestedFieldType(sourceSchema, "nested_record.string");
+    assertTrue(field.isPresent());
+    assertEquals(Schema.Type.STRING, field.get());
+
+    field = AvroSchemaUtils.findNestedFieldType(sourceSchema, "nested_record.long");
+    assertTrue(field.isPresent());
+    assertEquals(Schema.Type.LONG, field.get());
+
+    field = AvroSchemaUtils.findNestedFieldType(sourceSchema, null);
+    assertTrue(field.isEmpty());
+
+    field = AvroSchemaUtils.findNestedFieldType(sourceSchema, "");
+    assertTrue(field.isEmpty());
+
+    assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "long"));
+    assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "nested_record.bool"));
+    assertThrows(HoodieAvroSchemaException.class, () -> AvroSchemaUtils.findNestedFieldType(sourceSchema, "non_present_field.also_not_present"));
   }
 }

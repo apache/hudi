@@ -316,6 +316,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Initializes the metadata table by reading from the file system when the table is first created. Enabled by default. "
           + "Warning: This should only be disabled when manually constructing the metadata table outside of typical Hudi writer flows.");
 
+  public static final ConfigProperty<Boolean> FUNCTIONAL_INDEX_ENABLE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".index.functional.enable")
+      .defaultValue(false)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable functional index within the Metadata Table. Note that this config is to enable/disable all functional indexes. "
+          + "To enable or disable each functional index individually, users still need to use CREATE/DROP INDEX SQL commands.");
+
   public static final ConfigProperty<Integer> FUNCTIONAL_INDEX_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.functional.file.group.count")
       .defaultValue(2)
@@ -350,6 +357,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Parallelism to use, when generating partition stats index.");
+
+  public static final ConfigProperty<Boolean> ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.tightBound.enable")
+      .defaultValue(true)
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable tight bound for the min/max value for each column at the storage partition level. "
+          + "Typically, the min/max range for each column can become wider (i.e. the minValue is <= all valid values "
+          + "in the file, and the maxValue >= all valid values in the file) with updates and deletes. If this config is enabled, "
+          + "the min/max range will be updated to the tight bound of the valid values in the latest snapshot of the partition.");
 
   public static final ConfigProperty<Boolean> SECONDARY_INDEX_ENABLE_PROP = ConfigProperty
       .key(METADATA_PREFIX + ".index.secondary.enable")
@@ -494,6 +510,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(AUTO_INITIALIZE);
   }
 
+  public boolean isFunctionalIndexEnabled() {
+    return getBooleanOrDefault(FUNCTIONAL_INDEX_ENABLE_PROP);
+  }
+
   public int getFunctionalIndexFileGroupCount() {
     return getInt(FUNCTIONAL_INDEX_FILE_GROUP_COUNT);
   }
@@ -512,6 +532,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getPartitionStatsIndexParallelism() {
     return getInt(PARTITION_STATS_INDEX_PARALLELISM);
+  }
+
+  public boolean isPartitionStatsIndexTightBoundEnabled() {
+    return getBooleanOrDefault(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND);
   }
 
   public boolean isSecondaryIndexEnabled() {
@@ -722,6 +746,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withPartitionStatsIndexParallelism(int parallelism) {
       metadataConfig.setValue(PARTITION_STATS_INDEX_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
+    public Builder withPartitionStatsIndexTightBound(boolean enable) {
+      metadataConfig.setValue(ENABLE_PARTITION_STATS_INDEX_TIGHT_BOUND, String.valueOf(enable));
       return this;
     }
 

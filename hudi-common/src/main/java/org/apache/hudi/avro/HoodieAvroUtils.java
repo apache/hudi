@@ -1019,7 +1019,7 @@ public class HoodieAvroUtils {
     return result;
   }
 
-  private static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
+  public static Object rewritePrimaryType(Object oldValue, Schema oldSchema, Schema newSchema) {
     if (oldSchema.getType() == newSchema.getType()) {
       switch (oldSchema.getType()) {
         case NULL:

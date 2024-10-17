@@ -175,13 +175,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(tableType)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath) throws IOException {
@@ -190,13 +189,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
 
   @Override
   public HoodieTableMetaClient getHoodieMetaClient(StorageConfiguration<?> storageConf, String basePath, Properties props) throws IOException {
-    props = HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setTableName(RAW_TRIPS_TEST_NAME)
         .setTableType(COPY_ON_WRITE)
         .setPayloadClass(HoodieAvroPayload.class)
         .fromProperties(props)
-        .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, props);
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   @Override

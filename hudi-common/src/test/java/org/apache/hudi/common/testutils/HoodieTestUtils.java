@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.testutils;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -27,8 +28,11 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
@@ -131,6 +135,12 @@ public class HoodieTestUtils {
     return init(getDefaultStorageConf(), basePath, HoodieTableType.COPY_ON_WRITE, baseFileFormat);
   }
 
+  public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, HoodieTableVersion version) throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.VERSION.key(), String.valueOf(version.versionCode()));
+    return init(getDefaultStorageConf(), basePath, tableType, properties);
+  }
+
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath) throws IOException {
     return init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE);
   }
@@ -181,8 +191,8 @@ public class HoodieTestUtils {
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties, String databaseName)
       throws IOException {
-    HoodieTableMetaClient.PropertyBuilder builder =
-        HoodieTableMetaClient.withPropertyBuilder()
+    HoodieTableMetaClient.TableBuilder builder =
+        HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
             .setTableType(tableType)
@@ -198,9 +208,8 @@ public class HoodieTestUtils {
       builder.setPartitionFields("some_nonexistent_field");
     }
 
-    Properties processedProperties = builder.fromProperties(properties).build();
-
-    return HoodieTableMetaClient.initTableAndGetMetaClient(storageConf.newInstance(), basePath, processedProperties);
+    return builder.fromProperties(properties)
+        .initTable(storageConf.newInstance(), basePath);
   }
 
   public static HoodieTableMetaClient init(String basePath, HoodieTableType tableType, String bootstrapBasePath, HoodieFileFormat baseFileFormat, String keyGenerator) throws IOException {
@@ -366,5 +375,19 @@ public class HoodieTestUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Failed to get instant file status", e);
     }
+  }
+
+  /**
+   * Gets the pair of partition and cleaned file from the clean metadata.
+   */
+  public static List<Pair<String, String>> getCleanedFiles(HoodieTableMetaClient metaClient, HoodieInstant cleanInstant) throws IOException {
+    HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, cleanInstant);
+    List<Pair<String, String>> deleteFileList = new ArrayList<>();
+    cleanMetadata.getPartitionMetadata().forEach((partition, partitionMetadata) -> {
+      // Files deleted from a partition
+      List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      deletedFiles.forEach(entry -> deleteFileList.add(Pair.of(partition, entry)));
+    });
+    return deleteFileList;
   }
 }

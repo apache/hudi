@@ -14,6 +14,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
+<!-- TODO: [HUDI-8294] make this whole readme make sense for spark 3-->
 
 This page describes in detail how to run end to end tests on a hudi dataset that helps in improving our confidence 
 in a release as well as perform large scale performance benchmarks.  

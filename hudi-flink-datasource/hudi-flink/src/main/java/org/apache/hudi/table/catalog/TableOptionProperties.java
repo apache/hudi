@@ -67,7 +67,7 @@ public class TableOptionProperties {
 
   public static final String SPARK_SOURCE_PROVIDER = "spark.sql.sources.provider";
   public static final String SPARK_VERSION = "spark.version";
-  public static final String DEFAULT_SPARK_VERSION = "spark2.4.4";
+  public static final String DEFAULT_SPARK_VERSION = "spark3.5.1";
   static final Map<String, String> VALUE_MAPPING = new HashMap<>();
   static final Map<String, String> KEY_MAPPING = new HashMap<>();
 

@@ -78,7 +78,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     HoodieStorage storage = new HoodieHadoopStorage(fs);
-    metaClient.setHoodieStorage(storage);
+    metaClient.setStorage(storage);
   }
 
   // Test the scenario that fs keeps retrying until it fails.
@@ -92,7 +92,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     HoodieWrapperFileSystem fs =
         new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
     HoodieStorage storage = new HoodieHadoopStorage(fs);
-    metaClient.setHoodieStorage(storage);
+    metaClient.setStorage(storage);
     List<String> folders =
         Arrays.asList("2016/04/15", ".hoodie/.temp/2/2016/04/15");
     folders.forEach(f -> assertThrows(RuntimeException.class, () -> metaClient.getStorage()
