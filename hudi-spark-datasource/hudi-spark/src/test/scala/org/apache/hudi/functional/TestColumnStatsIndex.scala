@@ -317,6 +317,64 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     assertTrue(metaClient.getActiveTimeline.getRollbackTimeline.countInstants() > 0)
   }
 
+  @Test
+  def testMORDeleteBlocks(): Unit = {
+    val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
+    val partitionCol = "c8"
+    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true)
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> partitionCol,
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "5"
+    ) ++ metadataOpts
+
+    // inserts
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    // updates
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/update2-input-table-json/",
+      expectedColStatsSourcePath = null,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      false,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+
+    val expectedColStatsSourcePath = "index/colstats/mor-delete-block1-column-stats-index-table.json"
+
+    // delete a subset of recs. this will add a delete log block for MOR table.
+    doWriteAndValidateColumnStats(DoWriteAndValidateColumnStatsParams(testCase, metadataOpts, commonOpts,
+      dataSourcePath = "index/colstats/delete-input-table-json/",
+      expectedColStatsSourcePath = expectedColStatsSourcePath,
+      operation = DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      true,
+      numPartitions = 1,
+      parquetMaxFileSize = 100 * 1024 * 1024,
+      smallFileLimit = 0))
+  }
+
   @ParameterizedTest
   @ValueSource(strings = Array("", "c8"))
   def testColStatsWithCleanCOW(partitionCol: String): Unit = {

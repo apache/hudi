@@ -206,7 +206,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
   protected HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
     this(key, type, filesystemMetadata, null, null, null, null,
-        false);
+        filesystemMetadata.isEmpty());
   }
 
   protected HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
