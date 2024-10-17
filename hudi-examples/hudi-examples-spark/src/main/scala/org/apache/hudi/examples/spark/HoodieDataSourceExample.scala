@@ -90,10 +90,7 @@ object HoodieDataSourceExample {
     * Load the data files into a DataFrame.
     */
   def queryData(spark: SparkSession, tablePath: String, tableName: String, dataGen: HoodieExampleDataGenerator[HoodieAvroPayload]): Unit = {
-    val roViewDF = spark.
-      read.
-      format("hudi").
-      load(tablePath + "/*/*/*/*")
+    val roViewDF = spark.read.format("hudi").load(tablePath)
 
     roViewDF.createOrReplaceTempView("hudi_ro_table")
 
@@ -136,7 +133,7 @@ object HoodieDataSourceExample {
    */
   def delete(spark: SparkSession, tablePath: String, tableName: String): Unit = {
 
-    val roViewDF = spark.read.format("hudi").load(tablePath + "/*/*/*/*")
+    val roViewDF = spark.read.format("hudi").load(tablePath)
     roViewDF.createOrReplaceTempView("hudi_ro_table")
     val df = spark.sql("select uuid, partitionpath, ts from  hudi_ro_table limit 2")
 
