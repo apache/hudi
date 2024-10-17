@@ -864,7 +864,8 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       baseFileRecords.forEach((key, value) -> {
         if (!deletedRecordsFromLogs.contains(key)) {
           recordKeyMap.put(key, value.getRecordKey());
-        }});
+        }
+      });
     } catch (IOException ioe) {
       throw new HoodieIOException("Error merging records from metadata table for  " + recordKeys.size() + " key : ", ioe);
     } finally {
@@ -993,7 +994,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       // file slice has only base file
       timings.add(timer.endTimer());
       if (!deleteRecordKeysFromLogs.isEmpty()) { // remove deleted records from log from base file record list
-       deleteRecordKeysFromLogs.forEach(key -> baseFileRecordsMap.remove(key));
+        deleteRecordKeysFromLogs.forEach(key -> baseFileRecordsMap.remove(key));
       }
       return baseFileRecordsMap;
     }
