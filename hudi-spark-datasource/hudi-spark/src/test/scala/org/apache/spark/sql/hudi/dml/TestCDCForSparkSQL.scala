@@ -33,9 +33,9 @@ class TestCDCForSparkSQL extends HoodieSparkSqlTestBase {
     val reader = spark.read.format("hudi")
       .option(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(INCREMENTAL_FORMAT.key, INCREMENTAL_FORMAT_CDC_VAL)
-      .option(BEGIN_INSTANTTIME.key, startingTs.toString)
+      .option(BEGIN_COMPLETION_TIME.key, startingTs.toString)
     endingTs.foreach { ts =>
-      reader.option(END_INSTANTTIME.key, ts.toString)
+      reader.option(END_COMPLETION_TIME.key, ts.toString)
     }
     reader.load(basePath)
   }

@@ -69,9 +69,9 @@ class IncrementalRelation(val sqlContext: SQLContext,
   if (commitTimeline.empty()) {
     throw new HoodieException("No instants to incrementally pull")
   }
-  if (!optParams.contains(DataSourceReadOptions.BEGIN_INSTANTTIME.key)) {
+  if (!optParams.contains(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key)) {
     throw new HoodieException(s"Specify the begin instant time to pull from using " +
-      s"option ${DataSourceReadOptions.BEGIN_INSTANTTIME.key}")
+      s"option ${DataSourceReadOptions.BEGIN_COMPLETION_TIME.key}")
   }
 
   if (!metaClient.getTableConfig.populateMetaFields()) {
@@ -81,8 +81,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
   private val queryContext: IncrementalQueryAnalyzer.QueryContext =
     IncrementalQueryAnalyzer.builder()
       .metaClient(metaClient)
-      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
-      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
+      .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key))
+      .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_COMPLETION_TIME.key, null))
       .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
       .build()
       .analyze()

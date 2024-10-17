@@ -161,8 +161,8 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
       fallBackFullTableScan: Boolean): Unit = {
     val hoodieIncViewDF = spark.read.format("org.apache.hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key(), startTs)
-      .option(DataSourceReadOptions.END_INSTANTTIME.key(), endTs)
+      .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key(), startTs)
+      .option(DataSourceReadOptions.END_COMPLETION_TIME.key(), endTs)
       .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key(), fallBackFullTableScan)
       .load(basePath)
     assertEquals(perBatchSize * batchNum, hoodieIncViewDF.count())

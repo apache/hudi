@@ -56,8 +56,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.DataSourceReadOptions.BEGIN_INSTANTTIME;
-import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
@@ -255,8 +253,8 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(BEGIN_INSTANTTIME().key(), beginCompletionTime)
-          .option(END_INSTANTTIME().key(), endCompletionTime)
+          .option(BEGIN_COMPLETION_TIME().key(), beginCompletionTime)
+          .option(END_COMPLETION_TIME().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
                   INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue()))

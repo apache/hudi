@@ -649,8 +649,8 @@ class TestDataSourceForBootstrap {
     // during bootstrap
     val hoodieIncViewDF1 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, "000")
-      .option(DataSourceReadOptions.END_INSTANTTIME.key, bootstrapCommitCompletionTime)
+      .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, "000")
+      .option(DataSourceReadOptions.END_COMPLETION_TIME.key, bootstrapCommitCompletionTime)
       .load(basePath)
 
     assertEquals(numRecords, hoodieIncViewDF1.count())
@@ -663,7 +663,7 @@ class TestDataSourceForBootstrap {
     // later commits
     val hoodieIncViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beginCompletionTime)
+      .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, beginCompletionTime)
       .load(basePath)
 
     assertEquals(numRecordsUpdate, hoodieIncViewDF2.count())
@@ -676,7 +676,7 @@ class TestDataSourceForBootstrap {
       // pull the update commits within certain partitions
       val hoodieIncViewDF3 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beginCompletionTime)
+        .option(DataSourceReadOptions.BEGIN_COMPLETION_TIME.key, beginCompletionTime)
         .option(DataSourceReadOptions.INCR_PATH_GLOB.key, relativePartitionPath)
         .load(basePath)
 

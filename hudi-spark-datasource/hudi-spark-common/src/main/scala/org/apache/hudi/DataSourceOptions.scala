@@ -23,7 +23,6 @@ import org.apache.hudi.common.config._
 import org.apache.hudi.common.fs.ConsistencyGuardConfig
 import org.apache.hudi.common.model.{HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling
 import org.apache.hudi.common.util.ConfigUtils.{DELTA_STREAMER_CONFIG_PREFIX, IS_QUERY_AS_RO_TABLE, STREAMER_CONFIG_PREFIX}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -104,26 +103,22 @@ object DataSourceReadOptions {
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
-  val BEGIN_INSTANTTIME: ConfigProperty[String] = ConfigProperty
+  val BEGIN_COMPLETION_TIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()
-    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. Represents the instant time to start incrementally pulling data from. The instanttime here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with an instant_time >= BEGIN_INSTANTTIME are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to "
-      + HollowCommitHandling.USE_TRANSITION_TIME + ", will use instant's "
-      + "`stateTransitionTime` to perform comparison.")
+    .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
+      + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
+      + "correspond to an instant on the timeline. New data written with an completion_time >= BEGIN_COMPLETION_TIME are fetched out. "
+      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.")
 
-  val END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
+  val END_COMPLETION_TIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
     .noDefaultValue()
-    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL +
-      "`. Represents the instant time to limit incrementally fetched data to. When not specified latest commit time from " +
-      "timeline is assumed by default. When specified, new data written with an instant_time <= END_INSTANTTIME are fetched out. " +
-      "Point in time type queries make more sense with begin and end instant times specified. Note that if `"
-      + HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key() + "` set to `"
-      + HollowCommitHandling.USE_TRANSITION_TIME + "`, will use instant's "
-      + "`stateTransitionTime` to perform comparison.")
+    .withDocumentation("Used when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL
+      + "`. Represents the completion time to limit incrementally fetched data to. When not specified latest commit "
+      + "completion time from timeline is assumed by default. When specified, new data written with "
+      + "an completion_time <= END_COMPLETION_TIME are fetched out. "
+      + "Point in time type queries make more sense with begin and end completion times specified.")
 
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.schema.use.end.instanttime")
@@ -261,12 +256,12 @@ object DataSourceReadOptions {
   val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   @Deprecated
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-  /** @deprecated Use {@link BEGIN_INSTANTTIME} and its methods instead */
+  /** @deprecated Use {@link BEGIN_COMPLETION_TIME} and its methods instead */
   @Deprecated
-  val BEGIN_INSTANTTIME_OPT_KEY = BEGIN_INSTANTTIME.key()
-  /** @deprecated Use {@link END_INSTANTTIME} and its methods instead */
+  val BEGIN_INSTANTTIME_OPT_KEY = BEGIN_COMPLETION_TIME.key()
+  /** @deprecated Use {@link END_COMPLETION_TIME} and its methods instead */
   @Deprecated
-  val END_INSTANTTIME_OPT_KEY = END_INSTANTTIME.key()
+  val END_INSTANTTIME_OPT_KEY = END_COMPLETION_TIME.key()
   /** @deprecated Use {@link INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME} and its methods instead */
   @Deprecated
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key()

@@ -127,8 +127,8 @@ class HoodieStreamSource(
     } else {
       if (isCDCQuery) {
         val cdcOptions = Map(
-          DataSourceReadOptions.BEGIN_INSTANTTIME.key()-> startCompletionTime(startOffset),
-          DataSourceReadOptions.END_INSTANTTIME.key() -> endOffset.completionTime
+          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key() -> startCompletionTime(startOffset),
+          DataSourceReadOptions.END_COMPLETION_TIME.key() -> endOffset.completionTime
         )
         val rdd = CDCRelation.getCDCRelation(sqlContext, metaClient, cdcOptions)
           .buildScan0(HoodieCDCUtils.CDC_COLUMNS, Array.empty)
@@ -138,8 +138,8 @@ class HoodieStreamSource(
         // Consume the data between (startCommitTime, endCommitTime]
         val incParams = parameters ++ Map(
           DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          DataSourceReadOptions.BEGIN_INSTANTTIME.key -> startCompletionTime(startOffset),
-          DataSourceReadOptions.END_INSTANTTIME.key -> endOffset.completionTime
+          DataSourceReadOptions.BEGIN_COMPLETION_TIME.key -> startCompletionTime(startOffset),
+          DataSourceReadOptions.END_COMPLETION_TIME.key -> endOffset.completionTime
         )
 
         val rdd = tableType match {
