@@ -108,7 +108,7 @@ public abstract class HoodieSparkTable<T>
       // metadata table bootstrapping. Bootstrapping process could fail and checking the table
       // existence after the creation is needed.
       HoodieTableMetadataWriter metadataWriter = SparkHoodieBackedTableMetadataWriter.create(
-          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
+          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
           Option.of(triggeringInstantTimestamp));
       try {
         if (isMetadataTableExists || metaClient.getStorage().exists(

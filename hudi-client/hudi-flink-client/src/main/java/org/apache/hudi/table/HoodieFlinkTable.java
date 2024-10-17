@@ -104,7 +104,7 @@ public abstract class HoodieFlinkTable<T>
       HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy) {
     if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
-          context.getStorageConf(), config, failedWritesCleaningPolicy, context,
+          getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
           Option.of(triggeringInstantTimestamp)));
     } else {
       return Option.empty();
