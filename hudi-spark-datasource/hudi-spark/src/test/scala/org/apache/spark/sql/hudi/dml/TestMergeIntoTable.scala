@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.hudi.dml
 
+import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_OPTIMIZED_WRITES
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.config.HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.DataSourceTestUtils
-import org.apache.hudi.{DataSourceReadOptions, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport}
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.internal.SQLConf
@@ -1005,15 +1005,13 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
         // Test incremental query
         val hudiIncDF1 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, beforeFirstCompletionTime)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, firstCompletionTime)
           .option(DataSourceReadOptions.END_INSTANTTIME.key, firstCompletionTime)
           .load(targetBasePath)
         hudiIncDF1.createOrReplaceTempView("inc1")
         checkAnswer(s"select id, name, price, _ts from inc1")(
           Seq(1, "a1", 10, 1000)
         )
-        val secondCommitTime = HoodieDataSourceHelpers.latestCommit(fs, targetBasePath)
-        val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Third merge
         spark.sql(s"insert into $sourceTable values(2, 'a2', 10, 1001)")
         spark.sql(
@@ -1028,10 +1026,11 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
           Seq(1, "a1", 12, 1001),
           Seq(2, "a2", 10, 1001)
         )
+        val thirdCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, targetBasePath)
         // Test incremental query
         val hudiIncDF2 = spark.read.format("org.apache.hudi")
           .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, secondCompletionTime)
+          .option(DataSourceReadOptions.BEGIN_INSTANTTIME.key, thirdCompletionTime)
           .load(targetBasePath)
         hudiIncDF2.createOrReplaceTempView("inc2")
         checkAnswer(s"select id, name, price, _ts from inc2 order by id")(

@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
 import org.scalatest.BeforeAndAfter
 
 import java.io.File
@@ -66,11 +67,11 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 
       val metaClient = createMetaClient(spark, tablePath)
       val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
-      val firstCommitCompletion = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
 
       // Then insert another new record
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
 
+      val commitCompletion2 = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getCompletionTime
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(1, "a1", 10.0, 1000, partitionVal),
         Seq(2, "a2", 10.0, 1000, partitionVal)
@@ -89,7 +90,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // Manually pass incremental configs to global configs to make sure Hudi query is able to load the
       // global configs
       DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      DFSPropertiesConfiguration.addToGlobalProps(BEGIN_INSTANTTIME.key, firstCommitCompletion)
+      DFSPropertiesConfiguration.addToGlobalProps(BEGIN_INSTANTTIME.key, commitCompletion2)
       spark.catalog.refreshTable(tableName)
       checkAnswer(s"select id, name, price, ts, year from $tableName")(
         Seq(2, "a2", 10.0, 1000, partitionVal)

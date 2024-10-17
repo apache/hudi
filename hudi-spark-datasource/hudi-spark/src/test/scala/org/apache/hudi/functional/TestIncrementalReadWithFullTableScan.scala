@@ -17,20 +17,22 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis
+import org.apache.hudi.common.table.timeline.HoodieTimeline.GREATER_THAN
 import org.apache.hudi.common.testutils.RawTripTestPayload.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieIOException
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 
@@ -107,14 +109,10 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     assertTrue(nArchivedInstants >= 3)
 
     //Anything less than 2 is a valid commit in the sense no cleanup has been done for those commit files
-    val startUnarchivedCommitTs = completedCommits.nthInstant(0).get().getTimestamp //C4
-    val startUnarchivedCompletionTs = completedCommits.nthInstant(0).get().getCompletionTime //C4 completion
-    val endUnarchivedCommitTs = completedCommits.nthInstant(1).get().getTimestamp //C5
+    val startUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
     val endUnarchivedCompletionTs = completedCommits.nthInstant(1).get().getCompletionTime //C5 completion
 
-    val startArchivedCommitTs = archivedInstants(0).asInstanceOf[HoodieInstant].getTimestamp //C0
-    val startArchivedCompletionTs = archivedInstants(0).asInstanceOf[HoodieInstant].getCompletionTime //C0 completion
-    val endArchivedCommitTs = archivedInstants(1).asInstanceOf[HoodieInstant].getTimestamp //C1
+    val startArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
     val endArchivedCompletionTs = archivedInstants(1).asInstanceOf[HoodieInstant].getCompletionTime //C1 completion
 
     val startOutOfRangeCommitTs = hoodieMetaClient.createNewInstantTime()
@@ -143,12 +141,14 @@ class TestIncrementalReadWithFullTableScan extends HoodieSparkClientTestBase {
     runIncrementalQueryAndCompare(startOutOfRangeCommitTs, endOutOfRangeCommitTs, 0, true)
 
     // Test end commit is smaller than the start commit
-    runIncrementalQueryAndCompare(endUnarchivedCompletionTs, startUnarchivedCompletionTs, 0, false)
-    runIncrementalQueryAndCompare(endUnarchivedCompletionTs, startUnarchivedCompletionTs, 0, true)
+    runIncrementalQueryAndCompare(
+      startUnarchivedCompletionTs, instantTimeMinusMillis(startUnarchivedCompletionTs, 1), 0, false)
+    runIncrementalQueryAndCompare(
+      startUnarchivedCompletionTs, instantTimeMinusMillis(startUnarchivedCompletionTs, 1), 0, true)
 
     // Test both start commit and end commits is not archived and not cleaned
     val reversedCommits = completedCommits.getReverseOrderedInstants.toArray
-    val startUncleanedCompletionTs = reversedCommits.apply(1).asInstanceOf[HoodieInstant].getCompletionTime
+    val startUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
     val endUncleanedCompletionTs = reversedCommits.apply(0).asInstanceOf[HoodieInstant].getCompletionTime
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, true)
     runIncrementalQueryAndCompare(startUncleanedCompletionTs, endUncleanedCompletionTs, 1, false)

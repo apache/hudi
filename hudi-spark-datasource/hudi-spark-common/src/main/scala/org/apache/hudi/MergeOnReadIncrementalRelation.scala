@@ -204,7 +204,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
       .metaClient(metaClient)
       .beginCompletionTime(optParams(DataSourceReadOptions.BEGIN_INSTANTTIME.key))
       .endCompletionTime(optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key, null))
-      .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+      .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
       .build()
       .analyze()
 

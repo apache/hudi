@@ -176,7 +176,7 @@ object HoodieDataSourceExample {
   def incrementalQuery(spark: SparkSession, tablePath: String, tableName: String): Unit = {
     import spark.implicits._
     val commits = spark.sql("select distinct(_hoodie_commit_time) as commitTime from hudi_ro_table order by commitTime").map(k => k.getString(0)).take(50)
-    val beginTime = commits(commits.length - 2) // commit time we are interested in
+    val beginTime = commits(commits.length - 1) // commit time we are interested in
 
     // incrementally query data
     val incViewDF = spark.

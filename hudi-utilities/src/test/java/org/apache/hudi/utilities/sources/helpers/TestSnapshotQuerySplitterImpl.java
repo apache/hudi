@@ -52,7 +52,6 @@ public class TestSnapshotQuerySplitterImpl extends SnapshotLoadQuerySplitter {
   public Option<String> getNextCheckpoint(Dataset<Row> df, String beginCheckpointStr, Option<SourceProfileSupplier> sourceProfileSupplierOption) {
     List<Row> row = df.filter(col(COMMIT_TIME_METADATA_FIELD).gt(lit(beginCheckpointStr)))
         .orderBy(col(COMMIT_TIME_METADATA_FIELD)).limit(1).collectAsList();
-
     return Option.ofNullable(row.size() > 0 ? row.get(0).getAs(COMMIT_TIME_METADATA_FIELD) : null);
   }
 

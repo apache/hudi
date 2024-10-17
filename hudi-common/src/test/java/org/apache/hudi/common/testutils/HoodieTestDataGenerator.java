@@ -680,7 +680,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public List<HoodieRecord> generateInserts(String instantTime, Integer n) {
     return generateInserts(instantTime, n, false);
   }
-  
+
   public List<HoodieRecord> generateInsertsNestedExample(String instantTime, Integer n) {
     return generateInsertsStream(instantTime, n, false, TRIP_NESTED_EXAMPLE_SCHEMA).collect(Collectors.toList());
   }

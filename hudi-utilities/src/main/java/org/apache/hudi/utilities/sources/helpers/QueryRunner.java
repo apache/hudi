@@ -87,7 +87,7 @@ public class QueryRunner {
     LOG.info("Running incremental query");
     return Pair.of(queryInfo, sparkSession.read().format("org.apache.hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryInfo.getPreviousInstant())
+        .option(DataSourceReadOptions.BEGIN_INSTANTTIME().key(), queryInfo.getStartInstant())
         .option(DataSourceReadOptions.END_INSTANTTIME().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
             props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),

@@ -164,7 +164,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                |from hudi_table_changes(
                |'$identifier',
                |'latest_state',
-               |'$firstCompletionTime')
+               |'$secondCompletionTime')
                |""".stripMargin
           )(
             Seq(1, "a1_1", 10.0, 1100),
@@ -188,7 +188,7 @@ class TestHoodieTableValuedFunction extends HoodieSparkSqlTestBase {
                | from hudi_table_changes(
                | '$identifier',
                | 'latest_state',
-               | '$firstCompletionTime',
+               | '$secondCompletionTime',
                | '$secondCompletionTime')
                | """.stripMargin
           )(

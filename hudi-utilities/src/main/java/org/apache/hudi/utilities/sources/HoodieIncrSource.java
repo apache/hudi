@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +61,6 @@ import static org.apache.hudi.DataSourceReadOptions.END_INSTANTTIME;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE;
 import static org.apache.hudi.DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL;
-import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.instantTimeMinusMillis;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
@@ -246,11 +246,11 @@ public class HoodieIncrSource extends RowSource {
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
     } else {
-      // queryContext.getInstants().get(0).getCompletionTime();
       // normal incremental query
-      String completionTime = endCompletionTime;
-      String beginCompletionTime = analyzer.getBeginCompletionTime().orElseGet(
-          () -> instantTimeMinusMillis(completionTime, 1));
+      String beginCompletionTime = queryContext.getInstants().stream()
+          .map(HoodieInstant::getCompletionTime)
+          .min(Comparator.naturalOrder())
+          .get();
 
       source = reader
           .options(readOpts)
