@@ -718,9 +718,15 @@ public class HoodieTableConfig extends HoodieConfig {
     } else {
       inferPayloadClassName = payloadClassName;
       if (payloadClassName.equals(DefaultHoodieRecordPayload.class.getName())) {
-        checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
-        inferRecordMergeMode = EVENT_TIME_ORDERING;
-        inferRecordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
+        //TODO: after mergers are safe to use on the write side, add this check and get rid of the if
+        // checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
+        if (isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+          inferRecordMergeMode = EVENT_TIME_ORDERING;
+          inferRecordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
+        } else {
+          inferRecordMergeMode = CUSTOM;
+          inferRecordMergerStrategy = recordMergerStrategy;
+        }
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
         checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
         inferRecordMergeMode = OVERWRITE_WITH_LATEST;
