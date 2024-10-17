@@ -1130,8 +1130,15 @@ class HoodieSparkSqlWriterInternal {
         mergedParams.getOrElse(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), ""),
         mergedParams.getOrElse(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), ""))
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
+      mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), inferredMergeConfigs.getLeft.name())
       mergedParams.put(DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
+      mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), inferredMergeConfigs.getMiddle)
       mergedParams.put(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), inferredMergeConfigs.getRight)
+      mergedParams.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), inferredMergeConfigs.getRight)
+    } else {
+      mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), mergedParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()))
+      mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergedParams(HoodieWriteConfig.RECORD_MERGE_MODE.key()))
+      mergedParams.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), mergedParams(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()))
     }
 
     val params = mergedParams.toMap

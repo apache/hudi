@@ -71,6 +71,10 @@ public class HoodieConfig implements Serializable {
     props.setProperty(key, val);
   }
 
+  public <T> void clearValue(ConfigProperty<T> cfg) {
+    props.remove(cfg.key());
+  }
+
   public void setAll(Properties properties) {
     props.putAll(properties);
   }

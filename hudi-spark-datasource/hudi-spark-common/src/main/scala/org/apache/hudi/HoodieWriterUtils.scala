@@ -177,6 +177,9 @@ object HoodieWriterUtils {
           || key.equals(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()) || key.equals(RECORD_MERGE_MODE.key())
           || key.equals(RECORD_MERGER_STRATEGY.key())))
 
+        //don't validate the payload only in the case that insert into is using fallback to some legacy configs
+        ignoreConfig = ignoreConfig || (key.equals(PAYLOAD_CLASS_NAME.key()) &&  value.equals("org.apache.spark.sql.hudi.command.ValidateDuplicateKeyPayload"))
+
         if (!ignoreConfig) {
           val existingValue = getStringFromTableConfigWithAlternatives(tableConfig, key)
           if (null != existingValue && !resolver(existingValue, value)) {
@@ -293,7 +296,8 @@ object HoodieWriterUtils {
     PARTITIONPATH_FIELD -> HoodieTableConfig.PARTITION_FIELDS,
     RECORDKEY_FIELD -> HoodieTableConfig.RECORDKEY_FIELDS,
     PAYLOAD_CLASS_NAME -> HoodieTableConfig.PAYLOAD_CLASS_NAME,
-    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY
+    RECORD_MERGER_STRATEGY -> HoodieTableConfig.RECORD_MERGER_STRATEGY,
+    RECORD_MERGE_MODE -> HoodieTableConfig.RECORD_MERGE_MODE
   )
 
   def mappingSparkDatasourceConfigsToTableConfigs(options: Map[String, String]): Map[String, String] = {

@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.RecordPayloadType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -173,7 +174,7 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "This will render any value set for PRECOMBINE_FIELD_OPT_VAL in-effective");
 
   public static final ConfigProperty<String> RECORD_MERGE_MODE = ConfigProperty
-      .key("hoodie.record.merge.mode")
+      .key("hoodie.datasource.write.record.merge.mode")
       .defaultValue(RecordMergeMode.EVENT_TIME_ORDERING.name())
       .sinceVersion("1.0.0")
       .withDocumentation(RecordMergeMode.class);
@@ -1743,7 +1744,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getPayloadClass() {
-    return getString(HoodiePayloadConfig.PAYLOAD_CLASS_NAME);
+    return RecordPayloadType.getPayloadClassName(this);
   }
 
   public int getTargetPartitionsPerDayBasedCompaction() {

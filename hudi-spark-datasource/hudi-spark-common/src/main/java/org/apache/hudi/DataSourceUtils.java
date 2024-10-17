@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
 import org.apache.hudi.config.HoodieCompactionConfig;
+import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
@@ -191,6 +192,10 @@ public class DataSourceUtils {
     return builder.forTable(tblName)
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(inlineCompact).build())
+        .withPayloadConfig(HoodiePayloadConfig.newBuilder()
+            .withPayloadClass(parameters.get(DataSourceWriteOptions.PAYLOAD_CLASS_NAME().key()))
+            .withPayloadOrderingField(parameters.get(DataSourceWriteOptions.PRECOMBINE_FIELD().key()))
+            .build())
         // override above with Hoodie configs specified as options.
         .withProps(parameters).build();
   }

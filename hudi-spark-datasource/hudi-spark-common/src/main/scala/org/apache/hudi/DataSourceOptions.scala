@@ -1020,6 +1020,12 @@ object DataSourceOptionsHelper {
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
+    }
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()) && tableConfig.getRecordMergerStrategy != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key() -> tableConfig.getRecordMergerStrategy)
+    }
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())
     }

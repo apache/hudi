@@ -19,8 +19,9 @@
 package org.apache.hudi.functional.cdc
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
+import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY, RECORD_MERGE_MODE}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
@@ -641,6 +642,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
       "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
       "hoodie.datasource.write.partitionpath.field" -> "",
       "hoodie.datasource.write.payload.class" -> "org.apache.hudi.common.model.AWSDmsAvroPayload",
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       "hoodie.table.cdc.enabled" -> "true",
       "hoodie.table.cdc.supplemental.logging.mode" -> "data_before_after"
     )
@@ -774,6 +776,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
+        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
@@ -794,6 +797,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.write.operation", "upsert")
         .option("hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator")
         .option("hoodie.datasource.write.payload.class", "org.apache.hudi.common.model.AWSDmsAvroPayload")
+        .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
         .option("hoodie.table.cdc.enabled", "true")
         .option("hoodie.table.cdc.supplemental.logging.mode", loggingMode.name())
         .mode(SaveMode.Append).save(basePath)
