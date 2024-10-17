@@ -46,11 +46,14 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -76,6 +79,8 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.DirectWriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkers;
 
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
@@ -895,6 +900,8 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
         .mapToObj(i -> HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i))
         .collect(Collectors.toList());
     ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
+    ValidationUtils.checkArgument(metadataWriteConfig.getMarkersType() == MarkerType.DIRECT,
+        "Metadata table writer supports direct markers only.");
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
     engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
       try {
@@ -909,9 +916,11 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withStorage(dataMetaClient.getStorage())
+            .withStorage(metadataMetaClient.getStorage())
             .withRolloverLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
+            .withFileCreationCallback(getLogCreationCallback(
+                metadataMetaClient.getStorage(), instantTime, partitionName, fileGroupFileId))
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
           writer.appendBlock(block);
         }
@@ -921,6 +930,26 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }, fileGroupFileIds.size());
   }
 
+  /**
+   * Returns a log creation hook impl.
+   */
+  private LogFileCreationCallback getLogCreationCallback(HoodieStorage storage,
+                                                         String instantTime,
+                                                         String partitionPath,
+                                                         String fileId) {
+    return new LogFileCreationCallback() {
+      @Override
+      public boolean preFileCreation(HoodieLogFile logFile) {
+        WriteMarkers writeMarkers = new DirectWriteMarkers(
+            storage, metadataWriteConfig.getBasePath(),
+            metadataMetaClient.getMarkerFolderPath(instantTime), instantTime);
+        return writeMarkers.createIfNotExists(partitionPath, logFile.getFileName(), IOType.CREATE,
+            metadataWriteConfig, fileId, metadataMetaClient.getActiveTimeline()).isPresent();
+      }
+    };
+  }
+
+  @Override
   public void dropMetadataPartitions(List<String> metadataPartitions) throws IOException {
     for (String partitionPath : metadataPartitions) {
       // first update table config
@@ -996,6 +1025,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     return getEnabledPartitionTypes().stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
   }
 
+  @Override
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos, String instantTime) throws IOException {
     if (indexPartitionInfos.isEmpty()) {
       LOG.warn("No partition to index in the plan");
@@ -1762,6 +1792,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     }
   }
 
+  @Override
   public boolean isInitialized() {
     return initialized;
   }
