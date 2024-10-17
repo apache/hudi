@@ -747,6 +747,7 @@ class HoodieSparkSqlWriterInternal {
         ))
 
         HoodieTableMetaClient.newTableBuilder()
+          .setBootstrapIndexEnable(true)
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
