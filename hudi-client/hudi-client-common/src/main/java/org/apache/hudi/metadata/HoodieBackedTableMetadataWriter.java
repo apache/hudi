@@ -584,6 +584,9 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
   }
 
   private Set<String> getIndexPartitionsToInit(MetadataPartitionType partitionType) {
+    if (dataMetaClient.getIndexMetadata().isEmpty()) {
+      return Collections.emptySet();
+    }
     Set<String> secondaryIndexPartitions = dataMetaClient.getIndexMetadata().get().getIndexDefinitions().values().stream()
         .map(HoodieIndexDefinition::getIndexName)
         .filter(indexName -> indexName.startsWith(partitionType.getPartitionPath()))
