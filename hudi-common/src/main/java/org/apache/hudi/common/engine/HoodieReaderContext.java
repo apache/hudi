@@ -143,6 +143,7 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
   public static final String INTERNAL_META_SCHEMA = "_5";
+  public static final String DELETE_IN_BETWEEN = "DELETE_IN_BETWEEN";
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the

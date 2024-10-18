@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath;
 import static org.apache.hudi.common.table.cdc.HoodieCDCUtils.CDC_LOGFILE_SUFFIX;
@@ -105,7 +106,7 @@ public class HoodieMergedLogRecordScanner extends BaseHoodieMergedLogRecordScann
         // Reserve the delete information.
         if (prevRecord.isDelete(readerSchema, this.getPayloadProps())
             || (prevRecord.getMetadata().isPresent() && prevRecord.getMetaDataInfo(INTERNAL_META_OPERATION).isPresent())) {
-          finalRecord.addMetadata(INTERNAL_META_OPERATION, "DELETE_IN_BETWEEN");
+          finalRecord.addMetadata(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
         }
         records.put(key, finalRecord);
       }

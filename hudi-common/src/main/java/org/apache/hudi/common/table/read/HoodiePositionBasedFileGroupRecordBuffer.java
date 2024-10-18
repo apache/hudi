@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 
@@ -197,7 +198,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
     if (existingRecordMetadataPair != null) {
-      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, "DELETE_IN_BETWEEN");
+      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
       return;
     }
 
