@@ -207,8 +207,10 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
       String recordKey = recordOpt.get().getRecordKey();
       Comparable orderingVal = readerContext.getOrderingValue(
           Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+      Comparable orderingValApplied =
+          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), orderingVal, orderingFieldType)));
+          recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldType)));
     }
   }
 
