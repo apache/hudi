@@ -429,7 +429,7 @@ public class FlinkStreamerConfig extends Configuration {
     conf.setInteger(FlinkOptions.WRITE_TABLE_VERSION, config.writeTableVersion);
     conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, config.payloadClassName);
     conf.setString(FlinkOptions.RECORD_MERGER_IMPLS, config.recordMergerImpls);
-    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY, config.recordMergerStrategy);
+    conf.setString(FlinkOptions.RECORD_MERGER_STRATEGY_ID, config.recordMergerStrategy);
     conf.setBoolean(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.setInteger(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
     conf.setLong(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));

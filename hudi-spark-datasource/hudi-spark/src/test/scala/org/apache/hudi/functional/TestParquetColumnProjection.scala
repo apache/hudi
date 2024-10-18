@@ -18,7 +18,7 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.HoodieBaseRelation.projectSchema
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, OverwriteNonDefaultsWithLatestAvroPayload}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{HadoopMapRedUtils, HoodieTestDataGenerator}
@@ -183,6 +183,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
     //          being queried by the Spark, and we currently have no way figuring out what these fields are, therefore
     //          we fallback to read whole row
     val overriddenOpts = defaultWriteOpts ++ Map(
+      HoodieWriteConfig.RECORD_MERGE_MODE.key() -> RecordMergeMode.CUSTOM.name(),
       HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key -> classOf[OverwriteNonDefaultsWithLatestAvroPayload].getName
     )
 

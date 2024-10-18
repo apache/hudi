@@ -49,8 +49,6 @@ import scala.collection.JavaConverters._
 class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[InternalRow] with SparkAdapterSupport {
   var spark: SparkSession = _
 
-  var customPayloadName: String = classOf[CustomPayloadForTesting].getName
-
   @BeforeEach
   def setup() {
     val sparkConf = new SparkConf
@@ -127,11 +125,5 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     }
   }
 
-  override def getRecordPayloadForMergeMode(mergeMode: RecordMergeMode): String = {
-    mergeMode match {
-      case RecordMergeMode.EVENT_TIME_ORDERING => classOf[DefaultHoodieRecordPayload].getName
-      case RecordMergeMode.OVERWRITE_WITH_LATEST => classOf[OverwriteWithLatestAvroPayload].getName
-      case RecordMergeMode.CUSTOM => customPayloadName
-    }
-  }
+  override def getCustomPayload: String = classOf[CustomPayloadForTesting].getName
 }

@@ -21,7 +21,6 @@ package org.apache.hudi.common.testutils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -195,8 +194,7 @@ public class HoodieTestUtils {
         HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
-            .setTableType(tableType)
-            .setPayloadClass(HoodieAvroPayload.class);
+            .setTableType(tableType);
 
     if (properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()) != null) {
       builder.setKeyGeneratorType(properties.getProperty(HoodieTableConfig.KEY_GENERATOR_TYPE.key()));

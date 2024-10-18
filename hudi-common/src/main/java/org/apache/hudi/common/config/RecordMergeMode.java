@@ -19,6 +19,8 @@
 
 package org.apache.hudi.common.config;
 
+import org.apache.hudi.common.util.StringUtils;
+
 @EnumDescription("Determines the logic of merging updates")
 public enum RecordMergeMode {
   @EnumFieldDescription("Using transaction time to merge records, i.e., the record from later "
@@ -32,5 +34,12 @@ public enum RecordMergeMode {
   EVENT_TIME_ORDERING,
 
   @EnumFieldDescription("Using custom merging logic specified by the user.")
-  CUSTOM
+  CUSTOM;
+
+  public static RecordMergeMode getValue(String mergeMode) {
+    if (StringUtils.isNullOrEmpty(mergeMode)) {
+      return null;
+    }
+    return RecordMergeMode.valueOf(mergeMode.toUpperCase());
+  }
 }

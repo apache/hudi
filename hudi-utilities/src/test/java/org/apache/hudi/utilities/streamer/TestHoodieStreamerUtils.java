@@ -20,6 +20,7 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -80,6 +81,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
       return record;
     });
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
     TypedProperties props = new TypedProperties();
     SchemaProvider schemaProvider = new SimpleSchemaProvider(jsc, schema, props);
     BaseErrorTableWriter errorTableWriter = Mockito.mock(BaseErrorTableWriter.class);
