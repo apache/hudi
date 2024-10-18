@@ -658,12 +658,12 @@ class TestDataSourceForBootstrap {
     assertEquals(1, countsPerCommit.length)
     assertEquals(bootstrapCommitInstantTime, countsPerCommit(0).get(0))
 
-    val beginCompletionTime = HoodieInstantTimeGenerator.instantTimePlusMillis(bootstrapCommitCompletionTime, 1)
+    val startCompletionTime = HoodieInstantTimeGenerator.instantTimePlusMillis(bootstrapCommitCompletionTime, 1)
     // incrementally pull only changes after bootstrap commit, which would pull only the updated records in the
     // later commits
     val hoodieIncViewDF2 = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, beginCompletionTime)
+      .option(DataSourceReadOptions.START_COMMIT.key, startCompletionTime)
       .load(basePath)
 
     assertEquals(numRecordsUpdate, hoodieIncViewDF2.count())
@@ -676,7 +676,7 @@ class TestDataSourceForBootstrap {
       // pull the update commits within certain partitions
       val hoodieIncViewDF3 = spark.read.format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-        .option(DataSourceReadOptions.START_COMMIT.key, beginCompletionTime)
+        .option(DataSourceReadOptions.START_COMMIT.key, startCompletionTime)
         .option(DataSourceReadOptions.INCR_PATH_GLOB.key, relativePartitionPath)
         .load(basePath)
 

@@ -362,10 +362,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     inputDF1.createOrReplaceTempView("tbl")
   }
 
-  private def createIncrementalSQLTable(hudiOpts: Map[String, String], beginCompletionTime: String): Unit = {
+  private def createIncrementalSQLTable(hudiOpts: Map[String, String], startCompletionTime: String): Unit = {
     val opts = hudiOpts + (
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-      DataSourceReadOptions.START_COMMIT.key() -> beginCompletionTime
+      DataSourceReadOptions.START_COMMIT.key() -> startCompletionTime
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
     inputDF1.createOrReplaceTempView("tbl")

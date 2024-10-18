@@ -148,7 +148,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
 
     try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
-      // Pair<InstantStartTime, Records>
+      // Pair<HoodieInstant, Records>
       WriteResult insert1 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
       WriteResult insert2 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
       WriteResult insert3 = writeRecords(writeClient, INSERT, null, writeClient.createNewInstantTime());
@@ -158,10 +158,10 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // read everything upto latest
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.empty(), 500, insert5.getCompletionTime());
 
-      // even if the begin timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
+      // even if the start completion timestamp is archived (100), full table scan should kick in, but should filter for records having commit time > 100
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert1.getCompletionTime()), 400, insert5.getCompletionTime());
 
-      // even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      // even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT, Option.of(insert4.getCompletionTime()), 100, insert5.getCompletionTime());
 
       // read just the latest
@@ -236,14 +236,15 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           500,
           inserts.get(5).getCompletionTime());
 
-      // Even if the beginning timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant time
+      // Even if the start completion timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant
+      // time
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.of(inserts.get(0).getCompletionTime()),
           400,
           inserts.get(5).getCompletionTime());
 
-      // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      // Even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.of(inserts.get(2).getCompletionTime()),
@@ -372,7 +373,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           500,
           dataBatches.get(6).getCompletionTime());
 
-      // Even if the read upto latest is set, if begin timestamp is in active timeline, only incremental should kick in.
+      // Even if the read upto latest is set, if start completion timestamp is in active timeline, only incremental should kick in.
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.of(dataBatches.get(2).getCompletionTime()),
@@ -488,7 +489,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       // even if TestSnapshotQuerySplitterImpl is configured, it shouldn't be used if it's not a snapshot query
       // Conditions to determine if HoodieIncrSource should run a snapshot query
       //   1. checkpoint exists or checkpoint is missing but the MissingCheckpointStrategy is set to READ_LATEST
-      //   2. starting instant/checkpoint is archived
+      //   2. start completion time/checkpoint is archived
       // The tests below do not meet either of one of the condition, so they should run normal incremental queries
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(101));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,

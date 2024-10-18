@@ -191,10 +191,10 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
-      // mark beginTime
+      // mark startTime
       val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
-      val beginCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
+      val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
       val endCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
 
@@ -206,7 +206,7 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       val copyCmd = spark.sql(s"call copy_to_table" + s"(table=>'$tableName'" +
         s",new_table=>'$copyTableName'" +
         s",query_type=>'incremental'" +
-        s",begin_instance_time=>'$beginCompletionTime'" +
+        s",begin_instance_time=>'$startCompletionTime'" +
         s",end_instance_time=>'$endCompletionTime')").collectAsList()
       assert(copyCmd.size() == 1 && copyCmd.get(0).get(0) == 0)
 

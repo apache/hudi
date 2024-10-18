@@ -118,17 +118,17 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private transient HoodieTableMetadata tableMetadata = null;
 
   /**
-   * @param engineContext Hudi engine-specific context
-   * @param metaClient Hudi table's meta-client
-   * @param configProperties unifying configuration (in the form of generic properties)
-   * @param queryType target query type
-   * @param queryPaths target DFS paths being queried
-   * @param specifiedQueryInstant instant as of which table is being queried
-   * @param shouldIncludePendingCommits flags whether file-index should exclude any pending operations
-   * @param shouldValidateInstant flags to validate whether query instant is present in the timeline
-   * @param fileStatusCache transient cache of fetched [[FileStatus]]es
-   * @param startCompletionTime begin instant time for incremental query (optional)
-   * @param endCompletionTime end instant time for incremental query (optional)
+   * @param engineContext                Hudi engine-specific context
+   * @param metaClient                   Hudi table's meta-client
+   * @param configProperties             unifying configuration (in the form of generic properties)
+   * @param queryType                    target query type
+   * @param queryPaths                   target DFS paths being queried
+   * @param specifiedQueryInstant        instant as of which table is being queried
+   * @param shouldIncludePendingCommits  flags whether file-index should exclude any pending operations
+   * @param shouldValidateInstant        flags to validate whether query instant is present in the timeline
+   * @param fileStatusCache              transient cache of fetched [[FileStatus]]es
+   * @param startCompletionTime          start completion time for incremental query (optional)
+   * @param endCompletionTime            end completion time for incremental query (optional)
    */
   public BaseHoodieTableFileIndex(HoodieEngineContext engineContext,
                                   HoodieTableMetaClient metaClient,

@@ -256,12 +256,6 @@ object DataSourceReadOptions {
   val VIEW_TYPE_REALTIME_OPT_VAL = "realtime"
   @Deprecated
   val DEFAULT_VIEW_TYPE_OPT_VAL = VIEW_TYPE_READ_OPTIMIZED_OPT_VAL
-  /** @deprecated Use {@link START_COMMIT} and its methods instead */
-  @Deprecated
-  val BEGIN_INSTANTTIME_OPT_KEY = START_COMMIT.key()
-  /** @deprecated Use {@link END_COMMIT} and its methods instead */
-  @Deprecated
-  val END_INSTANTTIME_OPT_KEY = END_COMMIT.key()
   /** @deprecated Use {@link INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME} and its methods instead */
   @Deprecated
   val INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME_OPT_KEY = INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key()
