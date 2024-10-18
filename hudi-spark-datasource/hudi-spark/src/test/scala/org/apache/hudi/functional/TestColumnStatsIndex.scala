@@ -19,10 +19,10 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
-import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieFileGroup, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.ParquetUtils
@@ -30,9 +30,10 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -43,7 +44,10 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, MethodSource, ValueSource}
 
+import java.util.{Collections, Comparator}
+import java.util.stream.Collectors
 import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 @Tag("functional")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
@@ -159,11 +163,12 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       RECORDKEY_FIELD.key -> "c1",
       PRECOMBINE_FIELD.key -> "c1",
+      PARTITIONPATH_FIELD.key() -> "c8",
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       HoodieCommonConfig.RECONCILE_SCHEMA.key -> "true"
     ) ++ metadataOpts
 
-    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json-partition-pruning").toString
 
     // NOTE: Schema here is provided for validation that the input date is in the appropriate format
     val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
@@ -184,6 +189,20 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val metadataConfig = HoodieMetadataConfig.newBuilder()
       .fromProperties(toProperties(metadataOpts))
       .build()
+
+    val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient,
+      HoodieMetadataConfig.newBuilder().enable(false).build())
+    fsv.loadAllPartitions()
+
+    val partitionPaths = fsv.getPartitionPaths
+    val partitionToBaseFiles : java.util.Map[String, java.util.List[StoragePath]] = new java.util.HashMap[String, java.util.List[StoragePath]]
+
+    partitionPaths.forEach(partitionPath =>
+      partitionToBaseFiles.put(partitionPath.getName, fsv.getLatestBaseFiles(partitionPath.getName)
+        .map[StoragePath](baseFile => baseFile.getStoragePath).collect(Collectors.toList[StoragePath]))
+    )
+    fsv.close()
+
     val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
     val requestedColumns = Seq("c1")
     // get all file names
@@ -194,10 +213,32 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       newFileNameSet
     }
     val targetFileName = fileNameSet.take(2)
-    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(targetFileName)) { df =>
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, None, Some(targetFileName)) { df =>
       assertEquals(2, df.collect().length)
       val targetDFFileNameSet: Set[String] = df.select("fileName").as[String](stringEncoder).collect().toSet
       assertEquals(targetFileName, targetDFFileNameSet)
+    }
+
+    // fetch stats only for a subset of partitions
+    // lets send in all file names, but only 1 partition to test that the prefix based lookup is effective.
+    val expectedFileNames = partitionToBaseFiles.get("10").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toSet[String])
+    // even though fileNameSet (last arg) contains files from all partitions, since list of partitions passed in is just 1 (i.e 10), we should get matched only w/ files from
+    // partition 10.
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(Set("10")), Some(fileNameSet)) { df =>
+      assertEquals(expectedFileNames.size(), df.collect().length)
+      val targetDFFileNameSet = df.select("fileName").as[String](stringEncoder).collectAsList().stream().collect(Collectors.toSet[String])
+      assertEquals(expectedFileNames, targetDFFileNameSet)
+    }
+
+    // lets redo for 2 partitions.
+    val expectedFileNames1 = partitionToBaseFiles.get("9").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toList[String])
+    expectedFileNames1.addAll(partitionToBaseFiles.get("11").stream().map[String](baseFile => baseFile.getName).collect(Collectors.toList[String]))
+    Collections.sort(expectedFileNames1)
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(Set("9","11")), Some(fileNameSet)) { df =>
+      assertEquals(expectedFileNames1.size, df.collect().length)
+      val targetDFFileNameSet = df.select("fileName").as[String](stringEncoder).collectAsList().stream().collect(Collectors.toList[String])
+      Collections.sort(targetDFFileNameSet)
+      assertEquals(expectedFileNames1, targetDFFileNameSet)
     }
   }
 

@@ -896,7 +896,7 @@ public class HoodieTableMetadataUtil {
   /**
    * Returns partition name for the given path.
    */
-  private static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
+  public static String getPartitionIdentifier(@Nonnull String relativePartitionPath) {
     return EMPTY_PARTITION_NAME.equals(relativePartitionPath) ? NON_PARTITIONED_NAME : relativePartitionPath;
   }
 

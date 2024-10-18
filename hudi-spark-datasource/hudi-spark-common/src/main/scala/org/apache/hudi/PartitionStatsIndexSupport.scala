@@ -61,7 +61,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     throw new UnsupportedOperationException("This method is not supported by PartitionStatsIndexSupport")
   }
 
-  override def loadColumnStatsIndexRecords(targetColumns: Seq[String], shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
+  override def loadColumnStatsIndexRecords(targetColumns: Seq[String], prunedPartitions: Option[Set[String]] = None, shouldReadInMemory: Boolean): HoodieData[HoodieMetadataColumnStats] = {
     checkState(targetColumns.nonEmpty)
     val encodedTargetColumnNames = targetColumns.map(colName => new ColumnIndexID(colName).asBase64EncodedString())
     logDebug(s"Loading column stats for columns: ${targetColumns.mkString(", ")},  Encoded column names: ${encodedTargetColumnNames.mkString(", ")}")
@@ -84,7 +84,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
                       queryReferencedColumns: Seq[String]): Option[Set[String]] = {
     if (isIndexAvailable && queryFilters.nonEmpty && queryReferencedColumns.nonEmpty) {
       val readInMemory = shouldReadInMemory(fileIndex, queryReferencedColumns, inMemoryProjectionThreshold)
-      loadTransposed(queryReferencedColumns, readInMemory, Option.empty) {
+      loadTransposed(queryReferencedColumns, readInMemory, Option.empty, Option.empty) {
         transposedPartitionStatsDF => {
           val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
             .collect()
