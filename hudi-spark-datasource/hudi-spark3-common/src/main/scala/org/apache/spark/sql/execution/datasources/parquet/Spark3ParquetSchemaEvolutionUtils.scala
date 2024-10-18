@@ -29,7 +29,8 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.common.table.timeline.versioning.v2.{CommitMetadataSerDeV2, InstantFactoryV2, InstantFileNameParserV2}
+import org.apache.hudi.common.table.timeline.TimelineLayout
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
@@ -60,7 +61,7 @@ class Spark3ParquetSchemaEvolutionUtils(sharedConf: Configuration,
     val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
       new HoodieHadoopStorage(tablePath, sharedConf), if (validCommits == null) "" else validCommits,
-      new InstantFactoryV2(), new InstantFileNameParserV2(), new CommitMetadataSerDeV2())
+      TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION))
   } else {
     null
   }

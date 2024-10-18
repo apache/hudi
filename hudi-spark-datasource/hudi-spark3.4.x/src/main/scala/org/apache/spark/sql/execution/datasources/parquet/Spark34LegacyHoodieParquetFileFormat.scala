@@ -30,7 +30,8 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
-import org.apache.hudi.common.table.timeline.versioning.v2.{CommitMetadataSerDeV2, InstantFactoryV2, InstantFileNameParserV2}
+import org.apache.hudi.common.table.timeline.TimelineLayout
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -173,8 +174,8 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         //TODO: HARDCODED TIMELINE OBJECT
         val storage = new HoodieHadoopStorage(tablePath, sharedConf)
         InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, storage,
-          if (validCommits == null) "" else validCommits, new InstantFactoryV2(),
-          new InstantFileNameParserV2(), new CommitMetadataSerDeV2())
+          if (validCommits == null) "" else validCommits,
+          TimelineLayout.getLayout(TimelineLayoutVersion.CURR_LAYOUT_VERSION))
       } else {
         null
       }
