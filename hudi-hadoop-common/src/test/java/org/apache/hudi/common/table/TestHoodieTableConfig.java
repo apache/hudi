@@ -364,6 +364,7 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(null, overwritePayload, DEFAULT_MERGER_STRATEGY_UUID, true, null, null, null));
     return arguments;
   }
+
   @ParameterizedTest
   @MethodSource("argumentsForInferringRecordMergeMode")
   public void testInferMergeMode(RecordMergeMode inputMergeMode, String inputPayloadClass, String inputMergeStrategy, boolean shouldThrow,
