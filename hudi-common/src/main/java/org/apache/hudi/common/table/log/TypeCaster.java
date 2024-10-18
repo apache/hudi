@@ -21,8 +21,11 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Type;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class TypeCaster {
+  private static final Logger LOG = LoggerFactory.getLogger(TypeCaster.class);
   private TypeCaster() {
   }
 
@@ -41,9 +44,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          throw new UnsupportedOperationException(
-              String.format("Cast from Integer to %s is not supported", newType)
-          );
+          LOG.warn("Cannot cast integer to {}", newType);
+          return null;
       }
     } else if (value instanceof Long) {
       Long v = (Long) value;
@@ -57,9 +59,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          throw new UnsupportedOperationException(
-              String.format("Cast from Long to %s is not supported", newType)
-          );
+          LOG.warn("Cannot cast integer to {}", newType);
+          return null;
       }
     } else if (value instanceof Float) {
       Float v = (Float) value;
@@ -71,9 +72,8 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          throw new UnsupportedOperationException(
-              String.format("Cast from Float to %s is not supported", newType)
-          );
+          LOG.warn("Cannot cast integer to {}", newType);
+          return null;
       }
     } else if (value instanceof Double) {
       Double v = (Double) value;
@@ -83,18 +83,16 @@ public class TypeCaster {
         case STRING:
           return v.toString();
         default:
-          throw new UnsupportedOperationException(
-              String.format("Cast from Double to %s is not supported", newType)
-          );
+          LOG.warn("Cannot cast integer to {}", newType);
+          return null;
       }
     } else if (value instanceof String) {
       String v = (String) value;
       if (newType == Type.STRING) {
         return v;
       } else {
-        throw new UnsupportedOperationException(
-            String.format("Cast from String to %s is not supported", newType)
-        );
+        LOG.warn("Cannot cast integer to {}", newType);
+        return null;
       }
     } else {
       throw new UnsupportedOperationException(
