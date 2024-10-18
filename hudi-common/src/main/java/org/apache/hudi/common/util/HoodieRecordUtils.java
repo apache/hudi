@@ -84,14 +84,24 @@ public class HoodieRecordUtils {
     if (mergerClassList.isEmpty() || HoodieTableMetadata.isMetadataTable(basePath)) {
       return HoodieAvroRecordMerger.INSTANCE;
     } else {
-      return mergerClassList.stream()
-          .map(clazz -> loadRecordMerger(clazz))
-          .filter(Objects::nonNull)
-          .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
-          .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
-          .findFirst()
+      return createValidRecordMerger(engineType, mergerClassList, recordMergerStrategy)
           .orElse(HoodieAvroRecordMerger.INSTANCE);
     }
+  }
+
+  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
+                                                                   String mergerImpls, String recordMergerStrategy) {
+    return createValidRecordMerger(engineType,ConfigUtils.split2List(mergerImpls), recordMergerStrategy);
+  }
+
+  public static Option<HoodieRecordMerger> createValidRecordMerger(EngineType engineType,
+                                                           List<String> mergerClassList, String recordMergerStrategy) {
+    return Option.fromJavaOptional(mergerClassList.stream()
+        .map(clazz -> loadRecordMerger(clazz))
+        .filter(Objects::nonNull)
+        .filter(merger -> merger.getMergingStrategy().equals(recordMergerStrategy))
+        .filter(merger -> recordTypeCompatibleEngine(merger.getRecordType(), engineType))
+        .findFirst());
   }
 
   /**

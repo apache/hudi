@@ -22,6 +22,7 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -62,7 +63,14 @@ public abstract class BaseSparkInternalRowReaderContext extends HoodieReaderCont
         return Option.of(new OverwriteWithLatestSparkRecordMerger());
       case CUSTOM:
       default:
-        return Option.of(HoodieRecordUtils.createRecordMerger(null, EngineType.SPARK, mergerImpls, mergerStrategy));
+        if (mergerStrategy.equals(HoodieRecordMerger.PAYLOAD_BASED_MERGER_STRATEGY_UUID)) {
+          return Option.of(HoodieAvroRecordMerger.INSTANCE);
+        }
+        Option<HoodieRecordMerger> returnVal = HoodieRecordUtils.createValidRecordMerger(EngineType.SPARK, mergerImpls, mergerStrategy);
+        if (returnVal.isEmpty()) {
+          throw new IllegalArgumentException("No valid spark merger implementation set for `hoodie.write.record.merge.custom.impl.classes`");
+        }
+        return returnVal;
     }
   }
 
