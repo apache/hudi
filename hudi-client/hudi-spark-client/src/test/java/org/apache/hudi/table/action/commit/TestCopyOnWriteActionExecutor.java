@@ -346,7 +346,7 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
       return actionExecutor.handleInsert(FSUtils.createNewFileIdPfx(), records.iterator());
     }).flatMap(Transformations::flattenAsIterator).collect();
 
-    Map<String, String> allWriteStatusMergedMetadataMap =
+    Map<String, Object> allWriteStatusMergedMetadataMap =
         MetadataMergeWriteStatus.mergeMetadataForWriteStatuses(writeStatuses);
     assertTrue(allWriteStatusMergedMetadataMap.containsKey("InputRecordCount_1506582000"));
     // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this

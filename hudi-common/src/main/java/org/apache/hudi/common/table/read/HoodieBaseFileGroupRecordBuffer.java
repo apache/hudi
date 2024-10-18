@@ -59,6 +59,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordMergeMode;
@@ -176,6 +177,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                                          Map<String, Object> metadata,
                                                                          Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
+      // Preserve the information for the lost deletes.
+      if (existingRecordMetadataPair.getRight().containsKey(INTERNAL_META_ORDERING_FIELD)) {
+        return Option.of(Pair.of(existingRecordMetadataPair.getLeft().get(), existingRecordMetadataPair.getRight()));
+      }
+
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
         //  and use the record merge mode to control how to merge partial updates
@@ -252,6 +258,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
+      Comparable orderingValue = readerContext.getOrderingValue(
+          Option.of(record), metadata, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+      metadata.put(INTERNAL_META_ORDERING_FIELD, orderingValue);
       return Option.of(Pair.of(record, metadata));
     }
   }
@@ -278,10 +287,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
-          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+          Comparable deleteOrderingVal = readerContext.getOrderingValue(
+              Option.empty(), Collections.emptyMap(), readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
           // Checks the ordering value does not equal to 0
           // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(0)
+          boolean chooseExisting = !deleteOrderingVal.equals(orderingFieldDefault)
               && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
               && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
           if (chooseExisting) {
@@ -385,6 +395,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
           }
+
+          if (newerInfoMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
+            return newer;
+          }
+
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
           }

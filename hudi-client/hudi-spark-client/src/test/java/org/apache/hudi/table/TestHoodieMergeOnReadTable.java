@@ -124,7 +124,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
 
       List<WriteStatus> statuses = client.upsert(writeRecords, newCommitTime).collect();
       assertNoWriteErrors(statuses);
-      Map<String, String> allWriteStatusMergedMetadataMap =
+      Map<String, Object> allWriteStatusMergedMetadataMap =
           MetadataMergeWriteStatus.mergeMetadataForWriteStatuses(statuses);
       assertTrue(allWriteStatusMergedMetadataMap.containsKey("InputRecordCount_1506582000"));
       // For metadata key InputRecordCount_1506582000, value is 2 for each record. So sum of this

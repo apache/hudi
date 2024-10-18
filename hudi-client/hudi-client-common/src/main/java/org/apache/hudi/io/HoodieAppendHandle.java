@@ -238,7 +238,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
   }
 
   private Option<HoodieRecord> prepareRecord(HoodieRecord<T> hoodieRecord) {
-    Option<Map<String, String>> recordMetadata = hoodieRecord.getMetadata();
+    Option<Map<String, Object>> recordMetadata = hoodieRecord.getMetadata();
     Schema schema = useWriterSchema ? writeSchemaWithMetaFields : writeSchema;
     try {
       // Pass the isUpdateRecord to the props for HoodieRecordPayload to judge
@@ -489,7 +489,7 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
 
   @Override
   protected void doWrite(HoodieRecord record, Schema schema, TypedProperties props) {
-    Option<Map<String, String>> recordMetadata = record.getMetadata();
+    Option<Map<String, Object>> recordMetadata = record.getMetadata();
     try {
       init(record);
       flushToDiskIfRequired(record, false);
