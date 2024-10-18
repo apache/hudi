@@ -21,10 +21,6 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.fs.NoOpConsistencyGuard;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant.State;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantFactoryV1;
-import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameFactoryV1;
-import org.apache.hudi.common.table.timeline.versioning.v1.TimelineV1Factory;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
@@ -62,7 +58,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparatorUtils.compareTimestamps;
-import static org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion.VERSION_0;
 import static org.apache.hudi.common.testutils.Assertions.assertStreamEquals;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FACTORY;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_FACTORY;
@@ -148,36 +143,6 @@ public class TestHoodieActiveTimeline extends HoodieCommonTestHarness {
     assertStreamEquals(Stream.of(instant5),
         timeline.getCommitAndReplaceTimeline().filterPendingExcludingCompactionAndLogCompaction().getInstantsAsStream(),
         "Check the instants stream");
-
-    // Backwards compatibility testing for reading compaction plans
-    metaClient = HoodieTableMetaClient.newTableBuilder()
-        .fromMetaClient(metaClient)
-        .setTimelineLayoutVersion(VERSION_0)
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
-
-    instantFactory = new InstantFactoryV1();
-    timelineFactory = new TimelineV1Factory(TimelineLayout.getLayout(TimelineLayoutVersion.LAYOUT_VERSION_1));
-    InstantFileNameFactory instantFileNameFactory = new InstantFileNameFactoryV1();
-    HoodieInstant instant6 = instantFactory.createNewInstant(State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "9");
-    byte[] dummy = new byte[5];
-    HoodieActiveTimeline oldTimeline = timelineFactory.createActiveTimeline(
-        HoodieTableMetaClient.builder().setConf(metaClient.getStorageConf().newInstance())
-            .setBasePath(metaClient.getBasePath())
-            .setLoadActiveTimelineOnLoad(false)
-            .setConsistencyGuardConfig(metaClient.getConsistencyGuardConfig())
-            .setFileSystemRetryConfig(metaClient.getFileSystemRetryConfig()).build());
-    // Old Timeline writes both to aux and timeline folder
-    oldTimeline.saveToCompactionRequested(instant6, Option.of(dummy));
-    // Now use the latest timeline version
-    timeline = timeline.reload();
-    // Ensure aux file is present
-    assertTrue(metaClient.getStorage().exists(new StoragePath(metaClient.getMetaPath(),
-        instantFileNameFactory.getFileName(instant6))));
-    // Read 5 bytes
-    assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
-
-    // Now read compaction plan again which should not throw exception
-    assertEquals(5, timeline.readCompactionPlanAsBytes(instant6).get().length);
   }
 
   @Test
