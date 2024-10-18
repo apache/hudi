@@ -246,7 +246,7 @@ public class HoodieIncrSource extends RowSource {
               String.join("','", instantTimeList)));
     } else {
       // normal incremental query
-      String startCompletionTime = queryContext.getInstants().stream()
+      String inclusiveStartCompletionTime = queryContext.getInstants().stream()
           .min(HoodieInstant.COMPLETION_TIME_COMPARATOR)
           .map(HoodieInstant::getCompletionTime)
           .get();
@@ -254,7 +254,7 @@ public class HoodieIncrSource extends RowSource {
       source = reader
           .options(readOpts)
           .option(QUERY_TYPE().key(), QUERY_TYPE_INCREMENTAL_OPT_VAL())
-          .option(START_COMMIT().key(), startCompletionTime)
+          .option(START_COMMIT().key(), inclusiveStartCompletionTime)
           .option(END_COMMIT().key(), endCompletionTime)
           .option(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
               props.getString(INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
