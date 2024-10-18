@@ -307,42 +307,42 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
         case HoodieRecordType.SPARK => {
           val schema = HoodieInternalRowUtils.getCachedSchema(logFileReaderAvroSchema)
           val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-          return Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
+          Some(projection.apply(newRecord.getData.asInstanceOf[InternalRow]))
         }
         case _ => {
           val avroRecord = newRecord.toIndexedRecord(logFileReaderAvroSchema, payloadProps).get.getData.asInstanceOf[GenericRecord]
-          return Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+          Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
         }
       }
-    }
-
-    recordMerger.getRecordType match {
-      case HoodieRecordType.SPARK =>
-        val curRecord = new HoodieSparkRecord(curRow, readerSchema)
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val data = r.getLeft.getData.asInstanceOf[InternalRow]
-            if (isDeleteOperation(data)) {
-              None
-            } else {
-              val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
-              val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
-              Some(projection.apply(data))
+    } else {
+      recordMerger.getRecordType match {
+        case HoodieRecordType.SPARK =>
+          val curRecord = new HoodieSparkRecord(curRow, readerSchema)
+          val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+          toScalaOption(result)
+            .flatMap { r =>
+              val data = r.getLeft.getData.asInstanceOf[InternalRow]
+              if (isDeleteOperation(data)) {
+                None
+              } else {
+                val schema = HoodieInternalRowUtils.getCachedSchema(r.getRight)
+                val projection = HoodieInternalRowUtils.getCachedUnsafeProjection(schema, structTypeSchema)
+                Some(projection.apply(data))
+              }
             }
-          }
-      case _ =>
-        val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
-        val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
-        toScalaOption(result)
-          .flatMap { r =>
-            val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
-            if (isDeleteOperation(avroRecord)) {
-              None
-            } else {
-              Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+        case _ =>
+          val curRecord = new HoodieAvroIndexedRecord(serialize(curRow))
+          val result = recordMerger.merge(curRecord, baseFileReaderAvroSchema, newRecord, logFileReaderAvroSchema, payloadProps)
+          toScalaOption(result)
+            .flatMap { r =>
+              val avroRecord = r.getLeft.toIndexedRecord(r.getRight, payloadProps).get.getData.asInstanceOf[GenericRecord]
+              if (isDeleteOperation(avroRecord)) {
+                None
+              } else {
+                Some(deserialize(requiredSchemaAvroProjection(avroRecord)))
+              }
             }
-          }
+      }
     }
   }
 }
