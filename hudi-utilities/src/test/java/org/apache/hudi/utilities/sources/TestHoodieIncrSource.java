@@ -233,7 +233,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
       readAndAssert(
           IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
           Option.empty(),
-          400,
+          500,
           inserts.get(5).getCompletionTime());
 
       // Even if the start completion timestamp is archived, full table scan should kick in, but should filter for records having commit time > first instant
