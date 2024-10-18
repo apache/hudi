@@ -194,7 +194,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       newFileNameSet
     }
     val targetFileName = fileNameSet.take(2)
-    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, Some(targetFileName)) { df =>
+    columnStatsIndex.loadTransposed(requestedColumns, shouldReadInMemory, None, Some(targetFileName)) { df =>
       assertEquals(2, df.collect().length)
       val targetDFFileNameSet: Set[String] = df.select("fileName").as[String](stringEncoder).collect().toSet
       assertEquals(targetFileName, targetDFFileNameSet)
