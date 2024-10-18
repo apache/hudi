@@ -189,7 +189,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       opts.put(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), DefaultSparkRecordMerger.class.getName());
       opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
       opts.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name());
-      opts.put(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
+      opts.put(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key(), HoodieRecordMerger.DEFAULT_MERGER_STRATEGY_UUID);
       for (Map.Entry<String, String> entry : opts.entrySet()) {
         hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
       }

@@ -1138,7 +1138,7 @@ class HoodieSparkSqlWriterInternal {
     } else {
       mergedParams.put(HoodieTableConfig.PAYLOAD_CLASS_NAME.key(), mergedParams(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()))
       mergedParams.put(HoodieTableConfig.RECORD_MERGE_MODE.key(), mergedParams(HoodieWriteConfig.RECORD_MERGE_MODE.key()))
-      mergedParams.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), mergedParams(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()))
+      mergedParams.put(HoodieTableConfig.RECORD_MERGER_STRATEGY.key(), mergedParams(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key()))
     }
 
     val params = mergedParams.toMap
