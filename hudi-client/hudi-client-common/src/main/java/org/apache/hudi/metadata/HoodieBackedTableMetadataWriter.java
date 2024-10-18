@@ -606,7 +606,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   private List<Pair<String, FileSlice>> getPartitionFileSlicePairs() throws IOException {
     String latestInstant = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant()
-        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+        .map(HoodieInstant::getRequestTime).orElse(SOLO_COMMIT_TIMESTAMP);
     try (HoodieMetadataFileSystemView fsView = getMetadataView()) {
       // Collect the list of latest file slices present in each partition
       List<String> partitions = metadata.getAllPartitionPaths();
@@ -649,7 +649,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
           this.getClass().getSimpleName());
     } else {
       final List<Pair<String, FileSlice>> partitionFileSlicePairs = new ArrayList<>();
-      String latestCommit = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().map(instant -> instant.getTimestamp()).orElse(SOLO_COMMIT_TIMESTAMP);
+      String latestCommit = dataMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants().lastInstant().map(instant -> instant.getRequestTime()).orElse(SOLO_COMMIT_TIMESTAMP);
       for (String partition : partitions) {
         fsView.getLatestMergedFileSlicesBeforeOrOn(partition, latestCommit).forEach(fs -> partitionFileSlicePairs.add(Pair.of(partition, fs)));
       }
