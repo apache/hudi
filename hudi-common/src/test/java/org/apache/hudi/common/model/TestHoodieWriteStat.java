@@ -20,7 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.ActiveTimelineUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,7 @@ public class TestHoodieWriteStat {
 
   @Test
   public void testSetPaths() {
-    String instantTime = HoodieActiveTimeline.formatDate(new Date());
+    String instantTime = ActiveTimelineUtils.formatDate(new Date());
     String basePathString = "/data/tables/some-hoodie-table";
     String partitionPathString = "2017/12/31";
     String fileName = UUID.randomUUID().toString();

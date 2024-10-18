@@ -65,7 +65,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
 
       val metaClient = createMetaClient(spark, tablePath)
-      val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
+      val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get().getRequestTime
 
       // Then insert another new record
       spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")

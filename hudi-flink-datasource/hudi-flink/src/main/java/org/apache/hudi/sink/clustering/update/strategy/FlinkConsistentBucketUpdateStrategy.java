@@ -75,13 +75,13 @@ public class FlinkConsistentBucketUpdateStrategy<T extends HoodieRecordPayload> 
     List<HoodieInstant> instants = ClusteringUtils.getPendingClusteringInstantTimes(table.getMetaClient());
     if (!instants.isEmpty()) {
       HoodieInstant latestPendingReplaceInstant = instants.get(instants.size() - 1);
-      if (latestPendingReplaceInstant.getTimestamp().compareTo(lastRefreshInstant) > 0) {
+      if (latestPendingReplaceInstant.getRequestTime().compareTo(lastRefreshInstant) > 0) {
         LOG.info("Found new pending replacement commit. Last pending replacement commit is {}.", latestPendingReplaceInstant);
         this.table = table;
         this.fileGroupsInPendingClustering = table.getFileSystemView().getFileGroupsInPendingClustering()
             .map(Pair::getKey).collect(Collectors.toSet());
         // TODO throw exception if exists bucket merge plan
-        this.lastRefreshInstant = latestPendingReplaceInstant.getTimestamp();
+        this.lastRefreshInstant = latestPendingReplaceInstant.getRequestTime();
         this.partitionToIdentifier.clear();
       }
     }

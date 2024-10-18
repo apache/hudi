@@ -481,7 +481,7 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected String getLatestDataInstantTime() {
     return dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant()
-        .map(HoodieInstant::getTimestamp).orElse(SOLO_COMMIT_TIMESTAMP);
+        .map(HoodieInstant::getRequestTime).orElse(SOLO_COMMIT_TIMESTAMP);
   }
 
   public boolean isMetadataTableInitialized() {

@@ -70,7 +70,7 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
     // Transition bulk_insert state to inflight
-    table.getActiveTimeline().transitionRequestedToInflight(new HoodieInstant(HoodieInstant.State.REQUESTED,
+    table.getActiveTimeline().transitionRequestedToInflight(table.getInstantFactory().createNewInstant(HoodieInstant.State.REQUESTED,
             executor.getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
 

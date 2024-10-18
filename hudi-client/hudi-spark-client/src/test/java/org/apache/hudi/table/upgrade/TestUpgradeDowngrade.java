@@ -215,12 +215,12 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
     // delete one of the marker files in 2nd commit if need be.
     WriteMarkers writeMarkers =
-        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitsInstant.getTimestamp());
+        WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitsInstant.getRequestTime());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getStorage().deleteDirectory(new StoragePath(
-          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getTimestamp()
+          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getRequestTime()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
     }
@@ -629,12 +629,12 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
     HoodieInstant commitsInstant = table.getPendingCommitsTimeline().lastInstant().get();
 
     // delete one of the marker files in 2nd commit if need be.
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitsInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(markerType, table, commitsInstant.getRequestTime());
     List<String> markerPaths = new ArrayList<>(writeMarkers.allMarkerFilePaths());
     if (deletePartialMarkerFiles) {
       String toDeleteMarkerFile = markerPaths.get(0);
       table.getStorage().deleteDirectory(new StoragePath(
-          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getTimestamp()
+          table.getMetaClient().getTempFolderPath() + "/" + commitsInstant.getRequestTime()
               + "/" + toDeleteMarkerFile));
       markerPaths.remove(toDeleteMarkerFile);
     }
@@ -667,11 +667,11 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
 
   private void assertMarkerFilesForDowngrade(HoodieTable table, HoodieInstant commitInstant, boolean assertExists) throws IOException {
     // Verify recreated marker files are as expected
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getRequestTime());
     if (assertExists) {
       assertTrue(writeMarkers.doesMarkerDirExist());
       assertEquals(0, getTimelineServerBasedMarkerFileCount(
-          table.getMetaClient().getMarkerFolderPath(commitInstant.getTimestamp()),
+          table.getMetaClient().getMarkerFolderPath(commitInstant.getRequestTime()),
           (FileSystem) table.getStorage().getFileSystem()));
     } else {
       assertFalse(writeMarkers.doesMarkerDirExist());
@@ -690,7 +690,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
   private void assertMarkerFilesForUpgrade(HoodieTable table, HoodieInstant commitInstant, List<FileSlice> firstPartitionCommit2FileSlices,
                                            List<FileSlice> secondPartitionCommit2FileSlices) throws IOException {
     // Verify recreated marker files are as expected
-    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getTimestamp());
+    WriteMarkers writeMarkers = WriteMarkersFactory.get(getConfig().getMarkersType(), table, commitInstant.getRequestTime());
     assertTrue(writeMarkers.doesMarkerDirExist());
     Set<String> files = writeMarkers.allMarkerFilePaths();
 
@@ -717,7 +717,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
           expectedLogFilePaths.add(Pair.of(partitionPath + "/" + logFile.getFileId(), logBaseCommitTime));
         }
       }
-      if (fileSlice.getBaseInstantTime().equals(commitInstant.getTimestamp())) {
+      if (fileSlice.getBaseInstantTime().equals(commitInstant.getRequestTime())) {
         String path = fileSlice.getBaseFile().get().getPath();
         // for base files, path can be asserted as is.
         expectedPaths.add(path.substring(path.indexOf(partitionPath)));
@@ -882,7 +882,7 @@ public class TestUpgradeDowngrade extends HoodieClientTestBase {
         .collect(Collectors.toList());
     for (HoodieInstant instant : instantsToBeParsed) {
       WriteMarkers writeMarkers =
-          WriteMarkersFactory.get(table.getConfig().getMarkersType(), table, instant.getTimestamp());
+          WriteMarkersFactory.get(table.getConfig().getMarkersType(), table, instant.getRequestTime());
       Set<String> oldMarkers = writeMarkers.allMarkerFilePaths();
       boolean hasAppendMarker = oldMarkers.stream().anyMatch(marker -> marker.contains(IOType.APPEND.name()) || marker.contains(IOType.CREATE.name()));
       if (hasAppendMarker) {

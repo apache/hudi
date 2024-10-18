@@ -106,7 +106,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = includedCommits.last.getRequestTime
 
         val fsView = new HoodieTableFileSystemView(
           metaClient, timeline, affectedFilesInCommits)
@@ -129,7 +129,7 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
       val fileSlices = if (fullTableScan) {
         listLatestFileSlices(Seq(), partitionFilters, dataFilters)
       } else {
-        val latestCommit = includedCommits.last.getTimestamp
+        val latestCommit = includedCommits.last.getRequestTime
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
@@ -187,7 +187,7 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected def endTimestamp: String = optParams.getOrElse(
     DataSourceReadOptions.END_INSTANTTIME.key,
     if (hollowCommitHandling == USE_TRANSITION_TIME) super.timeline.lastInstant().get.getCompletionTime
-    else super.timeline.lastInstant().get.getTimestamp)
+    else super.timeline.lastInstant().get.getRequestTime)
 
   protected def startInstantArchived: Boolean = super.timeline.isBeforeTimelineStarts(startTimestamp)
 
@@ -228,9 +228,9 @@ trait HoodieIncrementalRelationTrait extends HoodieBaseRelation {
   protected lazy val (includeStartTime, startTs) = if (startInstantArchived) {
     (false, startTimestamp)
   } else {
-    (true, includedCommits.head.getTimestamp)
+    (true, includedCommits.head.getRequestTime)
   }
-  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getTimestamp
+  protected lazy val endTs: String = if (endInstantArchived) endTimestamp else includedCommits.last.getRequestTime
 
   // Record filters making sure that only records w/in the requested bounds are being fetched as part of the
   // scan collected by this relation
