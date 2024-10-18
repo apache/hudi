@@ -315,6 +315,7 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           }
           Comparable deleteOrderingVal = readerContext.getOrderingValue(
               Option.empty(), Collections.emptyMap(), readerSchema, orderingFieldName, orderingFieldTypeOpt, orderingFieldDefault);
+          deleteOrderingVal = deleteRecord.getOrderingValue() == null ? deleteOrderingVal : deleteRecord.getOrderingValue();
           // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
           // Choose the newer record if
           // 1. the delete record uses natural order; or
