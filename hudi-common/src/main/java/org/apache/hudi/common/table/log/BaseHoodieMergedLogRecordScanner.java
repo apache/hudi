@@ -212,12 +212,11 @@ public abstract class BaseHoodieMergedLogRecordScanner<K extends Serializable> e
       // Merge and store the merged record. The ordering val is taken to decide whether the same key record
       // should be deleted or be kept. The old record is kept only if the DELETE record has smaller ordering val.
       // For same ordering values, uses the natural order(arrival time semantics).
-
       Comparable curOrderingVal = oldRecord.getOrderingValue(this.readerSchema, this.hoodieTableMetaClient.getTableConfig().getProps());
-      Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
+      Comparable deleteOrderingVal = orderingFieldDefault;
       // Checks the ordering value does not equal to 0
       // because we use 0 as the default value which means natural order
-      boolean choosePrev = !deleteOrderingVal.equals(0)
+      boolean choosePrev = !deleteOrderingVal.equals(orderingFieldDefault)
           && ReflectionUtils.isSameClass(curOrderingVal, deleteOrderingVal)
           && curOrderingVal.compareTo(deleteOrderingVal) > 0;
       if (choosePrev) {

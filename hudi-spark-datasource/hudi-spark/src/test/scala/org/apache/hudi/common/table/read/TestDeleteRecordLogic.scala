@@ -20,88 +20,71 @@
 package org.apache.hudi.common.table.read
 
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, PRECOMBINE_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
-import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSparkRecordMerger}
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
-import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
+import org.apache.hudi.{DataSourceWriteOptions, DefaultSparkRecordMerger}
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
-import org.slf4j.LoggerFactory
-
-import scala.collection.convert.ImplicitConversions.`iterable AsScalaIterable`
-import scala.jdk.CollectionConverters.asJavaIterableConverter
 
 class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
-  val LOG = LoggerFactory.getLogger(classOf[TestDeleteRecordLogic])
   val expected = Seq(
-    (11, "1", "rider-X", "driver-X", 19.1, 9),
     (14, "5", "rider-Z", "driver-Z", 17.85, 3),
-    (-7, "4", "rider-DDD", "driver-DDD", 20.0, 1),
+    (-9, "4", "rider-DDDD", "driver-DDDD", 20.0, 1),
     (10, "3", "rider-C", "driver-C", 33.9, 10),
     (10, "2", "rider-B", "driver-B", 27.7, 1))
 
   @ParameterizedTest
   @MethodSource(Array("provideParams"))
-  def showDeleteIsInconsistent(useFgReader: String, tableType: String, recordType: String): Unit = {
-    LOG.info(
-      "Testing: {} with file group reader {} and record type: {}",
-      tableType, useFgReader, recordType)
+  def testDeleteLogic(useFgReader: String, tableType: String, recordType: String): Unit = {
+    val sparkOpts: Map[String, String] = Map(
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key -> classOf[DefaultSparkRecordMerger].getName)
+    val fgReaderOpts: Map[String, String] = Map(
+      HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key -> useFgReader)
 
-    val merger = classOf[DefaultSparkRecordMerger].getName
+    val opts = if (recordType.equals("SPARK")) sparkOpts ++ fgReaderOpts else fgReaderOpts
     val columns = Seq("ts", "key", "rider", "driver", "fare", "number")
+
     val data = Seq(
       (10, "1", "rider-A", "driver-A", 19.10, 7),
       (10, "2", "rider-B", "driver-B", 27.70, 1),
       (10, "3", "rider-C", "driver-C", 33.90, 10),
       (-1, "4", "rider-D", "driver-D", 34.15, 6),
       (10, "5", "rider-E", "driver-E", 17.85, 10))
-
     val inserts = spark.createDataFrame(data).toDF(columns: _*)
     inserts.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
       option(TABLE_TYPE.key(), tableType).
-      option(HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "test_table").
       option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
       mode(SaveMode.Overwrite).
       save(basePath)
 
     val updateData = Seq(
       (11, "1", "rider-X", "driver-X", 19.10, 9),
       (9, "2", "rider-Y", "driver-Y", 27.70, 7))
-
     val updates = spark.createDataFrame(updateData).toDF(columns: _*)
     updates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
 
     val deletesData = Seq((-5, "4", "rider-D", "driver-D", 34.15, 6))
-
     val deletes = spark.createDataFrame(deletesData).toDF(columns: _*)
     deletes.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "delete").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -112,12 +95,22 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
     secondUpdates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val secondDeletesData = Seq(
+      (10, "4", "rider-D", "driver-D", 34.15, 6),
+      (0, "1", "rider-X", "driver-X", 19.10, 8))
+    val secondDeletes = spark.createDataFrame(secondDeletesData).toDF(columns: _*)
+    secondDeletes.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "delete").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
 
@@ -126,34 +119,40 @@ class TestDeleteRecordLogic extends SparkClientFunctionalTestHarness{
     thirdUpdates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
 
-    val fourUpdateData = Seq((-7, "4", "rider-DDD", "driver-DDD", 20.00, 1))
+    val thirdDeletesData = Seq(
+      (10, "4", "rider-D4", "driver-D4", 34.15, 6),
+      (0, "1", "rider-X", "driver-X", 19.10, 8))
+    val thirdDeletes = spark.createDataFrame(thirdDeletesData).toDF(columns: _*)
+    thirdDeletes.write.format("hudi").
+      option(RECORDKEY_FIELD.key(), "key").
+      option(PRECOMBINE_FIELD.key(), "ts").
+      option(TABLE_TYPE.key(), tableType).
+      option(OPERATION.key(), "delete").
+      options(opts).
+      mode(SaveMode.Append).
+      save(basePath)
+
+    val fourUpdateData = Seq((-9, "4", "rider-DDDD", "driver-DDDD", 20.00, 1))
     val fourUpdates = spark.createDataFrame(fourUpdateData).toDF(columns: _*)
     fourUpdates.write.format("hudi").
       option(RECORDKEY_FIELD.key(), "key").
       option(PRECOMBINE_FIELD.key(), "ts").
-      option(DataSourceWriteOptions.TABLE_NAME.key(), "test_table").
       option(TABLE_TYPE.key(), tableType).
       option(OPERATION.key(), "upsert").
-      option(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
+      options(opts).
       mode(SaveMode.Append).
       save(basePath)
 
-    val df = spark.read.format("hudi").
-      option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "true").
-      option(HoodieWriteConfig.RECORD_MERGER_IMPLS.key, merger).
-      option(HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS.key(), "false").load(basePath)
+    // Read data to compare.
+    val df = spark.read.format("hudi").options(opts).load(basePath)
     val finalDf = df.select("ts", "key", "rider", "driver", "fare", "number").sort("ts")
+    finalDf.show(false)
 
     val expectedDf = spark.createDataFrame(expected).toDF(columns: _*).sort("ts")
     val expectedMinusActual = expectedDf.except(finalDf)
