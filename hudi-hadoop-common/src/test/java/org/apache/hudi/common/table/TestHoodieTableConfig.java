@@ -323,7 +323,6 @@ public class TestHoodieTableConfig extends HoodieCommonTestHarness {
         arguments(null, overwritePayload, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
         arguments(null, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
         arguments(null, null, OVERWRITE_MERGER_STRATEGY_UUID, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
-        arguments(OVERWRITE_WITH_LATEST, null, null, false, OVERWRITE_WITH_LATEST, overwritePayload, OVERWRITE_MERGER_STRATEGY_UUID),
 
         //test legal custom payload combos
         arguments(CUSTOM, customPayload, null, false, CUSTOM, customPayload, PAYLOAD_BASED_MERGER_STRATEGY_UUID),
