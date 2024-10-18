@@ -141,6 +141,7 @@ public abstract class HoodieReaderContext<T> {
   public static final String INTERNAL_META_OPERATION = "_3";
   public static final String INTERNAL_META_INSTANT_TIME = "_4";
   public static final String INTERNAL_META_SCHEMA = "_5";
+  public static final String DELETE_IN_BETWEEN = "DELETE_IN_BETWEEN";
 
   /**
    * Gets the record iterator based on the type of engine-specific record representation from the
@@ -232,12 +233,12 @@ public abstract class HoodieReaderContext<T> {
     if (metadataMap.containsKey(INTERNAL_META_ORDERING_FIELD)) {
       return (Comparable) metadataMap.get(INTERNAL_META_ORDERING_FIELD);
     }
-
     if (!recordOption.isPresent() || orderingFieldName == null) {
       return orderingFieldDefault;
     }
-
-    Object value = getValue(recordOption.get(), schema, orderingFieldName);
+    Schema schemaApplied = metadataMap.containsKey(INTERNAL_META_SCHEMA)
+        ? (Schema) metadataMap.get(INTERNAL_META_SCHEMA) : schema;
+    Object value = getValue(recordOption.get(), schemaApplied, orderingFieldName);
     Comparable finalOrderingVal = value != null ? castValue((Comparable) value, orderingFieldType) : orderingFieldDefault;
     metadataMap.put(INTERNAL_META_ORDERING_FIELD, finalOrderingVal);
     return finalOrderingVal;

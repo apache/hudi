@@ -35,6 +35,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -426,6 +427,24 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   public abstract HoodieRecord<T> copy();
 
   public abstract Option<Map<String, String>> getMetadata();
+
+  private void initMetadata() {
+    this.metaData = Option.of(new HashMap<>());
+  }
+
+  public void addMetadata(String key, String value) {
+    if (metaData.isEmpty()) {
+      initMetadata();
+    }
+    metaData.get().put(key, value);
+  }
+
+  public Option<Object> getMetaDataInfo(String key) {
+    if (metaData != null && metaData.isPresent()) {
+      return Option.ofNullable(metaData.get().getOrDefault(key, null));
+    }
+    return Option.empty();
+  }
 
   public static String generateSequenceId(String instantTime, int partitionId, long recordIndex) {
     return instantTime + "_" + partitionId + "_" + recordIndex;

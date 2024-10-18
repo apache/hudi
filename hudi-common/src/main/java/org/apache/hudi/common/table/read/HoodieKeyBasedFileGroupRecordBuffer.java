@@ -37,8 +37,12 @@ import org.apache.avro.Schema;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.Map;
+
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 
 /**
  * A buffer that is used to store log records by {@link org.apache.hudi.common.table.log.HoodieMergedLogRecordReader}
@@ -108,10 +112,19 @@ public class HoodieKeyBasedFileGroupRecordBuffer<T> extends HoodieBaseFileGroupR
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordKey) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordKey);
+    if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
+      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+      return;
+    }
+
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
+      Comparable orderingVal = readerContext.getOrderingValue(
+          Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+      Comparable orderingValApplied =
+          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
       records.put(recordKey, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          (String) recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
+          (String) recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldType)));
     }
   }
 

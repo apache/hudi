@@ -50,6 +50,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_RECORD_KEY;
 
 /**
@@ -195,11 +197,20 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
+    if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
+      existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+      return;
+    }
+
     Option<DeleteRecord> recordOpt = doProcessNextDeletedRecord(deleteRecord, existingRecordMetadataPair);
     if (recordOpt.isPresent()) {
       String recordKey = recordOpt.get().getRecordKey();
+      Comparable orderingVal = readerContext.getOrderingValue(
+          Option.empty(), Collections.EMPTY_MAP, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+      Comparable orderingValApplied =
+          recordOpt.get().getOrderingValue() == null ? orderingVal : recordOpt.get().getOrderingValue();
       records.put(recordPosition, Pair.of(Option.empty(), readerContext.generateMetadataForRecord(
-          recordKey, recordOpt.get().getPartitionPath(), recordOpt.get().getOrderingValue(), orderingFieldType)));
+          recordKey, recordOpt.get().getPartitionPath(), orderingValApplied, orderingFieldType)));
     }
   }
 

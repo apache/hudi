@@ -59,6 +59,9 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
+import static org.apache.hudi.common.engine.HoodieReaderContext.DELETE_IN_BETWEEN;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_OPERATION;
+import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_ORDERING_FIELD;
 import static org.apache.hudi.common.engine.HoodieReaderContext.INTERNAL_META_SCHEMA;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.read.HoodieFileGroupReader.getRecordMergeMode;
@@ -176,6 +179,11 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
                                                                          Map<String, Object> metadata,
                                                                          Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair) throws IOException {
     if (existingRecordMetadataPair != null) {
+      // If there is a deletion before this record, we can safely skip.
+      if (existingRecordMetadataPair.getRight().containsKey(INTERNAL_META_OPERATION)) {
+        return Option.of(Pair.of(existingRecordMetadataPair.getLeft().get(), existingRecordMetadataPair.getRight()));
+      }
+
       if (enablePartialMerging) {
         // TODO(HUDI-7843): decouple the merging logic from the merger
         //  and use the record merge mode to control how to merge partial updates
@@ -252,6 +260,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be put into records(Map).
+      Comparable orderingValue = readerContext.getOrderingValue(
+          Option.of(record), metadata, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+      metadata.put(INTERNAL_META_ORDERING_FIELD, orderingValue);
       return Option.of(Pair.of(record, metadata));
     }
   }
@@ -278,14 +289,19 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
           if (isDeleteRecordWithNaturalOrder(existingRecordMetadataPair.getLeft(), existingOrderingVal)) {
             return Option.empty();
           }
-          Comparable deleteOrderingVal = deleteRecord.getOrderingValue();
-          // Checks the ordering value does not equal to 0
-          // because we use 0 as the default value which means natural order
-          boolean chooseExisting = !deleteOrderingVal.equals(0)
-              && ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal)
-              && existingOrderingVal.compareTo(deleteOrderingVal) > 0;
+          Comparable deleteOrderingVal = readerContext.getOrderingValue(
+              Option.empty(), Collections.emptyMap(), readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
+          deleteOrderingVal = deleteRecord.getOrderingValue() == null ? deleteOrderingVal : deleteRecord.getOrderingValue();
+          // Here existing record represents newer record with the same key, which can be a delete or non-delete record.
+          // Choose the newer record if
+          // 1. the delete record uses natural order; or
+          // 2. the delete record has less than or equal ordering value.
+          boolean chooseExisting = deleteOrderingVal.equals(orderingFieldDefault)
+              || (ReflectionUtils.isSameClass(existingOrderingVal, deleteOrderingVal) && deleteOrderingVal.compareTo(existingOrderingVal) <= 0);
           if (chooseExisting) {
-            // The DELETE message is obsolete if the old message has greater orderingVal.
+            if (deleteOrderingVal.equals(orderingFieldDefault)) {
+              existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
+            }
             return Option.empty();
           }
       }
@@ -384,6 +400,9 @@ public abstract class HoodieBaseFileGroupRecordBuffer<T> implements HoodieFileGr
               newer, newerInfoMap, readerSchema, orderingFieldName, orderingFieldType, orderingFieldDefault);
           if (isDeleteRecordWithNaturalOrder(newer, newOrderingValue)) {
             return Option.empty();
+          }
+          if (newerInfoMap.containsKey(INTERNAL_META_OPERATION)) {
+            return newer;
           }
           if (oldOrderingValue.compareTo(newOrderingValue) > 0) {
             return older;
