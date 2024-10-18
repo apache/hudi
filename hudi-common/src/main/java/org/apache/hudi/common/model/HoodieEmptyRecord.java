@@ -147,7 +147,7 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public Option<Map<String, Object>> getMetadata() {
+  public Option<Map<String, String>> getMetadata() {
     return Option.empty();
   }
 
