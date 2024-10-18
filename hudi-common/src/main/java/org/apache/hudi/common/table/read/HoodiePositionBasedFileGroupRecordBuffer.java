@@ -197,7 +197,7 @@ public class HoodiePositionBasedFileGroupRecordBuffer<T> extends HoodieKeyBasedF
   @Override
   public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable recordPosition) {
     Pair<Option<T>, Map<String, Object>> existingRecordMetadataPair = records.get(recordPosition);
-    if (existingRecordMetadataPair != null) {
+    if (deleteRecord.getOrderingValue() == null && existingRecordMetadataPair != null) {
       existingRecordMetadataPair.getRight().put(INTERNAL_META_OPERATION, DELETE_IN_BETWEEN);
       return;
     }
