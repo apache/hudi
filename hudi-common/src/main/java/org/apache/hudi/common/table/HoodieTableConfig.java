@@ -706,11 +706,14 @@ public class HoodieTableConfig extends HoodieConfig {
       } else {
         inferRecordMergerStrategy = recordMergerStrategy;
         if (recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING, "Default merger strategy can only be used with event time ordering merge mode");
           inferRecordMergeMode = EVENT_TIME_ORDERING;
         } else if (recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Overwrite with latest merger strategy can only be used with overwrite with latest merge mode");
           inferRecordMergeMode = OVERWRITE_WITH_LATEST;
         } else {
           checkArgument(!recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Payload based strategy should only be used if you have a custom payload");
+          checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode must be set to custom when using a custom merger strategy");
           inferRecordMergeMode = CUSTOM;
         }
       }
@@ -721,19 +724,24 @@ public class HoodieTableConfig extends HoodieConfig {
         //TODO: after mergers are safe to use on the write side, add this check and get rid of the if
         // checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
         if (isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(DEFAULT_MERGER_STRATEGY_UUID)) {
+          checkArgument(recordMergeMode == null || recordMergeMode == EVENT_TIME_ORDERING, "Only event time ordering record merge mode can be used with default payload");
           inferRecordMergeMode = EVENT_TIME_ORDERING;
           inferRecordMergerStrategy = DEFAULT_MERGER_STRATEGY_UUID;
         } else {
+          checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode, payload class, and merge strategy are in an illegal configuration");
+          checkArgument(!recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID) && !recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID),
+              "Record merger strategy is incompatible with payload class");
           inferRecordMergeMode = CUSTOM;
           inferRecordMergerStrategy = recordMergerStrategy;
         }
       } else if (payloadClassName.equals(OverwriteWithLatestAvroPayload.class.getName())) {
         checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(OVERWRITE_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
+        checkArgument(recordMergeMode == null || recordMergeMode == OVERWRITE_WITH_LATEST, "Only overwrite with latest record merge mode can be used with overwrite payload");
         inferRecordMergeMode = OVERWRITE_WITH_LATEST;
         inferRecordMergerStrategy = OVERWRITE_MERGER_STRATEGY_UUID;
       } else {
         checkArgument(isNullOrEmpty(recordMergerStrategy) || recordMergerStrategy.equals(PAYLOAD_BASED_MERGER_STRATEGY_UUID), "Record merge strategy cannot be set if a merge payload is used");
-        checkArgument(recordMergeMode == null || recordMergeMode == RecordMergeMode.CUSTOM, "Record merge mode must be custom if payload is defined");
+        checkArgument(recordMergeMode == null || recordMergeMode == CUSTOM, "Record merge mode must be custom if payload is defined");
         inferRecordMergeMode = CUSTOM;
         inferRecordMergerStrategy = PAYLOAD_BASED_MERGER_STRATEGY_UUID;
       }
