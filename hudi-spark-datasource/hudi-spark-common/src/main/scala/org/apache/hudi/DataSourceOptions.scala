@@ -409,7 +409,7 @@ object DataSourceWriteOptions {
   /**
    * Id of merger strategy
    */
-  val RECORD_MERGER_STRATEGY = HoodieWriteConfig.RECORD_MERGER_STRATEGY
+  val RECORD_MERGER_STRATEGY_ID = HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID
 
 
   val RECORD_MERGE_MODE = HoodieWriteConfig.RECORD_MERGE_MODE
@@ -1024,8 +1024,8 @@ object DataSourceOptionsHelper {
     if (!params.contains(HoodieWriteConfig.RECORD_MERGE_MODE.key()) && tableConfig.getRecordMergeMode != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGE_MODE.key() -> tableConfig.getRecordMergeMode.name())
     }
-    if (!params.contains(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key()) && tableConfig.getRecordMergerStrategy != null) {
-      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGER_STRATEGY.key() -> tableConfig.getRecordMergerStrategy)
+    if (!params.contains(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key()) && tableConfig.getRecordMergerStrategy != null) {
+      missingWriteConfigs ++= Map(HoodieWriteConfig.RECORD_MERGER_STRATEGY_ID.key() -> tableConfig.getRecordMergerStrategy)
     }
     if (!params.contains(DataSourceWriteOptions.TABLE_TYPE.key())) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableConfig.getTableType.name())

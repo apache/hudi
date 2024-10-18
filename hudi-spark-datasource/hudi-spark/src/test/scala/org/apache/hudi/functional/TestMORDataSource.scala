@@ -1433,7 +1433,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .options(writeOpts)
       .option(DataSourceWriteOptions.TABLE_TYPE.key, "MERGE_ON_READ")
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
-      .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY.key(), mergerStrategyName)
+      .option(DataSourceWriteOptions.RECORD_MERGER_STRATEGY_ID.key(), mergerStrategyName)
       .option(DataSourceWriteOptions.RECORD_MERGE_MODE.key(), RecordMergeMode.CUSTOM.name())
       .mode(SaveMode.Overwrite)
       .save(basePath)
